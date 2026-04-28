@@ -1,27 +1,25 @@
-# Code of Conduct
+# code of conduct
 
-## Our Pledge
+`nest` is maintained by hoff research. anyone is welcome to use it, contribute, or open issues.
 
-We are committed to providing a welcoming, inclusive, and harassment-free environment for everyone, regardless of background, identity, or experience level.
+## what we expect
 
-## Expected Behavior
+be respectful. give and take feedback in good faith. focus on what is best for the project and the people using it.
 
-- Be respectful and constructive in communication.
-- Accept feedback gracefully and offer it thoughtfully.
-- Focus on what is best for the project and community.
+## what we do not accept
 
-## Unacceptable Behavior
+harassment of any kind. personal attacks, trolling, or deliberately inflammatory comments. publishing private information about others without consent. discrimination on any basis, including but not limited to race, gender identity, sexual orientation, disability, religion, age, nationality, or experience level.
 
-- Harassment, intimidation, or discrimination of any kind.
-- Personal attacks, trolling, or deliberately inflammatory remarks.
-- Publishing others' private information without consent.
+## reporting
 
-## Enforcement
+if something happens that violates this, email [brenner@hoffresearch.com](mailto:brenner@hoffresearch.com). reports are handled confidentially by the maintainer. you do not need to file a public issue.
 
-Instances of unacceptable behavior can be reported to [brenner@hoffresearch.com](mailto:brenner@hoffresearch.com). All reports will be reviewed and handled confidentially by the project maintainer.
+we aim to acknowledge any report within 72 hours and to follow up with the reporter on what action, if any, was taken.
 
-Maintainers who do not follow or enforce this Code of Conduct may face temporary or permanent consequences as determined by Hoff Research.
+## enforcement
 
-## Attribution
+response is at the maintainer's discretion and depends on context. it can range from a private warning to a temporary or permanent ban from the project. maintainers who do not follow or enforce this themselves are subject to the same.
 
-This Code of Conduct is adapted from the [Contributor Covenant](https://www.contributor-covenant.org/), version 2.1.
+## attribution
+
+adapted from the [contributor covenant](https://www.contributor-covenant.org/), version 2.1.
