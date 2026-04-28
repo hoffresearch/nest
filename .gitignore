@@ -49,7 +49,6 @@ data/measure/*.nest-*
 # Tracked. Earlier sessions had it gitignored, which silently dropped
 # every architectural decision committed there. Fixed 2026-04-28.
 
-# CODE_OF_CONDUCT.md / CONTRIBUTING.md are still empty templates from
-# the upstream init; tracking them as-is would publish placeholders.
-CODE_OF_CONDUCT.md
-CONTRIBUTING.md
+# CODE_OF_CONDUCT.md and CONTRIBUTING.md were template placeholders
+# at session start and excluded from tracking. The 2026-04-28 audit
+# pass replaced them with real content; they are tracked now.
