@@ -6,7 +6,7 @@ Thanks for your interest in improving `nest`. All contributions are valued.
 
 ## How to contribute
 
-1. Fork the repository at https://github.com/brennercruvinel/nest.
+1. Fork the repository at https://github.com/hoffresearch/nest.
 2. Create a feature branch from `dev`:
    `git checkout -b feature/short-description`.
 3. Make your changes, keeping each PR focused on one concern.
@@ -20,7 +20,7 @@ Thanks for your interest in improving `nest`. All contributions are valued.
 Requires Rust edition 2024 (`rustc >= 1.85`) and Python 3.12+.
 
 ```bash
-git clone https://github.com/brennercruvinel/nest.git
+git clone https://github.com/hoffresearch/nest.git
 cd nest
 
 # build the rust workspace + PyO3 extension
@@ -70,7 +70,7 @@ python tests/test_search_text_model_hash.py
 
 ## Reporting issues
 
-- Bugs and feature requests: [GitHub Issues](https://github.com/brennercruvinel/nest/issues).
+- Bugs and feature requests: [GitHub Issues](https://github.com/hoffresearch/nest/issues).
 - Security vulnerabilities: please do **not** open a public issue. Email [brenner@hoffresearch.com](mailto:brenner@hoffresearch.com) directly. We aim to acknowledge within 72 hours.
 - Questions about the format itself: open a discussion or check `SPEC.md` and `kdb/adr/`.
 
