@@ -81,7 +81,7 @@ straight by the SIMD dot product.
 
 ## References
 
-- `SPEC.md` §5 (encoding values), §6.5 (embeddings layouts).
+- `doc/spec.md` §5 (encoding values), §6.5 (embeddings layouts).
 - `crates/nest-format/src/encoding/` (split: zstd_codec / float16 / int8).
 - `crates/nest-format/src/reader/validate.rs::validate_encoding_for_section`.
 - ADR 0001 (frozen v1 container).

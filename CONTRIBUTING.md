@@ -67,7 +67,7 @@ python tests/test_search_text_model_hash.py
 
 - bugs and feature requests: [github issues](https://github.com/hoffresearch/nest/issues).
 - security vulns: do not open a public issue. email [brenner@hoffresearch.com](mailto:brenner@hoffresearch.com). target ack within 72 hours.
-- questions about the format: open a discussion, or read `SPEC.md` and `kdb/adr/`.
+- questions about the format: open a discussion, or read `doc/spec.md` and `kdb/adr/`.
 
 bug reports should include the `.nest` `file_hash` and `content_hash` (from `nest stats <file>`), the runtime `simd_backend` (also in `nest stats`), the exact cli or python invocation, and the error output.
 

@@ -32,6 +32,10 @@ pub(super) unsafe fn dot_f32_neon(q: &[f32], row_bytes: &[u8]) -> f32 {
     }
 }
 
+// `float16x4_t` and `vcvt_f32_f16` are stable since rustc 1.94. Workspace
+// MSRV is 1.85, but only this aarch64-only function uses them. Suppress
+// the lint here rather than bumping the whole workspace's MSRV.
+#[allow(clippy::incompatible_msrv)]
 #[target_feature(enable = "neon")]
 pub(super) unsafe fn dot_f32_f16_neon(q: &[f32], row_bytes: &[u8]) -> f32 {
     unsafe {

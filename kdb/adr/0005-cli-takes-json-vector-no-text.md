@@ -25,7 +25,7 @@ ships no embedding model. Text → vector is the caller's responsibility:
 - Shell users: pre-compute the JSON-array externally (e.g. via
   `python -c "..."`) and pass it as the second positional argument.
 
-The CLI's `--help` and `SPEC.md` §17 both document this.
+The CLI's `--help` and `doc/spec.md` §17 both document this.
 
 ## Consequences
 
@@ -61,5 +61,5 @@ The CLI's `--help` and `SPEC.md` §17 both document this.
 ## References
 
 - `crates/nest-cli/src/main.rs::cmd_search`
-- `SPEC.md` §17 (CLI surface)
+- `doc/spec.md` §17 (CLI surface)
 - `README.md` "Text queries" section

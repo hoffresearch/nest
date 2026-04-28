@@ -84,5 +84,5 @@ Any future change that alters the bytes on disk must bump
 ## References
 
 - `crates/nest-format/src/layout.rs` (constants and structs)
-- `SPEC.md` §§ 3-9 (byte-by-byte layout)
+- `doc/spec.md` §§ 3-9 (byte-by-byte layout)
 - `crates/nest-format/tests/golden.rs` (golden fixture)

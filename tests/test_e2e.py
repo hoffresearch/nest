@@ -123,7 +123,7 @@ def test_reproducible_builds_match_byte_for_byte():
 
 
 def test_search_hit_carries_full_contract():
-    """Every required SearchHit field per SPEC.md §16 is populated and stable."""
+    """Every required SearchHit field per doc/spec.md §16 is populated and stable."""
     with tempfile.NamedTemporaryFile(delete=False, suffix=".nest") as f:
         path = f.name
     try:

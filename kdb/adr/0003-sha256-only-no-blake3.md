@@ -60,4 +60,4 @@ all derive from `sha2::Sha256::digest`.
 - `crates/nest-format/src/layout.rs` (header_checksum, section_checksum)
 - `crates/nest-format/src/reader.rs` (footer hash, content_hash)
 - `crates/nest-format/src/chunk.rs` (chunk_id)
-- `SPEC.md` §8 (hashing summary)
+- `doc/spec.md` §8 (hashing summary)

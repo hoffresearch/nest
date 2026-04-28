@@ -86,7 +86,7 @@ ADR is consistent with that constraint.
 
 ## References
 
-- `SPEC.md` §6.8 (HNSW layout), §6.9 (BM25 layout).
+- `doc/spec.md` §6.8 (HNSW layout), §6.9 (BM25 layout).
 - `crates/nest-runtime/src/ann/` (5-module split).
 - `crates/nest-runtime/src/bm25/` (5-module split).
 - ADR 0001 (frozen six required sections — supplemented by this ADR).
