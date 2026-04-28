@@ -71,7 +71,6 @@ infrastructure:
 - HNSW recall fix: replaced naive `top-m` neighbor selection with `select_neighbors_heuristic` (Malkov-Yashunin Algorithm 4). bumped `DEFAULT_EF_CONSTRUCTION` to 400 to hit recall@10 >= 0.95 at typical corpus sizes.
 - file hygiene cap: every rust source file in `crates/**/src/**` and every first-party python module is at most 300 lines (see `kdb/adr/0011`). test files exempt.
 - ADRs added: 0006 (encodings 1/2/3), 0007 (HNSW + BM25 optional sections), 0008 (granular model_hash fingerprint), 0009 (runtime SIMD dispatch), 0010 (search-text supersedes 0005), 0011 (file hygiene 300-line rule).
-- repo moved from `truw/nest` to `hoffresearch/nest`.
 - `kdb/` removed from `.gitignore`. earlier sessions had it gitignored, silently dropping every architectural decision committed there.
 
 ### test surface
