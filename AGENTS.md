@@ -116,8 +116,7 @@ these are documented honest limitations of the current code, not bugs to silentl
 - `doc/architecture.md`: binary layout, API surface, errors, versioning, four hashes, SIMD dispatcher, search contract.
 - `doc/usage.md`: 10-section how-to for the 8 commands, presets, offline mode, citations.
 - `doc/changelog.md`: v0.1.0 and v0.2.0 deltas.
-- `doc/spec.md`: byte-by-byte format spec, the canonical reference for any external implementer.
-- `kdb/adr/`: 11 architectural decision records (0001 through 0011). every irreversible decision lives here.
+- `kdb/adr/`: architectural decisions records every product/feature/business irreversible decision lives here.
 - `database/README.md`: what each upstream PT-BR dataset is and how to rebuild the unified corpus.
 - `CONTRIBUTING.md`: external contributor flow.
 - `CODE_OF_CONDUCT.md`: contributor covenant 2.1, lowercase plain-style.
