@@ -5,7 +5,8 @@
 *.so
 *.dylib
 *.dll
-
+kdb/
+adr/
 # Python
 __pycache__/
 *.py[cod]
