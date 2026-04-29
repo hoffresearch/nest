@@ -1,5 +1,5 @@
 """nest_build_corpus.py — build a deterministic .nest from the seven
-PT-BR fake-news datasets under `database/`.
+PT-BR fake-news datasets under `data/demo/`.
 
 Steps:
   1. read each source (loaders live in `_corpus_sources.py`)
@@ -35,7 +35,7 @@ from _corpus_sources import MIN_TEXT_LEN, SOURCES  # noqa: E402
 from builder import BuildConfig, ChunkSpec, Pipeline  # noqa: E402
 
 DATA = REPO / "data"
-DB = REPO / "database"
+DB = REPO / "data" / "demo"
 NEST_BIN = REPO / "target" / "release" / "nest"
 
 EMBED_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"

@@ -54,7 +54,7 @@ python entry: `sys.path.insert(0, "python"); import nest`. dynamic loader finds 
 - branches: `main` is release; `dev` is integration. work happens in `dev` (or feature branches off `dev`).
 - PRs target `dev` from feature branches. release PRs target `main` from `dev`. squash merge into `main` to keep history linear.
 - tags on `main` only (`v0.2.0` is current). `Cargo.toml` workspace version tracks the latest released tag.
-- LFS: `database/` and `data/corpus_next.v1.nest` are tracked via Git LFS. first checkout pulls ~600 MB. tests run without LFS (the unit and golden-fixture tests avoid depend on it); only `measure_presets.py` and `release_check.sh` need the corpus.
+- LFS: `data/demo/` and `data/corpus_next.v1.nest` are tracked via Git LFS. first checkout pulls ~600 MB. tests run without LFS (the unit and golden-fixture tests avoid depend on it); only `measure_presets.py` and `release_check.sh` need the corpus.
 - `data/measure/corpus_*.nest` and `*.nest-*` are gitignored: regeneration artifacts, not assets. the JSON files next to them ARE tracked (regression baselines).
 
 # conventions
@@ -117,7 +117,7 @@ these are documented honest limitations of the current code, not bugs to silentl
 - `doc/usage.md`: 10-section how-to for the 8 commands, presets, offline mode, citations.
 - `doc/changelog.md`: v0.1.0 and v0.2.0 deltas.
 - `kdb/adr/`: architectural decisions records every product/feature/business irreversible decision lives here.
-- `database/README.md`: what each upstream PT-BR dataset is and how to rebuild the unified corpus.
+- `data/demo/README.md`: what each upstream PT-BR dataset is and how to rebuild the unified corpus.
 - `CONTRIBUTING.md`: external contributor flow.
 - `CODE_OF_CONDUCT.md`: contributor covenant 2.1, lowercase plain-style.
 - `scripts/release_check.sh`: read it. it documents the gate by being the gate.
