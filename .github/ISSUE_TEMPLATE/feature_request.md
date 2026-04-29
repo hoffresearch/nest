@@ -31,7 +31,7 @@ assignees: ''
 
 ## format / runtime impact
 
-<!-- if this touches binary layout, search contract, hash semantics, or model fingerprint, an ADR will be required under kdb/adr/. otherwise: n/a. -->
+<!-- describe any impact on binary layout, search contract, hash semantics, or model fingerprint. otherwise: n/a. -->
 
 n/a
 
