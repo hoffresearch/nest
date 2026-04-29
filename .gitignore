@@ -5,8 +5,7 @@
 *.so
 *.dylib
 *.dll
-kdb/
-adr/
+kdb/adr/
 # Python
 __pycache__/
 *.py[cod]
@@ -37,7 +36,7 @@ Thumbs.db
 *~
 
 # Project specific
-# database/ and data/corpus_next.v1.nest are tracked via Git LFS.
+# data/demo/ and data/corpus_next.v1.nest are tracked via Git LFS.
 # Per-phase preset .nest files (data/measure/corpus_*.nest) are
 # regeneration artifacts: re-derivable in minutes by measure_presets.py
 # from the LFS-tracked baseline. Do NOT commit them — they'd inflate the
