@@ -1,36 +1,36 @@
 # ADR NNNN: <title>
 
-- **Status:** Proposed | Accepted | Superseded by ADR-####
-- **Date:** YYYY-MM-DD
-- **Deciders:** <handles>
+- **status:** proposed | accepted | superseded by ADR-NNNN
+- **date:** YYYY-MM-DD
+- **deciders:** <handles>
 
-## Context
+## context
 
-Why are we deciding this now? What forces are at play?
+why are we deciding this now? what forces are at play?
 
-## Decision
+## decision
 
-What did we decide? State the decision in present tense.
+what did we decide? state the decision in present tense.
 
-## Consequences
+## consequences
 
-### Positive
-
-- ...
-
-### Negative
+### positive
 
 - ...
 
-### Trade-offs
+### negative
 
-- What did we explicitly NOT do, and why?
+- ...
 
-## Alternatives considered
+### trade-offs
 
-- **Alt A:** rejected because ...
-- **Alt B:** rejected because ...
+- what did we explicitly not do, and why?
 
-## References
+## alternatives considered
+
+- **alt a:** rejected because ...
+- **alt b:** rejected because ...
+
+## references
 
 - ...

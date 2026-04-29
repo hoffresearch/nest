@@ -1,0 +1,41 @@
+# dependabot configuration. simple by design: weekly cadence, capped pr count,
+# explicit scope. update when adding new package ecosystems (e.g. requirements.txt
+# would unlock the `pip` ecosystem).
+#
+# docs: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+
+updates:
+  # rust workspace at the repo root.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - rust
+    commit-message:
+      prefix: cargo
+      include: scope
+    groups:
+      patch-and-minor:
+        update-types:
+          - patch
+          - minor
+
+  # github actions workflows. picks up files under .github/workflows/ once they exist.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: actions
+      include: scope
