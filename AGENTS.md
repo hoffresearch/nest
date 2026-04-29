@@ -66,9 +66,9 @@ python entry: `sys.path.insert(0, "python"); import nest`. dynamic loader finds 
 - four hashes: `header_checksum`, per-section `checksum` (physical bytes), `file_hash` (whole file), `content_hash` (decoded canonical sections, stable across encodings).
 - `NestFileBuilder` is a consuming builder (`add_chunk(self) -> Self`). presets via `.text_encoding()` + `.embedding_dtype()`.
 - HNSW build is deterministic given a seed. BM25 index is sorted by alphabetical term order.
-- `model_hash` is a granular fingerprint over `(model_id, files_hash, tokenizer_hash, pooling_config_hash, embedding_dim, normalize_embeddings)`. zero-placeholder is rejected at write time. see ADR 0008.
+- `model_hash` is a granular fingerprint over `(model_id, files_hash, tokenizer_hash, pooling_config_hash, embedding_dim, normalize_embeddings)`. zero-placeholder is rejected at write time.
 - runtime SIMD dispatch: AVX2 (x86_64), NEON (aarch64), scalar fallback. `NEST_FORCE_SCALAR=1` forces scalar for A/B benchmarks.
-- file hygiene: every rust source file in `crates/**/src/**` and every first-party python module is at most 300 lines. test files and the `crates/nest-format/tests/roundtrip.rs` carve-out are exempt. see ADR 0011.
+- file hygiene: every rust source file in `crates/**/src/**` and every first-party python module is at most 300 lines. test files and the `crates/nest-format/tests/roundtrip.rs` carve-out are exempt.
 - golden fixture: `crates/nest-format/tests/fixtures/golden_v1_minimal.nest` (1366 bytes, byte-frozen).
 - CLI `search` takes JSON f32 array positional arg; `search-text` shells out to `python/embed_query.py` and validates the embedder's `model_hash` against the manifest.
 
@@ -116,7 +116,6 @@ these are documented honest limitations of the current code, not bugs to silentl
 - `doc/architecture.md`: binary layout, API surface, errors, versioning, four hashes, SIMD dispatcher, search contract.
 - `doc/usage.md`: 10-section how-to for the 8 commands, presets, offline mode, citations.
 - `doc/changelog.md`: v0.1.0 and v0.2.0 deltas.
-- `kdb/adr/`: architectural decisions records every product/feature/business irreversible decision lives here.
 - `data/demo/README.md`: what each upstream PT-BR dataset is and how to rebuild the unified corpus.
 - `CONTRIBUTING.md`: external contributor flow.
 - `CODE_OF_CONDUCT.md`: contributor covenant 2.1, lowercase plain-style.

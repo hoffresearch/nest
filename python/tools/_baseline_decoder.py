@@ -29,8 +29,7 @@ def decode_baseline(path: Path):
     `byte_start`, `byte_end`, `embedding`. `meta` is the manifest fields
     we need to rebuild (model, dim, chunker_version, model_hash).
 
-    Raises `SystemExit` if the file is not raw-encoded — see the
-    embeddings-section requirement in ADR 0006.
+    Raises `SystemExit` if the file is not raw-encoded.
     """
     db = nest.open(str(path))
     info = db.inspect()

@@ -38,7 +38,7 @@ rust:
 - `cargo clippy --workspace --all-targets -- -D warnings` is a hard gate. suppress an individual lint with `#[allow(clippy::name)]` and a one-line justification, never globally.
 - every `unsafe` block needs a `// SAFETY:` comment naming the invariant the caller is relying on.
 - public items get a doc comment that explains the why, not the what. the name already says what.
-- files in `crates/**/src/**` cap at 300 lines, see `kdb/adr/0011`. test files are exempt.
+- files in `crates/**/src/**` cap at 300 lines. test files are exempt.
 
 python:
 
@@ -49,7 +49,7 @@ python:
 
 format and runtime invariants:
 
-if a change touches the binary container layout, the search contract, hash semantics, or the model fingerprint, write or update an adr under `kdb/adr/`. the format is frozen at v1. any byte-level change either fits inside v1 (new section ids and encodings 4-255 are reserved) or bumps `NEST_FORMAT_VERSION` and ships as v2.
+the format is frozen at v1. any byte-level change either fits inside v1 (new section ids and encodings 4-255 are reserved) or bumps `NEST_FORMAT_VERSION` and ships as v2.
 
 ## tests
 
@@ -67,7 +67,7 @@ python tests/test_search_text_model_hash.py
 
 - bugs and feature requests: [github issues](https://github.com/hoffresearch/nest/issues).
 - security vulns: do not open a public issue. email [brenner@hoffresearch.com](mailto:brenner@hoffresearch.com). target ack within 72 hours.
-- questions about the format: open a discussion, or read `doc/spec.md` and `kdb/adr/`.
+- questions about the format: open a discussion, or read `doc/spec.md`.
 
 bug reports should include the `.nest` `file_hash` and `content_hash` (from `nest stats <file>`), the runtime `simd_backend` (also in `nest stats`), the exact cli or python invocation, and the error output.
 
