@@ -1,4 +1,4 @@
-![nest](nest-hoff-research-db.png)
+![nest](/doc/nest-hoff-research-db.png)
 
 # nest
 
@@ -132,17 +132,17 @@ python tests/test_search_text_model_hash.py
 
 ## the demo corpus that ships with nest
 
-`data/corpus_next.v1.nest` is built from seven public PT-BR fake-news datasets unified by truw: `FakeBr-hf`, `FakeTrue.Br-hf`, `Fake.br-Corpus`, `FakeRecogna`, `FakeTrue.Br`, `factck-br`, and `portuguese-fake-news-classifier-bilstm-combined`. raw datasets and the embedding cache live under `database/`. rebuild from source with:
+`data/corpus_next.v1.nest` is built from seven public PT-BR fake-news datasets unified by truw: `FakeBr-hf`, `FakeTrue.Br-hf`, `Fake.br-Corpus`, `FakeRecogna`, `FakeTrue.Br`, `factck-br`, and `portuguese-fake-news-classifier-bilstm-combined`. raw datasets and the embedding cache live under `data/demo/`. rebuild from source with:
 
 ```
 python python/tools/nest_build_corpus.py
 ```
 
-with `reproducible=True` (the script default) two operators get byte-identical `file_hash`. see `database/README.md` for what each subdirectory contains, the schema of the v2 truw canonical CSV, and per-dataset license notes.
+with `reproducible=True` (the script default) two operators get byte-identical `file_hash`. see `data/demo/README.md` for what each subdirectory contains, the schema of the v2 truw canonical CSV, and per-dataset license notes.
 
 ## reference
 
-- `database/README.md` for what each upstream dataset is and how to rebuild the corpus
+- `data/demo/README.md` for what each upstream dataset is and how to rebuild the corpus
 - `doc/architecture.md` for binary layout, API surface, errors, versioning
 - `doc/usage.md` for the eight commands, presets, offline mode, citations
 - `kdb/adr/` for architectural decision records (0001 through 0011)

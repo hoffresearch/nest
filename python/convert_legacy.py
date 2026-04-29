@@ -183,8 +183,8 @@ def convert(src: str, dst: str, *, reproducible: bool) -> None:
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--src", default="data/truw_ptbr.nest")
-    p.add_argument("--dst", default="data/truw_ptbr.v1.nest")
+    p.add_argument("--src", required=True, help="path to a legacy SQLite-based truw_ptbr.nest")
+    p.add_argument("--dst", required=True, help="output path for the converted v1 .nest")
     p.add_argument("--reproducible", action="store_true")
     args = p.parse_args()
     convert(args.src, args.dst, reproducible=args.reproducible)
