@@ -24,7 +24,7 @@ optional sections (skipped by older readers, not part of `content_hash`):
 CLI:
 
 - `nest search-ann <file> <qvec> -k K --ef N`: force the HNSW path with explicit `ef_search`.
-- `nest search-text <file> "query" -k K [--model-path PATH] [--skip-model-hash-check]`: shells out to `python/embed_query.py`, validates the embedder's `embedding_model`, `embedding_dim`, and `model_hash` against the manifest, then routes to the declared `index_type` (exact, hnsw, hybrid). a model mismatch fails with a typed error, never silently. supersedes ADR 0005.
+- `nest search-text <file> "query" -k K [--model-path PATH] [--skip-model-hash-check]`: shells out to `python/embed_query.py`, validates the embedder's `embedding_model`, `embedding_dim`, and `model_hash` against the manifest, then routes to the declared `index_type` (exact, hnsw, hybrid). a model mismatch fails with a typed error, never silently.
 - `nest benchmark --madvise-cold`: extra benchmark pass calling `posix_madvise(MADV_DONTNEED)` between queries. upper bound on cold-cache latency, not absolute cold (see `MmapNestFile::madvise_cold` for caveats).
 - `nest inspect --json`: structured output mirroring `MmapNestFile::inspect_json` for programmatic consumers.
 
@@ -69,9 +69,7 @@ tooling:
 infrastructure:
 
 - HNSW recall fix: replaced naive `top-m` neighbor selection with `select_neighbors_heuristic` (Malkov-Yashunin Algorithm 4). bumped `DEFAULT_EF_CONSTRUCTION` to 400 to hit recall@10 >= 0.95 at typical corpus sizes.
-- file hygiene cap: every rust source file in `crates/**/src/**` and every first-party python module is at most 300 lines (see `kdb/adr/0011`). test files exempt.
-- ADRs added: 0006 (encodings 1/2/3), 0007 (HNSW + BM25 optional sections), 0008 (granular model_hash fingerprint), 0009 (runtime SIMD dispatch), 0010 (search-text supersedes 0005), 0011 (file hygiene 300-line rule).
-- `kdb/` removed from `.gitignore`. earlier sessions had it gitignored, silently dropping every architectural decision committed there.
+- file hygiene cap: every rust source file in `crates/**/src/**` and every first-party python module is at most 300 lines. test files exempt.
 
 ### test surface
 
@@ -130,7 +128,7 @@ encoding: only `SECTION_ENCODING_RAW = 0` is accepted in v0.1. values `1 = zstd`
 - `file_hash` (footer): full 32-byte `SHA-256(file[0..file_size-40))`, including padding.
 - `content_hash`: 32-byte `SHA-256` over the canonical sections in alphabetical-by-name order, each domain-separated by length-prefixed name and length-prefixed payload. stable across rebuilds of the same content.
 - `chunk_id`: domain-separated `SHA-256` with literal preimage prefix `"nest:chunk_id:v1\n"`. format `sha256:<64 hex chars>`.
-- `model_hash`: caller-supplied; format `sha256:<64 hex chars>` enforced at write time. v0.1 accepted any value matching the regex; v0.2 enforces a real fingerprint (see ADR 0008).
+- `model_hash`: caller-supplied; format `sha256:<64 hex chars>` enforced at write time. v0.1 accepted any value matching the regex; v0.2 enforces a real fingerprint.
 
 ### manifest contract
 

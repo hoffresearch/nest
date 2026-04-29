@@ -213,7 +213,7 @@ python/tools/         ingestion (`nest_build_corpus.py`), regression measurement
 scripts/release_check.sh      end-to-end CI gate
 ```
 
-each crate sub-module is split into directories of files, each at most 300 lines (see `kdb/adr/0011`).
+each crate sub-module is split into directories of files, each at most 300 lines.
 
 ## rust API (nest-format)
 
