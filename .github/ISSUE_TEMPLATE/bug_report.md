@@ -1,38 +1,49 @@
 ---
-name: Bug report
-about: Create a report to help us improve
+name: bug report
+about: report a defect in the nest format, runtime, cli, or python bindings
 title: ''
-labels: ''
+labels: bug
 assignees: ''
-
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+<!-- title in plain english, no Conventional Commits prefix. body explains what is broken and why it matters. -->
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+## summary
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+<!-- 1-3 sentences: what is broken. -->
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+## reproduction
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+<!-- minimal repro. paste the exact command, code, or .nest path. include input and any relevant flags. -->
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+```
+$ nest <command> ...
+```
 
-**Additional context**
-Add any other context about the problem here.
+## expected vs actual
+
+<!-- what should happen, then what actually happens. paste the actual error or output verbatim. -->
+
+- expected:
+- actual:
+
+## environment
+
+- nest version / commit:
+- os + arch:
+- rust toolchain (`rustc --version`):
+- python (`python3 --version`):
+- embedding model (if relevant):
+
+## scope
+
+- [ ] binary format / hash semantics
+- [ ] runtime / search contract
+- [ ] cli
+- [ ] python bindings
+- [ ] build / release tooling
+- [ ] docs only
+
+## additional context
+
+<!-- logs, related issues, prior ADRs, anything else. n/a if none. -->

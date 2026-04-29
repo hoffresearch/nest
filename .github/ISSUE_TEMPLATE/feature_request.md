@@ -1,20 +1,40 @@
 ---
-name: Feature request
-about: Suggest an idea for this project
+name: feature request
+about: propose a change to nest format, runtime, cli, python bindings, or docs
 title: ''
-labels: ''
+labels: enhancement
 assignees: ''
-
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+<!-- title in plain english, no Conventional Commits prefix. body explains the why; a future pr will show the what. -->
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+## summary
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+<!-- 1-3 sentences: what you want and the problem it solves. -->
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+## scope
+
+- [ ] binary format / hash semantics
+- [ ] runtime / search contract
+- [ ] cli
+- [ ] python bindings
+- [ ] build / release tooling
+- [ ] docs only
+
+## proposal
+
+<!-- the shape of the change. api surface, cli flag, format field, etc. concrete is better than abstract. -->
+
+## alternatives
+
+<!-- what else you considered and why it falls short. n/a if none. -->
+
+## format / runtime impact
+
+<!-- if this touches binary layout, search contract, hash semantics, or model fingerprint, an ADR will be required under kdb/adr/. otherwise: n/a. -->
+
+n/a
+
+## additional context
+
+<!-- linked issues, prior PRs, ADRs, references. n/a if none. -->
