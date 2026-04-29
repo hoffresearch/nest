@@ -57,7 +57,7 @@ def _filter_and_dedupe(combined: pd.DataFrame) -> tuple[pd.DataFrame, int, int]:
 
 def _resolve_model_hash():
     """Compute the corpus' `model_hash` from the local sentence-transformers
-    snapshot. Refuses to write the legacy placeholder — see ADR 0008."""
+    snapshot. Refuses to write the legacy placeholder."""
     from model_fingerprint import (
         compute_model_fingerprint,
         fingerprint_to_model_hash,
