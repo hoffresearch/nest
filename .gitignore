@@ -7,8 +7,6 @@
 *.dll
 kdb/
 adr/
-/kdb
-/adr
 # Python
 __pycache__/
 *.py[cod]
