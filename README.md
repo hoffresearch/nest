@@ -151,6 +151,7 @@ with `reproducible=True` (the script default) two operators get byte-identical `
 
 ## license
 
-Made it simple, but signifcant. Brenner Cruvinel.
+made it simple, but signifcant. 
+Brenner Cruvinel.
 
 MIT.
