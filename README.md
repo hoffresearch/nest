@@ -6,21 +6,14 @@ sovereign embedded vector database. single-file `.nest` container with content-a
 
 one file carries chunks, embeddings, source spans, optional ANN and BM25 indices, and a search contract. all hash-verified, memory-mapped, SIMD-friendly.
 
-python builds. rust serves. nest ships. agents read.
+python builds. rust serves. nest ships. agents/llms read, that's it.
 
-## what it actually is
-
-a portable binary format plus a runtime that opens it. the format is open and frozen at v1. the runtime is rust, mmaps the file, runs SIMD dot products straight off disk, and returns hits with stable citation IDs. there is no server. no API call. no central index.
+a portable binary format plus a runtime that opens it. the format is open and frozen at v1. the runtime is rust, mmaps the file, runs SIMD dot products straight off disk, and returns hits with stable citation IDs. there is no server. no API call. no central index. ship a curated knowledge base with the application instead of pointing at a hosted vector DB. some run on phones, some on edge nodes, some inside regulated environments where queries must not leave the box.
 
 the file is the database.
 
-## used in production by
 
-truw, skinAI, super aurora, exaltify, hoff.
-
-different products, same need: ship a curated knowledge base with the application instead of pointing at a hosted vector DB. some run on phones, some on edge nodes, some inside regulated environments where queries must not leave the box.
-
-## why "sovereign"
+## sovereign data is our priority
 
 four properties, all enforced by the format itself, not by policy.
 
@@ -137,7 +130,7 @@ python tests/test_search_text_model_hash.py
 
 `release_check.sh` runs the full pipeline: build, test, clippy, fmt, line-count guard, python tests, ruff, `measure_presets.py`, `compare_measure.py` against the committed baseline. exits non-zero on any failure.
 
-## the corpus that ships with nest
+## the demo corpus that ships with nest
 
 `data/corpus_next.v1.nest` is built from seven public PT-BR fake-news datasets unified by truw: `FakeBr-hf`, `FakeTrue.Br-hf`, `Fake.br-Corpus`, `FakeRecogna`, `FakeTrue.Br`, `factck-br`, and `portuguese-fake-news-classifier-bilstm-combined`. raw datasets and the embedding cache live under `database/`. rebuild from source with:
 
@@ -157,5 +150,7 @@ with `reproducible=True` (the script default) two operators get byte-identical `
 - `doc/changelog.md` for v0.1 to v0.2 deltas
 
 ## license
+
+Made it simple, but signifcant. Brenner Cruvinel.
 
 MIT.
