@@ -1,4 +1,4 @@
-# database
+# demo
 
 raw and intermediate data used to build the truw corpus that ships with `nest`. each subdirectory is either a public PT-BR fake-news dataset (kept verbatim from its upstream distribution, license intact) or a derived artifact produced from those sources.
 
@@ -9,7 +9,7 @@ tracked via Git LFS. expect ~600 MB on first clone.
 ## contents
 
 ```
-database/
+data/demo/
 ├── FakeBr-hf/                                            7.2k rows  (csv, train+test)
 ├── FakeTrue.Br-hf/                                       3.6k rows  (csv, train+test)
 ├── Fake.br-Corpus/                                       7.2k rows  (preprocessed + full_texts)
@@ -47,7 +47,7 @@ the result is `data/corpus_next.v1.nest`: 30,725 deduped chunks, 119 MB at the `
 python python/tools/nest_build_corpus.py
 ```
 
-writes `data/corpus_next.v1.nest`. uses `database/corpus-next/embed_cache.sqlite` so re-runs skip the embedding step. takes ~10 minutes from cold cache, seconds from warm.
+writes `data/corpus_next.v1.nest`. uses `data/demo/corpus-next/embed_cache.sqlite` so re-runs skip the embedding step. takes ~10 minutes from cold cache, seconds from warm.
 
 with `reproducible=True` (the default in `BuildConfig` for this script) two operators on different machines produce byte-identical files. `file_hash` and `content_hash` will match.
 
@@ -75,7 +75,7 @@ for name, loader in SOURCES:
 import sys; sys.path.insert(0, "python")
 import nest
 
-db = nest.open("database/truw-built/truw_ptbr.nest")
+db = nest.open("data/demo/truw-built/truw_ptbr.nest")
 hits = db.search(qvec, k=5)
 ```
 
