@@ -53,6 +53,6 @@ things we do not treat as security bugs:
 ## hardening notes
 
 - the runtime never opens a network socket. queries are answered from `mmap`.
-- `model_hash` is a granular fingerprint over the local model snapshot (config + tokenizer + weights + pooling + dim + normalize). a mismatch fails with a typed error, never silently. see `kdb/adr/0008`.
+- `model_hash` is a granular fingerprint over the local model snapshot (config + tokenizer + weights + pooling + dim + normalize). a mismatch fails with a typed error, never silently.
 - `unsafe` is concentrated in the SIMD dispatcher (`crates/nest-runtime/src/simd/`) and the mmap reader (`crates/nest-runtime/src/mmap_file.rs`). every `unsafe` block carries a `// SAFETY:` comment documenting the invariant.
 - binary releases of `nest-cli` are not yet signed. signed tags are on the v0.3 backlog.
