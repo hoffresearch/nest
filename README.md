@@ -145,7 +145,6 @@ with `reproducible=True` (the script default) two operators get byte-identical `
 - `database/README.md` for what each upstream dataset is and how to rebuild the corpus
 - `doc/architecture.md` for binary layout, API surface, errors, versioning
 - `doc/usage.md` for the eight commands, presets, offline mode, citations
-- `doc/spec.md` for the byte-by-byte format
 - `kdb/adr/` for architectural decision records (0001 through 0011)
 - `doc/changelog.md` for v0.1 to v0.2 deltas
 
