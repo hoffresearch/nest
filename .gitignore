@@ -36,6 +36,9 @@ Thumbs.db
 *.swo
 *~
 
+# Claude
+.claude/
+
 # Project specific
 # data/demo/ and data/corpus_next.v1.nest are tracked via Git LFS.
 # Per-phase preset .nest files (data/measure/corpus_*.nest) are
@@ -45,4 +48,7 @@ Thumbs.db
 # metrics next to them.
 data/measure/corpus_*.nest
 data/measure/*.nest-*
+
+# Local symlink to external hoff database (not part of this repo)
+data/hoff.db
 
