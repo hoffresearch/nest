@@ -4,7 +4,7 @@ raw and intermediate data used to build the truw corpus that ships with `nest`. 
 
 nothing in here is required to use `nest` itself. `nest` reads `.nest` files and only `.nest` files. this directory exists so that the corpus shipped with the project is reproducible: anyone can re-run `python python/tools/nest_build_corpus.py` and get a byte-identical `dat/corpus_next.v1.nest`.
 
-tracked via Git LFS. expect ~600 MB on first clone.
+this directory is local-only and gitignored. datasets are fetched on demand from the upstream links below.
 
 ## contents
 
