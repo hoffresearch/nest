@@ -1,5 +1,5 @@
 """Acceptance harness: measure file size, recall@k, score drift, and
-latency for the four presets against a baseline `data/corpus_next.v1.nest`.
+latency for the four presets against a baseline `dat/corpus_next.v1.nest`.
 
 Pipeline:
 

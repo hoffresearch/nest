@@ -1,5 +1,5 @@
 """nest_build_corpus.py — build a deterministic .nest from the seven
-PT-BR fake-news datasets under `data/demo/`.
+PT-BR fake-news datasets under `dat/demo/`.
 
 Steps:
   1. read each source (loaders live in `_corpus_sources.py`)
@@ -8,13 +8,13 @@ Steps:
   4. dedupe by sha256(text), keep first
   5. embed each row with the model declared in EMBED_MODEL
   6. call builder.Pipeline (existing tool) to chunk + cache + emit
-  7. write data/<name>.nest
+    7. write dat/<name>.nest
   8. shell out to `nest validate`
   9. print report: original counts vs post-dedup vs in .nest
 
 Run:
   python3 python/tools/nest_build_corpus.py
-  python3 python/tools/nest_build_corpus.py --out data/foo.nest
+    python3 python/tools/nest_build_corpus.py --out dat/foo.nest
 """
 
 from __future__ import annotations
@@ -34,8 +34,8 @@ import pandas as pd  # noqa: E402
 from _corpus_sources import MIN_TEXT_LEN, SOURCES  # noqa: E402
 from builder import BuildConfig, ChunkSpec, Pipeline  # noqa: E402
 
-DATA = REPO / "data"
-DB = REPO / "data" / "demo"
+DATA = REPO / "dat"
+DB = REPO / "dat" / "demo"
 NEST_BIN = REPO / "target" / "release" / "nest"
 
 EMBED_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -114,7 +114,7 @@ def main():
     ap.add_argument(
         "--out",
         default=str(DATA / "corpus_next.v1.nest"),
-        help="output .nest path (default: data/corpus_next.v1.nest)",
+        help="output .nest path (default: dat/corpus_next.v1.nest)",
     )
     ap.add_argument(
         "--cache",
