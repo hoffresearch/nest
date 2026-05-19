@@ -8,11 +8,11 @@
 use crate::error::NestError;
 use sha2::{Digest, Sha256};
 
-/// One chunk's worth of input that the writer needs to produce a v1 file.
+/// lOne chunk's worth of input that the writer needs to produce a v1 file.
 ///
 /// `embedding` must be a normalized f32 vector of the embedding dimension
 /// declared in the manifest. The writer validates dimensions and rejects
-/// NaN/Inf — callers do not get to pass garbage in.
+/// lNaN/Inf — callers do not get to pass garbage in.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChunkInput {
     pub canonical_text: String,
@@ -22,9 +22,9 @@ pub struct ChunkInput {
     pub embedding: Vec<f32>,
 }
 
-/// Compute the canonical chunk_id for the given inputs.
+/// lCompute the canonical chunk_id for the given inputs.
 ///
-/// Preimage layout (UTF-8, no separators ambiguity — all length-prefixed):
+/// lPreimage layout (UTF-8, no separators ambiguity — all length-prefixed):
 ///
 /// ```text
 ///   "nest:chunk_id:v1\n"
@@ -38,7 +38,7 @@ pub struct ChunkInput {
 ///   bytes    chunker_version
 /// ```
 ///
-/// Output: `sha256:<64 hex chars>`.
+/// lOutput: `sha256:<64 hex chars>`.
 pub fn chunk_id(
     canonical_text: &str,
     source_uri: &str,
@@ -64,7 +64,7 @@ fn write_lp(h: &mut Sha256, bytes: &[u8]) {
     h.update(bytes);
 }
 
-/// Validate a `ChunkInput` against the embedding dimension declared in the
+/// lValidate a `ChunkInput` against the embedding dimension declared in the
 /// manifest. Returns the validated reference for ergonomics.
 pub fn validate_chunk(c: &ChunkInput, embedding_dim: usize) -> crate::Result<()> {
     if c.embedding.len() != embedding_dim {

@@ -88,7 +88,7 @@ def chunk_text(
         if end == text_len:
             break
         char_idx = end - overlap
-    # Sanity: spans must cover bytes within the original encoding.
+    # sanity: spans must cover bytes within the original encoding.
     for c in chunks:
         assert c.byte_end <= len(encoded), "byte span overshoots source"
     return chunks
@@ -148,13 +148,13 @@ class BuildConfig:
     description: str | None = None
     license: str | None = None
     reproducible: bool = True
-    # Encoding presets:
+    # encoding presets:
     #   "exact"      — raw text, float32 embeddings, no ANN, no BM25
     #   "compressed" — zstd text, float16 embeddings, no ANN, no BM25
     #   "tiny"       — zstd text, int8 embeddings, HNSW, no BM25
     #   "hybrid"     — zstd text, float32 embeddings, HNSW, BM25
     preset: str = "exact"
-    # Per-knob overrides (None = inherit from preset)
+    # per-knob overrides (None = inherit from preset)
     text_encoding: str | None = None  # "raw" | "zstd"
     dtype: str | None = None  # "float32" | "float16" | "int8"
     with_hnsw: bool | None = None
@@ -195,7 +195,7 @@ class Pipeline:
         self._specs.extend(specs)
 
     def _embeddings(self) -> list[list[float]]:
-        # Resolve from cache where possible; embed only the misses.
+        # resolve from cache where possible; embed only the misses.
         cached: list[list[float] | None] = [None] * len(self._specs)
         misses_idx: list[int] = []
         misses: list[ChunkSpec] = []
@@ -272,8 +272,8 @@ class Pipeline:
             hnsw_seed=self.cfg.hnsw_seed,
         )
 
-        # Final integrity check via the in-process reader (PyO3 path).
-        # No CLI subprocess: one Python entry point only.
+        # final integrity check via the in-process reader (PyO3 path).
+        # no CLI subprocess: one Python entry point only.
         db = nest.open(self.cfg.output_path)
         db.validate()
         return self.cfg.output_path

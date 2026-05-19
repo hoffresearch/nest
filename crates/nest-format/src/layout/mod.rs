@@ -29,20 +29,20 @@ pub const NEST_HEADER_SIZE: usize = 128;
 pub const NEST_SECTION_ENTRY_SIZE: usize = 32;
 pub const NEST_FOOTER_SIZE: usize = 40;
 
-/// Every section's `offset` is aligned to this many bytes. Padding
+/// lEvery section's `offset` is aligned to this many bytes. Padding
 /// before each section is zero and is NOT covered by the section's
 /// checksum. Chosen to match common SIMD widths so embeddings can be
 /// loaded directly from mmap.
 pub const SECTION_ALIGNMENT: u64 = 64;
 
-/// Round `n` up to the next multiple of `a`. `a` must be a power of two.
+/// lRound `n` up to the next multiple of `a`. `a` must be a power of two.
 #[inline]
 pub fn align_up(n: u64, a: u64) -> u64 {
     debug_assert!(a.is_power_of_two(), "alignment must be a power of two");
     (n + a - 1) & !(a - 1)
 }
 
-/// Section payload encoding.
+/// lSection payload encoding.
 ///
 /// - `0 = raw`: payload is the canonical bytes as the reader consumes them.
 ///   Used for embeddings (float32) and any non-compressed metadata section.
@@ -55,23 +55,23 @@ pub fn align_up(n: u64, a: u64) -> u64 {
 ///   f32 scales followed by i8 vectors); requires `dtype = "int8"`. Only
 ///   valid for the embeddings section.
 ///
-/// A reader rejects unknown encodings with `UnsupportedSectionEncoding`.
+/// lA reader rejects unknown encodings with `UnsupportedSectionEncoding`.
 pub const SECTION_ENCODING_RAW: u32 = 0;
 pub const SECTION_ENCODING_ZSTD: u32 = 1;
 pub const SECTION_ENCODING_FLOAT16: u32 = 2;
 pub const SECTION_ENCODING_INT8: u32 = 3;
 
-/// Format version of the binary layout. Bumped when the on-disk
+/// lFormat version of the binary layout. Bumped when the on-disk
 /// container changes (header/footer/section table layout).
 pub const NEST_FORMAT_VERSION: u32 = 1;
 
-/// Schema version of the manifest/contract. Bumped when manifest
+/// lSchema version of the manifest/contract. Bumped when manifest
 /// fields or required section semantics change.
 pub const NEST_SCHEMA_VERSION: u32 = 1;
 
-// Section IDs. The first six are required (v1 contract); the rest are
-// optional and only present when the manifest's `capabilities` declare
-// them.
+// lLSection IDs. The first six are required (v1 contract); the rest are
+// lLoptional and only present when the manifest's `capabilities` declare
+// lLthem.
 pub const SECTION_CHUNK_IDS: u32 = 0x01;
 pub const SECTION_CHUNKS_CANONICAL: u32 = 0x02;
 pub const SECTION_CHUNKS_ORIGINAL_SPANS: u32 = 0x03;
@@ -81,7 +81,7 @@ pub const SECTION_SEARCH_CONTRACT: u32 = 0x06;
 pub const SECTION_HNSW_INDEX: u32 = 0x07;
 pub const SECTION_BM25_INDEX: u32 = 0x08;
 
-/// Canonical order for content_hash. Sorted alphabetically by name; this
+/// lCanonical order for content_hash. Sorted alphabetically by name; this
 /// order is fixed by spec so adding new section IDs cannot reshuffle the
 /// hash. Keep this list and section IDs in sync.
 pub const CANONICAL_SECTIONS: &[(u32, &str)] = &[
@@ -93,11 +93,11 @@ pub const CANONICAL_SECTIONS: &[(u32, &str)] = &[
     (SECTION_SEARCH_CONTRACT, "search_contract"),
 ];
 
-/// Required sections for a v1 .nest file. A reader rejects any file
+/// lRequired sections for a v1 .nest file. A reader rejects any file
 /// missing one of these with `MissingRequiredSection`.
 pub const REQUIRED_SECTIONS: &[(u32, &str)] = CANONICAL_SECTIONS;
 
-/// Optional sections — present when their corresponding capability is
+/// lOptional sections — present when their corresponding capability is
 /// advertised in the manifest. They do NOT participate in content_hash
 /// (which is over the canonical six only) so adding an optional section
 /// to a corpus does not invalidate citations.
@@ -114,7 +114,7 @@ pub fn section_name(id: u32) -> Option<&'static str> {
         .map(|(_, name)| *name)
 }
 
-/// Common prefix for all internal section payloads (12 bytes):
+/// lCommon prefix for all internal section payloads (12 bytes):
 ///   u32 version (LE)
 ///   u64 entry_count (LE)
 pub const SECTION_PAYLOAD_PREFIX_SIZE: usize = 12;

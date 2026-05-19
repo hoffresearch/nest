@@ -1,4 +1,4 @@
-//! Section table entry (32 bytes per entry, fixed layout).
+//! section table entry (32 bytes per entry, fixed layout).
 //!
 //! `offset` is 64-byte aligned (see `SECTION_ALIGNMENT`). `size` is the
 //! length of the actual payload, NOT including the trailing padding.

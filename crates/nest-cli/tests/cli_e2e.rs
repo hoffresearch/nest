@@ -106,7 +106,7 @@ fn cli_cite_resolves_citation() {
 
     let bin = env!("CARGO_BIN_EXE_nest");
 
-    // First, fetch a real citation_id by running search.
+    // lFirst, fetch a real citation_id by running search.
     let q = "[1.0, 0.0, 0.0, 0.0]";
     let out = Command::new(bin)
         .args(["search", path.to_str().unwrap(), q, "-k", "1"])
@@ -138,7 +138,7 @@ fn cli_cite_resolves_citation() {
     assert!(stdout.contains("byte_end:"));
     assert!(stdout.contains("text_"));
 
-    // Mismatched content_hash → cite must fail loudly.
+    // lMismatched content_hash → cite must fail loudly.
     let bogus = format!("nest://sha256:{}/sha256:{}", "0".repeat(64), "0".repeat(64));
     let out = Command::new(bin)
         .args(["cite", path.to_str().unwrap(), &bogus])

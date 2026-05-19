@@ -129,7 +129,7 @@ def main() -> int:
         ),
     ]
 
-    # Pretty print the metrics side-by-side.
+    # pretty print the metrics side-by-side.
     print(f"# baseline ({args.baseline.name}) → post ({args.post.name})")
     print(f"  baseline n_queries={base.get('n_queries')}  post n_queries={post.get('n_queries')}")
     print()
@@ -145,7 +145,7 @@ def main() -> int:
             f"{fmt(p['p95_ms'], 8, 2)} {fmt(p['drift_max'], 10, 6)}"
         )
     print()
-    print("## Regression gates")
+    print("## regression gates")
     failed = 0
     for label, ok, val in gates:
         status = "PASS" if ok else "FAIL"

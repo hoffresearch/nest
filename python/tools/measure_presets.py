@@ -167,7 +167,7 @@ def main():
     log = sys.stderr if args.json else sys.stdout
     print(file=log)
     print(
-        f"## Acceptance harness: {len(chunks)} chunks, dim={meta['embedding_dim']}, "
+        f"## acceptance harness: {len(chunks)} chunks, dim={meta['embedding_dim']}, "
         f"{args.n_queries} queries, k={args.k}",
         file=log,
     )
@@ -246,7 +246,7 @@ def main():
         measurements.append(m)
 
     print(file=log)
-    print("## Results", file=log)
+    print("## results", file=log)
     widths = [max(len(str(r[i])) for r in rows) for i in range(len(rows[0]))]
     sep = "  ".join("-" * w for w in widths)
     for i, row in enumerate(rows):
