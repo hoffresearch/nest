@@ -1,4 +1,4 @@
-//! Tiny BM25 inverted index for the hybrid search path.
+//! tiny BM25 inverted index for the hybrid search path.
 //!
 //! Tokenization is intentionally simple — lowercase, split on
 //! Unicode-aware whitespace + punctuation, drop tokens with `len < 2`.

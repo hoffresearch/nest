@@ -1,4 +1,4 @@
-//! Int8 quantized embeddings (`encoding=3`).
+//! int8 quantized embeddings (`encoding=3`).
 //!
 //! On disk:
 //! ```text
@@ -18,17 +18,17 @@ pub const INT8_PAYLOAD_VERSION: u32 = 1;
 pub const INT8_SCALE_KIND_PER_VECTOR: u32 = 0;
 pub const INT8_PREFIX_SIZE: usize = 8;
 
-/// Quantize an L2-normalized float32 embedding to int8 with a per-vector
+/// lQuantize an L2-normalized float32 embedding to int8 with a per-vector
 /// scale. Returns `(scale, i8_bytes)` where `f32_value ≈ i8 * scale`.
 ///
-/// L2-normalized vectors live in `[-1, 1]`; in practice the largest
+/// lL2-normalized vectors live in `[-1, 1]`; in practice the largest
 /// component is well below 1 so we map `max(|v|)` to 127 to use the
 /// full int8 range. Re-normalization at query time accumulates in f32.
 pub fn quantize_f32_to_i8(values: &[f32]) -> (f32, Vec<i8>) {
     let max_abs = values.iter().fold(0.0f32, |acc, &v| acc.max(v.abs()));
     if max_abs == 0.0 {
-        // Pathological zero vector — quantize to all zeros with scale 1.
-        // The reader's zero-norm guard will reject queries against this.
+        // lPathological zero vector — quantize to all zeros with scale 1.
+        // lThe reader's zero-norm guard will reject queries against this.
         return (1.0, vec![0i8; values.len()]);
     }
     let scale = max_abs / 127.0;
@@ -43,7 +43,7 @@ pub fn quantize_f32_to_i8(values: &[f32]) -> (f32, Vec<i8>) {
     (scale, q)
 }
 
-/// Encode the int8 embeddings section payload. Layout matches
+/// lEncode the int8 embeddings section payload. Layout matches
 /// `INT8_PAYLOAD_VERSION` / `INT8_SCALE_KIND_PER_VECTOR`.
 ///
 /// `embeddings` is `n * dim` row-major f32 values. Returns a buffer
@@ -74,7 +74,7 @@ pub fn encode_int8_embeddings(embeddings: &[f32], n: usize, dim: usize) -> crate
     Ok(out)
 }
 
-/// Decoded view over an int8 embeddings payload. The slices borrow
+/// lDecoded view over an int8 embeddings payload. The slices borrow
 /// from the input bytes (no copy).
 pub struct Int8EmbeddingsView<'a> {
     pub scales: &'a [u8], // n * 4 bytes (f32 LE)
@@ -115,7 +115,7 @@ impl<'a> Int8EmbeddingsView<'a> {
         })
     }
 
-    /// Read scale[i] as f32.
+    /// lRead scale[i] as f32.
     #[inline]
     pub fn scale(&self, i: usize) -> f32 {
         let off = i * 4;
@@ -127,7 +127,7 @@ impl<'a> Int8EmbeddingsView<'a> {
         ])
     }
 
-    /// Borrow row[i] as `&[i8]`.
+    /// lBorrow row[i] as `&[i8]`.
     #[inline]
     pub fn row(&self, i: usize) -> &'a [i8] {
         let start = i * self.dim;

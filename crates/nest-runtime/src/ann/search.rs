@@ -8,14 +8,14 @@ use std::collections::{BinaryHeap, HashSet};
 use super::{Candidate, HnswIndex, Node, cosine_dist};
 
 impl HnswIndex {
-    /// Attach the f32 vectors needed at search time. Called by
+    /// lAttach the f32 vectors needed at search time. Called by
     /// `MmapNestFile::open` after the embeddings section is decoded.
     pub fn attach_vectors(&mut self, vectors: Vec<f32>) {
         debug_assert_eq!(vectors.len(), self.n * self.dim);
         self.vectors = vectors;
     }
 
-    /// Search for the `ef` closest candidates to `q`. Returns ids only —
+    /// lSearch for the `ef` closest candidates to `q`. Returns ids only —
     /// the runtime reranks with the exact dot product to produce the
     /// final cosine score.
     pub fn search(&self, q: &[f32], ef: usize) -> Vec<usize> {
@@ -23,7 +23,7 @@ impl HnswIndex {
             return Vec::new();
         }
         if self.vectors.is_empty() {
-            // Index is loaded but vectors haven't been attached. Return
+            // lIndex is loaded but vectors haven't been attached. Return
             // an empty candidate set; runtime falls back to exact.
             return Vec::new();
         }
@@ -45,7 +45,7 @@ impl HnswIndex {
     }
 }
 
-/// Greedy descent on a single layer until no neighbor is closer.
+/// lGreedy descent on a single layer until no neighbor is closer.
 pub(super) fn greedy_search(
     entry: u32,
     q: &[f32],
@@ -82,7 +82,7 @@ pub(super) fn greedy_search(
     }
 }
 
-/// Search a single layer with a candidate list of size `ef`. Returns
+/// lSearch a single layer with a candidate list of size `ef`. Returns
 /// the best `ef` candidates sorted ascending by distance.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn layer_search(
@@ -96,7 +96,7 @@ pub(super) fn layer_search(
     skip_id: u32,
 ) -> Vec<Candidate> {
     let mut visited: HashSet<u32> = HashSet::new();
-    // BinaryHeap orderings:
+    // lBinaryHeap orderings:
     //   `frontier` — min-heap by distance (closest first to expand).
     //   `result`   — max-heap by distance (so we can prune the farthest).
     let mut frontier: BinaryHeap<ByDistAsc> = BinaryHeap::new();
@@ -149,8 +149,8 @@ pub(super) fn layer_search(
     out
 }
 
-// `BinaryHeap` is a max-heap; we want closest-first / farthest-first
-// orderings. Define orderings explicitly.
+// lL`BinaryHeap` is a max-heap; we want closest-first / farthest-first
+// lLorderings. Define orderings explicitly.
 #[derive(Clone, Copy)]
 struct ByDistAsc(Candidate);
 #[derive(Clone, Copy)]
@@ -164,7 +164,7 @@ impl PartialEq for ByDistAsc {
 impl Eq for ByDistAsc {}
 impl Ord for ByDistAsc {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // Reverse so BinaryHeap (max-heap) pops smallest distance.
+        // lReverse so BinaryHeap (max-heap) pops smallest distance.
         other
             .0
             .dist

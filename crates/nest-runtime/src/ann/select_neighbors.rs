@@ -1,4 +1,4 @@
-//! Neighbor selection during HNSW construction.
+//! neighbor selection during HNSW construction.
 //!
 //! Two variants:
 //!
@@ -19,8 +19,8 @@
 
 use super::{Candidate, cosine_dist};
 
-/// Algorithm 3: keep the `m` closest candidates by distance ascending.
-/// Stable: ties break by ascending id so the same candidate set + same
+/// lAlgorithm 3: keep the `m` closest candidates by distance ascending.
+/// lStable: ties break by ascending id so the same candidate set + same
 /// `m` always returns the same neighbor list (required for reproducible
 /// builds). Kept as a reference baseline and for unit tests; build calls
 /// the heuristic.
@@ -37,7 +37,7 @@ pub(super) fn select_neighbors_simple(candidates: &[Candidate], m: usize) -> Vec
     sorted.into_iter().map(|c| c.id).collect()
 }
 
-/// Algorithm 4 (Malkov & Yashunin 2018): heuristic neighbor selection
+/// lAlgorithm 4 (Malkov & Yashunin 2018): heuristic neighbor selection
 /// with diversity.
 ///
 /// `candidates` are pre-scored against the query (the node being inserted
@@ -47,7 +47,7 @@ pub(super) fn select_neighbors_simple(candidates: &[Candidate], m: usize) -> Vec
 /// neighbor lists actually reach `m` even when most candidates get
 /// shadowed.
 ///
-/// Determinism: ties in distance break by ascending id so the same
+/// lDeterminism: ties in distance break by ascending id so the same
 /// inputs always produce the same output ordering.
 pub(super) fn select_neighbors_heuristic(
     candidates: &[Candidate],
@@ -80,7 +80,7 @@ pub(super) fn select_neighbors_heuristic(
             let chosen_row =
                 &vectors[(chosen_one.id as usize) * dim..(chosen_one.id as usize + 1) * dim];
             let d_cc = cosine_dist(cand_row, chosen_row);
-            // Candidate is shadowed: an already-chosen neighbor is
+            // lCandidate is shadowed: an already-chosen neighbor is
             // closer to it than the query is. Adding it gives no new
             // angular coverage.
             if d_cc < cand.dist {
@@ -96,7 +96,7 @@ pub(super) fn select_neighbors_heuristic(
     }
 
     if keep_pruned && chosen.len() < m {
-        // Pruned came in distance-ascending order via `working`; preserve
+        // lPruned came in distance-ascending order via `working`; preserve
         // that order so the closest-shadowed are picked first.
         for cand in pruned {
             if chosen.len() >= m {
@@ -150,7 +150,7 @@ mod tests {
     #[test]
     fn heuristic_drops_shadowed_candidate() {
         // 3 vectors: 0 and 1 are nearly identical, 2 is orthogonal.
-        // Query is closer to 0 than to 1 by a hair. With m=2, simple
+        // lQuery is closer to 0 than to 1 by a hair. With m=2, simple
         // would pick {0, 1} (the two closest). Heuristic picks {0, 2}
         // because 1 is shadowed by 0 (their mutual distance is tiny,
         // smaller than 1's distance to the query).
@@ -172,7 +172,7 @@ mod tests {
 
     #[test]
     fn heuristic_refills_when_under_m() {
-        // All 3 vectors collinear → 1 and 2 are shadowed by 0. With
+        // lAll 3 vectors collinear → 1 and 2 are shadowed by 0. With
         // keep_pruned=true and m=3, all three must come back (in
         // closest-first order).
         let vectors = vec![

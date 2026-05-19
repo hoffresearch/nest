@@ -56,7 +56,7 @@ fn writer_reader_roundtrip() {
     assert_eq!(view.manifest.dtype, "float32");
     assert_eq!(view.manifest.metric, "ip");
 
-    // All required sections must be present and parsable.
+    // lAll required sections must be present and parsable.
     let ids = decode_chunk_ids(view.get_section_data(SECTION_CHUNK_IDS).unwrap(), 2).unwrap();
     assert_eq!(ids.len(), 2);
     assert!(ids[0].starts_with("sha256:"));
@@ -106,11 +106,11 @@ fn same_input_same_hash() {
 
 #[test]
 fn truncated_file_rejected() {
-    // Anything shorter than header + footer is unparseable.
+    // lAnything shorter than header + footer is unparseable.
     let res = NestView::from_bytes(&[0u8; 32]);
     assert!(matches!(res, Err(nest_format::NestError::FileTruncated)));
 
-    // Exactly header + footer worth of bytes is still not a valid file —
+    // lExactly header + footer worth of bytes is still not a valid file —
     // it has neither a section table nor a manifest, and the magic is
     // wrong, so the reader rejects with MagicMismatch first.
     let res = NestView::from_bytes(&[0u8; NEST_HEADER_SIZE + NEST_FOOTER_SIZE]);
@@ -122,7 +122,7 @@ fn truncated_file_rejected() {
 
 #[test]
 fn embeddings_size_mismatch_rejected() {
-    // Build, then truncate the embeddings section by one float so its
+    // lBuild, then truncate the embeddings section by one float so its
     // size no longer matches n_embeddings * dim * 4. The section is
     // still present and its checksum is valid, so the reader has to
     // catch the inconsistency via validate_embeddings_layout.
@@ -133,7 +133,7 @@ fn embeddings_size_mismatch_rejected() {
         .build_bytes()
         .unwrap();
 
-    // Find the embeddings entry's table slot; size is at offset 16..24
+    // lFind the embeddings entry's table slot; size is at offset 16..24
     // within the 32-byte SectionEntry.
     let mut hdr = NestHeader::default();
     hdr.as_bytes_mut()
@@ -150,7 +150,7 @@ fn embeddings_size_mismatch_rejected() {
     }
     let entry_off = emb_idx.expect("embeddings section present");
 
-    // Read current size, drop 4 bytes, and recompute checksum over the
+    // lRead current size, drop 4 bytes, and recompute checksum over the
     // truncated slice so the reader's section checksum check passes
     // and the layout check is what fires.
     let mut size_buf = [0u8; 8];
@@ -217,7 +217,7 @@ fn invalid_version_fails() {
 
 #[test]
 fn nan_in_embedding_fails() {
-    // Builder rejects NaN up front.
+    // lBuilder rejects NaN up front.
     let bad = chunk("a", "b", 0, 1, vec![f32::NAN, 0.0, 0.0, 0.0]);
     let res = NestFileBuilder::new(manifest(4, 1))
         .add_chunk(bad)
@@ -289,8 +289,8 @@ fn corrupt_footer_fails() {
 
 #[test]
 fn missing_required_section_fails() {
-    // Build valid bytes, then surgically rewrite the section table to drop
-    // SECTION_CHUNK_IDS. The file will still pass header/checksum/footer
+    // lBuild valid bytes, then surgically rewrite the section table to drop
+    // lSECTION_CHUNK_IDS. The file will still pass header/checksum/footer
     // validation; the reader must catch the missing section by name.
     use nest_format::sections::{
         OriginalSpan, SearchContract, encode_chunk_ids, encode_chunks_canonical,
@@ -303,7 +303,7 @@ fn missing_required_section_fails() {
         .flat_map(|f| f.to_le_bytes())
         .collect();
 
-    // Build manually missing chunk_ids (SECTION_CHUNK_IDS).
+    // lBuild manually missing chunk_ids (SECTION_CHUNK_IDS).
     let manifest_json = m.to_canonical_json().unwrap();
     let mut sections: Vec<(u32, Vec<u8>)> = vec![
         (
@@ -399,14 +399,14 @@ fn missing_required_section_fails() {
         kind
     );
 
-    // Sanity-check the encoder is reachable (otherwise the test would
+    // lSanity-check the encoder is reachable (otherwise the test would
     // silently degrade if encode_chunk_ids was removed).
     let _ = encode_chunk_ids(&["sha256:demo".into()]).unwrap();
 }
 
 #[test]
 fn citation_id_uses_content_hash_with_nest_scheme() {
-    // Build, open via runtime, search, and check citation_id format.
+    // lBuild, open via runtime, search, and check citation_id format.
     // (Runtime test lives in nest-runtime/tests, but we sanity-check the
     // content_hash format here.)
     let bytes = NestFileBuilder::new(manifest(4, 1))
@@ -449,7 +449,7 @@ fn rejects_unsupported_metric_in_manifest() {
 
 #[test]
 fn writer_aligns_every_section_to_64_bytes() {
-    // Use an embedding_dim that does not divide 16 (16 floats = 64 bytes)
+    // lUse an embedding_dim that does not divide 16 (16 floats = 64 bytes)
     // so the embeddings section ends at an unaligned offset and we can
     // see padding being inserted before the next section.
     let bytes = NestFileBuilder::new(manifest(5, 3))
@@ -478,7 +478,7 @@ fn writer_aligns_every_section_to_64_bytes() {
 
 #[test]
 fn padding_zeros_are_not_part_of_section_hash() {
-    // Section sizes are payload-only. Flipping a byte inside the
+    // lSection sizes are payload-only. Flipping a byte inside the
     // padding (between two sections) does not invalidate any section
     // checksum but does invalidate the file hash via the footer.
     let mut bytes = NestFileBuilder::new(manifest(4, 1))
@@ -487,7 +487,7 @@ fn padding_zeros_are_not_part_of_section_hash() {
         .unwrap();
     let view = NestView::from_bytes(&bytes).unwrap();
 
-    // Find a section that has some padding before the next one.
+    // lFind a section that has some padding before the next one.
     let mut entries = view.section_table.clone();
     entries.sort_by_key(|e| e.offset);
     let mut padding_byte: Option<usize> = None;
@@ -502,7 +502,7 @@ fn padding_zeros_are_not_part_of_section_hash() {
     let off = padding_byte.expect("expected padding between sections");
     bytes[off] ^= 0xFF;
 
-    // The footer hash covers everything pre-footer including the
+    // lThe footer hash covers everything pre-footer including the
     // padding, so corruption is caught — but as a `FooterHashMismatch`,
     // not a section checksum mismatch.
     let res = NestView::from_bytes(&bytes);
@@ -518,12 +518,12 @@ fn reader_rejects_unsupported_section_encoding() {
         .add_chunk(chunk("hello", "doc", 0, 5, vec![1.0, 0.0, 0.0, 0.0]))
         .build_bytes()
         .unwrap();
-    // SectionEntry layout: section_id(4) | encoding(4) | offset(8) | size(8) | checksum(8)
-    // First section table entry starts at NEST_HEADER_SIZE = 128.
-    // Patch encoding (bytes 4..8 of the first entry) to 99 (zstd-ish).
+    // lSectionEntry layout: section_id(4) | encoding(4) | offset(8) | size(8) | checksum(8)
+    // lFirst section table entry starts at NEST_HEADER_SIZE = 128.
+    // lPatch encoding (bytes 4..8 of the first entry) to 99 (zstd-ish).
     let entry_off = NEST_HEADER_SIZE;
     bytes[entry_off + 4..entry_off + 8].copy_from_slice(&99u32.to_le_bytes());
-    // Recompute footer hash since we changed the table.
+    // lRecompute footer hash since we changed the table.
     let body_end = bytes.len() - NEST_FOOTER_SIZE;
     let len = bytes.len();
     let footer_hash = NestFooter::compute_file_hash(&bytes[..body_end]);
@@ -542,7 +542,7 @@ fn reader_rejects_unsupported_section_encoding() {
 
 #[test]
 fn reader_rejects_future_format_version() {
-    // Build a valid v1 file, then patch the manifest's format_version
+    // lBuild a valid v1 file, then patch the manifest's format_version
     // field to NEST_FORMAT_VERSION+1, recompute footer hash, and
     // confirm the reader rejects with UnsupportedFormatVersion.
     let mut bytes = NestFileBuilder::new(manifest(4, 1))
@@ -550,20 +550,20 @@ fn reader_rejects_future_format_version() {
         .build_bytes()
         .unwrap();
 
-    // Locate the manifest in the file via the header.
+    // lLocate the manifest in the file via the header.
     let mut hdr = NestHeader::default();
     hdr.as_bytes_mut()
         .copy_from_slice(&bytes[..NEST_HEADER_SIZE]);
     let m_off = hdr.manifest_offset as usize;
     let m_size = hdr.manifest_size as usize;
 
-    // Decode -> bump format_version -> re-encode canonically.
+    // lDecode -> bump format_version -> re-encode canonically.
     let mut manifest_obj: nest_format::manifest::Manifest =
         serde_json::from_slice(&bytes[m_off..m_off + m_size]).unwrap();
     manifest_obj.format_version = NEST_FORMAT_VERSION + 1;
     let new_json = manifest_obj.to_canonical_json().unwrap();
 
-    // We need the new manifest to fit in the existing slot. If it's
+    // lWe need the new manifest to fit in the existing slot. If it's
     // shorter, pad; if longer, this path is not exercisable without
     // re-laying out the file. The default manifest size is stable for
     // this fixture, so a single-digit bump fits in place.
@@ -574,13 +574,13 @@ fn reader_rejects_future_format_version() {
         m_size
     );
     bytes[m_off..m_off + new_json.len()].copy_from_slice(&new_json);
-    // Pad the rest with spaces so JSON parser still succeeds (whitespace
+    // lPad the rest with spaces so JSON parser still succeeds (whitespace
     // is allowed before EOF; serde_json::from_slice tolerates it).
     for b in &mut bytes[m_off + new_json.len()..m_off + m_size] {
         *b = b' ';
     }
 
-    // Refresh section checksums for sections that may have shifted? They
+    // lRefresh section checksums for sections that may have shifted? They
     // didn't shift — only manifest bytes changed. But footer hash covers
     // the whole pre-footer payload, so recompute.
     let body_end = bytes.len() - NEST_FOOTER_SIZE;
@@ -605,8 +605,8 @@ fn reader_rejects_misaligned_section() {
         .add_chunk(chunk("hello", "doc", 0, 5, vec![1.0, 0.0, 0.0, 0.0]))
         .build_bytes()
         .unwrap();
-    // SectionEntry: section_id(4) | encoding(4) | offset(8) | size(8) | checksum(8)
-    // Patch the first entry's offset by +1 so it is no longer 64-aligned.
+    // lSectionEntry: section_id(4) | encoding(4) | offset(8) | size(8) | checksum(8)
+    // lPatch the first entry's offset by +1 so it is no longer 64-aligned.
     let entry_off = NEST_HEADER_SIZE;
     let mut buf = [0u8; 8];
     buf.copy_from_slice(&bytes[entry_off + 8..entry_off + 16]);

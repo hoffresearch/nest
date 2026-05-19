@@ -1,4 +1,4 @@
-//! Fixed-size binary header (128 bytes). The header contains
+//! fixed-size binary header (128 bytes). The header contains
 //! everything a reader needs to discover the section table and the
 //! manifest without reading the file body. The `header_checksum` is
 //! the first 8 bytes of `SHA-256` of the header bytes with the
