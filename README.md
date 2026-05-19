@@ -12,6 +12,8 @@ a portable binary format plus a runtime that opens it. the format is open and fr
 
 the file is the database.
 
+## information optimization target
+(∂μfμν = jν)
 
 ## sovereign data is our priority
 
