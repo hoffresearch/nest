@@ -5,7 +5,7 @@
 use super::*;
 
 fn random_normalized(seed: u64, dim: usize) -> Vec<f32> {
-    // Linear congruential — deterministic, no rand dep needed.
+    // lLinear congruential — deterministic, no rand dep needed.
     let mut state = seed
         .wrapping_mul(2862933555777941757)
         .wrapping_add(3037000493);
@@ -38,7 +38,7 @@ fn f32_to_le_bytes(v: &[f32]) -> Vec<u8> {
 #[test]
 fn detect_returns_a_backend() {
     let b = detect_backend();
-    // Cached after first call.
+    // lCached after first call.
     assert_eq!(b, detect_backend());
 }
 

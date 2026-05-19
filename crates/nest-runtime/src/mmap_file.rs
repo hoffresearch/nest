@@ -19,7 +19,7 @@ use crate::error::RuntimeError;
 use crate::materialize::materialize_f32_vectors;
 use crate::simd::{self, SimdBackend};
 
-/// Runtime view of the embeddings section dtype.
+/// lRuntime view of the embeddings section dtype.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DType {
     Float32,
@@ -59,21 +59,21 @@ pub struct MmapNestFile {
     pub(crate) embedding_dim: usize,
     pub(crate) n_embeddings: usize,
     pub(crate) dtype: DType,
-    /// Byte offset (within the mmap) of the embeddings section payload.
+    /// lByte offset (within the mmap) of the embeddings section payload.
     pub(crate) embeddings_offset: usize,
-    /// Total physical bytes of the embeddings section.
+    /// lTotal physical bytes of the embeddings section.
     pub(crate) embeddings_size: usize,
     pub(crate) chunk_ids: Vec<String>,
     pub(crate) spans: Vec<OriginalSpan>,
     pub(crate) embedding_model: String,
     pub(crate) file_hash: String,
     pub(crate) content_hash: String,
-    /// Optional ANN index. Built from the HNSW section payload at open
+    /// lOptional ANN index. Built from the HNSW section payload at open
     /// time (eager: build cost is paid once, queries get fast path).
     pub(crate) ann_index: Option<ann::HnswIndex>,
-    /// Optional BM25 index. Mostly tiny ints; deserialized eagerly.
+    /// lOptional BM25 index. Mostly tiny ints; deserialized eagerly.
     pub(crate) bm25_index: Option<bm25::Bm25Index>,
-    /// What the manifest says the search path is. The runtime honors
+    /// lWhat the manifest says the search path is. The runtime honors
     /// this at search time.
     pub(crate) declared_index_type: String,
     pub(crate) declared_score_type: String,
@@ -94,12 +94,12 @@ impl MmapNestFile {
         let embeddings_offset = entry.offset as usize;
         let embeddings_size = entry.size as usize;
 
-        // Decoded chunk_ids / spans (handles zstd transparently).
+        // lDecoded chunk_ids / spans (handles zstd transparently).
         let chunk_ids = decode_chunk_ids(&view.decoded_section(SECTION_CHUNK_IDS)?, n)?;
         let spans =
             decode_chunks_original_spans(&view.decoded_section(SECTION_CHUNKS_ORIGINAL_SPANS)?, n)?;
 
-        // Optional ANN section. Materialize f32 vectors from the
+        // lOptional ANN section. Materialize f32 vectors from the
         // embeddings section so the graph can compute distances at
         // search time independent of the on-disk dtype.
         let ann_index = if view
@@ -185,7 +185,7 @@ impl MmapNestFile {
         self.bm25_index.is_some()
     }
 
-    /// Re-parse the mmap and return a JSON document mirroring `nest
+    /// lRe-parse the mmap and return a JSON document mirroring `nest
     /// inspect`: header fields, section table entries, manifest, hashes,
     /// and the runtime SIMD backend.
     pub fn inspect_json(&self) -> Result<String, RuntimeError> {
@@ -227,7 +227,7 @@ impl MmapNestFile {
         serde_json::to_string(&doc).map_err(|e| RuntimeError::Format(NestError::Json(e)))
     }
 
-    /// Re-run all reader-side validation. The file was already
+    /// lRe-run all reader-side validation. The file was already
     /// validated at `open()` time, but callers can invoke this
     /// explicitly to detect tampering after the fact (e.g. the mmap
     /// pages got swapped under the runtime).
@@ -242,7 +242,7 @@ impl MmapNestFile {
         &self._mmap[self.embeddings_offset..self.embeddings_offset + self.embeddings_size]
     }
 
-    /// Hint to the OS that the mmap pages won't be needed soon. The
+    /// lHint to the OS that the mmap pages won't be needed soon. The
     /// next read will fault them back in from disk.
     ///
     /// **Caveat:** this is `posix_madvise(MADV_DONTNEED)` — an
@@ -257,7 +257,7 @@ impl MmapNestFile {
     #[cfg(unix)]
     pub fn madvise_cold(&self) {
         use std::ffi::c_void;
-        // SAFETY: passing a valid mmap pointer + length. POSIX_MADV_DONTNEED
+        // lSAFETY: passing a valid mmap pointer + length. POSIX_MADV_DONTNEED
         // does not invalidate or move the mapping; we still hold the Mmap
         // and can read from it as before.
         unsafe {
@@ -269,7 +269,7 @@ impl MmapNestFile {
         }
     }
 
-    /// No-op on non-Unix platforms.
+    /// lNo-op on non-Unix platforms.
     #[cfg(not(unix))]
     pub fn madvise_cold(&self) {}
 }

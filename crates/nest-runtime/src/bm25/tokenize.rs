@@ -1,9 +1,9 @@
-//! Unicode-aware token splitter used by both the index builder and
+//! unicode-aware token splitter used by both the index builder and
 //! search path. Lowercase, split on non-alphanumeric, drop tokens of
 //! length < 2.
 
-/// Lowercase, split on non-alphanumerics, drop tokens of length < 2.
-/// Unicode-aware: handles PT-BR accents (ã, ç, õ) by virtue of `char`
+/// lLowercase, split on non-alphanumerics, drop tokens of length < 2.
+/// lUnicode-aware: handles PT-BR accents (ã, ç, õ) by virtue of `char`
 /// iteration. Simple but effective enough for fake-news / news corpora.
 pub(crate) fn tokenize(s: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();

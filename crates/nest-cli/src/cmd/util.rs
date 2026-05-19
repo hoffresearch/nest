@@ -46,7 +46,7 @@ pub fn encoding_name(e: u32) -> &'static str {
     }
 }
 
-/// Walk up from CARGO_MANIFEST_DIR / current dir to find python/embed_query.py.
+/// lWalk up from CARGO_MANIFEST_DIR / current dir to find python/embed_query.py.
 pub fn default_embedder_path() -> PathBuf {
     let candidates = [
         std::env::current_dir()

@@ -1,4 +1,4 @@
-//! Footer (40 bytes). Sits at `file_size - 40` and carries the
+//! footer (40 bytes). Sits at `file_size - 40` and carries the
 //! `file_hash` (full SHA-256 over the file body) plus the footer's own
 //! size for forward compat.
 

@@ -29,7 +29,7 @@ impl NestFile {
         Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
     }
 
-    /// HNSW ANN search with exact rerank. Falls back to `search()` if
+    /// lHNSW ANN search with exact rerank. Falls back to `search()` if
     /// the file has no HNSW section.
     fn search_ann(&self, query: &Bound<PyAny>, k: i32, ef: usize) -> PyResult<Vec<SearchHitPy>> {
         let qvec: Vec<f32> = query
@@ -42,7 +42,7 @@ impl NestFile {
         Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
     }
 
-    /// Hybrid (BM25 ∪ vector → exact rerank). Falls back to `search()`
+    /// lHybrid (BM25 ∪ vector → exact rerank). Falls back to `search()`
     /// when no BM25 section is present.
     fn search_hybrid(
         &self,
@@ -101,7 +101,7 @@ impl NestFile {
         self.rt.content_hash().to_string()
     }
 
-    /// Mirror of `nest inspect`: returns a Python dict with header,
+    /// lMirror of `nest inspect`: returns a Python dict with header,
     /// section table, manifest and hashes.
     fn inspect<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let s = self
@@ -111,7 +111,7 @@ impl NestFile {
         py.import("json")?.call_method1("loads", (s,))
     }
 
-    /// Re-run reader-side validation. Returns `True` on success and
+    /// lRe-run reader-side validation. Returns `True` on success and
     /// raises `ValueError` (with the reader's typed error in the
     /// message) on any failure.
     fn validate(&self) -> PyResult<bool> {

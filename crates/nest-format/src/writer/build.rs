@@ -22,7 +22,7 @@ use crate::sections::{
 use sha2::{Digest, Sha256};
 
 impl NestFileBuilder {
-    /// Build the file in memory. Pure computation — no I/O.
+    /// lBuild the file in memory. Pure computation — no I/O.
     pub fn build_bytes(mut self) -> crate::Result<Vec<u8>> {
         if self.reproducible {
             self.manifest.created = Some(REPRODUCIBLE_CREATED.into());
@@ -116,17 +116,17 @@ impl NestFileBuilder {
         )?);
 
         if let Some(payload) = self.hnsw_index.take() {
-            // HNSW is binary, mostly random — zstd would barely help and
+            // lHNSW is binary, mostly random — zstd would barely help and
             // would defeat mmap-friendly reads. Always raw.
             sections.push((SECTION_HNSW_INDEX, SECTION_ENCODING_RAW, payload));
         }
         if let Some(payload) = self.bm25_index.take() {
-            // BM25 posting lists are integer-heavy; zstd usually halves
+            // lBM25 posting lists are integer-heavy; zstd usually halves
             // them. Honor text_encoding here too.
             sections.push(maybe_zstd(SECTION_BM25_INDEX, text_enc, payload)?);
         }
 
-        // Sanity: every required section is present (writer never drops one).
+        // lSanity: every required section is present (writer never drops one).
         debug_assert!(
             REQUIRED_SECTIONS
                 .iter()
@@ -154,7 +154,7 @@ impl NestFileBuilder {
             current_offset = align_up(after, SECTION_ALIGNMENT);
         }
 
-        // After the last section we want the footer immediately, so use
+        // lAfter the last section we want the footer immediately, so use
         // the unaligned end of the last section's data.
         let last_section_end = match (section_entries.last(), sections.last()) {
             (Some(entry), Some((_, _, data))) => entry.offset + data.len() as u64,
