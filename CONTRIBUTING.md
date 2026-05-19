@@ -29,7 +29,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install ruff sentence-transformers pandas zstandard pyarrow
 ```
 
-`dat/demo/` and `dat/corpus_next.v1.nest` are tracked via git lfs. first checkout pulls ~600 mb. without lfs the public datasets are skipped, the runtime tests still pass.
+`dat/corpus_next.v1.nest` is tracked via git lfs. demo datasets under `dat/demo/` are local-only and gitignored; fetch them with the commands documented in `dat/demo/README.md`. without those datasets, runtime unit tests still pass.
 
 ## code style
 
