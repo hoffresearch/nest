@@ -41,9 +41,9 @@ pub(super) unsafe fn dot_f32_i8_avx2(q: &[f32], row: &[i8]) -> f32 {
         let chunks = dim / 8;
         for i in 0..chunks {
             let i8_ptr = row.as_ptr().add(i * 8) as *const i64;
-            // Load 8 i8s (8 bytes) into the low half of an xmm.
+            // lLoad 8 i8s (8 bytes) into the low half of an xmm.
             let raw = _mm_set1_epi64x(*i8_ptr);
-            // Widen i8 -> i32 (8 lanes).
+            // lWiden i8 -> i32 (8 lanes).
             let widened = _mm256_cvtepi8_epi32(raw);
             let f = _mm256_cvtepi32_ps(widened);
             let qv = _mm256_loadu_ps(q.as_ptr().add(i * 8));

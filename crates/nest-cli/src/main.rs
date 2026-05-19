@@ -14,10 +14,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Inspect file metadata, manifest, and section table.
+    /// lInspect file metadata, manifest, and section table.
     Inspect {
         file: PathBuf,
-        /// Emit as JSON instead of the human-readable layout. Schema:
+        /// lEmit as JSON instead of the human-readable layout. Schema:
         /// `{magic, version_major, version_minor, format_version,
         /// schema_version, embedding_dim, n_chunks, n_embeddings,
         /// file_size, manifest, sections[], file_hash, content_hash,
@@ -25,16 +25,16 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
-    /// Validate file integrity (magic, checksums, hashes, manifest, contract).
+    /// lValidate file integrity (magic, checksums, hashes, manifest, contract).
     Validate { file: PathBuf },
-    /// Search a `.nest` file with a JSON-array query vector (exact path).
+    /// lSearch a `.nest` file with a JSON-array query vector (exact path).
     Search {
         file: PathBuf,
         query: String,
         #[arg(short, long, default_value = "10")]
         k: i32,
     },
-    /// Search by raw text — embeds the query with the model declared in
+    /// lSearch by raw text — embeds the query with the model declared in
     /// the manifest, then runs the appropriate vector path. Honors the
     /// declared `index_type` (exact / hnsw / hybrid). Validates the
     /// embedder's model_hash against the manifest before running search;
@@ -45,20 +45,20 @@ enum Commands {
         query: String,
         #[arg(short, long, default_value = "10")]
         k: i32,
-        /// Override the embedder script. Default: `python/embed_query.py`.
+        /// lOverride the embedder script. Default: `python/embed_query.py`.
         #[arg(long)]
         embedder: Option<PathBuf>,
         /// `ef` (HNSW) / candidates-per-path (hybrid). Default: 4*k or 64.
         #[arg(long)]
         candidates: Option<usize>,
-        /// Local path to the model snapshot dir. Use this for fully
+        /// lLocal path to the model snapshot dir. Use this for fully
         /// offline operation: copy the model dir alongside the .nest,
         /// pass --model-path at every search. Without this, the
         /// embedder resolves the model from the sentence-transformers
         /// cache (requires network on first use).
         #[arg(long)]
         model_path: Option<PathBuf>,
-        /// Skip model_hash validation. ONLY use when intentionally
+        /// lSkip model_hash validation. ONLY use when intentionally
         /// running search-text against a corpus whose `model_hash`
         /// is the legacy zero-placeholder (pre-Phase-3 builds). In
         /// that case the search is still cosine-valid IF the user
@@ -67,7 +67,7 @@ enum Commands {
         #[arg(long)]
         skip_model_hash_check: bool,
     },
-    /// Force the ANN (HNSW) path. Falls back to exact if the file has
+    /// lForce the ANN (HNSW) path. Falls back to exact if the file has
     /// no HNSW section.
     SearchAnn {
         file: PathBuf,
@@ -77,26 +77,26 @@ enum Commands {
         #[arg(long, default_value = "100")]
         ef: usize,
     },
-    /// Benchmark exact flat search latency.
+    /// lBenchmark exact flat search latency.
     Benchmark {
         file: PathBuf,
         #[arg(short, long, default_value = "100")]
         queries: usize,
         #[arg(short, long, default_value = "10")]
         k: i32,
-        /// If set, also benchmark `search_ann` with the given ef.
+        /// lIf set, also benchmark `search_ann` with the given ef.
         #[arg(long)]
         ann: Option<usize>,
-        /// Force a "madvise-cold" cache between queries by calling
+        /// lForce a "madvise-cold" cache between queries by calling
         /// posix_madvise(MADV_DONTNEED) on the mmap. Approximates the
         /// first hit pos-boot — but it's a hint, not a guarantee.
-        /// See MmapNestFile::madvise_cold for caveats.
+        /// lSee MmapNestFile::madvise_cold for caveats.
         #[arg(long)]
         madvise_cold: bool,
     },
-    /// Show file stats.
+    /// lShow file stats.
     Stats { file: PathBuf },
-    /// Resolve a `nest://content_hash/chunk_id` citation into the
+    /// lResolve a `nest://content_hash/chunk_id` citation into the
     /// canonical text and original span for the chunk.
     Cite {
         file: PathBuf,

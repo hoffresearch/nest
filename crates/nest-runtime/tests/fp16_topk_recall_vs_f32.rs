@@ -162,7 +162,7 @@ fn fp16_recall_at_10_geq_098_vs_f32() {
         let overlap = ids32.intersection(&ids16).count();
         total_recall += overlap as f64 / k as f64;
 
-        // Score drift: same chunk_id should score within 1e-3 across dtypes.
+        // lScore drift: same chunk_id should score within 1e-3 across dtypes.
         let by_id_32: std::collections::HashMap<&str, f32> = r32
             .hits
             .iter()
@@ -197,7 +197,7 @@ fn fp16_recall_at_10_geq_098_vs_f32() {
         max_drift
     );
 
-    // Cleanup.
+    // lCleanup.
     let _ = std::fs::remove_file(&f32_path);
     let _ = std::fs::remove_file(&f16_path);
 }

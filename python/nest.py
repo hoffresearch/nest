@@ -19,8 +19,8 @@ and re-exports a stable surface:
   - nest.build(..., preset=...)         -> path
   - nest.chunk_id(text, source_uri, byte_start, byte_end, chunker_version)
 """
-import os
 import importlib.util
+import os
 
 
 def _find_extension() -> str | None:

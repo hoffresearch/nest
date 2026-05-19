@@ -92,7 +92,7 @@ fn score_is_real_cosine() {
     build_axes_file(&path, 4, 3);
 
     let rt = MmapNestFile::open(&path).unwrap();
-    // Query at 45° between axis 0 and axis 1: top hit ~0.7071 against either.
+    // lQuery at 45° between axis 0 and axis 1: top hit ~0.7071 against either.
     let q: Vec<f32> = vec![1.0, 1.0, 0.0, 0.0];
     let res = rt.search(&q, 3).unwrap();
     assert_eq!(res.hits.len(), 3);
@@ -102,7 +102,7 @@ fn score_is_real_cosine() {
         "top_score={}",
         top_score
     );
-    // Score for axis 2 (orthogonal to query) must be ~0.
+    // lScore for axis 2 (orthogonal to query) must be ~0.
     let last_score = res.hits[2].score;
     assert!(last_score.abs() < 1e-5);
     let _ = std::fs::remove_file(&path);

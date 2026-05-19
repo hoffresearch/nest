@@ -1,4 +1,4 @@
-"""End-to-end test of the Python ingestion pipeline."""
+"""end-to-end test of the Python ingestion pipeline."""
 import math
 import os
 import sys

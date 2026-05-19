@@ -63,7 +63,7 @@ pub fn run(
             print_latency(&cold);
         }
 
-        // Recall@k of ANN vs exact, computed on the same queries.
+        // lRecall@k of ANN vs exact, computed on the same queries.
         let mut hits_overlap_total = 0.0f64;
         for q in &queries {
             let exact = runtime.search(q, k)?;
