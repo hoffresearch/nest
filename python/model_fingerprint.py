@@ -32,8 +32,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-# Files whose contents affect inference output. Other files in the
-# snapshot dir (LICENSE, README.md, .git*) are ignored.
+# lFiles whose contents affect inference output. Other files in the
+# lsnapshot dir (LICENSE, README.md, .git*) are ignored.
 RELEVANT_FILES: tuple[str, ...] = (
     "config.json",
     "config_sentence_transformers.json",
@@ -198,7 +198,7 @@ def resolve_model_dir(model_name_or_path: str) -> Path:
     if p.is_dir():
         return p.resolve()
 
-    # HF Hub cache: standard layout. Finds the model regardless of
+    # hF Hub cache: standard layout. Finds the model regardless of
     # whether sentence-transformers is importable.
     hf_home = Path(_os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
     cache_dir = hf_home / "hub" / f"models--{model_name_or_path.replace('/', '--')}"
@@ -208,8 +208,8 @@ def resolve_model_dir(model_name_or_path: str) -> Path:
         if snaps:
             return snaps[0].resolve()
 
-    # Older sentence-transformers (v2.x) put the snapshot path in the
-    # AutoModel config. Importing is heavy; only do it as a last resort.
+    # older sentence-transformers (v2.x) put the snapshot path in the
+    # autoModel config. Importing is heavy; only do it as a last resort.
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError as e:

@@ -1,4 +1,4 @@
-//! Section payload encoding (raw / zstd / float16 / int8).
+//! section payload encoding (raw / zstd / float16 / int8).
 //!
 //! Two orthogonal axes:
 //!
@@ -34,11 +34,11 @@ use crate::layout::{
 };
 use std::borrow::Cow;
 
-/// Decode a section payload from its on-disk encoding to the logical
+/// lDecode a section payload from its on-disk encoding to the logical
 /// bytes a reader consumes. For `raw` this is a borrow; for `zstd` it
 /// is an owned decompressed buffer.
 ///
-/// Embedding-only encodings (`float16`, `int8`) are returned as-is —
+/// lEmbedding-only encodings (`float16`, `int8`) are returned as-is —
 /// their physical bytes ARE their canonical representation. The runtime
 /// dispatches on `dtype` to interpret them.
 pub fn decode_payload<'a>(encoding: u32, bytes: &'a [u8]) -> crate::Result<Cow<'a, [u8]>> {
@@ -54,7 +54,7 @@ pub fn decode_payload<'a>(encoding: u32, bytes: &'a [u8]) -> crate::Result<Cow<'
     }
 }
 
-/// Expected size of the embeddings section for a given dtype. Returns
+/// lExpected size of the embeddings section for a given dtype. Returns
 /// `None` for unknown dtypes.
 pub fn expected_embeddings_size(dtype: &str, n: usize, dim: usize) -> Option<usize> {
     match dtype {

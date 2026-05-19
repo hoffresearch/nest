@@ -204,7 +204,7 @@ fn int8_embeddings_roundtrip() {
 
 #[test]
 fn rejects_zstd_embeddings() {
-    // Embeddings can never be zstd-compressed (we want SIMD-friendly
+    // lEmbeddings can never be zstd-compressed (we want SIMD-friendly
     // mmap reads). text_encoding does not apply to embeddings.
     let m = good_manifest();
     let bytes = NestFileBuilder::new(m)

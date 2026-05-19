@@ -7,7 +7,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
-/// Build a .nest file from already-embedded chunks.
+/// lBuild a .nest file from already-embedded chunks.
 ///
 /// `chunks` is a list of dicts with keys:
 ///   - canonical_text: str
@@ -16,12 +16,12 @@ use pyo3::types::{PyDict, PyList};
 ///   - byte_end: int
 ///   - embedding: list[float] (length == embedding_dim, L2-normalized)
 ///
-/// Optional manifest fields (`title`, `version`, `created`, `description`,
+/// lOptional manifest fields (`title`, `version`, `created`, `description`,
 /// `authors`, `license`) and a free-form `provenance` dict can be passed
 /// as kwargs. `reproducible=True` overrides `created` so two builds with
 /// identical inputs produce byte-identical output.
 ///
-/// Preset / encoding kwargs:
+/// lPreset / encoding kwargs:
 ///   - `preset`: one of "exact" (default), "compressed", "tiny", "hybrid"
 ///   - `text_encoding`: "raw" | "zstd" (overrides preset)
 ///   - `dtype`: "float32" | "float16" | "int8" (overrides preset)
@@ -95,7 +95,7 @@ pub fn build(
         None => serde_json::json!({}),
     };
 
-    // Resolve preset defaults; explicit kwargs win.
+    // lResolve preset defaults; explicit kwargs win.
     let (default_text_enc, default_dtype, default_hnsw, default_bm25) = match preset {
         "exact" => (SectionEncoding::Raw, EmbeddingDType::Float32, false, false),
         "compressed" => (SectionEncoding::Zstd, EmbeddingDType::Float16, false, false),
@@ -155,7 +155,7 @@ pub fn build(
         .text_encoding(text_enc)
         .embedding_dtype(dt);
 
-    // HNSW: build the index from f32 vectors (we have them in chunk_inputs
+    // lHNSW: build the index from f32 vectors (we have them in chunk_inputs
     // already). The runtime materializes f32 vectors at open time too —
     // here we use the originals so build is independent of dtype loss.
     if want_hnsw {

@@ -10,7 +10,7 @@ use super::index::{BM25_PAYLOAD_VERSION, Bm25Index, Posting, TermEntry};
 use crate::error::RuntimeError;
 
 impl Bm25Index {
-    /// Encode for storage in section `0x08`.
+    /// lEncode for storage in section `0x08`.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut out = Vec::new();
         out.extend_from_slice(&BM25_PAYLOAD_VERSION.to_le_bytes());
@@ -22,7 +22,7 @@ impl Bm25Index {
         for &dl in &self.doc_lengths {
             out.extend_from_slice(&dl.to_le_bytes());
         }
-        // Sorted by term for determinism.
+        // lSorted by term for determinism.
         let mut terms: Vec<(&String, &TermEntry)> = self.terms.iter().collect();
         terms.sort_by(|a, b| a.0.cmp(b.0));
         for (term, entry) in terms {

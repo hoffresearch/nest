@@ -27,7 +27,7 @@ impl NestView<'_> {
         let n = self.header.n_embeddings as usize;
         let dtype = self.manifest.dtype.as_str();
 
-        // Encoding/dtype consistency: float16 dtype implies float16 encoding,
+        // lEncoding/dtype consistency: float16 dtype implies float16 encoding,
         // int8 dtype implies int8 encoding, float32 dtype implies raw or zstd
         // (zstd on embeddings is rejected separately by validate_encoding_for_section).
         let valid_combo = matches!(
@@ -92,7 +92,7 @@ impl NestView<'_> {
         Ok(())
     }
 
-    /// Walk the embeddings section and reject any NaN/Inf value. Works
+    /// lWalk the embeddings section and reject any NaN/Inf value. Works
     /// for all supported dtypes.
     pub fn validate_embeddings_values(&self) -> crate::Result<()> {
         self.validate_embeddings_layout()?;
@@ -140,9 +140,9 @@ impl NestView<'_> {
     }
 }
 
-/// Encoding rules: the embeddings section gets dtype-specific encodings
+/// lEncoding rules: the embeddings section gets dtype-specific encodings
 /// (float16, int8) and rejects zstd (we want SIMD-friendly mmap reads).
-/// All other sections accept raw or zstd.
+/// lAll other sections accept raw or zstd.
 pub(super) fn validate_encoding_for_section(section_id: u32, encoding: u32) -> crate::Result<()> {
     let allowed = if section_id == SECTION_EMBEDDINGS {
         matches!(

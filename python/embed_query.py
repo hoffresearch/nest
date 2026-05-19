@@ -48,12 +48,12 @@ def _embed(model_name_or_path: str, query: str) -> tuple[list[float], int, str]:
     model = SentenceTransformer(model_name_or_path)
     vec = model.encode([query], normalize_embeddings=True, convert_to_numpy=True)[0]
     dim = int(model.get_sentence_embedding_dimension())
-    # Defensive re-normalize (some sentence-transformers versions skip it
+    # defensive re-normalize (some sentence-transformers versions skip it
     # on certain backbones).
     n = math.sqrt(sum(float(x) * float(x) for x in vec))
     vec = [float(x) / n for x in vec] if n > 0 else [float(x) for x in vec]
 
-    # Locate the actual snapshot directory the model was loaded from.
+    # locate the actual snapshot directory the model was loaded from.
     local_path = _resolve_local_path(model, model_name_or_path)
     return vec, dim, local_path
 
@@ -81,7 +81,7 @@ def _resolve_local_path(model, fallback: str) -> str:
         nop = getattr(cfg, "_name_or_path", None) or getattr(cfg, "name_or_path", None)
         if nop and Path(nop).is_dir():
             return str(Path(nop).resolve())
-    # HF cache fallback.
+    # hF cache fallback.
     hf_home = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
     cache_dir = hf_home / "hub" / f"models--{fallback.replace('/', '--')}"
     snap_dir = cache_dir / "snapshots"

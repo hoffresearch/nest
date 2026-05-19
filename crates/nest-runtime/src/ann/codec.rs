@@ -10,7 +10,7 @@ use super::{HNSW_PAYLOAD_VERSION, HnswIndex, Node};
 use crate::error::RuntimeError;
 
 impl HnswIndex {
-    /// Encode the index to bytes for embedding in section `0x07`.
+    /// lEncode the index to bytes for embedding in section `0x07`.
     pub fn to_bytes(&self) -> Vec<u8> {
         // 7 u32 header fields + per-node (level + per-layer (count + ids)).
         let mut out = Vec::with_capacity(7 * 4 + self.n * 16);
@@ -34,7 +34,7 @@ impl HnswIndex {
         out
     }
 
-    /// Parse an HNSW payload from bytes. The vectors are reconstructed
+    /// lParse an HNSW payload from bytes. The vectors are reconstructed
     /// from the embeddings section by the caller; this constructor is
     /// for the on-disk graph only. Call `attach_vectors` before search.
     pub fn from_bytes(bytes: &[u8], n: usize, dim: usize) -> Result<Self, RuntimeError> {
@@ -72,7 +72,7 @@ impl HnswIndex {
             }
             nodes.push(Node { level, neighbors });
         }
-        // The reader must materialize vectors before we can search; until
+        // lThe reader must materialize vectors before we can search; until
         // then `vectors` is empty. The runtime sets this via attach_vectors.
         Ok(Self {
             m,
@@ -89,7 +89,7 @@ impl HnswIndex {
     }
 }
 
-/// Light cursor for parsing the on-disk HNSW payload.
+/// lLight cursor for parsing the on-disk HNSW payload.
 struct ByteCursor<'a> {
     buf: &'a [u8],
     pos: usize,

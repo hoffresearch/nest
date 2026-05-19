@@ -44,11 +44,11 @@ pub fn run(file: PathBuf, json: bool) -> Result<()> {
 }
 
 fn run_json(file: PathBuf) -> Result<()> {
-    // Reuse the runtime's inspect_json; same schema as
+    // lReuse the runtime's inspect_json; same schema as
     // `NestFile.inspect()` from Python and the PyO3 bindings.
     let rt = nest_runtime::MmapNestFile::open(&file)?;
     let s = rt.inspect_json()?;
-    // Pretty-print so humans can read it too without a separate tool.
+    // lPretty-print so humans can read it too without a separate tool.
     let v: serde_json::Value = serde_json::from_str(&s)?;
     println!("{}", serde_json::to_string_pretty(&v)?);
     Ok(())
