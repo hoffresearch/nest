@@ -6,14 +6,14 @@
 #   2. rebuild PyO3 extension (.so)
 #   3. python tests: e2e, builder, search-text model_hash
 #   4. measure_presets --json on the LFS-tracked corpus
-#   5. compare_measure regression gates vs data/measure/baseline.json
+#   5. compare_measure regression gates vs dat/measure/baseline.json
 #
 # Exits non-zero on the first failure. Total runtime ≈ 2–3 min on a
 # warm cache (most of it is the measure_presets re-build of the four
 # presets).
 #
 # Override knobs (env vars):
-#   NEST_BASELINE  — baseline JSON to compare against (default: data/measure/baseline.json)
+#   NEST_BASELINE  — baseline JSON to compare against (default: dat/measure/baseline.json)
 #   NEST_QUERIES   — measure_presets query count (default: 100)
 #   NEST_K         — measure_presets top-k (default: 10)
 #   NEST_PYTHON    — python interpreter (default: ./.venv/bin/python if present, else python3)
@@ -25,7 +25,7 @@ cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 
 # ---- knobs ----
-BASELINE="${NEST_BASELINE:-data/measure/baseline.json}"
+BASELINE="${NEST_BASELINE:-dat/measure/baseline.json}"
 QUERIES="${NEST_QUERIES:-100}"
 K="${NEST_K:-10}"
 OUT="${NEST_OUT:-/tmp/release_check_post.json}"

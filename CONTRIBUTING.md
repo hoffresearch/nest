@@ -8,9 +8,10 @@
 2. branch from `dev`: `git checkout -b feature/short-description`.
 3. keep each pr focused on one concern. small is better.
 4. add or update tests for the change. new behavior needs a new test.
-5. run `./scripts/release_check.sh` locally before pushing. that script is the same gate ci runs on the pr.
-6. commit with a clear message in plain english. no conventional commits prefix.
-7. open a pr against `dev`. the maintainer squashes or rebases into `main` at release time.
+5. if the change alters architecture, module boundaries, data flow, or doc locations, update `doc/arc/arc.yaml` and `doc/arc/arc.md` in the same pr. keep both concise and pragmatic. do not add a second human architecture doc.
+6. run `./scripts/release_check.sh` locally before pushing. that script is the same gate ci runs on the pr.
+7. commit with a clear message in plain english. no conventional commits prefix.
+8. open a pr against `dev`. the maintainer squashes or rebases into `main` at release time.
 
 ## setup
 
@@ -28,7 +29,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install ruff sentence-transformers pandas zstandard pyarrow
 ```
 
-`data/demo/` and `data/corpus_next.v1.nest` are tracked via git lfs. first checkout pulls ~600 mb. without lfs the public datasets are skipped, the runtime tests still pass.
+`dat/corpus_next.v1.nest` is tracked via git lfs. demo datasets under `dat/demo/` are local-only and gitignored; fetch them with the commands documented in `dat/demo/README.md`. without those datasets, runtime unit tests still pass.
 
 ## code style
 
@@ -45,7 +46,7 @@ python:
 - target `py312`, line length 100. ruff config in `pyproject.toml`.
 - lints: `E F W I B UP SIM`. run `ruff check .` and `ruff format --check .`.
 - private helpers in `python/tools/` use the `_` prefix, e.g. `_baseline_decoder.py`.
-- same 300-line cap as rust.
+- same 333-line cap as rust.
 
 format and runtime invariants:
 
@@ -67,7 +68,7 @@ python tests/test_search_text_model_hash.py
 
 - bugs and feature requests: [github issues](https://github.com/hoffresearch/nest/issues).
 - security vulns: do not open a public issue. email [brenner@hoffresearch.com](mailto:brenner@hoffresearch.com). target ack within 72 hours.
-- questions about the format: open a discussion, or read `doc/spec.md`.
+- questions about the format: open a discussion, or read `doc/arc/arc.md` and `doc/arc/arc.yaml`.
 
 bug reports should include the `.nest` `file_hash` and `content_hash` (from `nest stats <file>`), the runtime `simd_backend` (also in `nest stats`), the exact cli or python invocation, and the error output.
 
