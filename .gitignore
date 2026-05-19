@@ -19,6 +19,7 @@ wheels/
 .mypy_cache/
 .ruff_cache/
 .python-version
+dat/demos/
 
 # Virtual environments
 .venv
@@ -36,19 +37,32 @@ Thumbs.db
 *.swo
 *~
 
-# Claude
+# claude personal config
 .claude/
 
 # Project specific
-# data/demo/ and data/corpus_next.v1.nest are tracked via Git LFS.
-# Per-phase preset .nest files (data/measure/corpus_*.nest) are
+# demo datasets are local-only and intentionally not tracked.
+dat/demo/corpus-combined/
+dat/demo/corpus-next/
+dat/demo/factck-br/
+dat/demo/Fake.br-Corpus/
+dat/demo/FakeBr-hf/
+dat/demo/FakeRecogna/
+dat/demo/FakeTrue.Br/
+dat/demo/FakeTrue.Br-hf/
+dat/demo/portuguese-fake-news-classifier-bilstm-combined/
+dat/demo/truw-built/
+
+# dat/corpus_next.v1.nest remains tracked via Git LFS.
+# Per-phase preset .nest files (dat/measure/corpus_*.nest) are
 # regeneration artifacts: re-derivable in minutes by measure_presets.py
 # from the LFS-tracked baseline. Do NOT commit them — they'd inflate the
 # LFS bandwidth quota every phase. We commit only the JSON checksums and
 # metrics next to them.
-data/measure/corpus_*.nest
-data/measure/*.nest-*
+dat/measure/corpus_*.nest
+dat/measure/*.nest-*
+
 
 # Local symlink to external hoff database (not part of this repo)
-data/hoff.db
+dat/hoff.db
 

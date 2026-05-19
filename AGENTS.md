@@ -9,7 +9,7 @@ operating notes for ai agents and human contributors working in this repo. the p
 - `cargo fmt --all --check`: formatting check
 - `cargo clippy --workspace --all-targets -- -D warnings`: linting (warnings are errors)
 - `ruff check .` / `ruff format --check .`: python linting and formatting (config in `pyproject.toml`)
-- `./scripts/release_check.sh`: full pipeline + regression gates against `data/measure/baseline.json`. single source of truth for "PR-ready". exits non-zero on any failure.
+- `./scripts/release_check.sh`: full pipeline + regression gates against `dat/measure/baseline.json`. single source of truth for "PR-ready". exits non-zero on any failure.
 
 # pyo3 extension
 
@@ -58,8 +58,10 @@ python entry: `sys.path.insert(0, "python"); import nest`. dynamic loader finds 
 - branches: `main` is release; `dev` is integration. work happens in `dev` (or feature branches off `dev`).
 - PRs target `dev` from feature branches. release PRs target `main` from `dev`. squash merge into `main` to keep history linear.
 - tags on `main` only (`v0.2.0` is current). `Cargo.toml` workspace version tracks the latest released tag.
-- LFS: `data/demo/` and `data/corpus_next.v1.nest` are tracked via Git LFS. first checkout pulls ~600 MB. tests run without LFS (the unit and golden-fixture tests avoid depend on it); only `measure_presets.py` and `release_check.sh` need the corpus.
-- `data/measure/corpus_*.nest` and `*.nest-*` are gitignored: regeneration artifacts, not assets. the JSON files next to them ARE tracked (regression baselines).
+- LFS: `dat/corpus_next.v1.nest` is tracked via Git LFS.
+- demo datasets under `dat/demo/` are intentionally gitignored and downloaded locally from upstream sources listed in `dat/demo/README.md`.
+- tests run without the demo datasets (the unit and golden-fixture tests avoid depend on them); only `measure_presets.py` and `release_check.sh` need the baseline corpus.
+- `dat/measure/corpus_*.nest` and `*.nest-*` are gitignored: regeneration artifacts, not assets. the JSON files next to them ARE tracked (regression baselines).
 
 # conventions
 
@@ -74,6 +76,7 @@ build folders, files, and codebase items following apl-style 3-char tokens that 
 
 write in diataxis style. all lowercase. no emojis. no em-dash. no decorative markdown. pragmatic, professional, objective. every doc starts with a yaml header for semantic resolution (helps llm, agentic, vector search): project, audience, status, last-updated, domain. design notes that turn out wrong get a note on top. they are not deleted.
 
+`doc/arc/arc.yaml` is the machine-readable architecture map. `doc/arc/arc.md` is the single human architecture reference. after any implementation, refactor, or doc move that changes architecture, boundaries, or data flow, update both in the same change. keep them concise and pragmatic. do not keep a parallel second architecture doc.
 # file hygiene
 
 333 lines per file is the threshold. human working memory holds 4 plus or minus 1 chunks at once (cowan 2001, refining miller). neural networks also work better that way. a file that does not fit the "mental window" forces internal context switching, degrading comprehension and raising bug rates. this is unnecessary cognitive load, the same principle applied in ux.
@@ -142,10 +145,11 @@ these are documented honest limitations of the current code, not bugs to silentl
 # documentation
 
 - `README.md`: project overview, install, CLI summary, presets, v0.2 highlights.
-- `doc/architecture.md`: binary layout, API surface, errors, versioning, four hashes, SIMD dispatcher, search contract.
+- `doc/arc/arc.md`: concise architecture inventory and runtime contract summary.
+- `doc/arc/arc.yaml`: machine-readable architecture map for agents and tooling.
 - `doc/usage.md`: 10-section how-to for the 8 commands, presets, offline mode, citations.
 - `doc/changelog.md`: v0.1.0 and v0.2.0 deltas.
-- `data/demo/README.md`: what each upstream PT-BR dataset is and how to rebuild the unified corpus.
+- `dat/demo/README.md`: what each upstream PT-BR dataset is and how to rebuild the unified corpus.
 - `CONTRIBUTING.md`: external contributor flow.
 - `CODE_OF_CONDUCT.md`: contributor covenant 2.1, lowercase plain-style.
 - `scripts/release_check.sh`: read it. it documents the gate by being the gate.

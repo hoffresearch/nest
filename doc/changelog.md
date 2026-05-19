@@ -141,7 +141,7 @@ JCS-style canonical JSON (declaration-ordered known fields, BTreeMap order for `
 ### reproducibility
 
 - `NestFileBuilder::reproducible(true)` overrides `manifest.created` to `"1970-01-01T00:00:00Z"` (`REPRODUCIBLE_CREATED`).
-- two builds with identical inputs produce byte-identical files. verified on the legacy converter (`data/truw_ptbr.nest` to 73.73 MB v0.1 binary); both builds shasum to `b9f6e0ea16176706f08767559927737ce91070147ec6cb54e26710bff3d2566d`.
+- two builds with identical inputs produce byte-identical files. verified on the legacy converter (`dat/truw_ptbr.nest` to 73.73 MB v0.1 binary); both builds shasum to `b9f6e0ea16176706f08767559927737ce91070147ec6cb54e26710bff3d2566d`.
 
 ### version skew policy
 
@@ -199,7 +199,7 @@ single python entry point: no subprocess CLI fallback inside `python/`.
 ### reference artefacts
 
 - golden fixture: `crates/nest-format/tests/fixtures/golden_v1_minimal.nest` (1366 bytes; regenerate with `cargo run -p nest-format --example regen_golden`).
-- legacy SQLite-based dataset: `data/truw_ptbr.nest` (28 MB) to `data/truw_ptbr.v1.nest` (73.73 MB, 19,769 chunks dim 384) via `python/convert_legacy.py`.
-- specification: `doc/spec.md`.
+- legacy SQLite-based dataset: `dat/truw_ptbr.nest` (28 MB) to `dat/truw_ptbr.v1.nest` (73.73 MB, 19,769 chunks dim 384) via `python/convert_legacy.py`.
+- architecture references: `doc/arc/arc.md` and `doc/arc/arc.yaml`.
 
 [0.1.0]: https://github.com/hoffresearch/nest/releases/tag/v0.1.0
