@@ -1,3 +1,7 @@
+# user guide
+
+operating notes for ai agents and human contributors working in this repo. the principal author writes fast and uses voice transcription. typos, caps lock, missing accents are common. read intent, do not flag tone, do not project emotional risk.
+
 # build and test
 
 - `cargo build --workspace` / `cargo build --release --workspace`
@@ -58,6 +62,31 @@ python entry: `sys.path.insert(0, "python"); import nest`. dynamic loader finds 
 - `data/measure/corpus_*.nest` and `*.nest-*` are gitignored: regeneration artifacts, not assets. the JSON files next to them ARE tracked (regression baselines).
 
 # conventions
+
+
+# naming
+
+directories, docs, and assets: kebab-case in english. source files: idiomatic to the language. check folder structure consistency with the project's design pattern. when proposing renames or moves, list them as `mv` commands. after renaming, test every import touched by the change and fix them. run the test suite after the operation.
+
+build folders, files, and codebase items following apl-style 3-char tokens that read as variable syntax. that keeps the glyph atomic and context natural. high core value for neurodivergent readers.
+
+# docs
+
+write in diataxis style. all lowercase. no emojis. no em-dash. no decorative markdown. pragmatic, professional, objective. every doc starts with a yaml header for semantic resolution (helps llm, agentic, vector search): project, audience, status, last-updated, domain. design notes that turn out wrong get a note on top. they are not deleted.
+
+# file hygiene
+
+333 lines per file is the threshold. human working memory holds 4 plus or minus 1 chunks at once (cowan 2001, refining miller). neural networks also work better that way. a file that does not fit the "mental window" forces internal context switching, degrading comprehension and raising bug rates. this is unnecessary cognitive load, the same principle applied in ux.
+
+every file created or modified in a session that exceeds 333 lines must be read in full and refactored along single-responsibility lines.
+
+# audit when finishing a task
+
+run a full audit over every change made in the session, no summarizing, from devops, code quality, and secops angles. write a temporary manifest in markdown under your tmp folder to track tasks executed.
+
+identify every trace of dead code, generated scripts and files no longer useful, items needing update, and items to be moved to the correct location per architecture and design pattern. if the project lacks documented conventions, create them: adrs in `kdb/adr/` for architectural decisions, `.editorconfig` for stack-agnostic base formatting, and an idiomatic linter config per language used.
+
+identify temporary scripts and possible dead-code files in incorrect folders. understand how each works, preserve application integrity, test and validate that no imports or responsibilities are left orphan. run tests after execution.
 
 - rust edition 2024, resolver 3, `thiserror` for errors (never panic in library code).
 - `repr(C)` structs for binary layout; all integers LE unsigned.

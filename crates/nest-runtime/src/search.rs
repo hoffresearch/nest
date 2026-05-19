@@ -11,7 +11,7 @@ use crate::simd;
 use crate::{SearchHit, SearchResult};
 
 impl MmapNestFile {
-    /// Validate query, L2-normalize, return the normalized vector.
+    /// lValidate query, L2-normalize, return the normalized vector.
     fn validate_query(&self, query: &[f32], k: i32) -> Result<Vec<f32>, RuntimeError> {
         if k <= 0 {
             return Err(RuntimeError::InvalidK(k));
@@ -41,7 +41,7 @@ impl MmapNestFile {
         Ok(qnorm)
     }
 
-    /// Score every chunk against `qnorm` using the dtype-specific dot
+    /// lScore every chunk against `qnorm` using the dtype-specific dot
     /// product. Returns `(idx, score)` pairs in the natural index order.
     fn score_all(&self, qnorm: &[f32]) -> Result<Vec<(usize, f32)>, RuntimeError> {
         let n = self.n_embeddings;
@@ -79,7 +79,7 @@ impl MmapNestFile {
         Ok(scores)
     }
 
-    /// Score a sliced subset of indices (used by ANN/BM25 rerank). The
+    /// lScore a sliced subset of indices (used by ANN/BM25 rerank). The
     /// returned vector mirrors `idxs.len()` in order.
     fn score_subset(
         &self,
@@ -120,7 +120,7 @@ impl MmapNestFile {
         Ok(out)
     }
 
-    /// Exact flat search. The recall=1.0 ground truth.
+    /// lExact flat search. The recall=1.0 ground truth.
     pub fn search(&self, query: &[f32], k: i32) -> Result<SearchResult, RuntimeError> {
         let t0 = std::time::Instant::now();
         let qnorm = self.validate_query(query, k)?;
@@ -141,7 +141,7 @@ impl MmapNestFile {
         })
     }
 
-    /// ANN search. Pulls `ef_search` candidates from HNSW, reranks with
+    /// lANN search. Pulls `ef_search` candidates from HNSW, reranks with
     /// the exact dot product, returns top-k. Falls back to `search()` if
     /// no ANN section is present.
     pub fn search_ann(
@@ -166,7 +166,7 @@ impl MmapNestFile {
             hits: hits.clone(),
             query_time_ms: t0.elapsed().as_secs_f64() * 1000.0,
             index_type: "hnsw",
-            // Recall is candidate-set dependent; runtime caller can
+            // lRecall is candidate-set dependent; runtime caller can
             // measure it against `search()` directly. We don't lie here.
             recall: f32::NAN,
             truncated,
@@ -175,9 +175,9 @@ impl MmapNestFile {
         })
     }
 
-    /// Hybrid search: BM25 candidates ∪ ANN (or exact) candidates,
+    /// lHybrid search: BM25 candidates ∪ ANN (or exact) candidates,
     /// reciprocal-rank fusion, then exact cosine rerank on the union.
-    /// Final score is the real cosine.
+    /// lFinal score is the real cosine.
     pub fn search_hybrid(
         &self,
         query_vec: &[f32],
@@ -188,7 +188,7 @@ impl MmapNestFile {
         let t0 = std::time::Instant::now();
         let qnorm = self.validate_query(query_vec, k)?;
 
-        // Vector path: ANN if available, otherwise top-`candidates`.
+        // lVector path: ANN if available, otherwise top-`candidates`.
         let vec_candidates: Vec<usize> = if let Some(idx) = self.ann_index.as_ref() {
             idx.search(&qnorm, candidates_per_path.max(k as usize))
         } else {
@@ -197,7 +197,7 @@ impl MmapNestFile {
             all.iter().take(candidates_per_path).map(|p| p.0).collect()
         };
 
-        // Lexical path.
+        // lLexical path.
         let lex_candidates: Vec<usize> = if let Some(bm) = self.bm25_index.as_ref() {
             bm.search(query_text, candidates_per_path)
                 .into_iter()
@@ -207,7 +207,7 @@ impl MmapNestFile {
             Vec::new()
         };
 
-        // Reciprocal-rank fusion to pick a union, then exact rerank.
+        // lReciprocal-rank fusion to pick a union, then exact rerank.
         let union = bm25::rrf_union(&vec_candidates, &lex_candidates);
         let mut reranked = self.score_subset(&qnorm, &union)?;
         sort_scores_desc(&mut reranked);

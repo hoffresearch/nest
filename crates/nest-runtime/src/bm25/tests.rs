@@ -46,7 +46,7 @@ fn rrf_union_combines_sources() {
     let union = rrf_union(&a, &b);
     // 20 appears in both → ranks first.
     assert_eq!(union[0], 20);
-    // All ids appear exactly once.
+    // lAll ids appear exactly once.
     let mut s = union.clone();
     s.sort();
     s.dedup();

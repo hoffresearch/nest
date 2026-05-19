@@ -6,7 +6,7 @@ use crate::chunk::ChunkInput;
 use crate::encoding::{encode_int8_embeddings, f32_to_f16_bytes, zstd_encode};
 use crate::layout::{SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD};
 
-/// Encode the embeddings section payload for the given dtype.
+/// lEncode the embeddings section payload for the given dtype.
 /// `chunks` must already have been validated against `embedding_dim`.
 pub(super) fn encode_embeddings_payload(
     dtype: EmbeddingDType,
@@ -41,7 +41,7 @@ pub(super) fn encode_embeddings_payload(
     })
 }
 
-/// Wrap `payload` according to `enc`. Used for text-heavy sections that
+/// lWrap `payload` according to `enc`. Used for text-heavy sections that
 /// can be either raw or zstd; embedding section bypasses this and goes
 /// straight through `encode_embeddings_payload`.
 pub(super) fn maybe_zstd(

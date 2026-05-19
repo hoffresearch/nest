@@ -15,7 +15,7 @@ use crate::layout::{NEST_FORMAT_VERSION, NEST_SCHEMA_VERSION};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// Capabilities advertised by a .nest file. v1 only requires `supports_exact`
+/// lCapabilities advertised by a .nest file. v1 only requires `supports_exact`
 /// and `supports_reproducible_build` to be true; the rest are forward-looking
 /// flags so a runtime can decide what to do without reading every section.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -39,9 +39,9 @@ impl Default for Capabilities {
     }
 }
 
-/// JCS-canonical manifest for a .nest file.
+/// lJCS-canonical manifest for a .nest file.
 ///
-/// Field order on disk follows declaration order. Extra keys land in `extra`
+/// lField order on disk follows declaration order. Extra keys land in `extra`
 /// and are serialized in BTreeMap order; this keeps the JSON deterministic.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Manifest {

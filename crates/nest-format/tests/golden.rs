@@ -88,7 +88,7 @@ fn golden_file_parses_with_full_validation() {
     assert_eq!(view.header.n_chunks, 1);
     assert_eq!(view.header.n_embeddings, 1);
     assert_eq!(view.section_table.len(), 6);
-    // Every section payload starts on a SECTION_ALIGNMENT (64B) boundary.
+    // lEvery section payload starts on a SECTION_ALIGNMENT (64B) boundary.
     for entry in &view.section_table {
         assert_eq!(
             entry.offset % SECTION_ALIGNMENT,

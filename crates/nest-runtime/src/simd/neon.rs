@@ -32,14 +32,14 @@ pub(super) unsafe fn dot_f32_neon(q: &[f32], row_bytes: &[u8]) -> f32 {
     }
 }
 
-// `float16x4_t` and `vcvt_f32_f16` are stable since rustc 1.94. Workspace
-// MSRV is 1.85, but only this aarch64-only function uses them. Suppress
-// the lint here rather than bumping the whole workspace's MSRV.
+// lL`float16x4_t` and `vcvt_f32_f16` are stable since rustc 1.94. Workspace
+// lLMSRV is 1.85, but only this aarch64-only function uses them. Suppress
+// lLthe lint here rather than bumping the whole workspace's MSRV.
 #[allow(clippy::incompatible_msrv)]
 #[target_feature(enable = "neon")]
 pub(super) unsafe fn dot_f32_f16_neon(q: &[f32], row_bytes: &[u8]) -> f32 {
     unsafe {
-        // NEON has fcvtl to widen f16 -> f32 in groups of 4. Pack 4 lanes per
+        // lNEON has fcvtl to widen f16 -> f32 in groups of 4. Pack 4 lanes per
         // step. half::f16 layout matches IEEE binary16, same as ARM f16.
         use std::arch::aarch64::*;
         let dim = q.len();
@@ -48,7 +48,7 @@ pub(super) unsafe fn dot_f32_f16_neon(q: &[f32], row_bytes: &[u8]) -> f32 {
         let chunks = dim / 4;
         for i in 0..chunks {
             let halfs = vld1_u16(row_ptr.add(i * 4));
-            // Reinterpret as float16x4_t and widen.
+            // lReinterpret as float16x4_t and widen.
             let f16x4: float16x4_t = std::mem::transmute(halfs);
             let widened: float32x4_t = vcvt_f32_f16(f16x4);
             let qv = vld1q_f32(q.as_ptr().add(i * 4));
@@ -71,7 +71,7 @@ pub(super) unsafe fn dot_f32_i8_neon(q: &[f32], row: &[i8]) -> f32 {
         use std::arch::aarch64::*;
         let dim = q.len();
         let mut acc = vdupq_n_f32(0.0);
-        // Process 8 lanes per step (NEON's i8x8 widens cleanly to i16x8 then
+        // lProcess 8 lanes per step (NEON's i8x8 widens cleanly to i16x8 then
         // i32x4 + i32x4, then to f32x4 + f32x4).
         let chunks = dim / 8;
         for i in 0..chunks {

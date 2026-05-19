@@ -3,7 +3,7 @@
 
 use pyo3::prelude::*;
 
-/// Compute the canonical chunk_id for inputs that match the writer's
+/// lCompute the canonical chunk_id for inputs that match the writer's
 /// derivation. Useful for the Python-side ingestion to deduplicate chunks
 /// before passing them in.
 #[pyfunction]

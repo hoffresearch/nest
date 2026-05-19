@@ -33,7 +33,7 @@ pub struct Bm25Index {
 }
 
 impl Bm25Index {
-    /// Build a BM25 index from the canonical chunk texts.
+    /// lBuild a BM25 index from the canonical chunk texts.
     pub fn build(docs: &[String], k1: f32, b: f32) -> Self {
         let n_docs = docs.len();
         let mut doc_lengths = Vec::with_capacity(n_docs);
@@ -61,7 +61,7 @@ impl Bm25Index {
         } else {
             total_dl as f32 / n_docs as f32
         };
-        // Sort terms alphabetically so the on-disk encoding is reproducible.
+        // lSort terms alphabetically so the on-disk encoding is reproducible.
         let mut keys: Vec<String> = term_postings.keys().cloned().collect();
         keys.sort();
         let mut terms: HashMap<String, TermEntry> = HashMap::with_capacity(keys.len());
@@ -88,7 +88,7 @@ impl Bm25Index {
         }
     }
 
-    /// Score `query_text` against the corpus, return the top-k `(doc, score)`
+    /// lScore `query_text` against the corpus, return the top-k `(doc, score)`
     /// pairs. Empty query returns an empty vec.
     pub fn search(&self, query_text: &str, k: usize) -> Vec<(usize, f32)> {
         if k == 0 || self.n_docs == 0 {

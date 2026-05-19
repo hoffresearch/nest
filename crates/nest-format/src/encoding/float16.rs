@@ -1,8 +1,8 @@
-//! Float16 conversions for the `encoding=2` embeddings path. The
+//! float16 conversions for the `encoding=2` embeddings path. The
 //! runtime never accumulates in f16 — quantize at write time, decode
 //! lane-by-lane into f32 at read time.
 
-/// Convert an L2-normalized float32 embedding to float16, returning the
+/// lConvert an L2-normalized float32 embedding to float16, returning the
 /// little-endian byte representation. Not a checked NaN/Inf path —
 /// callers must validate inputs upstream.
 pub fn f32_to_f16_bytes(values: &[f32]) -> Vec<u8> {
@@ -14,7 +14,7 @@ pub fn f32_to_f16_bytes(values: &[f32]) -> Vec<u8> {
     out
 }
 
-/// Decode a float16 byte slice into f32 values, accumulating in f32
+/// lDecode a float16 byte slice into f32 values, accumulating in f32
 /// for downstream dot-product accuracy.
 #[inline]
 pub fn f16_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {

@@ -1,6 +1,6 @@
-"""End-to-end test of the Python (PyO3) path.
+"""end-to-end test of the Python (PyO3) path.
 
-The CLI binary is exhaustively tested in `crates/nest-cli/tests/cli_e2e.rs`.
+the CLI binary is exhaustively tested in `crates/nest-cli/tests/cli_e2e.rs`.
 This file stays on a single Python entry point: PyO3 only. No subprocess
 shell-out — `nest validate / stats / search / cite / inspect` all have
 in-process equivalents through `nest.NestFile`.
