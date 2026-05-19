@@ -1,0 +1,186 @@
+project: nest
+last-updated: "2026-05-19"
+domain: architecture
+summary: "single-file semantic knowledge stack: rust owns format, runtime, cli, and bindings; python owns ingestion, model fingerprinting, and support tooling."
+layers:
+  - {name: nest-format, role: "frozen v1 binary format, manifest, reader, writer, encodings, and hashes", entrypoints: ["crates/nest-format/src/lib.rs"], links: ["crates/nest-format/src/reader/mod.rs", "crates/nest-format/src/writer/mod.rs"]}
+  - {name: nest-runtime, role: "mmap-backed search runtime with simd, ann, bm25, and exact rerank", entrypoints: ["crates/nest-runtime/src/lib.rs", "crates/nest-runtime/src/mmap_file.rs", "crates/nest-runtime/src/search.rs"], links: ["crates/nest-format/src/lib.rs", "crates/nest-runtime/src/simd/mod.rs"]}
+  - {name: nest-cli, role: "thin clap front-end over format and runtime APIs", entrypoints: ["crates/nest-cli/src/main.rs"], links: ["crates/nest-cli/src/cmd/mod.rs", "crates/nest-runtime/src/mmap_file.rs"]}
+  - {name: nest-python, role: "PyO3 bridge that exposes build, chunk_id, and NestFile search APIs to python", entrypoints: ["crates/nest-python/src/lib.rs"], links: ["crates/nest-python/src/build_fn.rs", "crates/nest-python/src/nest_file.rs"]}
+  - {name: python-tooling, role: "corpus build, query embedding, model fingerprinting, preset measurement, and regression tooling", entrypoints: ["python/nest.py", "python/builder.py", "python/embed_query.py", "python/tools/nest_build_corpus.py"], links: ["crates/nest-python/src/build_fn.rs", "scripts/release_check.sh"]}
+flows:
+  - {name: python-corpus-build, entry: "python/tools/nest_build_corpus.py", path: ["python/tools/_corpus_sources.py", "python/builder.py", "crates/nest-python/src/build_fn.rs", "crates/nest-format/src/writer/mod.rs"], summary: "load seven PT-BR datasets, dedupe, embed, cache, and emit a deterministic .nest file"}
+  - {name: cli-search-text, entry: "crates/nest-cli/src/cmd/search_text.rs", path: ["python/embed_query.py", "python/model_fingerprint.py", "crates/nest-runtime/src/search.rs"], summary: "embed a query in python, validate name, dim, and model_hash, then route to exact, hnsw, or hybrid search"}
+  - {name: runtime-open-and-search, entry: "crates/nest-runtime/src/mmap_file.rs", path: ["crates/nest-format/src/reader/mod.rs", "crates/nest-runtime/src/search.rs", "crates/nest-runtime/src/simd/mod.rs"], summary: "open mmap, decode metadata and optional indices, and score rows directly from the embeddings section; embeddings stay raw, float16, or int8 so the runtime never has to zstd-decompress the hot path"}
+  - {name: release-gate, entry: "scripts/release_check.sh", path: ["Cargo.toml", "crates/*", "python/_nest.so", "tests/test_e2e.py", "tests/test_builder.py", "tests/test_search_text_model_hash.py"], summary: "build, test, lint, rebuild the extension, run python suites, and compare preset metrics against the baseline"}
+quality:
+  - "the format and runtime emphasize deterministic layout, typed errors, and checksum-verified reads."
+  - "embeddings stay mmap-friendly on disk: raw float32, float16, or int8 only; zstd is reserved for non-embedding sections so search can stay zero-copy and simd-driven."
+  - "the cli stays intentionally thin and delegates behavior to runtime and format crates."
+  - "the python surface is small and explicit: load extension, build corpora, fingerprint models, and run support tooling."
+  - "ann and hybrid paths always rerank with exact cosine, which keeps scores consistent across search modes."
+risks:
+  - "doc/spec.md is referenced by docs but is not present in the current workspace tree; doc/architecture.md acts as the practical spec here."
+  - "bm25 tokenization is intentionally simple and documented as weak for CJK, thai, and lao."
+  - "python/_nest.so must be rebuilt after Rust changes that touch nest-format, nest-runtime, or nest-python."
+inventory:
+  root:
+    - {path: ".editorconfig", kind: config, purpose: "editor defaults plus binary-safe .nest handling", links: []}
+    - {path: ".gitattributes", kind: config, purpose: "git lfs routing for datasets and binaries", links: []}
+    - {path: ".gitignore", kind: config, purpose: "ignores build outputs, caches, and regenerated corpora", links: []}
+    - {path: "AGENTS.md", kind: repo-ops, purpose: "agent operating contract, commands, conventions, and gotchas", links: ["scripts/release_check.sh"]}
+    - {path: "Cargo.lock", kind: lockfile, purpose: "generated dependency lock for reproducible cargo resolution", links: ["Cargo.toml"]}
+    - {path: "Cargo.toml", kind: workspace-manifest, purpose: "workspace members, edition, resolver, and shared dependencies", links: ["crates/nest-format/Cargo.toml", "crates/nest-runtime/Cargo.toml", "crates/nest-cli/Cargo.toml", "crates/nest-python/Cargo.toml"]}
+    - {path: "clippy.toml", kind: lint-config, purpose: "pins msrv and clippy thresholds", links: []}
+    - {path: "CODE_OF_CONDUCT.md", kind: governance-doc, purpose: "project conduct policy", links: []}
+    - {path: "CONTRIBUTING.md", kind: contributor-doc, purpose: "setup, branching, testing, and style guidance", links: ["scripts/release_check.sh"]}
+    - {path: "LICENSE", kind: legal, purpose: "mit license text", links: []}
+    - {path: "llms.txt", kind: metadata, purpose: "empty placeholder metadata file", links: []}
+    - {path: "pyproject.toml", kind: python-config, purpose: "ruff config and python tool exclusions", links: ["python", "tests"]}
+    - {path: "README.md", kind: overview-doc, purpose: "project overview, install flow, cli, presets, and demo corpus", links: ["doc/architecture.md", "doc/usage.md"]}
+    - {path: "rustfmt.toml", kind: format-config, purpose: "stable rustfmt policy", links: []}
+    - {path: "SECURITY.md", kind: security-doc, purpose: "reporting channel, supported versions, and security scope", links: ["crates/nest-runtime/src/mmap_file.rs", "crates/nest-runtime/src/simd/mod.rs"]}
+  workspace:
+    - {path: "crates", kind: directory, purpose: "workspace crate root", links: ["crates/nest-format", "crates/nest-runtime", "crates/nest-cli", "crates/nest-python"]}
+    - {path: "crates/nest-cli", kind: crate-dir, purpose: "cli crate", links: ["crates/nest-cli/src/main.rs"]}
+    - {path: "crates/nest-cli/src", kind: directory, purpose: "cli source root", links: ["crates/nest-cli/src/main.rs", "crates/nest-cli/src/cmd"]}
+    - {path: "crates/nest-cli/src/cmd", kind: directory, purpose: "cli subcommands and helpers", links: ["crates/nest-cli/src/cmd/search_text.rs", "crates/nest-cli/src/cmd/util.rs"]}
+    - {path: "crates/nest-cli/tests", kind: directory, purpose: "cli integration tests", links: ["crates/nest-cli/tests/cli_e2e.rs"]}
+    - {path: "crates/nest-format", kind: crate-dir, purpose: "format crate", links: ["crates/nest-format/src/lib.rs"]}
+    - {path: "crates/nest-format/examples", kind: directory, purpose: "format maintenance examples", links: ["crates/nest-format/examples/regen_golden.rs"]}
+    - {path: "crates/nest-format/src", kind: directory, purpose: "format source root", links: ["crates/nest-format/src/lib.rs", "crates/nest-format/src/writer", "crates/nest-format/src/reader"]}
+    - {path: "crates/nest-format/src/encoding", kind: directory, purpose: "wire encoding helpers", links: ["crates/nest-format/src/encoding/mod.rs"]}
+    - {path: "crates/nest-format/src/layout", kind: directory, purpose: "on-disk structs and constants", links: ["crates/nest-format/src/layout/mod.rs"]}
+    - {path: "crates/nest-format/src/manifest", kind: directory, purpose: "manifest schema and validation", links: ["crates/nest-format/src/manifest/mod.rs"]}
+    - {path: "crates/nest-format/src/reader", kind: directory, purpose: "zero-copy reader and validator", links: ["crates/nest-format/src/reader/mod.rs"]}
+    - {path: "crates/nest-format/src/sections", kind: directory, purpose: "section codecs for canonical payloads", links: ["crates/nest-format/src/sections/mod.rs"]}
+    - {path: "crates/nest-format/src/writer", kind: directory, purpose: "deterministic builder internals", links: ["crates/nest-format/src/writer/mod.rs"]}
+    - {path: "crates/nest-format/tests", kind: directory, purpose: "format regression tests", links: ["crates/nest-format/tests/golden.rs", "crates/nest-format/tests/roundtrip.rs"]}
+    - {path: "crates/nest-format/tests/fixtures", kind: directory, purpose: "golden fixture storage", links: ["crates/nest-format/tests/golden.rs"]}
+    - {path: "crates/nest-python", kind: crate-dir, purpose: "PyO3 binding crate", links: ["crates/nest-python/src/lib.rs"]}
+    - {path: "crates/nest-python/src", kind: directory, purpose: "binding source root", links: ["crates/nest-python/src/build_fn.rs", "crates/nest-python/src/nest_file.rs"]}
+    - {path: "crates/nest-runtime", kind: crate-dir, purpose: "runtime crate", links: ["crates/nest-runtime/src/lib.rs"]}
+    - {path: "crates/nest-runtime/src", kind: directory, purpose: "runtime source root", links: ["crates/nest-runtime/src/mmap_file.rs", "crates/nest-runtime/src/search.rs"]}
+    - {path: "crates/nest-runtime/src/ann", kind: directory, purpose: "hnsw subsystem", links: ["crates/nest-runtime/src/ann/mod.rs"]}
+    - {path: "crates/nest-runtime/src/bm25", kind: directory, purpose: "bm25 subsystem", links: ["crates/nest-runtime/src/bm25/mod.rs"]}
+    - {path: "crates/nest-runtime/src/simd", kind: directory, purpose: "simd kernels and dispatch", links: ["crates/nest-runtime/src/simd/mod.rs"]}
+    - {path: "crates/nest-runtime/tests", kind: directory, purpose: "runtime integration tests", links: ["crates/nest-runtime/tests/hnsw_recall.rs", "crates/nest-runtime/tests/search_exact.rs"]}
+    - {path: "dat", kind: directory, purpose: "local architecture notes", links: ["dat/arc.md", "dat/arc.yaml"]}
+    - {path: "data", kind: directory, purpose: "lfs corpora, demo datasets, and measurement outputs", links: ["data/demo/README.md"]}
+    - {path: "doc", kind: directory, purpose: "human-facing docs and architecture image", links: ["doc/architecture.md", "doc/usage.md", "doc/changelog.md"]}
+    - {path: "python", kind: directory, purpose: "python wrapper, builder, embedder, and tooling", links: ["python/nest.py", "python/builder.py"]}
+    - {path: "python/__pycache__", kind: directory, purpose: "generated python bytecode cache", links: []}
+    - {path: "python/tools", kind: directory, purpose: "private corpus and benchmark scripts", links: ["python/tools/nest_build_corpus.py", "python/tools/measure_presets.py"]}
+    - {path: "python/tools/__pycache__", kind: directory, purpose: "generated bytecode cache for python/tools", links: []}
+    - {path: "ref", kind: directory, purpose: "currently empty reference area", links: []}
+    - {path: "scripts", kind: directory, purpose: "shell entrypoints for repo operations", links: ["scripts/release_check.sh"]}
+    - {path: "target", kind: artifact-dir, purpose: "cargo build outputs and temporary files", links: []}
+    - {path: "tests", kind: directory, purpose: "python integration test scripts", links: ["tests/test_e2e.py", "tests/test_builder.py", "tests/test_search_text_model_hash.py"]}
+  nest_cli:
+    - {path: "crates/nest-cli/Cargo.toml", kind: rust-manifest, purpose: "cli crate manifest", links: ["Cargo.toml"]}
+    - {path: "crates/nest-cli/src/main.rs", kind: rust-source, purpose: "clap entrypoint and subcommand dispatch", links: ["crates/nest-cli/src/cmd/mod.rs"]}
+    - {path: "crates/nest-cli/src/cmd/benchmark.rs", kind: rust-source, purpose: "bench exact and ann latency plus cold-cache hint mode", links: ["crates/nest-runtime/src/mmap_file.rs", "crates/nest-runtime/src/search.rs"]}
+    - {path: "crates/nest-cli/src/cmd/cite.rs", kind: rust-source, purpose: "resolve citation ids into text and spans", links: ["crates/nest-format/src/reader/mod.rs", "crates/nest-format/src/sections/chunk_ids.rs"]}
+    - {path: "crates/nest-cli/src/cmd/inspect.rs", kind: rust-source, purpose: "print header, sections, manifest, and hashes", links: ["crates/nest-runtime/src/mmap_file.rs"]}
+    - {path: "crates/nest-cli/src/cmd/mod.rs", kind: rust-source, purpose: "module export list for subcommands", links: []}
+    - {path: "crates/nest-cli/src/cmd/search.rs", kind: rust-source, purpose: "exact vector search command", links: ["crates/nest-runtime/src/search.rs"]}
+    - {path: "crates/nest-cli/src/cmd/search_ann.rs", kind: rust-source, purpose: "forced ann search command", links: ["crates/nest-runtime/src/search.rs"]}
+    - {path: "crates/nest-cli/src/cmd/search_text.rs", kind: rust-source, purpose: "python embedder orchestration plus strict model_hash gate", links: ["python/embed_query.py", "python/model_fingerprint.py", "crates/nest-runtime/src/search.rs"]}
+    - {path: "crates/nest-cli/src/cmd/stats.rs", kind: rust-source, purpose: "stats command for size, dtype, sections, hashes, and simd backend", links: ["crates/nest-format/src/reader/mod.rs", "crates/nest-runtime/src/simd/mod.rs"]}
+    - {path: "crates/nest-cli/src/cmd/util.rs", kind: rust-source, purpose: "shared output and embedder path helpers", links: ["crates/nest-runtime/src/lib.rs"]}
+    - {path: "crates/nest-cli/src/cmd/validate.rs", kind: rust-source, purpose: "full integrity validation command", links: ["crates/nest-format/src/reader/mod.rs"]}
+    - {path: "crates/nest-cli/tests/cli_e2e.rs", kind: rust-test, purpose: "integration coverage for the compiled cli", links: ["crates/nest-cli/src/main.rs"]}
+  nest_format:
+    - {path: "crates/nest-format/Cargo.toml", kind: rust-manifest, purpose: "format crate manifest", links: ["Cargo.toml"]}
+    - {path: "crates/nest-format/examples/regen_golden.rs", kind: rust-example, purpose: "regenerate the byte-frozen golden fixture", links: ["crates/nest-format/tests/golden.rs"]}
+    - {path: "crates/nest-format/src/chunk.rs", kind: rust-source, purpose: "ChunkInput, chunk_id, and per-chunk validation", links: ["crates/nest-format/src/error.rs"]}
+    - {path: "crates/nest-format/src/encoding/float16.rs", kind: rust-source, purpose: "float16 encode and decode helpers", links: ["crates/nest-format/src/encoding/mod.rs"]}
+    - {path: "crates/nest-format/src/encoding/int8.rs", kind: rust-source, purpose: "int8 quantization and parsed embedding views", links: ["crates/nest-runtime/src/search.rs"]}
+    - {path: "crates/nest-format/src/encoding/mod.rs", kind: rust-source, purpose: "encoding exports and shared helpers", links: ["crates/nest-format/src/encoding/float16.rs", "crates/nest-format/src/encoding/int8.rs", "crates/nest-format/src/encoding/zstd_codec.rs"]}
+    - {path: "crates/nest-format/src/encoding/zstd_codec.rs", kind: rust-source, purpose: "zstd compression helpers for non-embedding text sections", links: ["crates/nest-format/src/reader/decode.rs"]}
+    - {path: "crates/nest-format/src/error.rs", kind: rust-source, purpose: "typed format and validation errors", links: []}
+    - {path: "crates/nest-format/src/layout/footer.rs", kind: rust-source, purpose: "footer struct and file-hash trailer", links: ["crates/nest-format/src/layout/mod.rs"]}
+    - {path: "crates/nest-format/src/layout/header.rs", kind: rust-source, purpose: "header struct and checksum layout", links: ["crates/nest-format/src/layout/mod.rs"]}
+    - {path: "crates/nest-format/src/layout/mod.rs", kind: rust-source, purpose: "format constants, section ids, and layout re-exports", links: ["crates/nest-format/src/layout/header.rs", "crates/nest-format/src/layout/footer.rs", "crates/nest-format/src/layout/section_entry.rs"]}
+    - {path: "crates/nest-format/src/layout/section_entry.rs", kind: rust-source, purpose: "section-table entry layout and section naming", links: ["crates/nest-format/src/layout/mod.rs"]}
+    - {path: "crates/nest-format/src/lib.rs", kind: rust-source, purpose: "public format API surface", links: ["crates/nest-format/src/reader/mod.rs", "crates/nest-format/src/writer/mod.rs"]}
+    - {path: "crates/nest-format/src/manifest/canonical.rs", kind: rust-source, purpose: "canonical json serialization for deterministic manifest bytes", links: ["crates/nest-format/src/manifest/mod.rs"]}
+    - {path: "crates/nest-format/src/manifest/mod.rs", kind: rust-source, purpose: "Manifest data model and capability flags", links: ["crates/nest-format/src/manifest/validate.rs"]}
+    - {path: "crates/nest-format/src/manifest/validate.rs", kind: rust-source, purpose: "manifest schema and invariant checks", links: ["crates/nest-format/src/error.rs"]}
+    - {path: "crates/nest-format/src/reader/decode.rs", kind: rust-source, purpose: "decoded section access by encoding", links: ["crates/nest-format/src/encoding/mod.rs"]}
+    - {path: "crates/nest-format/src/reader/mod.rs", kind: rust-source, purpose: "NestView zero-copy reader surface", links: ["crates/nest-format/src/reader/parse.rs", "crates/nest-format/src/reader/validate.rs"]}
+    - {path: "crates/nest-format/src/reader/parse.rs", kind: rust-source, purpose: "header, footer, and section-table parsing", links: ["crates/nest-format/src/layout/mod.rs"]}
+    - {path: "crates/nest-format/src/reader/validate.rs", kind: rust-source, purpose: "checksums, bounds, required sections, and embedding validation, including the rule that embeddings cannot use zstd", links: ["crates/nest-format/src/error.rs", "crates/nest-format/src/manifest/validate.rs"]}
+    - {path: "crates/nest-format/src/sections/canonical.rs", kind: rust-source, purpose: "canonical decoded payload handling for content_hash", links: ["crates/nest-format/src/sections/mod.rs"]}
+    - {path: "crates/nest-format/src/sections/chunk_ids.rs", kind: rust-source, purpose: "chunk id section codec", links: ["crates/nest-format/src/chunk.rs"]}
+    - {path: "crates/nest-format/src/sections/codec.rs", kind: rust-source, purpose: "shared section payload framing helpers", links: ["crates/nest-format/src/sections/mod.rs"]}
+    - {path: "crates/nest-format/src/sections/contract.rs", kind: rust-source, purpose: "search contract codec and cross-check helpers", links: ["crates/nest-format/src/manifest/mod.rs"]}
+    - {path: "crates/nest-format/src/sections/mod.rs", kind: rust-source, purpose: "section exports and common types", links: ["crates/nest-format/src/sections/chunk_ids.rs", "crates/nest-format/src/sections/spans.rs", "crates/nest-format/src/sections/provenance.rs"]}
+    - {path: "crates/nest-format/src/sections/provenance.rs", kind: rust-source, purpose: "provenance section codec", links: ["crates/nest-format/src/sections/codec.rs"]}
+    - {path: "crates/nest-format/src/sections/spans.rs", kind: rust-source, purpose: "source span section codec", links: ["crates/nest-format/src/sections/codec.rs"]}
+    - {path: "crates/nest-format/src/writer/build.rs", kind: rust-source, purpose: "final byte assembly and deterministic file layout, keeping embeddings out of zstd so the runtime can mmap them directly", links: ["crates/nest-format/src/writer/payload.rs"]}
+    - {path: "crates/nest-format/src/writer/encoding_choice.rs", kind: rust-source, purpose: "encoding enums and reproducible timestamp constant", links: ["crates/nest-format/src/writer/mod.rs"]}
+    - {path: "crates/nest-format/src/writer/mod.rs", kind: rust-source, purpose: "NestFileBuilder surface and manifest mutation rules", links: ["crates/nest-format/src/writer/build.rs"]}
+    - {path: "crates/nest-format/src/writer/payload.rs", kind: rust-source, purpose: "section payload generation and alignment, with zstd only for non-embedding payloads", links: ["crates/nest-format/src/sections/mod.rs"]}
+    - {path: "crates/nest-format/src/writer/tests.rs", kind: rust-test, purpose: "writer unit coverage", links: ["crates/nest-format/src/writer/mod.rs"]}
+    - {path: "crates/nest-format/tests/dual_integrity.rs", kind: rust-test, purpose: "physical hash and logical content_hash integrity tests", links: ["crates/nest-format/src/reader/mod.rs"]}
+    - {path: "crates/nest-format/tests/golden.rs", kind: rust-test, purpose: "byte-frozen minimal fixture checks", links: ["crates/nest-format/examples/regen_golden.rs"]}
+    - {path: "crates/nest-format/tests/negative_fp16.rs", kind: rust-test, purpose: "invalid float16 rejection coverage", links: ["crates/nest-format/src/encoding/float16.rs"]}
+    - {path: "crates/nest-format/tests/negative_int8.rs", kind: rust-test, purpose: "invalid int8 rejection coverage", links: ["crates/nest-format/src/encoding/int8.rs"]}
+    - {path: "crates/nest-format/tests/negative_zstd.rs", kind: rust-test, purpose: "illegal zstd use rejection coverage", links: ["crates/nest-format/src/encoding/zstd_codec.rs"]}
+    - {path: "crates/nest-format/tests/roundtrip.rs", kind: rust-test, purpose: "roundtrip coverage across encoding variants", links: ["crates/nest-format/src/writer/mod.rs", "crates/nest-format/src/reader/mod.rs"]}
+    - {path: "crates/nest-format/tests/v01_compat.rs", kind: rust-test, purpose: "v0.1 compatibility coverage", links: ["crates/nest-format/src/reader/mod.rs"]}
+  nest_python:
+    - {path: "crates/nest-python/Cargo.toml", kind: rust-manifest, purpose: "binding crate manifest", links: ["Cargo.toml"]}
+    - {path: "crates/nest-python/build.rs", kind: rust-build-script, purpose: "PyO3 cfg and macOS linker setup", links: []}
+    - {path: "crates/nest-python/src/build_fn.rs", kind: rust-source, purpose: "python build() bridge plus preset resolution and optional index creation", links: ["crates/nest-format/src/writer/mod.rs", "crates/nest-runtime/src/ann/mod.rs", "crates/nest-runtime/src/bm25/mod.rs"]}
+    - {path: "crates/nest-python/src/chunk_id_fn.rs", kind: rust-source, purpose: "python chunk_id helper", links: ["crates/nest-format/src/chunk.rs"]}
+    - {path: "crates/nest-python/src/lib.rs", kind: rust-source, purpose: "_nest module registration", links: ["crates/nest-python/src/build_fn.rs", "crates/nest-python/src/nest_file.rs"]}
+    - {path: "crates/nest-python/src/nest_file.rs", kind: rust-source, purpose: "PyO3 wrapper over MmapNestFile", links: ["crates/nest-runtime/src/mmap_file.rs", "crates/nest-runtime/src/search.rs"]}
+  nest_runtime:
+    - {path: "crates/nest-runtime/Cargo.toml", kind: rust-manifest, purpose: "runtime crate manifest", links: ["Cargo.toml", "crates/nest-format/Cargo.toml"]}
+    - {path: "crates/nest-runtime/src/ann/build.rs", kind: rust-source, purpose: "deterministic hnsw graph construction", links: ["crates/nest-runtime/src/ann/mod.rs"]}
+    - {path: "crates/nest-runtime/src/ann/codec.rs", kind: rust-source, purpose: "hnsw payload codec", links: ["crates/nest-runtime/src/ann/mod.rs"]}
+    - {path: "crates/nest-runtime/src/ann/mod.rs", kind: rust-source, purpose: "hnsw types, defaults, distance model, and tests", links: ["crates/nest-runtime/src/ann/build.rs", "crates/nest-runtime/src/ann/search.rs"]}
+    - {path: "crates/nest-runtime/src/ann/search.rs", kind: rust-source, purpose: "ann traversal over the hnsw graph", links: ["crates/nest-runtime/src/ann/mod.rs"]}
+    - {path: "crates/nest-runtime/src/ann/select_neighbors.rs", kind: rust-source, purpose: "neighbor selection heuristic", links: ["crates/nest-runtime/src/ann/build.rs"]}
+    - {path: "crates/nest-runtime/src/bm25/codec.rs", kind: rust-source, purpose: "bm25 payload codec", links: ["crates/nest-runtime/src/bm25/mod.rs"]}
+    - {path: "crates/nest-runtime/src/bm25/fusion.rs", kind: rust-source, purpose: "reciprocal-rank fusion helper", links: ["crates/nest-runtime/src/bm25/index.rs"]}
+    - {path: "crates/nest-runtime/src/bm25/index.rs", kind: rust-source, purpose: "bm25 index build and search", links: ["crates/nest-runtime/src/bm25/tokenize.rs"]}
+    - {path: "crates/nest-runtime/src/bm25/mod.rs", kind: rust-source, purpose: "bm25 module surface and payload contract", links: ["crates/nest-runtime/src/bm25/index.rs", "crates/nest-runtime/src/bm25/fusion.rs"]}
+    - {path: "crates/nest-runtime/src/bm25/tests.rs", kind: rust-test, purpose: "bm25 unit coverage", links: ["crates/nest-runtime/src/bm25/index.rs"]}
+    - {path: "crates/nest-runtime/src/bm25/tokenize.rs", kind: rust-source, purpose: "simple unicode-aware tokenizer", links: ["crates/nest-runtime/src/bm25/index.rs"]}
+    - {path: "crates/nest-runtime/src/error.rs", kind: rust-source, purpose: "runtime error surface", links: ["crates/nest-format/src/error.rs"]}
+    - {path: "crates/nest-runtime/src/lib.rs", kind: rust-source, purpose: "SearchHit, SearchResult, and runtime re-exports", links: ["crates/nest-runtime/src/mmap_file.rs", "crates/nest-runtime/src/search.rs"]}
+    - {path: "crates/nest-runtime/src/materialize.rs", kind: rust-source, purpose: "materialize stored embeddings to f32 vectors", links: ["crates/nest-runtime/src/mmap_file.rs"]}
+    - {path: "crates/nest-runtime/src/mmap_file.rs", kind: rust-source, purpose: "own mmap, decode metadata and optional indices, inspect, and revalidate, assuming embeddings remain directly readable from the mapped file", links: ["crates/nest-format/src/reader/mod.rs", "crates/nest-runtime/src/ann/mod.rs", "crates/nest-runtime/src/bm25/mod.rs"]}
+    - {path: "crates/nest-runtime/src/search.rs", kind: rust-source, purpose: "exact, ann, and hybrid search plus exact rerank", links: ["crates/nest-runtime/src/mmap_file.rs", "crates/nest-runtime/src/simd/mod.rs", "crates/nest-runtime/src/bm25/mod.rs"]}
+    - {path: "crates/nest-runtime/src/simd/avx2.rs", kind: rust-source, purpose: "x86_64 avx2 kernels", links: ["crates/nest-runtime/src/simd/mod.rs"]}
+    - {path: "crates/nest-runtime/src/simd/mod.rs", kind: rust-source, purpose: "simd backend detection and dispatch", links: ["crates/nest-runtime/src/simd/avx2.rs", "crates/nest-runtime/src/simd/neon.rs", "crates/nest-runtime/src/simd/scalar.rs"]}
+    - {path: "crates/nest-runtime/src/simd/neon.rs", kind: rust-source, purpose: "aarch64 neon kernels", links: ["crates/nest-runtime/src/simd/mod.rs"]}
+    - {path: "crates/nest-runtime/src/simd/scalar.rs", kind: rust-source, purpose: "portable scalar kernels", links: ["crates/nest-runtime/src/simd/mod.rs"]}
+    - {path: "crates/nest-runtime/src/simd/tests.rs", kind: rust-test, purpose: "simd parity tests", links: ["crates/nest-runtime/src/simd/mod.rs"]}
+    - {path: "crates/nest-runtime/tests/fp16_topk_recall_vs_f32.rs", kind: rust-test, purpose: "float16 recall and drift regression", links: ["crates/nest-runtime/src/search.rs"]}
+    - {path: "crates/nest-runtime/tests/hnsw_recall.rs", kind: rust-test, purpose: "ann recall regression", links: ["crates/nest-runtime/src/ann/mod.rs"]}
+    - {path: "crates/nest-runtime/tests/search_exact.rs", kind: rust-test, purpose: "exact-search integration coverage", links: ["crates/nest-runtime/src/search.rs"]}
+  data_docs_python_scripts_tests:
+    - {path: "dat/arc.md", kind: markdown-doc, purpose: "human-readable architecture inventory", links: ["dat/arc.yaml"]}
+    - {path: "data", kind: directory, purpose: "data root for corpora and demo sources", links: ["data/demo/README.md"]}
+    - {path: "doc", kind: directory, purpose: "top-level documentation root", links: ["doc/architecture.md", "doc/usage.md", "doc/changelog.md"]}
+    - {path: "python", kind: directory, purpose: "python wrapper and tooling root", links: ["python/nest.py", "python/builder.py", "python/tools"]}
+    - {path: "python/_nest.so", kind: binary-artifact, purpose: "compiled PyO3 extension", links: ["crates/nest-python/src/lib.rs"]}
+    - {path: "python/builder.py", kind: python-source, purpose: "chunk, cache, build, and validate pipeline", links: ["python/nest.py", "crates/nest-python/src/build_fn.rs"]}
+    - {path: "python/convert_legacy.py", kind: python-source, purpose: "legacy sqlite to v1 binary converter", links: ["python/model_fingerprint.py", "python/nest.py"]}
+    - {path: "python/embed_query.py", kind: python-source, purpose: "query embedder for cli search-text", links: ["python/model_fingerprint.py", "crates/nest-cli/src/cmd/search_text.rs"]}
+    - {path: "python/model_fingerprint.py", kind: python-source, purpose: "reproducible model fingerprint and model_hash", links: ["python/embed_query.py", "python/tools/nest_build_corpus.py"]}
+    - {path: "python/nest.py", kind: python-source, purpose: "dynamic loader and stable python API", links: ["crates/nest-python/src/lib.rs", "python/_nest.so"]}
+    - {path: "python/tools/_baseline_decoder.py", kind: python-source, purpose: "decode baseline corpora without re-embedding", links: ["python/tools/measure_presets.py"]}
+    - {path: "python/tools/_bench_runner.py", kind: python-source, purpose: "timing and build helpers for preset measurement", links: ["python/tools/measure_presets.py"]}
+    - {path: "python/tools/_corpus_sources.py", kind: python-source, purpose: "dataset loader registry and normalization", links: ["python/tools/nest_build_corpus.py", "data/demo/README.md"]}
+    - {path: "python/tools/compare_measure.py", kind: python-source, purpose: "regression gate over preset metrics", links: ["python/tools/measure_presets.py", "data/measure/baseline.json"]}
+    - {path: "python/tools/measure_presets.py", kind: python-source, purpose: "build and benchmark preset variants", links: ["python/tools/_baseline_decoder.py", "python/tools/_bench_runner.py"]}
+    - {path: "python/tools/nest_build_corpus.py", kind: python-source, purpose: "rebuild the shipped PT-BR corpus", links: ["python/tools/_corpus_sources.py", "python/builder.py", "scripts/release_check.sh"]}
+    - {path: "scripts/release_check.sh", kind: shell-script, purpose: "full release gate", links: ["python/tools/measure_presets.py", "python/tools/compare_measure.py", "tests/test_e2e.py", "tests/test_builder.py", "tests/test_search_text_model_hash.py"]}
+    - {path: "tests/test_builder.py", kind: python-test, purpose: "pipeline and cache regression coverage", links: ["python/builder.py"]}
+    - {path: "tests/test_e2e.py", kind: python-test, purpose: "PyO3 end-to-end coverage", links: ["python/nest.py", "crates/nest-python/src/nest_file.rs"]}
+    - {path: "tests/test_search_text_model_hash.py", kind: python-test, purpose: "model_hash gate coverage for search-text", links: ["crates/nest-cli/src/cmd/search_text.rs", "python/embed_query.py"]}
