@@ -8,7 +8,7 @@
 2. branch from `dev`: `git checkout -b feature/short-description`.
 3. keep each pr focused on one concern. small is better.
 4. add or update tests for the change. new behavior needs a new test.
-5. if the change alters architecture, module boundaries, data flow, or doc locations, update `doc/arc/arc.yaml` and `doc/arc/arc.md` in the same pr. keep both concise and pragmatic. do not add a second human architecture doc.
+5. if the change alters architecture, module boundaries, data flow, or doc locations, update the arc trio (`doc/arc/arc.md`, `doc/arc/arc.yaml`, `doc/arc/arc.mmd`) in the same pr. keep all three concise and pragmatic. do not add a second human architecture doc.
 6. run `./scripts/release_check.sh` locally before pushing. that script is the same gate ci runs on the pr.
 7. commit with a clear message in plain english. no conventional commits prefix.
 8. open a pr against `dev`. the maintainer squashes or rebases into `main` at release time.
@@ -31,6 +31,33 @@ pip install ruff sentence-transformers pandas zstandard pyarrow
 
 `dat/corpus_next.v1.nest` is tracked via git lfs. demo datasets under `dat/demo/` are local-only and gitignored; fetch them with the commands documented in `dat/demo/README.md`. without those datasets, runtime unit tests still pass.
 
+## conventions and writing style
+
+these conventions are not aesthetic preferences. they exist to keep the repo readable for humans, agents, and vector search at the same time. if you find yourself wanting to break one, open an issue first and explain why; do not silently deviate. the goal is gentle communal pressure to keep the codebase legible.
+
+### naming
+
+- top-level directories and most root tokens use **3-char codes** (`dat`, `doc`, `ref`). this keeps directory glyphs atomic, easy to scan at a glance, and consistent across the hoff research repos that follow the same pattern. rust workspace conventions (`crates/`, `target/`) and language defaults (`python/`, `scripts/`, `tests/`) are kept as-is so the project stays idiomatic to its stack.
+- multi-word documentation and asset names use **kebab-case in english** (`code-of-conduct.md`-style filenames, dataset folders, etc.).
+- source files follow the conventions of their language (`snake_case.rs`, `snake_case.py`).
+- when proposing renames or moves, list exact `mv` commands first, execute the move, fix every touched import, and run the test suite after.
+
+### writing style
+
+- write in **diataxis style**: separate tutorial, how-to, reference, and explanation. mixing them produces noise.
+- **all lowercase** in body text. acronyms used as words keep their canonical case (`CLI`, `BM25`, `HNSW`, `SIMD`, `MIT`).
+- **no emoji**, anywhere. **no em-dash** (`-`); use `,`, `;`, `.`, or a regular hyphen.
+- short paragraphs, direct voice, no marketing copy. commits explain the **why**; the diff already shows the what. no conventional-commits prefix.
+- every governance or architecture doc starts with a yaml frontmatter block (`project`, `audience`, `status`, `last-updated`, `domain`) so llm and vector tooling can resolve it semantically.
+
+### file hygiene
+
+human working memory holds four plus or minus one chunks at once (cowan, 2001). neural networks behave better the same way. a file that does not fit the mental window forces internal context switching and raises bug rates. this is the same principle ui designers apply to information density.
+
+- **operational target for new files: 220 lines.** aim here.
+- **hard limit: 333 lines.** above this, refactor along single-responsibility lines in the same pr.
+- **rust source carve-out: 300 lines** for `crates/**/src/**`. test files and the `crates/nest-format/tests/roundtrip.rs` carve-out are exempt.
+
 ## code style
 
 rust:
@@ -39,14 +66,14 @@ rust:
 - `cargo clippy --workspace --all-targets -- -D warnings` is a hard gate. suppress an individual lint with `#[allow(clippy::name)]` and a one-line justification, never globally.
 - every `unsafe` block needs a `// SAFETY:` comment naming the invariant the caller is relying on.
 - public items get a doc comment that explains the why, not the what. the name already says what.
-- files in `crates/**/src/**` cap at 300 lines. test files are exempt.
+- file hygiene as above: 300 lines for `crates/**/src/**`.
 
 python:
 
 - target `py312`, line length 100. ruff config in `pyproject.toml`.
 - lints: `E F W I B UP SIM`. run `ruff check .` and `ruff format --check .`.
-- private helpers in `python/tools/` use the `_` prefix, e.g. `_baseline_decoder.py`.
-- same 333-line cap as rust.
+- private helpers in `python/tools/` use the `_` prefix (e.g. `_baseline_decoder.py`).
+- file hygiene as above: 220-line target, 333-line hard limit.
 
 format and runtime invariants:
 
@@ -68,7 +95,7 @@ python tests/test_search_text_model_hash.py
 
 - bugs and feature requests: [github issues](https://github.com/hoffresearch/nest/issues).
 - security vulns: do not open a public issue. email [brenner@hoffresearch.com](mailto:brenner@hoffresearch.com). target ack within 72 hours.
-- questions about the format: open a discussion, or read `doc/arc/arc.md` and `doc/arc/arc.yaml`.
+- questions about the format: open a discussion, or read `doc/arc/arc.md`, `doc/arc/arc.yaml`, and `doc/arc/arc.mmd`.
 
 bug reports should include the `.nest` `file_hash` and `content_hash` (from `nest stats <file>`), the runtime `simd_backend` (also in `nest stats`), the exact cli or python invocation, and the error output.
 
