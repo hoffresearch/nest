@@ -1,0 +1,110 @@
+%% nest visual architecture reference
+%% visual companion to doc/arc/arc.md and doc/arc/arc.yaml
+
+graph LR
+    subgraph Gateway
+      CLI[nest cli<br/>clap, 8 subcommands]
+      PYAPI[python api<br/>nest.open, nest.build]
+    end
+
+    subgraph Build
+      BLD[builder.py<br/>pipeline]
+      CHK[chunker]
+      EMB[embed_query.py]
+      FPR[model_fingerprint.py]
+    end
+
+    subgraph Format
+      LAY[layout<br/>header, footer, sections]
+      MAN[manifest<br/>canonical json]
+      SEC[sections<br/>chunks, spans, contract]
+      ENC[encoding<br/>zstd, float16, int8]
+      HSH[hashes<br/>file, content, section]
+    end
+
+    subgraph Runtime
+      MMP[mmap_file<br/>zero-copy open]
+      SIMD[simd<br/>avx2, neon, scalar]
+      ANN[hnsw index]
+      BM25[bm25 index]
+      SRCH[search<br/>exact, ann, hybrid]
+    end
+
+    subgraph Data
+      NEST[(.nest file)]
+      CORP[(dat/corpus_next.v1.nest)]
+      BASE[(dat/measure/baseline.json)]
+      FX[(golden fixture)]
+    end
+
+    subgraph Monitoring
+      TST[cargo test + python tests]
+      GATE[scripts/release_check.sh]
+      ARC[doc/arc]
+    end
+
+    CLI --> SRCH
+    CLI --> MMP
+    PYAPI --> SRCH
+    PYAPI --> BLD
+
+    CHK --> BLD
+    EMB --> CLI
+    FPR --> BLD
+
+    BLD --> LAY
+    BLD --> MAN
+    BLD --> SEC
+    BLD --> ENC
+    BLD --> HSH
+    BLD --> NEST
+
+    NEST --> MMP
+    CORP --> MMP
+    MMP --> SIMD
+    MMP --> ANN
+    MMP --> BM25
+    SIMD --> SRCH
+    ANN --> SRCH
+    BM25 --> SRCH
+
+    TST --> GATE
+    GATE --> BASE
+    GATE --> ARC
+    FX --> TST
+
+    style Gateway fill:#0f172a,stroke:#334155,color:#e5e7eb
+    style Build fill:#0f172a,stroke:#334155,color:#e5e7eb
+    style Format fill:#0f172a,stroke:#334155,color:#e5e7eb
+    style Runtime fill:#0f172a,stroke:#334155,color:#e5e7eb
+    style Data fill:#0f172a,stroke:#334155,color:#e5e7eb
+    style Monitoring fill:#0f172a,stroke:#334155,color:#e5e7eb
+
+    style CLI fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style PYAPI fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+
+    style BLD fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style CHK fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style EMB fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style FPR fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+
+    style LAY fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style MAN fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style SEC fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style ENC fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style HSH fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+
+    style MMP fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style SIMD fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style ANN fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style BM25 fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style SRCH fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+
+    style NEST fill:#111827,stroke:#6b7280,color:#e5e7eb
+    style CORP fill:#111827,stroke:#6b7280,color:#e5e7eb
+    style BASE fill:#111827,stroke:#6b7280,color:#e5e7eb
+    style FX fill:#111827,stroke:#6b7280,color:#e5e7eb
+
+    style TST fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style GATE fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style ARC fill:#1f2937,stroke:#6b7280,color:#e5e7eb
