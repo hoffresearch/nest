@@ -1,5 +1,5 @@
 project: nest
-last-updated: "2026-05-19"
+last-updated: "2026-05-27"
 domain: architecture
 summary: "single-file semantic knowledge stack: rust owns format, runtime, cli, and bindings; python owns ingestion, model fingerprinting, and support tooling."
 layers:
@@ -20,7 +20,7 @@ quality:
   - "the python surface is small and explicit: load extension, build corpora, fingerprint models, and run support tooling."
   - "ann and hybrid paths always rerank with exact cosine, which keeps scores consistent across search modes."
 risks:
-  - "doc/arc/arc.md carries the human architecture and contract summary; keep it aligned with doc/arc/arc.yaml after architecture changes."
+  - "doc/arc/arc.md, doc/arc/arc.yaml, and doc/arc/arc.mmd form one architecture trio and must be updated together on any change to boundaries, data flow, or runtime contract."
   - "bm25 tokenization is intentionally simple and documented as weak for CJK, thai, and lao."
   - "python/_nest.so must be rebuilt after Rust changes that touch nest-format, nest-runtime, or nest-python."
 inventory:
@@ -35,9 +35,9 @@ inventory:
     - {path: "CODE_OF_CONDUCT.md", kind: governance-doc, purpose: "project conduct policy", links: []}
     - {path: "CONTRIBUTING.md", kind: contributor-doc, purpose: "setup, branching, testing, and style guidance", links: ["scripts/release_check.sh"]}
     - {path: "LICENSE", kind: legal, purpose: "mit license text", links: []}
-    - {path: "llms.txt", kind: metadata, purpose: "empty placeholder metadata file", links: []}
+    - {path: "llms.txt", kind: metadata, purpose: "concise llm and agent guidance", links: ["AGENTS.md", "CONTRIBUTING.md", "README.md"]}
     - {path: "pyproject.toml", kind: python-config, purpose: "ruff config and python tool exclusions", links: ["python", "tests"]}
-    - {path: "README.md", kind: overview-doc, purpose: "project overview plus pointers to the architecture maps and usage docs", links: ["doc/arc/arc.md", "doc/arc/arc.yaml", "doc/usage.md"]}
+    - {path: "README.md", kind: overview-doc, purpose: "project overview plus pointers to the architecture maps and usage docs", links: ["doc/arc/arc.md", "doc/arc/arc.yaml", "doc/arc/arc.mmd", "doc/usage.md"]}
     - {path: "rustfmt.toml", kind: format-config, purpose: "stable rustfmt policy", links: []}
     - {path: "SECURITY.md", kind: security-doc, purpose: "reporting channel, supported versions, and security scope", links: ["crates/nest-runtime/src/mmap_file.rs", "crates/nest-runtime/src/simd/mod.rs"]}
   workspace:
@@ -66,8 +66,8 @@ inventory:
     - {path: "crates/nest-runtime/src/simd", kind: directory, purpose: "simd kernels and dispatch", links: ["crates/nest-runtime/src/simd/mod.rs"]}
     - {path: "crates/nest-runtime/tests", kind: directory, purpose: "runtime integration tests", links: ["crates/nest-runtime/tests/hnsw_recall.rs", "crates/nest-runtime/tests/search_exact.rs"]}
     - {path: "dat", kind: directory, purpose: "lfs corpora, demo datasets, and measurement outputs", links: ["dat/demo/README.md"]}
-    - {path: "doc", kind: directory, purpose: "human-facing docs, changelog, usage guide, and architecture maps", links: ["doc/arc/arc.md", "doc/arc/arc.yaml", "doc/usage.md", "doc/changelog.md"]}
-    - {path: "doc/arc", kind: directory, purpose: "architecture maps for humans and tooling", links: ["doc/arc/arc.md", "doc/arc/arc.yaml"]}
+    - {path: "doc", kind: directory, purpose: "human-facing docs, changelog, usage guide, and architecture maps", links: ["doc/arc/arc.md", "doc/arc/arc.yaml", "doc/arc/arc.mmd", "doc/usage.md", "doc/changelog.md"]}
+    - {path: "doc/arc", kind: directory, purpose: "architecture maps for humans, tooling, and visual review", links: ["doc/arc/arc.md", "doc/arc/arc.yaml", "doc/arc/arc.mmd"]}
     - {path: "python", kind: directory, purpose: "python wrapper, builder, embedder, and tooling", links: ["python/nest.py", "python/builder.py"]}
     - {path: "python/__pycache__", kind: directory, purpose: "generated python bytecode cache", links: []}
     - {path: "python/tools", kind: directory, purpose: "private corpus and benchmark scripts", links: ["python/tools/nest_build_corpus.py", "python/tools/measure_presets.py"]}
@@ -164,10 +164,11 @@ inventory:
     - {path: "crates/nest-runtime/tests/hnsw_recall.rs", kind: rust-test, purpose: "ann recall regression", links: ["crates/nest-runtime/src/ann/mod.rs"]}
     - {path: "crates/nest-runtime/tests/search_exact.rs", kind: rust-test, purpose: "exact-search integration coverage", links: ["crates/nest-runtime/src/search.rs"]}
   data_docs_python_scripts_tests:
-    - {path: "doc/arc/arc.md", kind: markdown-doc, purpose: "single human architecture inventory and contract reference", links: ["doc/arc/arc.yaml"]}
-    - {path: "doc/arc/arc.yaml", kind: yaml-doc, purpose: "machine-readable architecture map for agents and tooling", links: ["doc/arc/arc.md"]}
+    - {path: "doc/arc/arc.md", kind: markdown-doc, purpose: "single human architecture inventory and contract reference", links: ["doc/arc/arc.yaml", "doc/arc/arc.mmd"]}
+    - {path: "doc/arc/arc.yaml", kind: yaml-doc, purpose: "machine-readable architecture map for agents and tooling", links: ["doc/arc/arc.md", "doc/arc/arc.mmd"]}
+    - {path: "doc/arc/arc.mmd", kind: mermaid-doc, purpose: "visual architecture map covering gateway, build, format, runtime, data, and monitoring", links: ["doc/arc/arc.md", "doc/arc/arc.yaml"]}
     - {path: "dat", kind: directory, purpose: "data root for corpora and demo sources", links: ["dat/demo/README.md"]}
-    - {path: "doc", kind: directory, purpose: "top-level documentation root", links: ["doc/arc/arc.md", "doc/arc/arc.yaml", "doc/usage.md", "doc/changelog.md"]}
+    - {path: "doc", kind: directory, purpose: "top-level documentation root", links: ["doc/arc/arc.md", "doc/arc/arc.yaml", "doc/arc/arc.mmd", "doc/usage.md", "doc/changelog.md"]}
     - {path: "python", kind: directory, purpose: "python wrapper and tooling root", links: ["python/nest.py", "python/builder.py", "python/tools"]}
     - {path: "python/_nest.so", kind: binary-artifact, purpose: "compiled PyO3 extension", links: ["crates/nest-python/src/lib.rs"]}
     - {path: "python/builder.py", kind: python-source, purpose: "chunk, cache, build, and validate pipeline", links: ["python/nest.py", "crates/nest-python/src/build_fn.rs"]}
