@@ -34,109 +34,99 @@ put together: nobody outside the operator's machine has to be online, trusted, o
 python builds, rust serves. the .nest file is the contract between them. one writer pipeline produces a deterministic container; one mmap-backed runtime opens it and answers queries through a SIMD-dispatched search path. the cli and the python api are thin surfaces over the same runtime.
 
 ```mermaid
-graph LR
-    subgraph Gateway
-      CLI[nest cli]
-      PYAPI[python api]
+flowchart TB
+    classDef py   fill:#1e293b,stroke:#64748b,color:#e2e8f0
+    classDef rs   fill:#451a03,stroke:#b45309,color:#fed7aa
+    classDef ctr  fill:#064e3b,stroke:#10b981,color:#a7f3d0
+    classDef gate fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    classDef ref  fill:#1e1b4b,stroke:#6366f1,color:#c7d2fe
+
+    subgraph BUILD["python writer pipeline"]
+      direction LR
+      SRC["_corpus_sources.py<br/>dataset loaders"]:::py
+      FPR["model_fingerprint.py<br/>model_hash"]:::py
+      PIPE["builder.Pipeline<br/>chunk · sqlite cache · embed"]:::py
+      BLDFN["nest.build()<br/>python entry"]:::py
+      SRC --> PIPE
+      FPR --> PIPE
+      PIPE --> BLDFN
     end
 
-    subgraph Build
-      BLD[builder.py]
-      CHK[chunker]
-      EMB[embed_query.py]
-      FPR[model_fingerprint.py]
+    NEST[/".nest file · frozen v1 container<br/>required: chunks · embeddings · spans · provenance · contract<br/>optional: hnsw · bm25<br/>hashes: header · section · file · content"/]:::ctr
+
+    subgraph RUST["rust workspace"]
+      direction TB
+
+      subgraph PYBR["nest-python · pyo3 bridge"]
+        PYM["_nest.so · build · NestFile"]:::rs
+      end
+
+      subgraph FMT["nest-format · frozen v1"]
+        direction TB
+        WRT["writer<br/>deterministic emit"]:::rs
+        RDR["reader + validate<br/>parse · checksum"]:::rs
+        FMTI["layout · manifest · sections<br/>encoding zstd / fp16 / int8<br/>four hashes"]:::rs
+      end
+
+      subgraph RT["nest-runtime · mmap search engine"]
+        direction TB
+        MMP["mmap_file<br/>zero-copy open"]:::rs
+        SRCH["search<br/>orchestrator + mandatory exact rerank"]:::rs
+        SIMD["simd dispatch<br/>avx2 · neon · scalar"]:::rs
+        ANN["ann::HnswIndex · optional"]:::rs
+        BM25["bm25::Bm25Index · optional"]:::rs
+      end
+
+      subgraph CLIC["nest-cli · 8 clap subcommands"]
+        CLI["inspect · validate · stats · cite<br/>search · search-ann · search-text · benchmark"]:::rs
+      end
     end
 
-    subgraph Format
-      LAY[layout]
-      MAN[manifest]
-      SEC[sections]
-      ENC[encoding]
-      HSH[hashes]
+    EMB["embed_query.py<br/>query-time embedder<br/>spawned by search-text"]:::py
+    PYAPI["python/nest.py<br/>user-facing api"]:::py
+
+    subgraph QA["quality gates"]
+      direction LR
+      FX[("golden fixture<br/>byte-frozen")]:::gate
+      TST["cargo + python tests"]:::gate
+      GATE["release_check.sh"]:::gate
+      BASE[("measure/baseline.json")]:::gate
     end
 
-    subgraph Runtime
-      MMP[mmap_file]
-      SIMD[simd dispatch]
-      ANN[hnsw]
-      BM25[bm25]
-      SRCH[search]
-    end
+    ARC[["doc/arc trio<br/>arc.md · arc.yaml · arc.mmd<br/>updated by humans on arch changes"]]:::ref
 
-    subgraph Data
-      NEST[(.nest file)]
-      CORP[(corpus_next.v1.nest)]
-      BASE[(measure/baseline.json)]
-      FX[(golden fixture)]
-    end
+    %% build path
+    BLDFN -- "pyo3" --> PYM
+    PYM --> WRT
+    WRT == "emits" ==> NEST
 
-    subgraph Monitoring
-      TST[cargo + python tests]
-      GATE[release_check.sh]
-      ARC[doc/arc]
-    end
+    %% runtime open
+    NEST == "mmap" ==> MMP
+    MMP --> RDR
 
+    %% search orchestration
+    SRCH --> MMP
+    SRCH --> SIMD
+    SRCH -. "candidates" .-> ANN
+    SRCH -. "candidates" .-> BM25
+    ANN -. "rerank exact cosine" .-> SRCH
+    BM25 -. "rerank exact cosine" .-> SRCH
+
+    %% query interfaces
+    PYAPI --> PYM
+    PYM --> SRCH
     CLI --> SRCH
-    CLI --> MMP
-    PYAPI --> SRCH
-    PYAPI --> BLD
+    CLI -- "spawn" --> EMB
+    EMB -- "qvec + model_hash" --> CLI
+    CLI -. "validate model_hash<br/>vs manifest" .-> NEST
 
-    CHK --> BLD
-    EMB --> CLI
-    FPR --> BLD
-
-    BLD --> LAY
-    BLD --> MAN
-    BLD --> SEC
-    BLD --> ENC
-    BLD --> HSH
-    BLD --> NEST
-
-    NEST --> MMP
-    CORP --> MMP
-    MMP --> SIMD
-    MMP --> ANN
-    MMP --> BM25
-    SIMD --> SRCH
-    ANN --> SRCH
-    BM25 --> SRCH
-
+    %% quality
+    FX --> TST
     TST --> GATE
     GATE --> BASE
-    GATE --> ARC
-    FX --> TST
-
-    style Gateway fill:#0f172a,stroke:#334155,color:#e5e7eb
-    style Build fill:#0f172a,stroke:#334155,color:#e5e7eb
-    style Format fill:#0f172a,stroke:#334155,color:#e5e7eb
-    style Runtime fill:#0f172a,stroke:#334155,color:#e5e7eb
-    style Data fill:#0f172a,stroke:#334155,color:#e5e7eb
-    style Monitoring fill:#0f172a,stroke:#334155,color:#e5e7eb
-
-    style CLI fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style PYAPI fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style BLD fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style CHK fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style EMB fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style FPR fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style LAY fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style MAN fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style SEC fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style ENC fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style HSH fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style MMP fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style SIMD fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style ANN fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style BM25 fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style SRCH fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style NEST fill:#111827,stroke:#6b7280,color:#e5e7eb
-    style CORP fill:#111827,stroke:#6b7280,color:#e5e7eb
-    style BASE fill:#111827,stroke:#6b7280,color:#e5e7eb
-    style FX fill:#111827,stroke:#6b7280,color:#e5e7eb
-    style TST fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style GATE fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    style ARC fill:#1f2937,stroke:#6b7280,color:#e5e7eb
 ```
+
+the diagram reads top to bottom in five layers: python writer pipeline, the `.nest` contract, the rust workspace (four crates), the query-time helpers and user-facing api, and the quality gates. the `.nest` file is the single artifact that crosses the language boundary. search.rs is the conductor on the rust side: it owns mandatory exact-cosine rerank for both hnsw and bm25 candidate paths. the doc/arc trio is updated by humans and agents on architecture-touching changes, not by ci.
 
 four crates plus a python tooling layer:
 
@@ -144,7 +134,7 @@ four crates plus a python tooling layer:
 - `nest-runtime` owns the mmap, the simd dispatcher, hnsw, bm25, and the search path with mandatory exact rerank.
 - `nest-cli` is a thin clap surface with eight subcommands.
 - `nest-python` is the pyo3 bridge that exposes the runtime to python.
-- `python/` holds the writer pipeline, chunker, model fingerprint, and the embedder used by `search-text`.
+- `python/` holds the writer pipeline, model fingerprint, and the query-time embedder used by `search-text`.
 
 full visual map: [doc/arc/arc.mmd](doc/arc/arc.mmd). human reference: [doc/arc/arc.md](doc/arc/arc.md). machine map: [doc/arc/arc.yaml](doc/arc/arc.yaml).
 
