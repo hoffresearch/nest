@@ -28,7 +28,7 @@ this file is the human readable companion to dat/arc.yaml. it records what each 
 - CODE_OF_CONDUCT.md | governance | contributor conduct policy in the repo's lowercase documentation style.
 - CONTRIBUTING.md | contributor guide | explains branch flow, setup, tests, line-count rules, and the local release gate.
 - LICENSE | legal | mit license grant for the workspace.
-- llms.txt | metadata | empty placeholder file, currently not used for behavior.
+- llms.txt | metadata | concise llm/agent guidance for build, coding, and repo policy.
 - pyproject.toml | python tooling config | configures ruff, target version py312, formatting, and exclusions for the local python surface.
 - README.md | overview doc | project positioning, install flow, presets, cli surface, and demo corpus summary.
 - rustfmt.toml | rust format policy | pins stable-channel rustfmt behavior for the workspace.

@@ -35,7 +35,7 @@ inventory:
     - {path: "CODE_OF_CONDUCT.md", kind: governance-doc, purpose: "project conduct policy", links: []}
     - {path: "CONTRIBUTING.md", kind: contributor-doc, purpose: "setup, branching, testing, and style guidance", links: ["scripts/release_check.sh"]}
     - {path: "LICENSE", kind: legal, purpose: "mit license text", links: []}
-    - {path: "llms.txt", kind: metadata, purpose: "empty placeholder metadata file", links: []}
+    - {path: "llms.txt", kind: metadata, purpose: "concise llm and agent guidance", links: ["AGENTS.md", "CONTRIBUTING.md", "README.md"]}
     - {path: "pyproject.toml", kind: python-config, purpose: "ruff config and python tool exclusions", links: ["python", "tests"]}
     - {path: "README.md", kind: overview-doc, purpose: "project overview plus pointers to the architecture maps and usage docs", links: ["doc/arc/arc.md", "doc/arc/arc.yaml", "doc/usage.md"]}
     - {path: "rustfmt.toml", kind: format-config, purpose: "stable rustfmt policy", links: []}
