@@ -29,6 +29,125 @@ four properties, all enforced by the format itself, not by policy.
 
 put together: nobody outside the operator's machine has to be online, trusted, or even reachable for the database to work. that is what "sovereign" means here.
 
+## architecture
+
+python builds, rust serves. the .nest file is the contract between them. one writer pipeline produces a deterministic container; one mmap-backed runtime opens it and answers queries through a SIMD-dispatched search path. the cli and the python api are thin surfaces over the same runtime.
+
+```mermaid
+graph LR
+    subgraph Gateway
+      CLI[nest cli]
+      PYAPI[python api]
+    end
+
+    subgraph Build
+      BLD[builder.py]
+      CHK[chunker]
+      EMB[embed_query.py]
+      FPR[model_fingerprint.py]
+    end
+
+    subgraph Format
+      LAY[layout]
+      MAN[manifest]
+      SEC[sections]
+      ENC[encoding]
+      HSH[hashes]
+    end
+
+    subgraph Runtime
+      MMP[mmap_file]
+      SIMD[simd dispatch]
+      ANN[hnsw]
+      BM25[bm25]
+      SRCH[search]
+    end
+
+    subgraph Data
+      NEST[(.nest file)]
+      CORP[(corpus_next.v1.nest)]
+      BASE[(measure/baseline.json)]
+      FX[(golden fixture)]
+    end
+
+    subgraph Monitoring
+      TST[cargo + python tests]
+      GATE[release_check.sh]
+      ARC[doc/arc]
+    end
+
+    CLI --> SRCH
+    CLI --> MMP
+    PYAPI --> SRCH
+    PYAPI --> BLD
+
+    CHK --> BLD
+    EMB --> CLI
+    FPR --> BLD
+
+    BLD --> LAY
+    BLD --> MAN
+    BLD --> SEC
+    BLD --> ENC
+    BLD --> HSH
+    BLD --> NEST
+
+    NEST --> MMP
+    CORP --> MMP
+    MMP --> SIMD
+    MMP --> ANN
+    MMP --> BM25
+    SIMD --> SRCH
+    ANN --> SRCH
+    BM25 --> SRCH
+
+    TST --> GATE
+    GATE --> BASE
+    GATE --> ARC
+    FX --> TST
+
+    style Gateway fill:#0f172a,stroke:#334155,color:#e5e7eb
+    style Build fill:#0f172a,stroke:#334155,color:#e5e7eb
+    style Format fill:#0f172a,stroke:#334155,color:#e5e7eb
+    style Runtime fill:#0f172a,stroke:#334155,color:#e5e7eb
+    style Data fill:#0f172a,stroke:#334155,color:#e5e7eb
+    style Monitoring fill:#0f172a,stroke:#334155,color:#e5e7eb
+
+    style CLI fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style PYAPI fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style BLD fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style CHK fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style EMB fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style FPR fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style LAY fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style MAN fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style SEC fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style ENC fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style HSH fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style MMP fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style SIMD fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style ANN fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style BM25 fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style SRCH fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style NEST fill:#111827,stroke:#6b7280,color:#e5e7eb
+    style CORP fill:#111827,stroke:#6b7280,color:#e5e7eb
+    style BASE fill:#111827,stroke:#6b7280,color:#e5e7eb
+    style FX fill:#111827,stroke:#6b7280,color:#e5e7eb
+    style TST fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style GATE fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+    style ARC fill:#1f2937,stroke:#6b7280,color:#e5e7eb
+```
+
+four crates plus a python tooling layer:
+
+- `nest-format` owns the frozen v1 container: layout, manifest, sections, encodings, hashes.
+- `nest-runtime` owns the mmap, the simd dispatcher, hnsw, bm25, and the search path with mandatory exact rerank.
+- `nest-cli` is a thin clap surface with eight subcommands.
+- `nest-python` is the pyo3 bridge that exposes the runtime to python.
+- `python/` holds the writer pipeline, chunker, model fingerprint, and the embedder used by `search-text`.
+
+full visual map: [doc/arc/arc.mmd](doc/arc/arc.mmd). human reference: [doc/arc/arc.md](doc/arc/arc.md). machine map: [doc/arc/arc.yaml](doc/arc/arc.yaml).
+
 ## install
 
 requires rust edition 2024 and python 3.12+.
@@ -147,6 +266,7 @@ with `reproducible=True` (the script default) two operators get byte-identical `
 - `dat/demo/README.md` for what each upstream dataset is and how to rebuild the corpus
 - `doc/arc/arc.md` for architecture, binary layout, API surface, errors, and versioning
 - `doc/arc/arc.yaml` for the machine-readable architecture map used by agents and tooling
+- `doc/arc/arc.mmd` for the mermaid visual map of gateway, build, format, runtime, data, and monitoring
 - `doc/usage.md` for the eight commands, presets, offline mode, citations
 - `doc/changelog.md` for v0.1 to v0.2 deltas
 
