@@ -6,7 +6,9 @@ domain: architecture
 
 # architecture inventory
 
-this file is the human readable companion to doc/arc/arc.yaml. it is the single human architecture reference in this directory and records what each requested path does and how it fits into the repo.
+this file is the human readable companion to doc/arc/arc.yaml and doc/arc/arc.mmd. it is the single human architecture reference in this directory and records what each requested path does and how it fits into the repo.
+
+the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). any change to boundaries, data flow, sections, or runtime contract must update all three in the same commit.
 
 ## system view
 
@@ -36,7 +38,7 @@ this file is the human readable companion to doc/arc/arc.yaml. it is the single 
 - CODE_OF_CONDUCT.md | governance | contributor conduct policy in the repo's lowercase documentation style.
 - CONTRIBUTING.md | contributor guide | explains branch flow, setup, tests, line-count rules, and the local release gate.
 - LICENSE | legal | mit license grant for the workspace.
-- llms.txt | metadata | empty placeholder file, currently not used for behavior.
+- llms.txt | metadata | concise llm/agent guidance for build, coding, and repo policy.
 - pyproject.toml | python tooling config | configures ruff, target version py312, formatting, and exclusions for the local python surface.
 - README.md | overview doc | project positioning, install flow, presets, cli surface, and demo corpus summary.
 - rustfmt.toml | rust format policy | pins stable-channel rustfmt behavior for the workspace.
@@ -179,6 +181,7 @@ this file is the human readable companion to doc/arc/arc.yaml. it is the single 
 
 - doc/arc/arc.md | markdown doc | single human architecture inventory and contract reference for the repo.
 - doc/arc/arc.yaml | yaml doc | machine-readable architecture map for agents, llms, and maintenance workflows.
+- doc/arc/arc.mmd | mermaid doc | visual architecture map covering gateway, build, format, runtime, data, and monitoring.
 - dat | data dir | top-level home for the demo sources, baseline corpus, and measure outputs.
 - doc/changelog.md | markdown doc | release deltas, compatibility notes, and test-surface growth between v0.1 and v0.2.
 - doc/usage.md | markdown doc | operator-facing usage guide for build, validate, stats, inspect, search, benchmark, and citations.

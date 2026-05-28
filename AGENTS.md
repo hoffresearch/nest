@@ -76,12 +76,18 @@ build folders, files, and codebase items following apl-style 3-char tokens that 
 
 write in diataxis style. all lowercase. no emojis. no em-dash. no decorative markdown. pragmatic, professional, objective. every doc starts with a yaml header for semantic resolution (helps llm, agentic, vector search): project, audience, status, last-updated, domain. design notes that turn out wrong get a note on top. they are not deleted.
 
-`doc/arc/arc.yaml` is the machine-readable architecture map. `doc/arc/arc.md` is the single human architecture reference. after any implementation, refactor, or doc move that changes architecture, boundaries, or data flow, update both in the same change. keep them concise and pragmatic. do not keep a parallel second architecture doc.
+architecture references live as a trio under `doc/arc/`:
+
+- `doc/arc/arc.md` is the single human architecture reference.
+- `doc/arc/arc.yaml` is the machine-readable architecture map.
+- `doc/arc/arc.mmd` is the visual architecture map (mermaid).
+
+at task start, read `doc/arc/arc.yaml` and `doc/arc/arc.mmd` in a short pass to preserve structure and naming pattern. after any implementation, refactor, rename, or doc move that changes architecture, boundaries, data flow, module layout, public contracts, storage, or runtime behavior, update `arc.md`, `arc.yaml`, and `arc.mmd` in the same change. keep them concise and pragmatic. do not keep a parallel second architecture document.
 # file hygiene
 
-333 lines per file is the threshold. human working memory holds 4 plus or minus 1 chunks at once (cowan 2001, refining miller). neural networks also work better that way. a file that does not fit the "mental window" forces internal context switching, degrading comprehension and raising bug rates. this is unnecessary cognitive load, the same principle applied in ux.
+hard limit is 333 lines per file. operational target for new files is 220 lines. human working memory holds 4 plus or minus 1 chunks at once (cowan 2001, refining miller). neural networks also work better that way. a file that does not fit the "mental window" forces internal context switching, degrading comprehension and raising bug rates. this is unnecessary cognitive load, the same principle applied in ux.
 
-every file created or modified in a session that exceeds 333 lines must be read in full and refactored along single-responsibility lines.
+every file created or modified in a session that exceeds 333 lines must be read in full and refactored along single-responsibility lines. the rust source carve-out (`crates/**/src/**` at 300 lines) and the test-file exemptions documented below remain in force.
 
 # audit when finishing a task
 
@@ -144,9 +150,10 @@ these are documented honest limitations of the current code, not bugs to silentl
 
 # documentation
 
-- `README.md`: project overview, install, CLI summary, presets, v0.2 highlights.
-- `doc/arc/arc.md`: concise architecture inventory and runtime contract summary.
+- `README.md`: project overview, install, CLI summary, presets, v0.2 highlights, embedded mermaid system view.
+- `doc/arc/arc.md`: single human architecture inventory and runtime contract summary.
 - `doc/arc/arc.yaml`: machine-readable architecture map for agents and tooling.
+- `doc/arc/arc.mmd`: visual architecture map (mermaid) covering gateway, build, format, runtime, data, and monitoring.
 - `doc/usage.md`: 10-section how-to for the 8 commands, presets, offline mode, citations.
 - `doc/changelog.md`: v0.1.0 and v0.2.0 deltas.
 - `dat/demo/README.md`: what each upstream PT-BR dataset is and how to rebuild the unified corpus.
