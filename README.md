@@ -34,55 +34,32 @@ put together: nobody outside the operator's machine has to be online, trusted, o
 python builds, rust serves. the .nest file is the contract between them. one writer pipeline produces a deterministic container; one mmap-backed runtime opens it and answers queries through a SIMD-dispatched search path. the cli and the python api are thin surfaces over the same runtime.
 
 ```mermaid
-flowchart LR
-    classDef py   fill:#1e293b,stroke:#475569,color:#e2e8f0
-    classDef rs   fill:#3f1d05,stroke:#a45a09,color:#fcd9b6
-    classDef ctr  fill:#064e3b,stroke:#10b981,color:#a7f3d0,stroke-width:3px
-    classDef gate fill:#1f2937,stroke:#6b7280,color:#cbd5e1
+sequenceDiagram
+    autonumber
+    participant B as builder.py
+    participant F as nest-format
+    participant N as .nest file
+    participant R as nest-runtime
+    participant E as embed_query.py
+    participant Q as nest cli / api
 
-    subgraph BUILD["python build pipeline"]
-      direction TB
-      FPR["model_fingerprint<br/>model_hash"]:::py
-      PIPE["builder.Pipeline<br/>chunk · embed · sqlite cache"]:::py
-      FPR --> PIPE
-    end
+    note over B,N: build · offline · reproducible
+    B->>B: chunk + embed + model_hash
+    B->>F: nest.build(chunks, model_hash)
+    F->>N: deterministic emit + four hashes
 
-    NEST(["<b>.nest file</b><br/>frozen v1 container<br/>chunks · embeddings · spans · provenance · contract<br/>optional hnsw · bm25<br/>hashes: header · section · file · content"]):::ctr
-
-    subgraph RUST["rust workspace · 4 crates"]
-      direction TB
-      FMT["nest-format<br/>writer · reader · encodings · hashes"]:::rs
-      RT["nest-runtime<br/>mmap · simd avx2 / neon / scalar<br/>hnsw · bm25 · mandatory exact rerank"]:::rs
-      CLI["nest-cli<br/>8 clap subcommands"]:::rs
-      PYB["nest-python<br/>pyo3 bridge"]:::rs
-      FMT --- RT
-      RT --- CLI
-      RT --- PYB
-    end
-
-    subgraph QRY["query interfaces"]
-      direction TB
-      PYAPI["python/nest.py<br/>user-facing api"]:::py
-      EMB["embed_query.py<br/>spawned by search-text"]:::py
-    end
-
-    subgraph QA["quality gates"]
-      direction TB
-      TST["cargo + python tests"]:::gate
-      GATE["release_check.sh"]:::gate
-      BASE["measure/baseline.json"]:::gate
-      TST --> GATE
-      GATE --> BASE
-    end
-
-    PIPE  ==> NEST
-    NEST  ==> FMT
-    NEST  ==> RT
-    PYAPI --> PYB
-    CLI   -.-> EMB
+    note over R,Q: query · offline · mmap
+    Q->>E: search-text spawns embedder
+    E-->>Q: query vector + model_hash
+    Q->>R: search(vector)
+    R->>N: mmap open + validate hashes
+    R->>R: model_hash vs manifest
+    R->>R: hnsw / bm25 candidates
+    R->>R: mandatory exact cosine rerank
+    R-->>Q: hits + nest://content_hash/chunk_id
 ```
 
-the diagram reads left to right in four bands plus a quality column. python builds, the `.nest` file is the contract, the rust workspace (four crates) opens it and serves queries, and the query interfaces sit on the right. exact-cosine rerank is mandatory inside `nest-runtime` for both hnsw and bm25 candidate paths.
+the sequence traces the two flows that define nest. build (python, offline, reproducible) chunks, embeds, fingerprints the model, and writes a deterministic `.nest` file with four hashes. query (rust, offline, mmap) opens the file, validates the embedder's `model_hash` against the manifest, gathers hnsw or bm25 candidates, and reranks them with exact cosine before returning citations. the `.nest` file is the only artifact that crosses between python and rust.
 
 four crates plus a python tooling layer:
 
@@ -212,7 +189,7 @@ with `reproducible=True` (the script default) two operators get byte-identical `
 - `dat/demo/README.md` for what each upstream dataset is and how to rebuild the corpus
 - `doc/arc/arc.md` for architecture, binary layout, API surface, errors, and versioning
 - `doc/arc/arc.yaml` for the machine-readable architecture map used by agents and tooling
-- `doc/arc/arc.mmd` for the mermaid visual map of gateway, build, format, runtime, data, and monitoring
+- `doc/arc/arc.mmd` for the mermaid sequence diagram of the build and query flows
 - `doc/usage.md` for the eight commands, presets, offline mode, citations
 - `doc/changelog.md` for v0.1 to v0.2 deltas
 
