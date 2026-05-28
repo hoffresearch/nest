@@ -34,99 +34,55 @@ put together: nobody outside the operator's machine has to be online, trusted, o
 python builds, rust serves. the .nest file is the contract between them. one writer pipeline produces a deterministic container; one mmap-backed runtime opens it and answers queries through a SIMD-dispatched search path. the cli and the python api are thin surfaces over the same runtime.
 
 ```mermaid
-flowchart TB
-    classDef py   fill:#1e293b,stroke:#64748b,color:#e2e8f0
-    classDef rs   fill:#451a03,stroke:#b45309,color:#fed7aa
-    classDef ctr  fill:#064e3b,stroke:#10b981,color:#a7f3d0
-    classDef gate fill:#1f2937,stroke:#6b7280,color:#e5e7eb
-    classDef ref  fill:#1e1b4b,stroke:#6366f1,color:#c7d2fe
+flowchart LR
+    classDef py   fill:#1e293b,stroke:#475569,color:#e2e8f0
+    classDef rs   fill:#3f1d05,stroke:#a45a09,color:#fcd9b6
+    classDef ctr  fill:#064e3b,stroke:#10b981,color:#a7f3d0,stroke-width:3px
+    classDef gate fill:#1f2937,stroke:#6b7280,color:#cbd5e1
 
-    subgraph BUILD["python writer pipeline"]
-      direction LR
-      SRC["_corpus_sources.py<br/>dataset loaders"]:::py
-      FPR["model_fingerprint.py<br/>model_hash"]:::py
-      PIPE["builder.Pipeline<br/>chunk · sqlite cache · embed"]:::py
-      BLDFN["nest.build()<br/>python entry"]:::py
-      SRC --> PIPE
-      FPR --> PIPE
-      PIPE --> BLDFN
-    end
-
-    NEST[/".nest file · frozen v1 container<br/>required: chunks · embeddings · spans · provenance · contract<br/>optional: hnsw · bm25<br/>hashes: header · section · file · content"/]:::ctr
-
-    subgraph RUST["rust workspace"]
+    subgraph BUILD["python build pipeline"]
       direction TB
-
-      subgraph PYBR["nest-python · pyo3 bridge"]
-        PYM["_nest.so · build · NestFile"]:::rs
-      end
-
-      subgraph FMT["nest-format · frozen v1"]
-        direction TB
-        WRT["writer<br/>deterministic emit"]:::rs
-        RDR["reader + validate<br/>parse · checksum"]:::rs
-        FMTI["layout · manifest · sections<br/>encoding zstd / fp16 / int8<br/>four hashes"]:::rs
-      end
-
-      subgraph RT["nest-runtime · mmap search engine"]
-        direction TB
-        MMP["mmap_file<br/>zero-copy open"]:::rs
-        SRCH["search<br/>orchestrator + mandatory exact rerank"]:::rs
-        SIMD["simd dispatch<br/>avx2 · neon · scalar"]:::rs
-        ANN["ann::HnswIndex · optional"]:::rs
-        BM25["bm25::Bm25Index · optional"]:::rs
-      end
-
-      subgraph CLIC["nest-cli · 8 clap subcommands"]
-        CLI["inspect · validate · stats · cite<br/>search · search-ann · search-text · benchmark"]:::rs
-      end
+      FPR["model_fingerprint<br/>model_hash"]:::py
+      PIPE["builder.Pipeline<br/>chunk · embed · sqlite cache"]:::py
+      FPR --> PIPE
     end
 
-    EMB["embed_query.py<br/>query-time embedder<br/>spawned by search-text"]:::py
-    PYAPI["python/nest.py<br/>user-facing api"]:::py
+    NEST(["<b>.nest file</b><br/>frozen v1 container<br/>chunks · embeddings · spans · provenance · contract<br/>optional hnsw · bm25<br/>hashes: header · section · file · content"]):::ctr
+
+    subgraph RUST["rust workspace · 4 crates"]
+      direction TB
+      FMT["nest-format<br/>writer · reader · encodings · hashes"]:::rs
+      RT["nest-runtime<br/>mmap · simd avx2 / neon / scalar<br/>hnsw · bm25 · mandatory exact rerank"]:::rs
+      CLI["nest-cli<br/>8 clap subcommands"]:::rs
+      PYB["nest-python<br/>pyo3 bridge"]:::rs
+      FMT --- RT
+      RT --- CLI
+      RT --- PYB
+    end
+
+    subgraph QRY["query interfaces"]
+      direction TB
+      PYAPI["python/nest.py<br/>user-facing api"]:::py
+      EMB["embed_query.py<br/>spawned by search-text"]:::py
+    end
 
     subgraph QA["quality gates"]
-      direction LR
-      FX[("golden fixture<br/>byte-frozen")]:::gate
+      direction TB
       TST["cargo + python tests"]:::gate
       GATE["release_check.sh"]:::gate
-      BASE[("measure/baseline.json")]:::gate
+      BASE["measure/baseline.json"]:::gate
+      TST --> GATE
+      GATE --> BASE
     end
 
-    ARC[["doc/arc trio<br/>arc.md · arc.yaml · arc.mmd<br/>updated by humans on arch changes"]]:::ref
-
-    %% build path
-    BLDFN -- "pyo3" --> PYM
-    PYM --> WRT
-    WRT == "emits" ==> NEST
-
-    %% runtime open
-    NEST == "mmap" ==> MMP
-    MMP --> RDR
-
-    %% search orchestration
-    SRCH --> MMP
-    SRCH --> SIMD
-    SRCH -. "candidates" .-> ANN
-    SRCH -. "candidates" .-> BM25
-    ANN -. "rerank exact cosine" .-> SRCH
-    BM25 -. "rerank exact cosine" .-> SRCH
-
-    %% query interfaces
-    PYAPI --> PYM
-    PYM --> SRCH
-    CLI --> SRCH
-    CLI -- "spawn" --> EMB
-    EMB -- "qvec + model_hash" --> CLI
-    CLI -. "validate model_hash<br/>vs manifest" .-> NEST
-
-    %% quality
-    FX --> TST
-    TST --> GATE
-    GATE --> BASE
+    PIPE  ==> NEST
+    NEST  ==> FMT
+    NEST  ==> RT
+    PYAPI --> PYB
+    CLI   -.-> EMB
 ```
 
-the diagram reads top to bottom in five layers: python writer pipeline, the `.nest` contract, the rust workspace (four crates), the query-time helpers and user-facing api, and the quality gates. the `.nest` file is the single artifact that crosses the language boundary. search.rs is the conductor on the rust side: it owns mandatory exact-cosine rerank for both hnsw and bm25 candidate paths. the doc/arc trio is updated by humans and agents on architecture-touching changes, not by ci.
+the diagram reads left to right in four bands plus a quality column. python builds, the `.nest` file is the contract, the rust workspace (four crates) opens it and serves queries, and the query interfaces sit on the right. exact-cosine rerank is mandatory inside `nest-runtime` for both hnsw and bm25 candidate paths.
 
 four crates plus a python tooling layer:
 
