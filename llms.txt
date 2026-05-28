@@ -1,0 +1,63 @@
+# nest
+
+concise context for llm coding agents working in this repository.
+
+## project snapshot
+
+- language stack: rust workspace + python tooling.
+- product: single-file .nest format, mmap runtime, cli, and pyo3 bindings.
+- architecture docs: doc/arc/arc.md and doc/arc/arc.yaml are the source of truth.
+
+## build and verification
+
+- cargo build --workspace
+- cargo build --release --workspace
+- cargo test --workspace
+- cargo fmt --all --check
+- cargo clippy --workspace --all-targets -- -D warnings
+- ./scripts/release_check.sh
+
+prefer release_check.sh before merge, it is the project gate.
+
+## coding practices
+
+- rust edition 2024, resolver 3.
+- no panic in library code, use typed errors.
+- keep files small and single-responsibility.
+- preserve deterministic behavior for hashing and index builds.
+- for unsafe blocks, include a safety comment naming the invariant.
+- keep markdown lowercase, no emoji, no em dash.
+
+## format and runtime invariants
+
+- format v1 is frozen.
+- hash format: sha256:<64 lowercase hex>.
+- content_hash must stay stable across non-semantic encodings.
+- search score contract is cosine with exact rerank for ann/hybrid paths.
+
+## dataset policy
+
+- dat/corpus_next.v1.nest is tracked with git lfs.
+- dat/demo datasets are local-only and gitignored.
+- dataset fetch commands and provenance are documented in dat/demo/README.md.
+
+## branch and release flow
+
+- feature work targets dev (or feature branches based on dev).
+- release flow is dev to main.
+- main may enforce pr-only updates and required checks.
+
+## do not
+
+- do not force-push main.
+- do not bypass release_check.sh.
+- do not bump NEST_FORMAT_VERSION for additive changes.
+- do not commit local demo datasets under dat/demo.
+
+## references
+
+- README.md
+- AGENTS.md
+- CONTRIBUTING.md
+- doc/arc/arc.md
+- doc/usage.md
