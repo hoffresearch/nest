@@ -153,7 +153,7 @@ these are documented honest limitations of the current code, not bugs to silentl
 - `README.md`: project overview, install, CLI summary, presets, v0.2 highlights, embedded mermaid system view.
 - `doc/arc/arc.md`: single human architecture inventory and runtime contract summary.
 - `doc/arc/arc.yaml`: machine-readable architecture map for agents and tooling.
-- `doc/arc/arc.mmd`: visual architecture map (mermaid) covering gateway, build, format, runtime, data, and monitoring.
+- `doc/arc/arc.mmd`: mermaid sequence diagram of the build and query flows.
 - `doc/usage.md`: 10-section how-to for the 8 commands, presets, offline mode, citations.
 - `doc/changelog.md`: v0.1.0 and v0.2.0 deltas.
 - `dat/demo/README.md`: what each upstream PT-BR dataset is and how to rebuild the unified corpus.

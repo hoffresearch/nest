@@ -181,7 +181,7 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 
 - doc/arc/arc.md | markdown doc | single human architecture inventory and contract reference for the repo.
 - doc/arc/arc.yaml | yaml doc | machine-readable architecture map for agents, llms, and maintenance workflows.
-- doc/arc/arc.mmd | mermaid doc | visual architecture map covering gateway, build, format, runtime, data, and monitoring.
+- doc/arc/arc.mmd | mermaid doc | sequence diagram of the build and query flows.
 - dat | data dir | top-level home for the demo sources, baseline corpus, and measure outputs.
 - doc/changelog.md | markdown doc | release deltas, compatibility notes, and test-surface growth between v0.1 and v0.2.
 - doc/usage.md | markdown doc | operator-facing usage guide for build, validate, stats, inspect, search, benchmark, and citations.
