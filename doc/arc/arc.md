@@ -6,7 +6,9 @@ domain: architecture
 
 # architecture inventory
 
-this file is the human readable companion to doc/arc/arc.yaml. it is the single human architecture reference in this directory and records what each requested path does and how it fits into the repo.
+this file is the human readable companion to doc/arc/arc.yaml and doc/arc/arc.mmd. it is the single human architecture reference in this directory and records what each requested path does and how it fits into the repo.
+
+the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). any change to boundaries, data flow, sections, or runtime contract must update all three in the same commit.
 
 ## system view
 
@@ -179,6 +181,7 @@ this file is the human readable companion to doc/arc/arc.yaml. it is the single 
 
 - doc/arc/arc.md | markdown doc | single human architecture inventory and contract reference for the repo.
 - doc/arc/arc.yaml | yaml doc | machine-readable architecture map for agents, llms, and maintenance workflows.
+- doc/arc/arc.mmd | mermaid doc | visual architecture map covering gateway, build, format, runtime, data, and monitoring.
 - dat | data dir | top-level home for the demo sources, baseline corpus, and measure outputs.
 - doc/changelog.md | markdown doc | release deltas, compatibility notes, and test-surface growth between v0.1 and v0.2.
 - doc/usage.md | markdown doc | operator-facing usage guide for build, validate, stats, inspect, search, benchmark, and citations.

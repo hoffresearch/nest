@@ -1,5 +1,5 @@
 project: nest
-last-updated: "2026-05-19"
+last-updated: "2026-05-27"
 domain: architecture
 summary: "single-file semantic knowledge stack: rust owns format, runtime, cli, and bindings; python owns ingestion, model fingerprinting, and support tooling."
 layers:
@@ -20,7 +20,7 @@ quality:
   - "the python surface is small and explicit: load extension, build corpora, fingerprint models, and run support tooling."
   - "ann and hybrid paths always rerank with exact cosine, which keeps scores consistent across search modes."
 risks:
-  - "doc/arc/arc.md carries the human architecture and contract summary; keep it aligned with doc/arc/arc.yaml after architecture changes."
+  - "doc/arc/arc.md, doc/arc/arc.yaml, and doc/arc/arc.mmd form one architecture trio and must be updated together on any change to boundaries, data flow, or runtime contract."
   - "bm25 tokenization is intentionally simple and documented as weak for CJK, thai, and lao."
   - "python/_nest.so must be rebuilt after Rust changes that touch nest-format, nest-runtime, or nest-python."
 inventory:
@@ -37,7 +37,7 @@ inventory:
     - {path: "LICENSE", kind: legal, purpose: "mit license text", links: []}
     - {path: "llms.txt", kind: metadata, purpose: "concise llm and agent guidance", links: ["AGENTS.md", "CONTRIBUTING.md", "README.md"]}
     - {path: "pyproject.toml", kind: python-config, purpose: "ruff config and python tool exclusions", links: ["python", "tests"]}
-    - {path: "README.md", kind: overview-doc, purpose: "project overview plus pointers to the architecture maps and usage docs", links: ["doc/arc/arc.md", "doc/arc/arc.yaml", "doc/usage.md"]}
+    - {path: "README.md", kind: overview-doc, purpose: "project overview plus pointers to the architecture maps and usage docs", links: ["doc/arc/arc.md", "doc/arc/arc.yaml", "doc/arc/arc.mmd", "doc/usage.md"]}
     - {path: "rustfmt.toml", kind: format-config, purpose: "stable rustfmt policy", links: []}
     - {path: "SECURITY.md", kind: security-doc, purpose: "reporting channel, supported versions, and security scope", links: ["crates/nest-runtime/src/mmap_file.rs", "crates/nest-runtime/src/simd/mod.rs"]}
   workspace:
