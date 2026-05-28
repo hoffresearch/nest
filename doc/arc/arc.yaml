@@ -166,7 +166,7 @@ inventory:
   data_docs_python_scripts_tests:
     - {path: "doc/arc/arc.md", kind: markdown-doc, purpose: "single human architecture inventory and contract reference", links: ["doc/arc/arc.yaml", "doc/arc/arc.mmd"]}
     - {path: "doc/arc/arc.yaml", kind: yaml-doc, purpose: "machine-readable architecture map for agents and tooling", links: ["doc/arc/arc.md", "doc/arc/arc.mmd"]}
-    - {path: "doc/arc/arc.mmd", kind: mermaid-doc, purpose: "visual architecture map covering gateway, build, format, runtime, data, and monitoring", links: ["doc/arc/arc.md", "doc/arc/arc.yaml"]}
+    - {path: "doc/arc/arc.mmd", kind: mermaid-doc, purpose: "sequence diagram of the build and query flows", links: ["doc/arc/arc.md", "doc/arc/arc.yaml"]}
     - {path: "dat", kind: directory, purpose: "data root for corpora and demo sources", links: ["dat/demo/README.md"]}
     - {path: "doc", kind: directory, purpose: "top-level documentation root", links: ["doc/arc/arc.md", "doc/arc/arc.yaml", "doc/arc/arc.mmd", "doc/usage.md", "doc/changelog.md"]}
     - {path: "python", kind: directory, purpose: "python wrapper and tooling root", links: ["python/nest.py", "python/builder.py", "python/tools"]}
