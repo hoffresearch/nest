@@ -1,0 +1,118 @@
+================================================================================================
+genome :: fulltext-search (index)
+full-text and lexical search engines (inverted index, BM25, edge cases)
+================================================================================================
+
+one file per project in this folder. open the one you need.
+
+[MUST     ] quickwit-oss__quickwit.txt         Distributed full-text/analytics search engine
+                                               over object storage, built on the Tantivy Rust
+                                               library, whose immutable "split" files pack an
+                                               FST term dictionary plus 128-doc-block
+                                               SIMD-bitpacked posting lists and bitpacked
+                                               columnar fast fields, all mmap-readable and
+                                               decompressed on the fly.
+[MUST     ] meilisearch__meilisearch.txt       A Rust lexical+hybrid search engine whose term
+                                               dictionary is a byte-level minimal-acyclic FST
+                                               (BurntSushi `fst`), whose docid sets are roaring
+                                               bitmaps with a custom small-set serialization,
+                                               and whose typo/prefix matching is a
+                                               Levenshtein-automaton intersected against the FST
+                                               in one streaming pass.
+[HIGH     ] apache__lucene.txt                 Java full-text search library whose default codec
+                                               compresses inverted-index postings with
+                                               delta-coded, block-bit-packed integers
+                                               (FOR/PForDelta over 128-doc blocks), stores term
+                                               dictionaries as a shared-prefix/suffix FST (now
+                                               Trie), and accelerates top-k BM25 with Block-Max
+                                               WAND skipping over impact-block skip lists.
+[HIGH     ] quickwit-oss__tantivy.txt          A Lucene-class Rust full-text search library
+                                               whose inverted index stores posting lists as
+                                               interlaced 128-doc blocks of delta-encoded,
+                                               SIMD-bitpacked doc ids and bitpacked term
+                                               frequencies, fronted by an FST term dictionary
+                                               and a Block-Max-WAND skip list.
+[HIGH     ] typesense__typesense.txt           A from-scratch C++ in-memory typo-tolerant
+                                               lexical search engine whose inverted index is an
+                                               Adaptive Radix Tree (ART) over tokens with
+                                               Frame-of-Reference bit-packed posting lists,
+                                               pointer-tagged compact lists for short postings,
+                                               incremental trie-Levenshtein fuzzy traversal, and
+                                               relevance encoded as a single sortable 64-bit
+                                               integer.
+[HIGH     ] manticoresoftware__manticoresearch.txt A C++ full-text + columnar search engine
+                                               whose Manticore Columnar Library (MCL) compresses
+                                               attributes with per-block adaptive encoding
+                                               (const / table-dictionary / delta+bitpack /
+                                               generic) plus min-max zone maps and a PGM learned
+                                               secondary index, while full-text postings use VLN
+                                               (variable-length number) delta encoding and the
+                                               docstore stores original text in LZ4-compressed
+                                               fixed-size blocks.
+[HIGH     ] RediSearch__RediSearch.txt         A C full-text/secondary-index engine for Redis
+                                               whose inverted index is a custom block-structured
+                                               posting list using delta+varint gap coding with
+                                               pluggable per-schema encoder variants, backed by
+                                               a HyperLogLog-driven adaptive numeric range tree.
+[HIGH     ] xapian__xapian-docsprint.txt       The docsprint repo is only the Sphinx user-guide
+                                               source for Xapian, a mature C++ probabilistic IR
+                                               engine whose real value here is its documented
+                                               glass backend on-disk format: chunked,
+                                               delta+varint-encoded BM25 posting lists with a
+                                               separated document-length stream and
+                                               order-preserving numeric encodings.
+[HIGH     ] izihawa__summa.txt                 An IPFS-friendly, WASM-compatible full-text
+                                               search server built on a fork of Tantivy (Rust
+                                               Lucene), whose key trick is a network-backed
+                                               caching Directory that resolves BM25 queries over
+                                               a remote, immutable, byte-range-addressable
+                                               segment format by downloading only the few 32KB
+                                               blocks a query actually touches.
+[HIGH     ] toshi-search__Toshi.txt            Toshi is an Elasticsearch-style HTTP/Raft
+                                               frontend over Tantivy, whose value to nest is
+                                               Tantivy's segment codec stack: FST term
+                                               dictionaries, BP128 delta+bitpacked posting
+                                               blocks with VInt remainders, 1-byte log-quantized
+                                               fieldnorms, and an auto-selecting columnar
+                                               fast-field codec
+                                               (constant/GCD/bitpacked/blockwise).
+[HIGH     ] SeekStorm__SeekStorm.txt           A sub-millisecond, sharded, real-time full-text +
+                                               vector search engine in Rust (Apache-2.0) whose
+                                               lexical core stores posting lists as
+                                               roaring-bitmap-compressed doc-id sets with
+                                               delta+VINT-encoded term positions, ranked by
+                                               BM25F/BM25F_Proximity via Document-at-a-Time
+                                               traversal with improved Block-Max WAND, MaxScore,
+                                               galloping and SIMD set intersection, served from
+                                               one on-disk format in either RAM or mmap mode.
+[HIGH     ] valeriansaliou__sonic.txt          A lightweight schema-less search backend in Rust
+                                               that pairs a RocksDB inverted index (term ->
+                                               packed 32-bit IID arrays) with a per-bucket
+                                               memory-mapped BurntSushi-fst Finite-State
+                                               Transducer for typo-tolerant autocomplete,
+                                               returning external identifiers rather than
+                                               documents and running in a few MB of RAM.
+[HIGH     ] tinysearch__tinysearch.txt         A static-site full-text search engine that
+                                               replaces a traditional inverted index with one
+                                               approximate-membership Xor filter per document,
+                                               serialized with bincode and compiled into a tiny
+                                               dependency-free WASM blob.
+[HIGH     ] nextapps-de__flexsearch.txt        An in-memory full-text search library whose
+                                               "contextual index" replaces query-time TF-IDF
+                                               with a pre-scored lexical dictionary that buckets
+                                               postings by an integer relevance score
+                                               (resolution), making multi-term intersections
+                                               near-constant-time.
+[HIGH     ] Michael-JB__bm25.txt               A pure-Rust Okapi BM25 toolkit (MIT, ~1.2M
+                                               downloads) that turns text into precomputed
+                                               sparse-vector embeddings via a pluggable
+                                               tokenizer, with three composable layers: Embedder
+                                               (text to sparse vec), Scorer (inverted-index
+                                               query scoring), and SearchEngine (in-memory CRUD
+                                               search).
+[MEDIUM   ] jameslittle230__stork.txt          A Rust+WebAssembly static-site full-text search
+                                               engine that builds a single self-contained binary
+                                               `.st` index file (MessagePack-serialized inverted
+                                               "prefix map") which a WASM blob loads in the
+                                               browser to do instant prefix search with
+                                               positional excerpt highlighting, no server.

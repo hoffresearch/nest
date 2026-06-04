@@ -1,0 +1,73 @@
+================================================================================================
+typedb/typedb
+category: graph-db   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Rust-rewritten (3.0) typed-hypergraph database that flattens an n-ary
+             entity/relation/attribute model with inheritance onto RocksDB's LSM key-value
+             engine using fixed-prefix, type-grouped, sort-order-preserving key encodings.
+innovation:  The attribute-value IID encoding: a value is packed into a fixed-width, sort-stable key where
+             small values inline directly and large/variable-length values (strings) switch to
+             an [8-byte prefix][8-byte hash][1-byte tag] form. The high bit of the final tag
+             byte flags inline-vs-hashed, the low 7 bits double as either a length (inline) or a
+             collision disambiguator counter (hashed, up to 128 colliding values per prefix+hash
+             before overflow). This gives a content-addressed, bounded-width handle for
+             arbitrarily long values while keeping the first 8 bytes as a sort-meaningful prefix
+             so range scans and prefix iteration still work.
+techniques:
+  - Fixed 1-byte prefix kind tag (e.g. 0x1e entity, 0x1f relation) + TypeID + counter forming a
+    self-describing IID that encodes the instance's direct type
+  - Type-and-connection-grouped key layout so edges/vertices of the same type/relation sort
+    adjacently in the LSM, giving locality and prefix-iterable traversal without pointer chasing
+  - Inline-vs-hash attribute encoding: strings <=16 bytes stored raw with a [0b0|7-bit length]
+    tag byte (17 bytes total); longer strings as [8B prefix][8B u64 hash][0b1|7-bit
+    disambiguator]
+  - Caller-provided &[u8]->u64 hash with snapshot-checked collision disambiguation via a 7-bit
+    counter (128 variants per prefix+hash)
+  - Struct values always hashed: 1-byte value-type-category + 7-byte hash-with-disambiguator (8
+    bytes total)
+  - Fixed-width-per-type value encoding (bool/int/double/decimal/date/datetime/duration all 8
+    bytes) so keys are memcmp-comparable and sortable
+  - Centralized value comparators in one encoding module so traversal predicates (>, <) and sort
+    share one byte-order definition (no comparator drift)
+  - Disabling vertex/edge caching on read paths so multi-million-element scans stay O(1) memory;
+    only written vertices get cached
+nest steals: Steal the inline-vs-hash bounded-width value encoding for nest-format. Today nest stores
+             chunks_canonical text and chunk_ids as separate sections; adopt TypeDB's
+             [prefix][hash][tag] scheme as a new optional codec/representation for chunk_ids and
+             any future fixed-width id/key section, so a chunk_id or content-key is a bounded
+             17-byte (or 16-byte) handle whose first 8 bytes stay sort-meaningful and whose
+             tag-byte high bit distinguishes inline-short vs hashed-long. This is
+             content-addressed by construction, aligning with nest's existing
+             content_hash/SHA-256 surfaces; reusing a truncated content_hash as the 8-byte hash
+             field would let nest://content_hash/chunk_id citations resolve via a memcmp prefix
+             scan over a sorted id section instead of a hashmap, and keeps the format additive
+             (new encoding id in the reserved 4-255 range, deterministic since hashing is
+             seedless). The fixed-width-per-type, memcmp-sortable value packing is also directly
+             applicable if nest adds a structured/json/parquet column section: pack scalar
+             columns as 8-byte sort-stable keys so range filters run as ordered scans straight
+             off mmap. Lower relevance to raw embedding compression (those stay raw f32/f16/int8
+             for SIMD), but high relevance to compressing/serving id/key/metadata sections and
+             to the graph-search and structured-data items on the north star.
+compression: Medium-high for nest's metadata/id sections, low for embeddings. The bounded 17-byte handle
+             replaces storing full variable-length keys inline, compressing id/key columns and
+             any high-cardinality string column to fixed width while preserving range-scan
+             ability. The transferable extreme-compression idea is that the SAME bytes serve as
+             both a sort key and a content-addressed handle (prefix stays meaningful, hash gives
+             uniqueness, 1 tag byte multiplexes mode+length+collision-counter) at zero extra
+             bytes for the discriminator. Does not help the embedding hot path (kept raw for
+             SIMD dot products), so it complements rather than competes with nest's
+             zstd/f16/int8 codecs.
+perf:        RocksDB LSM gives graceful degradation past RAM (TypeDB ~25% throughput drop 100->400 warehouses
+             vs Neo4j ~51%), the payoff of memcmp-sortable type-grouped keys over
+             pointer-chasing property graphs. Tradeoff: ~24GB vs Neo4j 17GB on disk because
+             TypeDB auto-builds bidirectional/ad-hoc indices. Read paths deliberately skip
+             caching vertices/edges to scan millions without OOM. Query pipeline is synchronous
+             (non-async) Rust, coupled to RocksDB. No SIMD in the encoding path; the win is
+             branch-light fixed-width comparisons, not vectorization.
+license:     Mozilla Public License 2.0 (MPL-2.0) for the typedb engine; TypeQL grammar Apache-2.0. MPL-2.0
+             is file-level copyleft, so vendoring TypeDB source files into nest would carry MPL
+             obligations on those files. Safe path: reimplement the encoding scheme (ideas are
+             not copyrightable) rather than copy source.

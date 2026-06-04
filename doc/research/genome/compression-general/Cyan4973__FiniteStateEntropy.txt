@@ -1,0 +1,42 @@
+================================================================================================
+Cyan4973/FiniteStateEntropy
+category: compression-general   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Reference C implementation of Finite State Entropy (tANS, table-based Asymmetric Numeral
+             Systems) plus Huff0, the entropy-coder backends that power zstd, providing
+             near-arithmetic compression accuracy at hundreds of MB/s via a single
+             state-transition table lookup per symbol.
+innovation:  tANS replaces per-symbol arithmetic with a precomputed state-transition table making decode a
+             single LUT lookup plus a bit read; the accuracy depends entirely on quasi-regular
+             symbol spreading across the state table.
+techniques:
+  - tANS decode table {symbol, nbBits, newStateBaseline} with 4-line decode hot loop
+  - Symbol spread stride step=(tableSize>>1)+(tableSize>>3)+3 mod tableSize
+  - FSE_normalizeCount to sum=2^tableLog with rtbTable rounding thresholds and minTableLog
+    rejection
+  - FSE_optimalTableLog auto-selecting smallest cache-friendly tableLog (~14)
+  - nbBits/baseline assignment via next-power-of-2 shares, low states cost +1 bit
+  - Normalized-count table bit-packed into the compressed header; RLE special case
+  - Huff0 canonical Huffman with 4 interleaved bitstreams for OoO ALU throughput
+  - FSEU16 16-bit-symbol variant for large alphabets
+nest steals: Vendor a pure-Rust FSE+Huff0 entropy codec into crates/nest-format/src/encoding/, registered as
+             new additive encoding ids in the reserved 4-255 range, applied only to
+             non-embedding sections (text, provenance, search_contract, and especially
+             bm25_index 0x08 postings and hnsw_index 0x07 neighbor lists) where skewed
+             integer/token residuals after delta-coding beat zstd's generic stage at lower
+             complexity. Table build is a pure function of the histogram so output is
+             byte-identical/deterministic, preserving content_hash and reproducible builds;
+             FSEU16 suits 16-bit tokenized term streams. Keep under 300 lines by sharing the
+             spread/table-build core between encode and decode, typed thiserror errors, no
+             panics.
+compression: Core to compress-more-than-everyone: tANS hits within a fraction of a percent of Shannon entropy
+             on skewed symbol streams (BM25 postings, HNSW adjacency, term dicts) where Huffman
+             loses up to ~1 bit/symbol, at hundreds of MB/s, giving nest a sovereign in-house
+             entropy floor below generic zstd.
+perf:        FSE ~325/440 MB/s, Huff0 ~600/1350 MB/s on i7-5600U with 32KB blocks; tableLog<=14 to fit L1;
+             Huff0 uses 4 interleaved streams for ALU parallelism. Pure scalar, branch-light LUT
+             decode portable to x86_64/aarch64.
+license:     BSD-2-Clause

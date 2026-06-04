@@ -1,0 +1,266 @@
+================================================================================================
+synthesis :: compression-integer
+integer and posting-list compression (bitpacking, varint, elias-fano)
+================================================================================================
+
+state of the art and concrete nest recommendations for this category.
+
+summary:     The category collectively defines the modern integer-compression playbook nest is missing
+             entirely: transform the data (delta/d1 for sorted, frame-of-reference subtract-min,
+             zigzag for signed) then pack residuals at a per-block minimal bit-width, with two
+             escape hatches for the realistic non-uniform cases - patched exceptions
+             (PFOR/FastPFor/TurboPFor) for a few large outliers, and locally re-based partitions
+             (partitioned Elias-Fano) for clustered/bursty sequences. The decisive property for
+             nest is that several of these (FOR/libfor select(), VByte select()/lower_bound,
+             Elias-Fano broadword rank/select) support O(1) random access and nextGEQ DIRECTLY
+             on the compressed bytes, which zstd structurally cannot - so they compress AND keep
+             nest's mmap-and-score-off-disk discipline, unlike zstd which forces a full block
+             inflate. nest today has the single largest uncompressed integer surface sitting in
+             plain sight: ann/codec.rs writes every HNSW neighbor id as 4 raw LE bytes (line
+             29-31), bm25/codec.rs writes every posting as doc:u32+tf:u32 raw (line 33-36), and
+             spans.rs stores 16 raw bytes per chunk as two u64 (line 22-23). All three are
+             sorted or near-monotone u32/u64 arrays - the textbook delta+bitpack/FOR workload -
+             and all three are version-gated by per-section payload versions
+             (HNSW_PAYLOAD_VERSION/BM25_PAYLOAD_VERSION) or could carry a new reserved encoding
+             id (4-255 free), so the win is fully additive with NEST_FORMAT_VERSION frozen at 1.
+             Determinism is free: packing is a pure function of the integers and content_hash
+             hashes DECODED values, so byte-identical builds and stable content_hash are
+             preserved. The pure-scalar ports are small and fit the 300-line
+             single-responsibility cap; SIMD is a later throughput upgrade behind the existing
+             simd dispatcher and is unnecessary for correctness since index sections are
+             cold-loaded once at mmap time.
+
+state of the art
+------------------------------------------------------------------------------------------------
+State of the art is a layered pipeline: (1) a reversible integer transform chosen by data shape
+- delta/d1 (gaps) for sorted lists, frame-of-reference (subtract per-block min) for
+clustered-range values, zigzag for signed, delta-of-delta+RLE for timestamps; (2) fixed-block
+binary bit-packing at a per-block bit-width b = ceil(log2(max_residual+1)), giving a 32/b ratio
+that decodes branch-free with shift+mask; (3) an exception mechanism so a handful of outliers do
+not force a wide b for the whole block - either patched-FOR (FastPFor/TurboPFor: store outlier
+positions + high-bit residuals out-of-band, 128- or 256-int blocks, 2-bit block-type header
+selecting constant/bitpack/bitmap-exc/vbyte-exc) or locally re-based partitions (partitioned
+Elias-Fano: a linear-time (1+epsilon) DP cuts the sequence into variable chunks, each encoded as
+the cheapest of strict-EF / all-ones-run / raw bitvector against its own small universe). The
+frontier additionally insists compression must not cost queryability: libfor's for_select_bits()
+is O(1) random access by index*b bit-offset, vbyte_select/lower_bound walk a compressed varint
+stream without materializing it, and Elias-Fano gives O(1) select and O(log) nextGEQ via
+broadword popcount + in-word select tables on 64-bit words (no SIMD needed). SIMD (SIMD-BP128,
+TurboPackV256, MaskedVByte, simdcomp) pushes 10-20 Gint/s via vertical lane-transposed layout,
+but the scalar layouts are correct and deterministic on their own. Permissive ports exist
+(FastPFor Apache-2.0 minus the patented varint-G8IU, simdcomp BSD, quickwit-oss/bitpacking MIT,
+libfor/libvbyte Apache-2.0); TurboPFor is GPL-2.0 and must be clean-room reimplemented from the
+format description only.
+
+top transferable innovations
+------------------------------------------------------------------------------------------------
+1. Delta(d1)+bitpack for sorted id lists: gaps in a monotone u32 list pack to
+   ceil(log2(max_gap)) bits not 32, the single highest-leverage transform for nest because HNSW
+   neighbor ids (sortable per-list) and BM25 doc ids (already strictly increasing) are exactly
+   this shape. Source: FastPFor SIMD-BP128, simdcomp simdpackd1, libvbyte sorted variants.
+2. Frame-of-reference (subtract per-block min, store base+bit-width, pack residuals) with O(1)
+   random access via index*b bit-offset arithmetic - the canonical first stage that ALSO keeps
+   elements individually addressable off mmap, so spans[i] or neighbor[i] is one bit-extract
+   with no whole-section decode. Source: libfor for_select_bits().
+3. Patched frame-of-reference / PFOR exceptions: pick b so MOST values fit, store the rare
+   outliers out-of-band, so one giant gap or degree spike does not inflate the whole block's
+   bit-width. Decodes branch-free. Source: FastPFor/SIMD-FastPFor, TurboPFor 2-bit block-type
+   header.
+4. Partitioned Elias-Fano: locally re-based variable-length partitions chosen by a deterministic
+   (1+epsilon) DP, each chunk the cheapest of EF/all-ones/raw-bitvector, giving 10-30% below
+   plain EF on clustered data PLUS O(1) select and O(log) nextGEQ via broadword rank/select -
+   random access without any decompression. Source: ot/partitioned_elias_fano.
+5. Per-chunk/per-section cheapest-of-N codec selection with a branch-on-tag decode: pick the
+   smallest of {raw, delta, FOR, patched, EF, all-ones} at build time, store a tiny tag, decode
+   deterministically. A reusable codec-selection pattern that mirrors nest's existing
+   encoding-choice axis. Source: partitioned_elias_fano level-2 selector, TurboPFor 2-bit
+   header.
+6. Random-access/search-over-compressed primitives (select, lower_bound/nextGEQ) that operate on
+   the compressed stream - the property that lets a codec replace zstd on nest's mmap hot path
+   instead of forcing a full inflate. Source: libfor, libvbyte, Elias-Fano broadword select.
+7. Space-efficient byte-range varint denser than LEB128 (0-176 in 1 byte, then 14/19/32-bit
+   tiers) and StreamVByte's control-bytes-separate-from-payload layout for branch-light scalar
+   decode. Source: TurboPFor varbyte, FastPFor StreamVByte.
+8. Vertical/lane-transposed bit-packing (block of 128 for SSE/NEON, 256 for AVX2, all sharing
+   one b) as the SIMD throughput layer that maps cleanly onto nest's existing AVX2/NEON/scalar
+   simd dispatcher when/if throughput matters. Source: simdcomp BitPacker4x/8x,
+   TurboPackV128/V256.
+
+nest recommendations
+------------------------------------------------------------------------------------------------
+* Add a pure-safe-Rust scalar bitpack+delta(d1) codec module and apply it to HNSW neighbor-id
+  lists. Sort each per-layer neighbor list at build time, delta-encode (d1), and pack residuals
+  at per-list/per-block bit-width b=ceil(log2(max_gap+1)); store b as one byte. Replace the raw
+  4-byte-per-id loop. Bump HNSW_PAYLOAD_VERSION to 2 (NOT NEST_FORMAT_VERSION); decode
+  reproduces identical id sets so search and the mandatory exact-cosine rerank are byte-for-byte
+  unchanged.
+    where:  crates/nest-runtime/src/ann/codec.rs (replace the raw `for &id in nbrs {
+            out.extend_from_slice(&id.to_le_bytes()) }` at lines 29-31 and its mirror parse loop
+            at lines 65-71); new shared codec in a new crates/nest-runtime/src/bitpack.rs (<=300
+            loc, single-responsibility). HNSW_PAYLOAD_VERSION lives at
+            crates/nest-runtime/src/ann/mod.rs:40.
+    impact: Largest single shrink of the index section that dominates the tiny preset (0.283 ratio).
+            Neighbor ids drop from 32 bits to roughly log2(n) bits (e.g. ~14-17 bits at 100k-1M
+            nodes), often <50% of the raw adjacency bytes; pushes tiny/hybrid preset size down
+            with zero recall change.
+    effort: medium
+    from:   lemire/FastPFor, fast-pack/simdcomp, cruppstahl/libfor
+
+* Apply the same delta+bitpack codec to BM25 posting lists: doc ids per term are already
+  strictly increasing (deterministic alphabetical term order), so delta-code doc gaps and
+  bitpack them, and bitpack tf separately at its own tiny bit-width (tf is small). Bump
+  BM25_PAYLOAD_VERSION to 2. Keep df and the alphabetical term order untouched so determinism
+  holds.
+    where:  crates/nest-runtime/src/bm25/codec.rs (replace the raw `p.doc.to_le_bytes()` +
+            `p.tf.to_le_bytes()` posting loop at lines 33-36 and the matching parse at lines
+            73-77); reuse the bitpack.rs module from rec #1. BM25_PAYLOAD_VERSION at
+            crates/nest-runtime/src/bm25/index.rs:8.
+    impact: Sorted doc-id gaps routinely pack to 4-8 bits vs 32; tf to ~3-4 bits. Several-fold shrink of
+            section 0x08 in the hybrid preset, beating zstd-on-raw-u32 in both ratio and (cold,
+            one-time) decode cost, with no scoring change.
+    effort: medium
+    from:   lemire/FastPFor, fast-pack/simdcomp, cruppstahl/libvbyte
+
+* Re-encode chunks_original_spans as delta-coded varint streams grouped by source_uri. Within
+  one source the byte_start/byte_end offsets are monotonically increasing; store each source's
+  offsets as delta+varint (or FOR) instead of two raw u64 (16 bytes/chunk). Register a NEW
+  reserved encoding id (e.g. SECTION_ENCODING_BITPACK = 4) so old readers reject it cleanly and
+  NEST_FORMAT_VERSION stays 1; content_hash is unchanged because it hashes decoded canonical
+  OriginalSpan values.
+    where:  crates/nest-format/src/sections/spans.rs (lines 22-23 emit the raw u64 pair today); add codec
+            under crates/nest-format/src/encoding/ and wire the new id into decode_payload in
+            crates/nest-format/src/encoding/mod.rs:44 and into SectionEncoding in
+            crates/nest-format/src/writer/encoding_choice.rs.
+    impact: Cuts a REQUIRED non-embedding section from ~16 bytes/chunk toward ~2-4 bytes for close-packed
+            chunks - structurally beats even zstd-on-raw because it exploits monotonicity zstd
+            cannot see; shrinks every preset including exact.
+    effort: medium
+    from:   cruppstahl/libvbyte, cruppstahl/libfor, powturbo/TurboPFor-Integer-Compression
+
+* Make the new integer codec FOR-based with index*b bit-offset random access (libfor select
+  semantics) so spans[i] and one neighbor id can be fetched by O(1) bit-extract straight off
+  mmap, never decoding the whole section. This preserves nest's zero-copy hot path for citation
+  resolution (nest://content_hash/chunk_id materialize) and keeps the option of
+  search-over-compressed for bm25 nextGEQ later.
+    where:  the codec module shared by recs #1-#3 (crates/nest-runtime/src/bitpack.rs and/or
+            crates/nest-format/src/encoding/); a tiny succinct rank/select primitive file kept
+            separate (<=300 loc each) if Elias-Fano is added later. Wire select() into the
+            materialize / citation path in nest-runtime.
+    impact: Keeps compression from costing queryability - the property that justifies these codecs over zstd
+            on the mmap-and-score discipline. Enables shrinking spans/index while still serving
+            span[i] zero-copy.
+    effort: high
+    from:   cruppstahl/libfor, cruppstahl/libvbyte, ot/partitioned_elias_fano
+
+* Add patched exceptions (PFOR) once plain bitpack lands: pick b for the common case and store
+  the few outliers out-of-band (position + high bits), with a 2-bit block-type header selecting
+  constant/plain-bitpack/patched. This stops one huge gap (a sparse posting list term) or one
+  high-degree HNSW node from widening b for the whole block. Clean-room from the
+  FastPFor/TurboPFor format description only.
+    where:  extend crates/nest-runtime/src/bitpack.rs with an exceptions sub-path (separate file if it nears
+            300 loc); applies transparently to recs #1 and #2.
+    impact: 10-25% further shrink on real (bursty) distributions vs plain per-block bitpack; the difference
+            between good and state-of-the-art on clustered posting lists and skewed adjacency.
+    effort: high
+    from:   lemire/FastPFor, powturbo/TurboPFor-Integer-Compression
+
+* Adopt a cheapest-of-N per-section codec selector with a branch-on-tag decode: at build time
+  try {raw, delta+bitpack, FOR, patched, all-ones} on each integer section/list, store the
+  1-byte winning tag, and pick the smallest. Mirror nest's existing SectionEncoding enum so the
+  choice is explicit and the DP/selector is a deterministic pure function (byte-identical builds
+  preserved).
+    where:  crates/nest-format/src/writer/encoding_choice.rs (extend SectionEncoding beyond Raw/Zstd) and
+            the dispatch in crates/nest-format/src/encoding/mod.rs:44; tag read at decode time.
+    impact: Guarantees the codec never loses to raw/zstd on adversarial inputs and auto-adapts per dataset
+            (e.g. PT-BR fake-news corpora) without manual tuning - turns compression into a
+            build-time optimization rather than a fixed guess.
+    effort: medium
+    from:   ot/partitioned_elias_fano, powturbo/TurboPFor-Integer-Compression
+
+* Replace LEB128-style varints anywhere nest emits length prefixes / counts for integer arrays
+  with the denser byte-range varint (0-176 in 1 byte, 14/19/32-bit tiers) or StreamVByte's
+  controls-separate-from-payload layout, decoded with a branch-light scalar loop.
+    where:  the varint path in crates/nest-format/src/encoding/ and the count/df prefixes in bm25/codec.rs
+            and ann/codec.rs headers; keep all-LE per nest invariant.
+    impact: Small but free uniform shrink on every count/length field; complements the bitpack codec for the
+            non-block scalar fields.
+    effort: low
+    from:   powturbo/TurboPFor-Integer-Compression, lemire/FastPFor
+
+* Later: add NEON(128)/AVX2(256) vertical bit-pack kernels behind the existing simd dispatcher
+  for decode throughput, keeping the scalar path as the deterministic reference. The on-disk bit
+  layout must be identical across scalar/SIMD so content_hash and decode are independent of CPU.
+    where:  crates/nest-runtime/src/simd (mirror the AVX2/NEON/scalar dispatch already used for dot
+            products); SIMD touches DECODE only, never the on-disk layout produced by the python
+            builder.
+    impact: Throughput only (10-20 Gint/s vs scalar). Low priority because index sections are cold-loaded
+            once at mmap time, but useful if posting-list scan-over-compressed becomes hot.
+    effort: high
+    from:   fast-pack/simdcomp, lemire/FastPFor, powturbo/TurboPFor-Integer-Compression
+
+compression wins
+------------------------------------------------------------------------------------------------
+  - HNSW neighbor ids (ann/codec.rs:29-31): sort-per-list + delta(d1) + bitpack drops each id
+    from 32 bits to ~log2(n) bits (~14-17 bits at 100k-1M nodes) plus exceptions for high-degree
+    nodes - the single biggest lever on the tiny-preset index section, no recall change since
+    decode reproduces identical ids and the exact-cosine rerank is untouched.
+  - BM25 doc ids (bm25/codec.rs:33-36): already strictly increasing, so delta-gap + bitpack
+    packs to a typical 4-8 bits/id and tf to ~3-4 bits, several-fold over raw doc:u32+tf:u32 and
+    below zstd-on-raw, shrinking section 0x08 in the hybrid preset.
+  - chunks_original_spans (spans.rs:22-23): delta+varint/FOR per source_uri cuts a REQUIRED
+    section from 16 bytes/chunk toward 2-4 bytes for close-packed chunks - a win in EVERY preset
+    including exact, exploiting monotonicity zstd cannot.
+  - These codecs beat zstd structurally on sorted integer columns AND keep O(1) random access
+    (FOR/EF select), so they compress without breaking the mmap-and-score-off-disk hot path -
+    zstd would force a full block inflate and forfeit zero-copy.
+  - Cheapest-of-N build-time selection guarantees the integer sections are never larger than raw
+    and auto-adapt per corpus, compounding toward pushing the tiny preset below its current
+    0.283 ratio.
+  - All wins are lossless on the integer payload and stack on top of existing zstd/f16/int8 -
+    they attack the metadata/index surface (everything except the f32 embeddings that must stay
+    raw for scoring), the part nest leaves uncompressed today.
+
+watch-outs (conflict with nest constraints)
+------------------------------------------------------------------------------------------------
+  - GPL-2.0 contamination: TurboPFor is GPL-2.0 (dual-licensed). Never vendor or copy -
+    clean-room reimplement from the format description only. Prefer the permissive sources
+    (FastPFor Apache-2.0, simdcomp BSD, quickwit-oss/bitpacking MIT, libfor/libvbyte Apache-2.0)
+    for reference. Avoid FastPFor's varint-G8IU specifically (patented).
+  - Determinism: bit-width selection, exception ordering, and any partition DP must be a pure
+    deterministic function of the integers (fixed block size, canonical b=max-residual-bits,
+    exceptions in ascending index order, fixed epsilon). Any data-dependent or
+    floating-point-influenced choice in the encoder would break byte-identical reproducible
+    builds. Note HNSW neighbor lists must be sorted in a canonical, seeded-deterministic order
+    before delta-coding or the on-disk bytes will vary.
+  - content_hash stability: content_hash hashes DECODED canonical sections, so a new INTEGER
+    codec on chunks_original_spans is safe (decode yields identical OriginalSpan values). But
+    the codec MUST decode to byte-identical canonical integers - any lossy or reordering
+    transform would change content_hash and break nest:// citations.
+  - Format-freeze discipline: index codecs (HNSW 0x07, BM25 0x08) must bump only their
+    per-section PAYLOAD_VERSION (ann/mod.rs:40, bm25/index.rs:8), never NEST_FORMAT_VERSION. A
+    new section encoding id for spans must use the reserved 4-255 range and old readers must
+    reject it via the existing UnsupportedSectionEncoding path - do NOT change the meaning of an
+    existing field (that would be a true v2).
+  - Never-panic constraint: bit-cursor unpack, varint continuation, FOR base/width reads, and
+    broadword select on malformed/truncated bytes must return typed thiserror errors
+    (RuntimeError::Format / NestError::MalformedSectionPayload), never panic or index out of
+    bounds. The hand-tuned C kernels assume well-formed input; the Rust port must bounds-check
+    every word read.
+  - Zero-copy vs decode-into-Vec: zstd already breaks zero-copy by decompressing whole blocks.
+    To keep the mmap hot path, prefer FOR/EF layouts that support select() straight off mmap
+    rather than codecs that force a full decode into an owned Vec. libfor's bits<=32 cap means
+    64-bit span offsets need a 64-bit path or delta-into-u32 - handle u64 spans explicitly.
+  - 300-line file cap: split into single-responsibility modules - block header / bitpack-unpack
+    / exception list / delta transform / succinct rank-select each as its own file under the
+    300-line (333 hard) cap. Do not let a monolithic codec file grow past it.
+  - SIMD is a throughput-only later step and must NOT alter the on-disk bit layout: the python
+    builder produces the bytes scalar-deterministically, and AVX2/NEON/scalar decode in
+    nest-runtime must all yield identical integers. Vertical lane layout differs between 128-bit
+    (NEON, 4x u32) and 256-bit (AVX2, 8x u32) - if SIMD is added, the on-disk format must commit
+    to ONE block size (256) and let NEON decode it as two 128-bit halves, or builds become
+    CPU-dependent.
+  - CJK/Thai BM25 tokenizer gap is orthogonal - posting-list compression does not fix the
+    word-segmentation degradation; don't conflate the two.
+  - Keep embeddings out of scope: these codecs are for integer sections only. The f32 embeddings
+    are scored directly from mmap on the hot path and must stay raw/f16/int8 as today - never
+    apply integer bitpacking to embeddings.

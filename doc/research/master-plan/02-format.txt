@@ -1,0 +1,37 @@
+================================================================================================
+master plan :: format evolution
+additive within frozen v1
+================================================================================================
+
+part 2 of 5.
+
+v1 STAYS FROZEN AND ADDITIVE for the entire compression roadmap. NEST_FORMAT_VERSION is bumped
+ONLY when an existing field changes meaning. Three additive lanes carry everything, and the
+in-tree machinery already supports all three. LANE A - NEW WIRE ENCODINGS in reserved 4-255
+(raw=0/zstd=1/float16=2/int8=3 occupied): intpack(4), zstd_dict(5), frontcode(6), int4(7),
+rabitq(8), fsst(9), with shuffle+zstd and tokenized reserved beyond. The existing decode_payload
+default arm (encoding/mod.rs:50) already rejects unknown ids with UnsupportedSectionEncoding, so
+an old runtime fails closed and a new runtime dispatches by id - additive by construction.
+content_hash hashes DECODED canonical-six bytes, so any codec that round-trips bit-exactly
+yields the SAME content_hash (enforce with a roundtrip+hash-equality test per codec, mirroring
+the existing zstd_roundtrip_preserves_bytes test); only embeddings are precision-dependent,
+which is already documented and accepted. LANE B - NEW OPTIONAL SECTIONS at 0x09+ (0x01-0x08
+occupied), EXCLUDED from content_hash by the existing spec (layout/mod.rs:101-107) so adding
+them never invalidates citations: embeddings_fp(0x09, the f16/f32 rerank source that gates
+sub-int8), dictionary(0x0A), dedup_map(0x0B), graph_adjacency(0x0C), chunk_scalars(0x0D),
+tokenizer_model(0x0E), edit_journal(0x0F), repro_manifest(0x10), and reserved
+merkle_index/eval_results beyond. LANE C - PER-PAYLOAD VERSION BUMPS internal to an
+already-defined section: INT8 scale_kind=1 (the field already exists at int8.rs:18 and parse()
+already rejects unknown kinds, so old readers stay safe), HNSW_PAYLOAD_VERSION 1->2,
+BM25_PAYLOAD_VERSION 1->2 - never NEST_FORMAT_VERSION. HARDENING that stays additive: add a
+skippable-OPTIONAL vs unskippable-REQUIRED flag bit on SectionEntry (a reserved field, no layout
+change) so old runtimes serve unknown optional sections and error cleanly on unknown required
+ones; verify the 64-byte embeddings alignment at reader open (SECTION_ALIGNMENT=64 is declared
+but not verified). THE ONE TRUE v2 (NEST_FORMAT_VERSION=2, deferred to its own research lane,
+justified ONLY by measured demand for partial/single-chunk citation verification + corpus-level
+subtree dedup): make content_hash a BLAKE3 Merkle ROOT over per-section/per-chunk hashes instead
+of a flat SHA-256 over concatenated canonical-six bytes. This CHANGES the meaning of the
+existing content_hash field (the citation identity anchor), so it cannot be additive - it must
+be v2 with v1 readers retained. Until then SHA-256 over decoded canonical-six stays frozen and a
+NEW additive blake3 algorithm-id can be offered for large-blob addressing without touching the
+v1 default.

@@ -1,0 +1,71 @@
+================================================================================================
+meilisearch/meilisearch
+category: fulltext-search   |   steal priority: MUST
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Rust lexical+hybrid search engine whose term dictionary is a byte-level minimal-acyclic FST
+             (BurntSushi `fst`), whose docid sets are roaring bitmaps with a custom small-set
+             serialization, and whose typo/prefix matching is a Levenshtein-automaton
+             intersected against the FST in one streaming pass.
+innovation:  Store the entire sorted term dictionary as a single minimal acyclic finite-state transducer
+             (FST): the FSA shares both common prefixes AND common suffixes across all terms,
+             compressing the dictionary to a fraction of the concatenated-string size while
+             staying mmap-friendly and zero-copy. The same structure that compresses the terms
+             also serves prefix lookup and fuzzy lookup by intersecting it with a Levenshtein
+             DFA in a single streaming pass (no per-term scan).
+techniques:
+  - FST term dictionary (BurntSushi `fst` crate): minimal acyclic FSA compressing shared
+    prefix+suffix of sorted keys, mmap zero-copy, byte-level transitions
+  - Levenshtein automaton x FST streaming intersection: DFA from query term + max edit distance
+    intersected with FST to enumerate all in-distance terms without scanning; unify prefix +
+    typo on the last query term in one pass
+  - Roaring bitmaps for docid sets (array/bitmap/run containers per 64k block) with a custom
+    small-set serialization that writes raw integers when smaller than the standard roaring
+    header
+  - Variable-length integer term ids: intern words as ~2-byte varints instead of 5-6 byte
+    strings; store dictionary once, reference by id
+  - Database reshape (word,fid)->docids => word->[(fid,docids)] to kill per-field word
+    duplication; positional bucketing capped at first N positions to bound posting growth
+  - Damerau-Levenshtein typo budget keyed to term length (5 chars=>1 typo, 9=>2) plus
+    word-boundary concatenation/split candidates each counted as 1 typo
+  - Bucket-sort cascade of independent ranking rules (words, typo, proximity, attribute, sort,
+    exactness) applied sequentially over shrinking candidate sets
+  - charabia: script-detection-driven segmentation + normalization (lowercase, diacritic strip,
+    CJK/Thai dictionary segmentation) shared identically at index and query time
+nest steals: Rebuild nest-runtime/src/bm25/codec.rs section 0x08. Today nest serializes the term dictionary
+             as raw `(u32 len, utf8 bytes)` per term (alphabetical) and postings as fixed `(doc
+             u32, tf u32)` pairs with zero compression. Steal three layers: (1) replace the
+             term-string blob with an FST map (term -> u32 term-id) built from the
+             already-alphabetical terms; the FST is deterministic given sorted input (satisfies
+             nest's alphabetical-term-order rule) and shrinks the dictionary dramatically on
+             natural-language corpora, a pure win for the compression north star and compatible
+             with the zstd-on-non-embedding-sections policy. (2) Delta+varint encode postings:
+             docids are sorted ascending so store first docid as varint then gaps as varints, tf
+             as varint, cutting the 8-byte fixed pair to ~2-3 bytes typical and shrinking the
+             tiny/hybrid presets. (3) Optionally swap per-term Vec<u32> for a roaring bitmap
+             docid set with the small-set raw-int trick for rare terms. The FST also closes
+             nest's two known bm25 gaps: Levenshtein-automaton-over-FST intersection gives typo
+             tolerance and prefix/search-as-you-type, and FST byte-level transitions make
+             CJK/Thai bigram tokens compress well. All additive: new internal layout under the
+             existing reserved 0x08 id; bump only BM25_PAYLOAD_VERSION (per-section payload
+             version), never NEST_FORMAT_VERSION, since section meaning is unchanged. Split
+             fst-dict and posting-codec into separate modules to stay under the 300-line cap.
+compression: Directly central. The FST term dictionary is one of the highest-leverage text-index compression
+             structures known (shared prefix+suffix minimization beats simple front-coding), and
+             delta+varint postings plus roaring bitmaps are the standard inverted-index size
+             wins. Together they make nest's bm25 section (0x08) a fraction of its current size,
+             advancing the compress-more-than-everyone mission while staying deterministic,
+             mmap-friendly, and offline.
+perf:        FST lookup is O(query length) with zero-copy mmap reads (no whole-dictionary decompression).
+             Levenshtein-DFA x FST intersection enumerates in-distance terms in a single
+             streaming pass; BurntSushi notes the bundled Levenshtein construction is
+             proof-of-concept (~2.5ms for distance 2 on `Levenshtein`), while the
+             tantivy-search/levenshtein-automata algorithm builds the same DFA in ~0.09ms if
+             query latency headroom is needed (FST intersection dominates anyway). Roaring
+             bitmaps give SIMD-friendly union/intersection across array/bitmap/run containers.
+             nest's current HashMap<String,TermEntry> is fast but uncompressed and non-mmap; FST
+             trades a tiny constant lookup cost for large on-disk and zero-copy gains.
+license:     MIT (meilisearch core); BurntSushi `fst` is Unlicense/MIT (public-domain-friendly, safe to
+             vendor); roaring-rs is Apache-2.0/MIT; charabia is MIT.

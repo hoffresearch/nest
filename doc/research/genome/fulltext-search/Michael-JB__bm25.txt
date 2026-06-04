@@ -1,0 +1,56 @@
+================================================================================================
+Michael-JB/bm25
+category: fulltext-search   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A pure-Rust Okapi BM25 toolkit (MIT, ~1.2M downloads) that turns text into precomputed
+             sparse-vector embeddings via a pluggable tokenizer, with three composable layers:
+             Embedder (text to sparse vec), Scorer (inverted-index query scoring), and
+             SearchEngine (in-memory CRUD search).
+innovation:  Treat BM25 as a precomputed sparse embedding so query-time scoring is a sparse dot product
+             reusing the same vector primitive as dense embeddings.
+techniques:
+  - Okapi BM25 with k1/b/avgdl params; b=0 cleanly disables length normalization (good for
+    short, uniform chunks)
+  - avgdl auto-fit from corpus statistics (with_fit_to_corpus) so the only stateful param is
+    computed deterministically from the data
+  - Sparse embedding format: TokenEmbedding { index, value } pairs, only non-zero dims stored,
+    directly ingestible by Qdrant/Pinecone/Milvus
+  - Hash-based token IDs (token hashed to u32/u64) instead of a term dictionary, eliminating the
+    string->id map at the cost of possible collisions
+  - Pluggable Tokenizer trait; DefaultTokenizer pipeline = deunicode normalization +
+    unicode-segmentation word boundaries + stop-words removal + rust-stemmers Snowball stemming
+  - Three-layer split Embedder/Scorer/SearchEngine, each usable independently, generic over
+    token-id (TokenEmbedder trait) and doc-id (Document<T>)
+  - Optional feature flags: language_detection (whichlang), parallelism (rayon batch fit),
+    default_tokenizer toggle to drop text-proc deps
+nest steals: nest-runtime/src/bm25.rs (Bm25Index) should adopt the precomputed-sparse-weight model: store, in
+             the 0x08 bm25_index section, per-chunk postings as (term_id:u32_le,
+             weight:f16_or_quantized) sorted by alphabetical term order (nest's determinism rule
+             already requires this), plus a small header of {k1,b,avgdl,doc_count}. This
+             converts BM25 scoring into a sparse dot product that nest's existing SIMD
+             dispatcher can run straight off mmap, exactly mirroring the dense f32 cosine hot
+             path, so hybrid preset RRF fusion needs no separate scoring engine. Steal the
+             Tokenizer trait shape into nest-runtime so the word-segmented tokenizer becomes
+             swappable (addresses the known CJK/Thai gap) without an additive format change.
+             Borrow deunicode+unicode-segmentation+rust-stemmers+stop-words as the default
+             pipeline. Do NOT adopt hash-based token IDs: nest needs deterministic alphabetical
+             term ordering and reopenable citations, so keep an explicit sorted term dictionary
+             in-section (a sorted Vec<&str> with delta/front-coded prefix compression) to stay
+             collision-free and byte-reproducible.
+compression: Medium-high: storing BM25 as precomputed sparse weights lets the 0x08 section be zstd-compressed
+             (it is a non-embedding section, so nest's codec rules permit it) and the postings
+             quantized (f16 or int8 weights) and front-coded/delta-coded on term_id, shrinking
+             the lexical index dramatically versus a full inverted index with float positions.
+             The hash-id trick is a compression idea (drop the term dictionary entirely) but
+             conflicts with nest's determinism/citation guarantees, so nest should instead
+             front-code the term dictionary to recover most of that space without collisions.
+perf:        Pure-Rust, no_std-friendly enough to compile to WebAssembly (proven by bm25-demo). Sparse
+             representation keeps memory proportional to non-zero terms. Optional rayon
+             parallelism only for batch corpus fitting; query scoring is single-pass over
+             postings. No SIMD kernel of its own (nest would add SIMD via its existing
+             dispatcher). In-memory only, no on-disk serialization in the upstream crate, so
+             nest must design the on-disk 0x08 layout itself.
+license:     MIT

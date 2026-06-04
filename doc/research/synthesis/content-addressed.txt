@@ -1,0 +1,274 @@
+================================================================================================
+synthesis :: content-addressed
+content-addressed, reproducible, and distributed storage
+================================================================================================
+
+state of the art and concrete nest recommendations for this category.
+
+summary:     The content-addressed cluster (IPFS/Kubo, Nix/NAR, Maven reproducible-central) collectively
+             proves three things nest already half-implements and one thing it does not. First,
+             nest's existing primitives are validated prior-art: content_hash over decoded
+             canonical sections (crates/nest-format/src/reader/decode.rs:53-66) is already a
+             NAR-grade construction - length-prefixed, domain-separated by section name,
+             alphabetically ordered via CANONICAL_SECTIONS (layout/mod.rs:87). That is exactly
+             Nix's NarHash-vs-FileHash split (logical identity stable across codec; physical
+             checksum over stored bytes) and Kubo's "multihash indexes storage, encoding is a
+             wrapper" model. The nest://content_hash/chunk_id citation mirrors CIDv1 +
+             raw-leaves block addressing. So three extracts' headline recommendation ("adopt NAR
+             framing for content_hash") is ALREADY DONE; nest should claim the validation, not
+             redo the work. The genuinely new, high-value lever the whole cluster points at is
+             what nest does NOT do: deduplication before entropy coding. nest today chunks
+             upstream in Python (build_fn.rs receives pre-embedded chunks with explicit spans)
+             and zstd-compresses each section independently (writer/payload.rs:47 maybe_zstd)
+             with no shared dictionary and no cross-chunk or cross-file dedup. chunks_canonical
+             (sections/canonical.rs) stores every chunk's text verbatim before zstd sees it.
+             IPFS content-defined chunking (FastCDC/Gear rolling hash) + block-level dedup, and
+             Nix store-optimise hard-link dedup (25-35% on redundant corpora purely from
+             content-hash equality), are the single biggest untapped compression mechanism for
+             nest's boilerplate-heavy targets (PT-BR news templates, repeated JSON keys, legal
+             text, whole repos). The hard-won cross-cutting lesson is Nix's: dedup and CDC MUST
+             run on decompressed bytes, with compression applied per-chunk/per-block AFTERWARD -
+             getting this order wrong destroys the ratio. Maven contributes the
+             reproducibility-as-verifiable-artifact discipline: a tiny declarative recipe
+             (.buildspec) plus a per-output sorted SHA manifest (.buildinfo) whose equality IS
+             the proof, with length recorded for free fast-reject, turning nest's "same chunks +
+             same model => byte-identical" claim into something a third party re-derives offline
+             without byte-diffing 100MB of embeddings.
+
+state of the art
+------------------------------------------------------------------------------------------------
+State of the art across the cluster: (1) Content identity is decoupled from physical encoding
+via a canonical, metadata-stripped serialization hashed independently of its compressed form.
+Nix NAR (magic 'nix-archive-1', u64-LE length-prefixed strings zero-padded to 8 bytes, dir
+entries sorted by name, all metadata stripped except the executable bit) is the reference;
+narinfo carries both NarHash/NarSize (logical, uncompressed) and FileHash/FileSize (physical,
+compressed) so signatures over the uncompressed form survive recompression. (2) Content-defined
+chunking replaces fixed-offset splitting: a rolling hash (Rabin polynomial; Buzhash cyclic-poly,
+~3x faster; Gear/FastCDC single shift+add, ~1350 MB/s) sets a boundary when the low/high N
+fingerprint bits hit a target, so a local edit perturbs only one or two chunks and downstream
+boundaries (and their hashes) stay stable - yielding high cross-version dedup. FastCDC adds
+zero-padded mask widening, cut-point skipping below min-size, and normalized chunking for a
+tight size distribution. (3) Block/chunk dedup keyed by content hash collapses identical content
+to one stored object regardless of transport (Kubo blockstore raw-leaves where block multihash
+== plain content hash; Nix store-optimise hard-links identical NAR files into .links/<checksum>;
+nix-casync/Tvix CDC chunk-store + caibx index for sub-file dedup). (4) The order rule:
+compression sits OUTSIDE the chunking/dedup layer (CDC on decompressed bytes, compress per chunk
+afterward) or dedup collapses to near-zero. (5) Reproducibility is engineered and externally
+verifiable: pin the minimal input set, normalize ordering (sort entries) and strip incidental
+metadata/timestamps before hashing (killed ~92% of Maven nondeterminism), and prove it by
+equality of a per-output content manifest rather than a byte diff. nest already satisfies (1)
+for its six canonical sections and the citation layer, and partially (5) via reproducible(true)
++ REPRODUCIBLE_CREATED; it does NOT yet do (2), (3), or expose (5) as a verifiable manifest.
+
+top transferable innovations
+------------------------------------------------------------------------------------------------
+1. Cross-chunk + cross-file content-hash dedup BEFORE zstd (Nix store-optimise + Kubo
+   blockstore). Hash each canonical chunk (machinery already exists: chunk_id in chunk.rs is a
+   SHA-256 over canonical_text), store each unique chunk's bytes once in chunks_canonical, and
+   replace duplicates with a back-reference index. Free 25-35% on boilerplate-heavy corpora
+   purely from content-hash equality, compounding multiplicatively with the existing per-section
+   zstd. Highest value, lowest recall risk (text sections only, embeddings untouched).
+2. FastCDC/Gear content-defined chunking for large blob inputs and edit-local rechunking. A
+   small deterministic seeded rolling-hash kernel (left-shift+add, O(window) memory, ~1350 MB/s,
+   SIMD-friendly) added to the Python build pipeline so editing one paragraph re-emits only the
+   touched chunk(s); unchanged chunks keep byte-identical canonical_text + embeddings, making
+   real-time-edit diffs tiny and enabling cheap incremental/append builds for the
+   pdf/json/parquet/repo roadmap.
+3. The 'compress outside the chunking layer, CDC on decompressed bytes' invariant (Nix
+   nix-casync/Tvix lesson). A one-line design constraint that prevents the classic mistake of
+   compressing then chunking, which would silently destroy nest's dedup ratio. Cheap to honor,
+   expensive to discover late.
+4. NarHash/FileHash dual-identity as the formal license to aggressively re-encode. nest's
+   content_hash (decoded) vs per-section checksum (physical) IS this split and is already
+   correct; the innovation to claim is the GUARANTEE it unlocks: re-encode a .nest from
+   exact->tiny preset and prove identical content_hash, so the smallest preset provably carries
+   the same content as the exact one. A killer sovereign re-packaging property worth a test +
+   doc, not new code.
+5. Reproducibility manifest a la Maven .buildspec/.buildinfo: a minimal declarative build recipe
+   (model_hash, chunker_version, preset, section order) plus a flat sorted lowercase-hex
+   per-section manifest (section_id, decoded_length, content_checksum). decoded_length gives
+   free fast-reject before hashing; manifest equality proves two independent builds match
+   without byte-diffing embeddings. Turns nest's determinism claim into a third-party-verifiable
+   artifact, offline.
+6. Canonical/sorted ordering as a dual-purpose primitive: it is simultaneously the
+   reproducibility guarantee AND a zstd ratio win (sorting groups similar bytes). nest already
+   sorts bm25 terms and section IDs; the innovation is extending the discipline consciously to
+   every new section so ordering is never left to input order.
+7. Shorter copy-paste-safe citation tokens via a confusable-free base32 (Nix nix-base32 omits
+   e/o/u/t) over a truncated digest. Optional ergonomic upgrade to nest://content_hash/chunk_id
+   so citations are shorter and dirty-word/confusable-free, with the full SHA-256 still
+   available for verification.
+8. Block-level deduped citation resolution (Kubo): once chunks_canonical is deduped, a citation
+   can resolve to a single shared physical block, so identical boilerplate across many
+   chunks/files cites one stored region - content-addressing all the way down to the byte span.
+
+nest recommendations
+------------------------------------------------------------------------------------------------
+* Add a build-time content-hash dedup pass for chunks_canonical (and later
+  chunks_original_spans/blob sections): SHA-256 each chunk's canonical_text, keep a first-seen
+  table, store each unique text once, and emit a parallel u32 back-reference array (chunk index
+  -> unique-block index). Expose as a new additive encoding id in the reserved 4-255 range (e.g.
+  SECTION_ENCODING_DEDUP) or an internal payload variant of chunks_canonical, with zstd applied
+  to the deduped unique-block pool. content_hash stays computed over the DECODED (re-expanded)
+  bytes so it is unchanged and citations stay stable.
+    where:  crates/nest-format/src/encoding/ (new dedup.rs module, <=300 loc, typed thiserror) wired into
+            crates/nest-format/src/writer/payload.rs maybe_zstd path and
+            crates/nest-format/src/sections/canonical.rs encode/decode; decode re-expands before
+            crates/nest-format/src/reader/decode.rs content_hash sees it so the hash and
+            nest://content_hash/chunk_id are invariant.
+    impact: high
+    effort: medium
+    from:   https://github.com/NixOS/nix, https://github.com/NixOS/nixpkgs (Nix store / NAR model,
+            implemented in NixOS/nix), https://github.com/ipfs/kubo
+
+* Enforce and document the 'dedup/CDC on decompressed bytes, compress afterward' invariant
+  directly in code: the dedup pass operates on raw canonical bytes and ONLY then is the
+  unique-block pool zstd-encoded; add a comment + a writer test asserting that
+  compressing-then-deduping is never done. This is the Nix nix-casync/Tvix lesson encoded as a
+  guardrail so a future contributor cannot accidentally invert the order and silently kill the
+  ratio.
+    where:  crates/nest-format/src/writer/payload.rs (ordering in maybe_zstd / new dedup wrapper) and
+            crates/nest-format/src/writer/tests.rs (a regression test that a corpus of repeated
+            chunks shrinks under dedup+zstd more than zstd alone).
+    impact: high
+    effort: low
+    from:   https://github.com/NixOS/nix
+
+* Add a FastCDC/Gear content-defined chunker as a deterministic seeded kernel for large blob
+  inputs, used by the Python build pipeline as an alternative to upstream token/sentence
+  segmentation. Single left-shift+add rolling hash, seeded mask (seed in
+  manifest/chunker_version for deterministic-build compliance), min/avg/max size params,
+  cut-point skipping. Edit-local boundaries mean a one-paragraph edit re-emits only touched
+  chunks, so unchanged chunks keep byte-identical canonical_text + embeddings.
+    where:  new encoding-neutral module crates/nest-format/src/chunking.rs (rolling hash + seeded mask,
+            <=300 loc, repr(C) little-endian if any state serialized, typed errors) exposed to
+            crates/nest-python/src/ so the Python builder can call it before embedding;
+            chunker_version string already threads through chunk.rs chunk_id() so determinism is
+            captured.
+    impact: medium
+    effort: high
+    from:   https://github.com/ipfs/kubo, https://github.com/NixOS/nix
+
+* Emit a reproducibility manifest as an additive section (id 0x09+) or sidecar: a flat, sorted,
+  lowercase-hex list of (section_id, decoded_length, content_checksum) plus a minimal recipe
+  (model_hash, chunker_version, preset, section order). decoded_length enables O(1) fast-reject
+  before any hash. Two independently-built .nest files compare by manifest equality without
+  byte-diffing embeddings.
+    where:  crates/nest-format/src/manifest/ (recipe fields) + crates/nest-format/src/reader/decode.rs
+            (already computes per-section decoded bytes; expose a manifest builder) consumed by
+            a new crates/nest-cli/src/cmd/verify_reproducible.rs sibling to validate.rs (9th
+            subcommand, offline, additive).
+    impact: medium
+    effort: medium
+    from:   https://github.com/jvm-repo-rebuild/reproducible-central
+
+* Document and test the NarHash/FileHash re-encoding guarantee as a first-class sovereign
+  feature: re-encode an existing .nest from exact (raw/f32) to compressed (zstd/f16 for text
+  only) and assert content_hash_hex() is byte-identical for non-quantized sections. This is the
+  Nix recompression-invariance property; nest's writer/tests.rs:105 already tests zstd vs raw
+  equality, so extend it to a full preset re-pack round-trip and surface it in docs as 'ship the
+  smallest preset, prove same content'.
+    where:  crates/nest-format/src/writer/tests.rs (extend zstd_encoding_preserves_content_hash to a preset
+            re-pack) and a doc note in the frozen-format spec; no runtime code change, pure
+            validation + claim.
+    impact: medium
+    effort: low
+    from:   https://github.com/NixOS/nix, https://github.com/NixOS/nixpkgs (Nix store / NAR model,
+            implemented in NixOS/nix)
+
+* Adopt a confusable-free base32 (nix-base32 alphabet, omits e/o/u/t) as an OPTIONAL shorter
+  citation token rendering of content_hash, keeping the full sha256:<hex> as the verifiable
+  canonical form. Shorter, copy-paste-safe nest:// URIs for humans without changing the on-disk
+  hash.
+    where:  crates/nest-cli/src/cmd/cite.rs (render a short token alongside content_hash) + a small helper
+            in crates/nest-format/src/ (encode only, decode still accepts full hex). Purely
+            additive, no format change.
+    impact: low
+    effort: low
+    from:   https://github.com/NixOS/nix, https://github.com/NixOS/nixpkgs (Nix store / NAR model,
+            implemented in NixOS/nix)
+
+* When dedup lands, make citation resolution block-aware: a nest:// citation whose chunk text is
+  a duplicate resolves to the single shared physical block, and cite.rs reports the dedup-block
+  index. This is Kubo raw-leaves block addressing applied to nest's chunk layer and proves
+  content-addressing all the way to the byte span.
+    where:  crates/nest-cli/src/cmd/cite.rs (after dedup decode, map chunk index -> unique-block index and
+            surface it) building on the dedup back-reference array from recommendation 1.
+    impact: low
+    effort: low
+    from:   https://github.com/ipfs/kubo
+
+compression wins
+------------------------------------------------------------------------------------------------
+  - Cross-chunk dedup of chunks_canonical before zstd: store each unique canonical_text once + a
+    u32 back-reference array. On boilerplate-heavy corpora (PT-BR fake-news templates, repeated
+    JSON keys/values, legal forms) this removes redundancy that per-section zstd cannot fully
+    recover across distant chunks, compounding with the existing zstd/f16/int8 stack. Nix
+    store-optimise shows 25-35% on redundant corpora from content-hash equality ALONE, before
+    any entropy coder.
+  - Cross-FILE dedup across a corpus of .nest files via content_hash equality: identical
+    chunks/sections shared across many files store once and reference by content_hash (Maven
+    'same coordinates => same bytes' becomes 'same chunk => stored once'). Enables a future
+    distributed/pack format that is far smaller than the sum of independent files.
+  - FastCDC edit-local rechunking turns O(file) re-encodes into O(changed-chunks): a
+    one-paragraph edit re-emits one or two chunks, so an incremental/append build writes a tiny
+    diff instead of a whole new file - the on-disk delta between two corpus versions becomes
+    proportional to the edit, not the corpus.
+  - Honoring 'CDC/dedup on decompressed bytes, compress afterward' protects the entire dedup
+    ratio: shared substrings are collapsed BEFORE zstd's window, so zstd then only has to
+    compress the unique residue. Inverting the order (the classic mistake) would leave
+    duplicates hidden inside compressed blocks and recover almost nothing.
+  - Canonical/sorted entry ordering is a free zstd ratio win on every non-embedding section
+    (grouping similar bytes shortens match distances), and it is the same operation that
+    guarantees reproducibility - one discipline, two payoffs. nest already does this for bm25
+    terms and section IDs; extending it to all sections is pure upside.
+  - A zstd shared dictionary trained over the unique-block pool (natural follow-on once dedup
+    exists) further shrinks many small similar chunks that individually defeat per-chunk zstd
+    framing overhead - applies only to non-embedding sections, zero recall cost.
+  - All wins are confined to non-embedding sections (canonical text, spans, future blob
+    payloads); embeddings remain raw/quantized and scored straight off mmap, so every byte saved
+    is recall-free and the SIMD hot path is untouched.
+
+watch-outs (conflict with nest constraints)
+------------------------------------------------------------------------------------------------
+  - DO NOT compress before dedup/CDC. The Nix nix-casync/Tvix lesson is load-bearing: CDC and
+    content-hash dedup must run on decompressed bytes with compression applied per unique-block
+    afterward, or dedup collapses to near-zero. Encode this as a code-level invariant +
+    regression test, not just a comment.
+  - NEVER dedup or CDC the embeddings section. Embeddings are scored directly from mmap on the
+    SIMD hot path (AVX2/NEON dot products) and are intentionally never compressed; any
+    indirection (back-reference table, variable-size blocks) would break the contiguous repr(C)
+    little-endian layout and the alignment the SIMD dispatcher relies on. Dedup is
+    text/span/blob-only.
+  - Dedup must keep content_hash invariant. content_hash (decode.rs:53-66) is computed over
+    DECODED canonical bytes; the dedup decoder MUST re-expand to the identical logical byte
+    stream before the hash sees it, or every citation nest://content_hash/chunk_id breaks. This
+    is the whole point of the NarHash/FileHash split - keep dedup strictly a physical-encoding
+    concern.
+  - Stay additive within v1. A dedup encoding id belongs in the reserved 4-255 range and a
+    chunk-store/manifest section in 0x09+; only a change to the MEANING of an existing field
+    (e.g. redefining content_hash preimage) justifies bumping NEST_FORMAT_VERSION to a true v2.
+    Do not let dedup leak into a format break.
+  - Determinism is non-negotiable. CDC rolling-hash seed/mask and dedup first-seen ordering must
+    be fully seeded and deterministic (seed captured via chunker_version/manifest) so 'same
+    chunks + same model fingerprint => byte-identical file' still holds. A HashMap
+    iteration-order leak or unseeded mask would silently break reproducibility.
+  - Single-file + offline must survive. Kubo's blockstore and Nix's binary cache are multi-file,
+    networked stores; nest must keep dedup INSIDE one .nest container and as a one-shot
+    build-time pass - no socket, no external block store, no separate index file at runtime.
+    Cross-file dedup/pack is a future opt-in format, never the default sovereign single-file
+    path.
+  - Respect the small-core budget: <=300 lines/file (333 hard cap), single-responsibility, never
+    panic in library code (typed thiserror). A CDC kernel + dedup module are each one file;
+    resist pulling in heavy crates (avoid vendoring Kubo Go or Nix LGPL code - reimplement the
+    algorithms clean-room from spec; standalone Rust gearhash/fastcdc are MIT/Apache if a
+    dependency is justified, but a hand-rolled <=300-loc kernel fits nest's by-hand ethos
+    better).
+  - Do not over-build the reproducibility manifest. Maven's value is the SMALL recipe + sorted
+    hash list, not a verification farm; nest's bounded single-file scope means a manifest
+    section + one verify-reproducible subcommand suffices. Avoid Docker/container pinning and
+    diffoscope-style deep diff machinery - out of scope for a solo, minimal-budget, offline
+    tool.
+  - Truncated/base32 citation tokens are ergonomic ONLY; never let a truncated digest become the
+    verification surface. Keep full sha256:<hex> as the canonical, collision-safe identity and
+    treat short base32 as a display convenience that still resolves to the full hash.

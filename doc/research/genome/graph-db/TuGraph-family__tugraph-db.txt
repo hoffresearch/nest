@@ -1,0 +1,74 @@
+================================================================================================
+TuGraph-family/tugraph-db
+category: graph-db   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A C++ high-performance property-graph database (Ant Group, LDBC SNB #1) that builds a graph
+             storage layer on top of LMDB's memory-mapped B+tree, packing CSR-like adjacency
+             topology and compact-encoded properties into single key-value pairs with an
+             adaptive mixed/split mapping scheme.
+innovation:  Adaptive mapping: a vertex's entire neighborhood (vertex props + out-edges + in-edges + edge
+             props) is packed CSR-style into ONE key-value blob when small (mixed mapping), but
+             auto-splits into separate VERTEX/OUTEDGE/INEDGE key-value records once the blob
+             exceeds a size threshold (merge under ~2KB, split over ~4KB). The split records all
+             share the same VertexUid key prefix, so the KV store keeps them physically adjacent
+             and a single prefix scan plus two binary searches still serves sequential traversal
+             at full speed, while bounding the per-write repack cost. The threshold is
+             deliberately tuned to fit hot blobs in L1 cache and to amortize SSD ~150us page
+             latency.
+techniques:
+  - Adaptive mixed/split mapping: single packed KV blob below ~2KB, auto-split into
+    VERTEX/OUTEDGE/INEDGE records above ~4KB threshold, sharing a common VertexUid key prefix
+    for locality
+  - CSR-like topology packing: VertexUid header followed by inline sorted OutEdgeUid[] and
+    InEdgeUid[] arrays in one contiguous value, giving pure-sequential adjacency scans
+  - Composite EdgeUid key = (SrcVid, LabelId, TemporalId, DstVid, Eid) ordered so same-label
+    edges cluster; enables vertex-centric range scans by label and time window
+  - Length-based varint compression of EdgeUid: LabelId/DstVid/Eid are small auto-incrementing
+    integers from 0, stored in minimal byte length; optional TemporalId omitted entirely when
+    absent
+  - Compact property packing: [Nullable bitmap | FixedData | VariableOffset table |
+    VariableData] so fixed fields are O(1) indexed and variable fields located via offset table,
+    zero pointer overhead
+  - External-sort bulk import: assign monotonically increasing VertexUid, hold only the vertex
+    primary-key->VertexUid map in memory, sort edges externally (sorted insert ~10x faster than
+    random)
+  - Threshold sizing tuned to hardware: value size bounded to fit L1 cache and amortize SSD
+    page-fault latency
+  - Optimistic query-level concurrent writer plus WAL durability layered over LMDB's
+    single-writer B+tree
+nest steals: Two distinct steals. (1) For a future graph_index section (reserved 0x09+, additive within v1):
+             adopt the CSR-like adjacency layout verbatim in nest-format -- one contiguous,
+             mmap-friendly array of sorted neighbor ids per source node with an offset table,
+             which is exactly the SIMD-scannable, zero-pointer, deterministic shape nest already
+             uses for embeddings. nest-runtime would traverse it straight off mmap with no
+             deserialization, matching the existing hot-path discipline. (2) The bigger,
+             immediately-relevant steal for compression is the length-based varint encoding of
+             small monotonic integers: nest's chunk_ids section and any id/offset arrays
+             (chunks_original_spans offsets, future graph neighbor ids) are dense ascending
+             integers ideal for delta+varint or frame-of-reference encoding. Add this as a new
+             encoding id (4-255 reserved space) in nest-format/encoding alongside
+             raw/zstd/float16/int8, applied to NON-embedding id/offset sections only --
+             preserving the rule that embeddings stay raw for mmap dot-products. The adaptive
+             mixed/split threshold idea also maps onto nest's section sizing: keep tiny sections
+             inline, split only when a size threshold is crossed, tuned to mmap page (4KB)
+             boundaries.
+compression: Directly relevant on the id/offset axis, not the embedding axis. The length-based varint trick
+             (exploiting that ids are small auto-incrementing integers from 0) plus delta
+             encoding can shrink nest's chunk_ids and span-offset arrays substantially with zero
+             accuracy loss and full determinism -- a cheap, lossless win that compounds the tiny
+             preset's 0.283 ratio. The CSR layout is a compactness win specifically for the
+             eventual graph-search capability in nest's north star (graph search over whole
+             repos/databases), giving the smallest possible on-disk adjacency representation.
+             Neither touches the embedding hot path, so both respect the
+             never-compress-embeddings rule.
+perf:        LMDB is copy-on-write mmap'd B+tree: zero-copy reads straight from the page cache, exactly
+             nest's mmap model. TuGraph targets a 20:1 read:write ratio and chooses B+tree over
+             LSM precisely to avoid LSM background-merge latency jitter -- validation for nest's
+             static single-file read-mostly stance. Threshold tuned so hot blobs land in L1 and
+             writes amortize ~150us SSD page latency. Sorted bulk import is ~10x faster than
+             random insert. Single-writer LMDB is the bottleneck they patched with optimistic
+             concurrency plus WAL; nest sidesteps this entirely by being build-once/serve-many.
+license:     Apache-2.0

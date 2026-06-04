@@ -1,0 +1,70 @@
+================================================================================================
+github.com/google/highway
+category: simd-lowlevel   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A C++ portable-SIMD library exposing a single width-agnostic ops API
+             (Add/Mul/MulAdd/Load/Compress/Gather/Mask) that compiles each translation unit once
+             per instruction set (SSE4/AVX2/AVX-512/NEON/SVE/RVV/WASM) and selects the best
+             kernel at runtime via a function-pointer table, plus contrib kernels for vectorized
+             quicksort (vqsort), math, and reductions.
+innovation:  The "compile every kernel once per SIMD target, then pick the best at runtime through a cached
+             function-pointer table" pattern (foreach_target.h + HWY_DYNAMIC_DISPATCH +
+             HWY_EXPORT): one width-agnostic source body, N object-code variants, one
+             CPU-feature detection paid once, then an indirect call per hot-path entry instead
+             of a CPUID/branch per element. This is exactly the dispatch discipline nest's
+             hot-path dot-product loop needs to scale beyond its current hand-written
+             avx2/neon/scalar trio without bloating the small rust core.
+techniques:
+  - foreach_target.h: include a -inl.h kernel body once per target in HWY_TARGETS via controlled
+    re-inclusion + per-target namespace (hwy::HWY_NAMESPACE)
+  - HWY_DYNAMIC_DISPATCH + HWY_EXPORT: build a per-function pointer table, resolve once with
+    GetChosenTarget().Update(SupportedTargets()), then indirect-call (mirrors nest's OnceLock
+    function-pointer cache, but table-per-function not enum-per-call)
+  - width-agnostic tag types (ScalableTag/CappedTag/FixedTag) so one loop body targets
+    128/256/512-bit and scalable SVE/RVV with automatic remainder handling
+  - Compress/CompressStore: stream-compaction primitive (store only mask=yes lanes
+    consecutively) - the engine of vqsort's branchless 3-region partition
+  - AVX2 compress emulation via table-driven permute (precomputed shuffle-index LUT indexed by
+    an 8-bit mask) when no native VPCOMPRESS exists
+  - vqsort: branchless SIMD partition + recursive sorting-network base case (<=256 elts) +
+    384-byte robust pivot sampling with heapsort fallback for O(n log n) worst case
+  - MaskedLoad/BlendedStore/FirstN for tail/remainder handling without scalar fallthrough
+  - SoA + aligned-allocation discipline as the precondition for SIMD payoff (>=100KiB arrays
+    before wide vectors pay off)
+nest steals: Two concrete steals into nest-runtime/src/simd/. (1) Dispatch refactor: mod.rs currently does
+             `match detect_backend()` (an enum compare) inside every dot_* wrapper, and each new
+             dtype x target adds a match arm. Adopt Highway's per-function pointer-table idea:
+             store `fn(&[f32],&[u8])->f32` resolved once in a OnceLock, so adding AVX-512 or SVE
+             later is a new table entry, not a new hot-path branch - keeps files under the
+             300-line cap while widening target coverage. Also add an F16C-detected avx2 f16
+             path (today dot_f32_f16_bytes falls back to scalar on x86_64, a perf gap flagged in
+             the file's own comment). (2) Compress-store primitive: port Highway's table-driven
+             Compress (AVX2 permute-LUT / NEON / scalar) into a new simd/compress.rs. This
+             unlocks the highest-leverage item on nest's roadmap: a deterministic SIMD
+             candidate-compaction filter in ann/search.rs (compact surviving HNSW candidates
+             branchlessly before the mandatory exact-cosine rerank), and it is the exact
+             primitive needed if nest adds a vectorized RLE/sparse repack codec for
+             non-embedding sections in nest-format/encoding. Keep it offline/deterministic: pure
+             compute, fixed LUTs => byte-identical results, fits the additive-format and
+             never-panic constraints.
+compression: Indirect but real. Highway is not a compressor; its payoff for nest's
+             compress-more-than-everyone north star is the Compress/CompressStore
+             stream-compaction primitive, the SIMD engine behind branchless partition,
+             RLE/sparse repack, and mask-driven candidate pruning. Direct relevance: int8
+             quantization (tiny preset, 0.283 ratio) dot products and ANN rerank throughput; a
+             faster, wider, table-dispatched kernel lets nest afford finer quantization
+             (per-block int4/int8 with SIMD dequant) at serve time without blowing the mandatory
+             exact-cosine rerank budget.
+perf:        vqsort beats std::sort by 10-20x on AVX2/AVX-512 and ips4o by geomean 2.89x single-core / 1.59x
+             parallel; robust pivot sampling adds <2% CPU. vqsort uses ~1.2KiB stack + a 3-word
+             TLS RNG cache, no heap. Guidance: wide-vector overhead only pays above ~100KiB
+             arrays, and SoA + aligned loads are prerequisites - relevant because nest embedding
+             rows are mmap'd contiguous f32/f16/i8 (already SoA) and dims are typically
+             384-1536, well above SIMD break-even. Highway f16 paths assume F16C/NEON-fp16;
+             nest's avx2 f16 currently degrades to scalar.
+license:     Dual-licensed Apache-2.0 / BSD-3-Clause (originally Apache-2.0 only). C++ library, so nest
+             reimplements ideas in rust rather than vendoring; permissive for clean-room
+             reimplementation either way.

@@ -1,0 +1,331 @@
+================================================================================================
+synthesis :: embedded-db
+embedded / datalog / temporal / kv / column storage engines (edit + real-time)
+================================================================================================
+
+state of the art and concrete nest recommendations for this category.
+
+summary:     This cohort (datahike, datascript, xtdb, buntdb, tigerbeetle, rocksdb, duckdb, upscaledb)
+             converges on a handful of patterns that map almost 1:1 onto nest's three biggest
+             open gaps: real-time edit on a frozen single-file container, deeper compression of
+             non-embedding sections, and large-corpus serving without paging cold data. The two
+             highest-leverage steals are RocksDB's cross-block trained ZSTD dictionary (the
+             single biggest size lever for nest's many-small-similar-chunk PT-BR corpus, where
+             per-section zstd today cannot see cross-chunk redundancy) and the upscaledb/Lemire
+             delta + SIMD bit-packing family (StreamVByte / SIMD-BP128) for the integer sections
+             chunk_ids and chunks_original_spans, which are exactly the small/monotone arrays
+             zstd handles poorly and which nest can search/materialize directly off mmap. DuckDB
+             contributes the architectural pattern that should govern all of this: a
+             deterministic Analyze-and-pick codec selection per section instead of fixed
+             per-preset encodings, plus FSST for random-access text compression that fits the
+             cite/materialize path better than zstd frames. For the edit pillar, BuntDB's
+             AOF+Shrink and datahike/datascript's content-addressed structural-sharing tree both
+             show the same answer: never mutate frozen v1 bytes; append a typed journal (new
+             reserved section 0x09+) overlaid in memory at open, with a deterministic `compact`
+             that re-derives a minimal maximally-compressed container (the exact moment to
+             re-run the trained dictionary and re-quantize). TigerBeetle's EWAH bitset and
+             out-of-band content-addressed checksums, plus XTDB's per-file zone-maps + recency
+             scalar, give the supporting machinery: compact scannable tombstone/liveness sets, a
+             Merkle-root content_hash enabling single-chunk citation verification, and
+             block-level skip-indexes so a large .nest stays fast. Every recommendation below
+             respects nest's hard constraints: additive-only within v1 (reserved encoding ids
+             4-255, section ids 0x09+), embeddings stay raw/f16/int8 scored straight from mmap
+             (never zstd), deterministic/seeded, offline by construction, typed thiserror (never
+             panic), and <=300 lines per source file.
+
+state of the art
+------------------------------------------------------------------------------------------------
+The state of the art for embedded edit+realtime engines is a layered stack: (1) an
+append-only/immutable substrate where edits never rewrite existing bytes -- either an AOF
+command log replayed on open (buntdb), an LSM of immutable files (rocksdb, xtdb), or a
+copy-on-write content-addressed tree where an edit touches ~log_b(N) nodes and unchanged nodes
+are shared by hash (datahike/datascript). (2) Content-addressing as integrity AND dedup:
+node/block id = hash(contents), so identical sub-structures across versions/corpora collapse to
+one physical block (datahike SHA-512, tigerbeetle 128-bit AEGIS with the checksum stored
+out-of-band in the parent reference, defeating torn/misdirected writes). (3) Lightweight,
+scannable, per-segment-adaptive compression that decodes faster than memcpy and is operated on
+without full decompression: DuckDB's cascade (RLE/FOR/delta/dictionary/FSST/ALP) chosen by a
+sampling Analyze phase; RocksDB's cross-block trained ZSTD dictionary + Ribbon filters (~7 vs
+~10 bits/key) + delta/restart key encoding; upscaledb's SIMD-BP128/StreamVByte delta-bitpacking
+at 4-8 billion ints/sec; tigerbeetle's EWAH run-length bitmaps operated on in compressed form.
+(4) Cheap per-block summary statistics for skip/prune: zone-maps (min/max), Bloom/Ribbon
+membership filters, and a collapsed monotone "recency" scalar so temporal/current-state queries
+elide whole cold files before touching payload (xtdb). (5) Temporal model as append-only facts
+with an assertion/retraction flag and tx ids, so time-travel (as-of/history) is a filter, never
+a mutation (datahike datoms in EAVT/AEVT/AVET covering indexes; xtdb bitemporal recency). The
+unifying lesson for nest: compression, integrity, dedup, and edit are not separate subsystems --
+content-addressed immutable blocks + adaptive lightweight codecs + per-block skip metadata
+deliver all four at once, and a periodic deterministic compaction is where extreme compression
+re-enters after cheap appends.
+
+top transferable innovations
+------------------------------------------------------------------------------------------------
+1. Cross-block trained ZSTD dictionary (rocksdb): train ONE ZDICT dictionary by sampling across
+   all text chunks, compress each section against it. Captures cross-chunk redundancy (repeated
+   names/boilerplate in PT-BR fake-news articles) that nest's current per-section
+   zstd::encode_all at level 19 cannot see. Deterministic given pinned zstd + sorted input.
+   Highest single ROI on 'compress more than everyone', zero recall cost (embeddings excluded).
+2. Delta + SIMD bit-packing for integer sections (upscaledb / lemire simdcomp+streamvbyte,
+   Apache-2.0/patent-free): SIMD-BP128 or StreamVByte over chunk_ids and chunks_original_spans
+   reaches 1-4 bits/int on monotone/near-monotone arrays vs zstd's byte-granular framing
+   overhead, AND decodes faster than memcpy with operate-in-register random access for
+   citation/materialize -- a rare codec that improves size and speed simultaneously.
+3. DuckDB per-section Analyze-and-pick codec selection: a deterministic sampling estimate
+   chooses the smallest codec per section instead of fixed per-preset encodings. Turns nest's
+   presets from hardcoded choices into an automatic 'pick smallest' machine while preserving
+   byte-identical determinism (seeded/ordered sampling).
+4. FSST random-access text compression (duckdb, MIT): 255-entry static symbol table, ~2-3x on
+   text like zstd but decodes a single string without inflating a whole frame -- a strictly
+   better fit than zstd for nest's nest://content_hash/chunk_id cite/materialize path.
+5. AOF + Shrink edit model (buntdb, MIT): append typed edit records to a journal overlaid in
+   memory at open; never touch frozen v1 bytes; a deterministic compact() re-derives a minimal
+   container. The cleanest way to add the real-time-edit pillar while preserving
+   single-file/deterministic guarantees, and compact is exactly where re-compression (trained
+   dict, re-quantize, drop dead chunks, rebuild to tiny preset) happens.
+6. Per-block content-addressed structural sharing (datahike/datascript, EPL -- learn not
+   vendor): block id = hash(contents) so duplicate chunks/embeddings/index-nodes across versions
+   or similar corpora dedup to one physical block; an edit rewrites only ~3 dirty nodes.
+   Dedup-as-compression for multi-version/multi-corpus .nest files.
+7. EWAH run-length bitmap codec (tigerbeetle, Apache-2.0): in-place-scannable compression of
+   sparse boolean id-sets with a hard 'never >0.1% larger than raw' guarantee -- ideal for
+   nest's coming tombstone/liveness/doc-presence sets, scannable off mmap without decompression.
+8. Zone-map + Bloom/Ribbon skip metadata per block (xtdb, rocksdb): cheap per-block min/max +
+   membership filter lets search.rs and bm25 skip blocks that cannot beat the current top-k
+   cosine bound or contain a query term, cutting SIMD dot products and mmap page faults so a
+   large single .nest stays fast. Exact rerank keeps correctness regardless of false positives.
+9. Out-of-band content-addressed checksums + Merkle-root content_hash (tigerbeetle, datahike):
+   store a block's checksum in its parent reference; make content_hash a Merkle root over
+   per-section/per-block hashes so a citation can verify a single chunk against the root without
+   rehashing the whole file (partial verification).
+10. Recency-scalar / append-only fact log for temporal (xtdb, datahike): collapse (valid_from,
+   ingested_at) into one monotone u64 'recency' kept sorted, and model edits/retractions as
+   append-only [chunk_id, op, tx] facts so 'serve current state' and 'as-of T' become a
+   deterministic filter over tx ids -- the temporal pillar with no mutation of frozen sections.
+
+nest recommendations
+------------------------------------------------------------------------------------------------
+* Trained ZSTD dictionary codec for text sections. Add a new RESERVED encoding id (e.g.
+  SECTION_ENCODING_ZSTD_DICT=4) in layout/mod.rs; in writer, train ONE ZDICT dictionary over
+  chunks_canonical + chunks_original_spans + provenance via the zstd crate's ZDICT bindings,
+  compress each against it, and persist the digested dictionary either as a new optional section
+  (0x09) or a manifest field. Reader gains a decode arm in encoding/mod.rs decode_payload that
+  loads the dict then decompresses. Embeddings untouched.
+    where:  crates/nest-format/src/encoding/ (new zstd_dict_codec.rs), layout/mod.rs (new encoding id +
+            reserved section), writer/encoding_choice.rs + writer/build.rs (train+emit),
+            reader/decode.rs (decode arm)
+    impact: Highest single compression lever. Cross-chunk redundancy in the PT-BR corpus (repeated
+            names/boilerplate) becomes bytes saved on every text section in
+            compressed/tiny/hybrid presets at zero recall cost. Old readers fail closed on the
+            unknown encoding id (additive-safe).
+    effort: medium
+    from:   https://github.com/facebook/rocksdb
+
+* Delta + SIMD bit-packing codec for integer sections. Add encoding id 5 (e.g.
+  SECTION_ENCODING_DELTA_BP) and a delta_bitpack.rs codec (blocks of 128, per-block bit-width
+  header) for chunk_ids and chunks_original_spans. chunk_ids are sha256: strings today -- pair
+  this with storing ids as raw u64 hashes (or delta-coded sorted ints) so they delta-code to
+  ~1-4 bits. Span (byte_start,byte_end) pairs are near-monotone and delta-code well. Decode
+  kernel slots into the existing SIMD dispatcher (avx2 pshufb / neon tbl / scalar) for
+  operate-in-register reconstruction during materialize().
+    where:  crates/nest-format/src/encoding/ (new delta_bitpack.rs), sections/chunk_ids.rs +
+            sections/spans.rs (encode/decode integration), crates/nest-runtime/src/simd/
+            (vectorized unpack path)
+    impact: Shrinks structural sections below zstd while decoding faster than memcpy; directly tightens the
+            tiny preset (today 0.283) and speeds citation/materialize. Improves size AND speed.
+    effort: high
+    from:   https://github.com/cruppstahl/upscaledb, https://github.com/facebook/rocksdb
+
+* Per-section Analyze-and-pick codec selection. Replace the fixed per-preset SectionEncoding
+  choice with a deterministic sampling Analyze pass: for each non-embedding section, cheaply
+  estimate compressed size under each candidate codec (raw / zstd / zstd+dict / delta-bitpack /
+  fsst) and emit the smallest. Seed/order the sampling so output stays byte-identical across
+  builds.
+    where:  crates/nest-format/src/writer/encoding_choice.rs (turn enums into an estimator), writer/build.rs
+            (selection loop)
+    impact: Converts presets from hardcoded codecs into an automatic 'pick smallest per section' machine --
+            the core 'compress more than everyone' machinery. Preserves determinism via ordered
+            sampling.
+    effort: medium
+    from:   https://github.com/duckdb/duckdb
+
+* FSST codec for random-access text. Add encoding id 6 (SECTION_ENCODING_FSST) with a 255-entry
+  symbol table for chunks_canonical, giving ~2-3x like zstd but per-string decode straight off
+  mmap so materialize/cite resolves one chunk without inflating a whole zstd frame.
+    where:  crates/nest-format/src/encoding/ (new fsst.rs), sections/canonical.rs (decode integration),
+            crates/nest-runtime materialize path
+    impact: Better fit than zstd for the nest://content_hash/chunk_id byte-span reopen path; competitive
+            ratio with random access. Complements (not replaces) the trained dict where
+            whole-section scan dominates.
+    effort: high
+    from:   https://github.com/duckdb/duckdb
+
+* Append-only edit journal + deterministic compact. New nest-runtime journal.rs (<300 loc,
+  little-endian repr(C), typed thiserror) holding
+  add_chunk{content_hash,chunk_id,canonical_bytes,embedding} / del_chunk{chunk_id} records
+  appended after the frozen v1 body or as a sidecar; reader overlays journal deltas in memory at
+  open (base served from mmap). Per-Tx rollbackItems map for transactional abort. New nest-cli
+  `compact` subcommand rewrites base+journal into a fresh deterministic .nest holding only live
+  chunks, recomputing all four hashes and re-running the trained dict + re-quantization + index
+  rebuild to the tiny preset.
+    where:  crates/nest-runtime/src/journal.rs (new), reader overlay in nest-format/src/reader/,
+            crates/nest-cli/src/cmd/ (new compact.rs)
+    impact: Unlocks the real-time-edit north-star pillar without bumping v2 or mutating frozen sections;
+            compact is where extreme re-compression re-enters after cheap appends. Same live set
+            => byte-identical output (determinism law holds).
+    effort: high
+    from:   https://github.com/tidwall/buntdb, https://github.com/replikativ/datahike,
+            https://github.com/tonsky/datascript
+
+* EWAH liveness/tombstone bitset codec. Add an EWAH word-aligned-hybrid bitset as encoding id 7
+  (or an internal representation) for a deletion/tombstone bitmap, an hnsw live-node mask, and
+  bm25 doc-presence sets. Operated on in compressed form off mmap; deterministic by ascending id
+  order; <=300-line single-responsibility module.
+    where:  crates/nest-format/src/encoding/ (new ewah.rs), used by the edit-log section and
+            crates/nest-runtime/src/ann + bm25 liveness masks
+    impact: Near-free, in-place-scannable compression of the sparse boolean id-sets edit/tombstones need,
+            with a hard 'never materially larger than raw' guarantee. Enables soft-delete before
+            the next compaction.
+    effort: medium
+    from:   https://github.com/tigerbeetle/tigerbeetle
+
+* Per-block zone-map + Ribbon/Bloom skip section. New optional section_zonemaps (0x09):
+  per-block embedding coarse centroid or per-dim min/max, plus a deterministic Ribbon filter
+  (~30% smaller than Bloom at equal FP, clean-room from the Dietzfelbinger-Walzer paper) over
+  bm25 terms / provenance source-ids. search.rs and bm25 skip blocks whose summary cannot beat
+  the current top-k cosine bound or whose filter cannot contain a query term, before issuing
+  SIMD dot products. Exact cosine rerank stays ground truth so false positives never cause wrong
+  answers.
+    where:  crates/nest-format/src/manifest + sections (new section_zonemaps),
+            crates/nest-runtime/src/search.rs (block-skip in score_all),
+            crates/nest-runtime/src/bm25/
+    impact: Lets one .nest hold far more data while staying fast -- cold blocks never paged or scored. The
+            scaling axis of 'compress AND serve whole databases'. Ribbon also shrinks the
+            membership filter itself.
+    effort: high
+    from:   https://github.com/xtdb/xtdb, https://github.com/facebook/rocksdb
+
+* Merkle-root content_hash for partial verification. Restructure hashing so content_hash is a
+  Merkle root over per-section (and eventually per-block) content_hashes, and store each
+  section's checksum in the manifest/parent reference (tigerbeetle out-of-band rule). A citation
+  nest://content_hash/chunk_id can then verify a single chunk against the root without rehashing
+  the whole file.
+    where:  crates/nest-format/src/writer/build.rs (footer_hash/content_hash computation),
+            layout/section_entry.rs + manifest (checksum placement), reader/validate.rs
+    impact: Enables single-chunk integrity verification (cheap citation trust) and is the precondition for
+            per-block content-addressed structural sharing/dedup in a future edit region.
+            Reinforces reproducible-build story.
+    effort: medium
+    from:   https://github.com/tigerbeetle/tigerbeetle, https://github.com/replikativ/datahike
+
+* Recency-scalar temporal index for as-of queries. Store each chunk version's (valid_from,
+  ingested_at) collapsed into one monotone u64 'recency' in the edit-log/journal section, kept
+  sorted; model retractions as append-only [chunk_id, op, tx] facts. 'Serve current state' and
+  'as-of T' become a deterministic filter over tx ids; a survivor/historical split keeps hot
+  current-state scans off cold history.
+    where:  crates/nest-runtime/src/journal.rs (recency + fact tuples), search.rs (as-of filter before
+            scoring)
+    impact: Adds the temporal/time-travel pillar deterministically without mutating frozen sections;
+            historical versions compact into denser blocks that the trained dict compresses
+            well.
+    effort: high
+    from:   https://github.com/xtdb/xtdb, https://github.com/replikativ/datahike
+
+* ALP + FastLanes-style transposed bitpacking as the principled embedding quantization successor
+  and SIMD-path unifier. Evaluate ALP (lossless float) and the 04261537 transposed bitpacking
+  layout so one scalar decode kernel auto-vectorizes across avx2/neon/scalar -- potentially
+  collapsing nest's three SIMD dot paths into one portable kernel while shrinking embeddings
+  better than naive f16/int8 without recall loss. Gate strictly on keeping cheap random decode
+  for the mmap hot path.
+    where:  crates/nest-format/src/encoding/ (new alp.rs, embedding-only), crates/nest-runtime/src/simd/
+            (unified kernel evaluation)
+    impact: Could improve embedding size at zero recall cost and reduce SIMD-path maintenance surface.
+            Higher risk: must not break direct-from-mmap f32 scoring.
+    effort: high
+    from:   https://github.com/duckdb/duckdb
+
+compression wins
+------------------------------------------------------------------------------------------------
+  - Trained cross-chunk ZSTD dictionary on chunks_canonical/spans/provenance: captures repeated
+    names/boilerplate across PT-BR articles that per-section level-19 zstd cannot see today.
+    Biggest single lever; improves every zstd-using preset (compressed/tiny/hybrid) at zero
+    recall cost since embeddings are excluded.
+  - Delta + SIMD bit-packing (SIMD-BP128/StreamVByte) on chunk_ids and chunks_original_spans:
+    1-4 bits/integer vs zstd's byte-granular framing overhead on short monotone int arrays;
+    directly shrinks the tiny preset's structural overhead while decoding faster than memcpy.
+  - FSST on canonical text: ~2-3x ratio with per-string random-access decode -- compresses the
+    cite/materialize path's working bytes without forcing whole-frame inflation, a better
+    space/latency tradeoff than zstd frames for citation reopen.
+  - EWAH run-length bitmaps for tombstone/liveness/doc-presence sets: near-free compression of
+    sparse boolean id-sets with a hard never->0.1%-larger guarantee, scannable in compressed
+    form off mmap.
+  - Ribbon filters instead of Bloom in the bm25/zonemap region: ~7 vs ~10 bits/key at equal
+    false-positive rate -- ~30% smaller membership index, compact probabilistic substitute for
+    an exact term dictionary.
+  - Per-block content-addressed structural sharing / dedup: duplicate chunks, embeddings, and
+    index nodes across versions or similar corpora collapse to one physical block, so a
+    multi-version or multi-corpus .nest pays once -- dedup-as-compression for whole evolving
+    repos/databases.
+  - Per-section Analyze-and-pick codec selection: always emits the smallest available codec per
+    section (raw/zstd/zstd+dict/delta-bitpack/fsst), squeezing every section to its best
+    lightweight scheme instead of a fixed per-preset choice.
+  - Compaction-time re-compression cycle: cheap appends absorb edits, then a deterministic
+    compact re-runs the trained dict, re-quantizes embeddings (int8/f16), drops dead chunks, and
+    rebuilds indexes to the smallest preset -- so edited corpora periodically re-derive a
+    minimal maximally-compressed container instead of bloating.
+  - ALP lossless float compression for embeddings (evaluate carefully): potential shrink below
+    naive f16/int8 with no recall loss, only if random decode stays cheap enough for the mmap
+    SIMD hot path.
+  - LSM-concat recency compaction for history: store full edit history as one append-only sorted
+    run that compacts/dedups instead of N snapshots, so old versions migrate to denser deeper
+    blocks that the trained dict compresses well -- compact way to store full temporal history.
+
+watch-outs (conflict with nest constraints)
+------------------------------------------------------------------------------------------------
+  - Never zstd/dictionary-compress or heavyweight-encode the embeddings section: it is scored
+    f32/f16/i8 directly from mmap on the hot path. Any embedding codec MUST keep cheap random
+    decode (ALP/FastLanes may qualify; zstd and FSST do not). nest already correctly bans zstd
+    on embeddings -- preserve that invariant in every new codec.
+  - Licensing traps: datahike/datascript are EPL-1.0 (weak-copyleft) -- learn the
+    content-addressed tree and IStorage ideas, do NOT vendor Clojure source. upscaledb is GPLv3
+    -- reimplement from papers; use the Apache-2.0/patent-free lemire/simdcomp and streamvbyte
+    (and the permissive Rust ports) instead. rocksdb is Apache/GPLv2 dual -- clean-room Ribbon
+    from the public paper, use the zstd crate's native ZDICT bindings, never vendor rocksdb.
+    xtdb is MPL-2.0 (file-level copyleft) -- reimplement trie/zone-map/recency. buntdb, duckdb,
+    tigerbeetle are MIT/MIT/Apache-2.0 (safe to adapt). The small permissive Rust core must stay
+    uncontaminated.
+  - Determinism is a hard law: ZDICT must be pinned to a fixed zstd version and fed
+    sorted/identical sampled input; the Analyze-and-pick sampler must be seeded/ordered;
+    EWAH/Ribbon/delta-bitpack must use fixed block sizes and ascending id order. Any
+    nondeterminism breaks 'same chunks + same model fingerprint => byte-identical file' and
+    reproducible builds.
+  - Additive-only within v1: only consume reserved encoding ids 4-255 and section ids 0x09+; old
+    readers must fail closed (UnsupportedSectionEncoding / MissingRequiredSection) on unknown
+    ids. Do NOT bump NEST_FORMAT_VERSION unless an existing field changes meaning (a true v2).
+    The edit journal and zone-maps must be optional sections, not changes to the frozen six.
+  - No panics in library code: all new codecs and the journal must return typed thiserror
+    NestError/RuntimeError, including on malformed/truncated/adversarial inputs (mirror the
+    existing negative_zstd/negative_int8/negative_fp16 test discipline). Ribbon/Bloom false
+    positives must never produce wrong answers -- the mandatory exact cosine rerank is the
+    safety net; keep it unconditional.
+  - Offline + single-file by construction: konserve-style pluggable KV backends, xtdb
+    object-storage/distribution, rocksdb remote caching, and buntdb's whole-dataset-in-RAM model
+    all violate nest's model. Adapt only the on-disk/in-process algorithm; drop distribution;
+    keep base sections mmap-resident and hold only journal deltas in RAM (do not load the whole
+    corpus into memory).
+  - File-hygiene cap: each new codec (zstd_dict, delta_bitpack, fsst, ewah, alp) and journal.rs
+    must stay <=300 lines (333 hard cap), single-responsibility. The Analyze-and-pick estimator
+    and Ribbon construction are the most likely to bloat -- split estimator/codec cleanly.
+  - Build-CPU cost asymmetry is acceptable but bounded: Ribbon construction is ~4-5x Bloom,
+    ZDICT training and FSST table-building add a build pass, ALP/transposed-bitpacking add
+    kernel complexity. nest builds in Python offline so one-time build cost is fine, but it must
+    not regress the runtime hot path or the deterministic-build reproducibility guarantee.
+  - Quantization/lossy interactions with content_hash: content_hash is over decoded canonical
+    sections and must stay STABLE across encodings for non-quantized sections. Lossy embedding
+    codecs (int8 today, ALP-exception paths tomorrow) already make content_hash
+    encoding-dependent for embeddings -- keep the documented rule that content_hash equality
+    holds only for non-quantized sections, and do not let a new text codec accidentally change
+    decoded bytes.
+  - CJK/Thai tokenizer gap compounds with bm25 skip-filters: a Ribbon/Bloom term filter built on
+    the current word-segmented tokenizer inherits its degradation on CJK/Thai. Do not let the
+    skip-filter silently drop candidates for those languages -- ensure the filter is advisory
+    (skip only) with exact rerank as backstop, and flag the tokenizer as the real fix.

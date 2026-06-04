@@ -1,0 +1,68 @@
+================================================================================================
+fabriziosalmi/UglyFeed
+category: factcheck-datasets   |   steal priority: LOW
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A pure-Python RSS pipeline that fetches feeds, deduplicates and clusters near-duplicate articles
+             via TF-IDF/cosine + agglomerative clustering, LLM-rewrites each cluster, and scores
+             output with a ~30-metric text-quality evaluation suite
+             (BLEU/ROUGE-L/METEOR/CIDEr/NIST, edit/Levenshtein/Hamming, TF-IDF & BoW & LSA
+             cosine, plus readability indices) merged into a single weighted Ugly Score.
+innovation:  A deterministic, dependency-light recipe for collapsing a corpus of near-duplicate documents
+             into representative clusters: build a sparse vectorizer (tfidf/count/hashing with
+             configurable ngram_range, min_df/max_df), compute a dense cosine-similarity matrix,
+             convert to a precomputed distance matrix (1 - sim, clamped to >=0), then run
+             AgglomerativeClustering(metric=precomputed, linkage=average,
+             distance_threshold=0.66, n_clusters=None). Cluster cohesion is reported as the mean
+             pairwise intra-cluster similarity. This is a pre-storage dedup/segmentation
+             primitive that directly reduces how many documents you must store at all.
+techniques:
+  - TF-IDF/Count/Hashing vectorizer with ngram_range, max_df=0.85, min_df=0.01 to bound
+    vocabulary
+  - Cosine-similarity matrix -> precomputed distance (1-sim clamped >=0) feeding
+    AgglomerativeClustering(linkage=average, distance_threshold, n_clusters=None) for
+    threshold-driven near-duplicate grouping
+  - Alternative clustering backends behind one config key:
+    DBSCAN(metric=precomputed,eps,min_samples) and KMeans
+  - Mean intra-cluster pairwise similarity as a per-group cohesion/confidence score stored with
+    the group
+  - Exact-dedup pre-pass keyed on (content, link) tuple-set before expensive vectorization
+  - Reference-free readability/lexical battery: Gunning-Fog, SMOG, Coleman-Liau, ARI, type-token
+    ratio, lexical density, entropy
+  - Reference-based similarity battery: BLEU-n via Counter n-gram intersection, ROUGE-L/LCS,
+    METEOR, CIDEr, NIST, Jaccard/Dice/Overlap, WER
+  - Normalize-then-weighted-sum aggregation of ~30 heterogeneous metrics into one scalar
+    (per-metric max-value normalization to 0-100, fixed weight vector)
+nest steals: Two targeted lifts. (1) A nest-python build-time dedup/cluster pass (Python is the builder, so
+             sklearn-class deps are acceptable): before embedding/encoding, run
+             TF-IDF-or-embedding cosine + agglomerative threshold clustering to detect
+             near-duplicate chunks; keep one canonical chunk per cluster and record collapsed
+             members as additive provenance metadata, so chunks_canonical shrinks at the source.
+             Pure pre-compression leverage (fewer chunks = fewer embeddings, the dominant byte
+             cost) and stays deterministic if you fix linkage=average plus a sorted tie-break,
+             matching nest reproducible-build rule. (2) For nest-runtime bm25 path, this repo
+             confirms the TF-IDF/cosine-over-sparse-vectors recipe and the precomputed-distance
+             trick; nest already does mandatory exact cosine rerank, so the reusable bit is the
+             cluster cohesion score (mean intra-group similarity) as a cheap storable confidence
+             signal for a future graph-search/dedup section (reserved section id 0x09+). The
+             ~30-metric eval suite is reference material for a nest-cli benchmark/quality-report
+             surface and for scoring the shipped PT-BR fake-news demo corpus, not core-format
+             code.
+compression: Indirect but real: agglomerative near-duplicate clustering is a dedup primitive that can run at
+             build time in nest-python to drop redundant chunks before embeddings are generated,
+             attacking the single largest byte cost (per-chunk f32/f16/int8 vectors) at its
+             source. It compresses corpus cardinality, orthogonal to and multiplicative with
+             nest per-section codecs (zstd/f16/int8). The metric suite itself compresses
+             nothing.
+perf:        O(n^2) memory/time: materializes a dense n-by-n cosine-similarity and distance matrix with
+             precomputed-metric agglomerative clustering, so it does not scale past a few
+             thousand docs per batch (fine for RSS, a hard wall for whole databases).
+             KMeans/agglomerative call vectors.toarray(), densifying the sparse TF-IDF matrix.
+             For nest, any borrowed dedup pass must be blocked/batched or swapped to an
+             ANN-neighbor graph (nest already ships HnswIndex) to avoid quadratic blowup. Pure
+             Python/sklearn/nltk/spacy stack, no SIMD, no native kernels worth importing into
+             the Rust core.
+license:     AGPL-3.0 (copyleft; vendoring source into a permissive core is incompatible, so reimplement the
+             algorithm cleanly rather than copying code).

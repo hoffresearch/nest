@@ -1,24 +1,26 @@
-==================================================================================================
+================================================================================================
 nest build board
 now / next / later / research
-==================================================================================================
+================================================================================================
 
-##################################################################################################
+see README.txt for the full map
+
+################################################################################################
 # NOW  (4 cards)
-##################################################################################################
+################################################################################################
 
 [ ] Land SECTION_EMBEDDINGS_FP=0x09 rerank source + make score_subset use it   (CRITICAL)
-    The gate for all sub-int8 work. score_subset (search.rs:84-121) reranks against the SAME lossy
-    stored dtype today, so below int8 'real cosine' silently becomes 'real cosine at stored
-    precision'. Reserve an optional f16/f32 rerank-source section (excluded from content_hash) and
-    rerank survivors against it when present. Additive, no version bump.
+    The gate for all sub-int8 work. score_subset (search.rs:84-121) reranks against the SAME
+    lossy stored dtype today, so below int8 'real cosine' silently becomes 'real cosine at
+    stored precision'. Reserve an optional f16/f32 rerank-source section (excluded from
+    content_hash) and rerank survivors against it when present. Additive, no version bump.
     refs: crates/nest-runtime/src/search.rs, crates/nest-format/src/sections/contract.rs,
           gaoj0017/RaBitQ
 
 [ ] Fix materialize-to-f32 RAM leak in the ANN distance path   (CRITICAL)
     materialize_f32_vectors (materialize.rs:32-41) expands EVERY dtype to n*dim*4 f32 whenever
-    HNSW is attached (mmap_file.rs:113), so int8/int4 halve disk but keep a dense f32 copy in RAM
-    on exactly the tiny/hybrid presets that need it. Teach the ANN path to score packed int8
+    HNSW is attached (mmap_file.rs:113), so int8/int4 halve disk but keep a dense f32 copy in
+    RAM on exactly the tiny/hybrid presets that need it. Teach the ANN path to score packed int8
     blocks (or keep f16). Pure runtime fix, no format change.
     refs: crates/nest-runtime/src/materialize.rs, crates/nest-runtime/src/ann/mod.rs,
           microsoft/onnxruntime
@@ -39,22 +41,22 @@ now / next / later / research
           embeddings-benchmark/mteb
 
 
-##################################################################################################
+################################################################################################
 # NEXT  (6 cards)
-##################################################################################################
+################################################################################################
 
 [ ] Shared intpack codec (delta+zigzag+per-128-block bitpack/FOR with O(1) select)   (HIGH)
     SECTION_ENCODING_INTPACK=4, the reusable primitive for HNSW/BM25/spans. Branch-free scalar
-    decode, never panic on truncated input, O(1) select by bit-offset so spans[i]/neighbor[i] stay
-    fetchable off mmap. Clean-room PFOR exceptions from the FastPFor format description (avoid GPL
-    TurboPFor).
+    decode, never panic on truncated input, O(1) select by bit-offset so spans[i]/neighbor[i]
+    stay fetchable off mmap. Clean-room PFOR exceptions from the FastPFor format description
+    (avoid GPL TurboPFor).
     refs: crates/nest-format/src/encoding/intpack.rs, lemire/FastPFor, cruppstahl/libfor
 
 [ ] Re-encode HNSW neighbor ids + BM25 postings with intpack   (HIGH)
     Sort-per-list + delta+bitpack HNSW neighbor ids (flat uint40, bump HNSW_PAYLOAD_VERSION,
     identical id set => zero recall change). Delta-gap BM25 doc ids + bitpacked tf + 1-byte
-    log-quantized doc_lengths (bump BM25_PAYLOAD_VERSION). Biggest free shrink of the tiny/hybrid
-    index sections.
+    log-quantized doc_lengths (bump BM25_PAYLOAD_VERSION). Biggest free shrink of the
+    tiny/hybrid index sections.
     refs: crates/nest-runtime/src/ann/codec.rs, crates/nest-runtime/src/bm25/codec.rs,
           apache/lucene
 
@@ -63,8 +65,8 @@ now / next / later / research
     content_hash unchanged). Dedup repeated source_uri into a string pool + delta+varint span
     offsets. Add a u32 offset table so cite/materialize reach chunk N in O(1) instead of an O(n)
     scan.
-    refs: crates/nest-format/src/sections/chunk_ids.rs, crates/nest-format/src/sections/spans.rs,
-          google/flatbuffers
+    refs: crates/nest-format/src/sections/chunk_ids.rs,
+          crates/nest-format/src/sections/spans.rs, google/flatbuffers
 
 [ ] Trained shared zstd dictionary + FSST + zstd level/LDM knobs   (HIGH)
     SECTION_DICTIONARY=0x0A + SECTION_ENCODING_ZSTD_DICT=5 (ZDICT over sorted samples,
@@ -76,21 +78,21 @@ now / next / later / research
 
 [ ] Block-scaled + rotational int8 (scale_kind=1, no new id, no version bump)   (HIGH)
     One f16 scale per 32-dim block recovers per-vector-outlier loss at the same 4x size; seeded
-    FWHT rotation before quantize pushes recall@10 toward ~0.99. The int8 scale_kind field already
-    exists at int8.rs:18 and parse() rejects unknown kinds, so old readers stay safe. Pair with
-    VNNI/dotprod for bit-determinism.
+    FWHT rotation before quantize pushes recall@10 toward ~0.99. The int8 scale_kind field
+    already exists at int8.rs:18 and parse() rejects unknown kinds, so old readers stay safe.
+    Pair with VNNI/dotprod for bit-determinism.
     refs: crates/nest-format/src/encoding/int8.rs, ggml-org/ggml, weaviate/recipes
 
 [ ] Zero-copy PyBuffer query + maturin cp312-abi3 wheel   (MEDIUM)
     Replace query.extract::<Vec<f32>>() (nest_file.rs:23) with a PyBuffer<f32> borrow +
-    Python::detach around the read-only mmap search; ship one cp312-abi3 wheel to PyPI. Stops the
-    compression wins being paid back as per-search alloc+memcpy, and closes the install gap.
+    Python::detach around the read-only mmap search; ship one cp312-abi3 wheel to PyPI. Stops
+    the compression wins being paid back as per-search alloc+memcpy, and closes the install gap.
     refs: crates/nest-python/src/nest_file.rs, pyproject.toml, PyO3/pyo3
 
 
-##################################################################################################
+################################################################################################
 # LATER  (7 cards)
-##################################################################################################
+################################################################################################
 
 [ ] int4 block-64 codec + fused dequant+dot kernel   (MEDIUM)
     SECTION_ENCODING_INT4=7 (~4.25bpw), split pack/unpack from kernel, fused SQNBitGemm-style
@@ -109,9 +111,9 @@ now / next / later / research
 
 [ ] Content-hash dedup before zstd + chunk_scalars pre-filter   (MEDIUM)
     Build-time dedup of identical chunks (SECTION_DEDUP_MAP=0x0B, unique pool + u32 back-ref) on
-    DECOMPRESSED bytes, zstd after - encode the order as a code-level invariant + test. Re-expand
-    to identical bytes so content_hash/citations invariant. Add SECTION_CHUNK_SCALARS=0x0D
-    columnar pre-filter, opt-in.
+    DECOMPRESSED bytes, zstd after - encode the order as a code-level invariant + test.
+    Re-expand to identical bytes so content_hash/citations invariant. Add
+    SECTION_CHUNK_SCALARS=0x0D columnar pre-filter, opt-in.
     refs: crates/nest-format/src/encoding/dedup.rs,
           crates/nest-format/src/sections/chunk_scalars.rs, NixOS/nix
 
@@ -122,9 +124,9 @@ now / next / later / research
     refs: crates/nest-python/src/build_fn.rs, QwenLM/Qwen3-Embedding
 
 [ ] CSR graph_adjacency section + search-graph subcommand   (LOW)
-    SECTION_GRAPH_ADJACENCY=0x0C (chunk-to-chunk edges, reusing intpack), bounded-BFS seeded from
-    exact top-k feeding the SAME exact rerank. Lets nest drop chunk_overlap text by reconstructing
-    neighbor context from NEXT_CHUNK edges. Delivers the graph-search pillar.
+    SECTION_GRAPH_ADJACENCY=0x0C (chunk-to-chunk edges, reusing intpack), bounded-BFS seeded
+    from exact top-k feeding the SAME exact rerank. Lets nest drop chunk_overlap text by
+    reconstructing neighbor context from NEXT_CHUNK edges. Delivers the graph-search pillar.
     refs: crates/nest-runtime/src/graph/, crates/nest-cli/src/cmd/search_graph.rs,
           vesoft-inc/nebula
 
@@ -141,15 +143,16 @@ now / next / later / research
     refs: crates/nest-runtime/src/journal.rs, crates/nest-cli/src/cmd/compact.rs, tidwall/buntdb
 
 
-##################################################################################################
+################################################################################################
 # RESEARCH  (5 cards)
-##################################################################################################
+################################################################################################
 
 [ ] BLAKE3 Merkle-root content_hash (the one true v2)   (LOW)
-    Make content_hash a Merkle root over per-section/per-chunk hashes for O(touched-bytes) partial
-    verification + single-chunk citation proof + corpus-level subtree dedup. Changes the meaning
-    of an existing field, so it MUST be NEST_FORMAT_VERSION=2 with v1 readers retained. Ship
-    SECTION_MERKLE_INDEX + a new additive blake3 algorithm-id FIRST; bump only on measured demand.
+    Make content_hash a Merkle root over per-section/per-chunk hashes for O(touched-bytes)
+    partial verification + single-chunk citation proof + corpus-level subtree dedup. Changes the
+    meaning of an existing field, so it MUST be NEST_FORMAT_VERSION=2 with v1 readers retained.
+    Ship SECTION_MERKLE_INDEX + a new additive blake3 algorithm-id FIRST; bump only on measured
+    demand.
     refs: crates/nest-format/src/hashing.rs, BLAKE3-team/BLAKE3, tigerbeetle/tigerbeetle
 
 [ ] Structured tape (json/yaml/parquet) + per-column codec cascade   (LOW)
@@ -161,21 +164,22 @@ now / next / later / research
 
 [ ] Sovereign in-house FSE/tANS entropy floor over delta-coded postings   (LOW)
     In-house FSE/tANS + Huff0 (new reserved encoding ids) over delta-coded BM25 postings, HNSW
-    adjacency, term dictionaries - a deterministic table-build entropy floor below generic zstd on
-    skewed residuals; libdeflate-style two-level decode table for mmap-friendly decode. Larger
-    surface, lowest priority.
-    refs: crates/nest-format/src/encoding/fse.rs, Cyan4973/FiniteStateEntropy, ebiggers/libdeflate
+    adjacency, term dictionaries - a deterministic table-build entropy floor below generic zstd
+    on skewed residuals; libdeflate-style two-level decode table for mmap-friendly decode.
+    Larger surface, lowest priority.
+    refs: crates/nest-format/src/encoding/fse.rs, Cyan4973/FiniteStateEntropy,
+          ebiggers/libdeflate
 
 [ ] PDF/audio/video ingestion + copy-without-recode media payloads   (LOW)
-    Canonicalize PDF to deterministic text before chunking (then it IS the text path), store media
-    verbatim by content_hash with a CDC chunk index (never lossy-re-encode inside the container),
-    CLIP-style L2-normalized media embeddings ride the same quantization ladder. FastCDC
-    content-defined chunking for edit-local rechunking.
+    Canonicalize PDF to deterministic text before chunking (then it IS the text path), store
+    media verbatim by content_hash with a CDC chunk index (never lossy-re-encode inside the
+    container), CLIP-style L2-normalized media embeddings ride the same quantization ladder.
+    FastCDC content-defined chunking for edit-local rechunking.
     refs: crates/nest-python/src/build_fn.rs, activeloopai/deeplake, ipfs/kubo
 
 [ ] Algorithm-4 diversity neighbor selection + generational visited set   (LOW)
     Replace the _simple top-m HNSW neighbor selection (ann/mod.rs:33 flags this as planned) with
-    Malkov-Yashunin Algorithm-4 so recall rises at fixed M, letting tiny/nano presets LOWER M and
-    shrink the index. Route traversal through the SIMD dispatcher and swap the per-query HashSet
-    for a generational buffer.
+    Malkov-Yashunin Algorithm-4 so recall rises at fixed M, letting tiny/nano presets LOWER M
+    and shrink the index. Route traversal through the SIMD dispatcher and swap the per-query
+    HashSet for a generational buffer.
     refs: crates/nest-runtime/src/ann/select_neighbors.rs, djc/instant-distance, nmslib/hnswlib

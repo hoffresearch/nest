@@ -1,0 +1,66 @@
+================================================================================================
+huggingface/setfit
+category: embeddings-models   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        SetFit is a prompt-free few-shot text-classification framework that fine-tunes a
+             Sentence-Transformer body via contrastive Siamese pair training
+             (CosineSimilarityLoss) then fits a tiny logistic-regression head on the resulting
+             frozen embeddings, plus a contrastive knowledge-distillation path that compresses a
+             teacher into a much smaller student.
+innovation:  The transferable idea is contrastive knowledge distillation: a large teacher embedder's geometry
+             is transferred into a tiny student embedder using cheap unlabeled in-domain text
+             turned into positive/negative pairs (and the teacher's own similarity scores as
+             soft targets via ContrastiveDistillationDataset). This decouples the model that
+             PRODUCES the on-disk vectors from the model the user originally chose, so the same
+             corpus can be re-embedded into a smaller, faster, dimension-reduced vector space
+             whose neighbor ordering is preserved -- exactly the lever nest needs to shrink the
+             embeddings section (its largest, non-zstd-compressible payload) without changing
+             the search contract.
+techniques:
+  - Contrastive Siamese fine-tuning with CosineSimilarityLoss on same-class=positive /
+    diff-class=negative pairs
+  - Combinatorial pair amplification: from N labeled sentences generate O(N^2) pairs (8+8 -> 28
+    pos + 64 neg = 92), controlled by num_iterations=R
+  - Two-stage decoupling: frozen Sentence-Transformer body produces embeddings, cheap
+    LogisticRegression / differentiable SetFitHead does classification
+  - ContrastiveDistillationDataset: teacher similarity scores become soft regression targets for
+    the student (DistillationTrainer), reported ~123x inference speedup
+  - Mean-pooling of token embeddings into a single fixed-width sentence vector (the unit of
+    storage)
+  - Body-swap multilinguality: any compatible ST checkpoint replaces the encoder without
+    changing the pipeline
+nest steals: nest steals contrastive distillation as an offline, Python-side (nest-python build path, not the
+             rust core) re-embedding step: ship a small distilled student embedder fingerprint
+             so a corpus can be re-encoded into a lower-dimension vector space (e.g. 768 -> 256)
+             before the embeddings section is written. This shrinks nest's single largest
+             section -- which the format deliberately never zstd-compresses because
+             nest-runtime/src/simd scores it straight from mmap -- in a way zstd/float16/int8
+             cannot, since it cuts the float COUNT not just the per-float width, and stacks
+             multiplicatively with the existing int8 codec in nest-format/src/encoding. The
+             provenance/search_contract sections record the student model fingerprint so
+             determinism holds (same chunks + same student => byte-identical file); content_hash
+             stays stable because it hashes decoded canonical text, not vectors. The
+             teacher-vs-student recall delta is validated by the mandatory exact-cosine rerank
+             already in nest-runtime/src/search.rs, so a lossy smaller embedder still returns
+             true cosine over whatever vectors are stored. Optionally expose a build-time preset
+             in nest-cli (a 'nano' preset = distilled-256-dim + int8 + hnsw) below the current
+             'tiny' preset. The contrastive-pairs-from-unlabeled-text trick also gives nest a
+             cheap way to domain-adapt the student to its PT-BR fake-news demo corpus without
+             labels.
+compression: Direct and high: embeddings are nest's biggest and least-compressible section (raw f32 is
+             incompressible by zstd, and nest forbids zstd on it anyway for hot-path mmap
+             scoring). Distillation attacks the only remaining axis -- the dimensionality/count
+             of floats -- via a smaller student embedder, which composes with int8/float16 width
+             reduction multiplicatively. A 768->256 distill is a 3x cut on top of int8's ~4x,
+             plausibly pushing below the current tiny preset 0.283 size ratio while the
+             exact-cosine rerank guards recall. Cleanest path toward 'compress more than
+             everyone' for vector payloads.
+perf:        Reported 30s training on 8 examples/class (V100, ~$0.025); distillation yields ~123x inference
+             speedup of student vs teacher. Bodies are standard ST checkpoints (MPNet ~110M,
+             RoBERTa-Large ~355M). All cost is training/build-time; the rust runtime is
+             unaffected and gains pure win (fewer/smaller floats per dot-product, fewer cache
+             lines touched by the SIMD kernels in nest-runtime/src/simd).
+license:     Apache-2.0

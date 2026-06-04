@@ -1,0 +1,62 @@
+================================================================================================
+yuxiaw/Factcheck-GPT
+category: factcheck-datasets   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        An LLM-output fact-checking framework that decomposes a document into context-independent atomic
+             claims, retrieves ranked evidence per claim, runs 4-way stance detection
+             (support/partial-support/refute/irrelevant), and emits per-claim verdict records,
+             shipping Factcheck-Bench (94 annotated ChatGPT responses) plus FactBench (4,835
+             examples merged from FacTool-KB/FELM-WK/HaluEval).
+innovation:  A serializable, fine-grained "claim -> evidence -> stance -> verdict" provenance schema: every
+             checkable fact becomes an atomic claim record with a structured verdict dict
+             {reasoning, error, correction, factuality:bool}, each backed by N ranked evidence
+             snippets carrying a discrete stance label (CP/PS/RE/IR). This decouples a coarse
+             document from auditable, span-localized truth units -- the structure nest needs to
+             attach verifiable truth/provenance metadata to chunks without inventing a format
+             from scratch.
+techniques:
+  - Atomic claim decomposition: NLTK sentence-split then LLM decompose(input:str)->list[str] of
+    context-independent, decontextualized statements
+  - 4-way stance vocabulary CP/PS/RE/IR (completely-support / partially-support / refute /
+    irrelevant), collapsible to 3-way (support/refute/irrelevant)
+  - Per-claim verdict record: {reasoning, error, correction, factuality:bool} structured
+    machine-parseable judgment
+  - Evidence retrieval by query-generation then ranking ~5 snippets by semantic relevance to the
+    claim
+  - Three-class modular abstraction: claim_processor -> retriever -> verifier pipeline (mirrors
+    OpenFactCheck)
+  - Checkworthiness gating with discrete labels {factual=1, opinion=2, non-claim=3, other=4} to
+    filter what is worth verifying
+  - Span-based annotation schema: response + list of false segments/spans + per-claim factual
+    labels[] + document-level label
+nest steals: nest-format: add an OPTIONAL additive section (reserved id 0x09+, never bump v1) named
+             chunks_truth -- a deterministic, zstd-encoded (non-embedding, codec-eligible) table
+             parallel to chunks_canonical holding per-chunk atomic-claim records: claim_id, char
+             span into chunks_original_spans, verdict enum {true,false,unverified} as a 1-byte
+             field, stance counts, and optional evidence chunk_ids resolving to
+             nest://content_hash/chunk_id citations. This makes the PT-BR fake-news demo corpus
+             self-describing: each chunk carries its own auditable verdict + evidence pointers,
+             offline, inside the single file. nest-runtime: a thin verify/filter on the search
+             path (post exact-cosine rerank) to restrict or boost results by verdict, plus a
+             materialize path emitting the {reasoning,error,correction,factuality} record for a
+             hit. nest-cli: extend the `cite` subcommand (or add `verify`) to print the truth
+             record + evidence citations. The 4-way stance label is a 1-byte enum
+             (deterministic, alphabetical-order friendly), staying within nest's small-core,
+             no-panic, little-endian, additive constraints.
+compression: Indirect to raw compression. Stance/verdict labels are tiny discrete enums (1 byte each, highly
+             compressible under zstd, in a non-embedding codec-eligible section) adding
+             negligible bytes while raising 'truth density' per byte of the demo corpus. The
+             real win is mission-side (truth features + provenance for the fake-news demo
+             domain), not the compress-more-than-everyone north-star: it does not improve
+             embedding or text ratios.
+perf:        Reference framework is LLM-prompt-bound (GPT-3.5-turbo per claim, Google search per claim) --
+             not a hot-path or SIMD concern. nest would NOT replicate the online retrieval/LLM
+             calls (violates offline-by-construction); it adopts only the data schema, built
+             once at python build time and served as static bytes. Serving overhead is just
+             decoding a small zstd section plus an enum compare -- effectively free relative to
+             the SIMD dot-product hot path.
+license:     Apache-2.0 (per repo; verify before vendoring any prompt text or dataset rows -- the PT-BR demo
+             should adopt the schema design only, not their data)

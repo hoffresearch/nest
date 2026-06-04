@@ -1,0 +1,114 @@
+================================================================================================
+genome :: embeddings-models (index)
+embedding and representation models (text + image, including tiny/static)
+================================================================================================
+
+one file per project in this folder. open the one you need.
+
+[MUST     ] QwenLM__Qwen3-Embedding.txt        A family of decoder-only LLM-based text
+                                               embedding/reranker models (0.6B/4B/8B, dims
+                                               1024/2560/4096) using causal last-token (EOS)
+                                               pooling, instruction-prefix conditioning, and
+                                               Matryoshka Representation Learning so a single
+                                               vector can be truncated to as few as 32 dims and
+                                               re-normalized with minimal retrieval loss.
+[MUST     ] facebookresearch__fastText.txt     A C++ library for linear-bag-of-words text
+                                               classification and subword word embeddings whose
+                                               real gem for nest is its model-compression
+                                               pipeline (fastText.zip): product quantization of
+                                               the embedding matrix plus greedy coverage-based
+                                               feature pruning, shrinking 400MB+ models to
+                                               single-digit MB with near-zero accuracy loss.
+[HIGH     ] openai__CLIP.txt                   CLIP is a contrastively-trained dual-encoder
+                                               (ViT/ResNet image tower + 12-layer Transformer
+                                               text tower with byte-level BPE) that projects
+                                               both modalities into one shared L2-normalized
+                                               embedding space (embed_dim 512 for ViT-B/32)
+                                               where cosine similarity, scaled by a learned
+                                               temperature, is the native cross-modal metric.
+[HIGH     ] google-research__bert.txt          BERT is a bidirectional transformer encoder for
+                                               contextual text embeddings, but its
+                                               independently-reusable artifact is the WordPiece
+                                               tokenizer: a greedy longest-match-first subword
+                                               segmenter over an ordered string-to-id
+                                               vocabulary, fronted by a CJK-aware basic
+                                               tokenizer.
+[HIGH     ] UKPLab__sentence-transformers.txt  A PyTorch framework for
+                                               dense/sparse/cross-encoder text+image embeddings
+                                               whose most transferable assets are three post-hoc
+                                               compression techniques: scalar(int8)/binary
+                                               embedding quantization with float32 rescoring,
+                                               Matryoshka (front-loaded truncatable dimensions),
+                                               and Model2Vec static distillation (attention-free
+                                               token lookup tables).
+[HIGH     ] FlagOpen__FlagEmbedding.txt        A retrieval toolkit (MIT) whose flagship BGE-M3
+                                               model emits, from one shared XLM-RoBERTa encoder,
+                                               three aligned representations per text -- a
+                                               1024-d dense vector, a learned sparse
+                                               lexical-weight dict (ReLU over a linear head per
+                                               token id, max-pooled on repeats), and
+                                               ColBERT-style per-token multi-vectors -- combined
+                                               at query time by a weighted hybrid score.
+[HIGH     ] MinishLab__model2vec.txt           A dataset-free distillation method that collapses
+                                               a sentence-transformer into a static
+                                               token-embedding lookup table, so encoding a
+                                               sentence becomes tokenize + table-lookup +
+                                               mean-pool (no forward pass), shrinking models up
+                                               to 50x and running up to 500x faster on CPU.
+[HIGH     ] huggingface__setfit.txt            SetFit is a prompt-free few-shot
+                                               text-classification framework that fine-tunes a
+                                               Sentence-Transformer body via contrastive Siamese
+                                               pair training (CosineSimilarityLoss) then fits a
+                                               tiny logistic-regression head on the resulting
+                                               frozen embeddings, plus a contrastive
+                                               knowledge-distillation path that compresses a
+                                               teacher into a much smaller student.
+[HIGH     ] tmikolov__word2vec.txt             The original C implementation of word2vec: trains
+                                               static word embeddings (CBOW / skip-gram) with
+                                               negative sampling and hierarchical softmax, and
+                                               ships utilities (distance, word-analogy) that
+                                               linear-scan a flat float32 matrix with
+                                               precomputed L2-normalized vectors so a dot
+                                               product equals cosine.
+[HIGH     ] huggingface__text-embeddings-inference.txt A Rust inference server for
+                                               embedding/reranking transformers
+                                               (BERT/XLM-R/GTE/ModernBERT/Qwen) with a candle +
+                                               ONNX-Runtime backend, token-based dynamic
+                                               batching, and four pooling heads (CLS, mean,
+                                               last-token, SPLADE) exposing dense and sparse
+                                               embeddings plus cross-encoder rerank scores.
+[MEDIUM   ] jina-ai__clip-as-service.txt       A scalable client/server (gRPC, HTTP, WebSocket)
+                                               for producing CLIP text+image embeddings and
+                                               cross-modal rank scores, with swappable PyTorch /
+                                               ONNX Runtime / TensorRT inference backends and
+                                               DocArray protobuf transport.
+[MEDIUM   ] stanfordnlp__GloVe.txt             GloVe is a log-bilinear word-embedding model
+                                               trained on a global word-word cooccurrence
+                                               matrix, shipped as a 4-stage C toolchain
+                                               (vocab_count -> cooccur -> shuffle -> glove)
+                                               whose real engineering value is its
+                                               external-memory sparse-matrix pipeline that
+                                               sorts/merges/shuffles billions of records on a
+                                               tiny RAM budget.
+[MEDIUM   ] ddangelov__Top2Vec.txt             Top2Vec is a topic-modeling pipeline that places
+                                               documents AND words in one shared embedding
+                                               space, then derives topics geometrically:
+                                               UMAP-reduce doc vectors, HDBSCAN-cluster the
+                                               dense regions, take each cluster's centroid as a
+                                               "topic vector," and cosine-rank the nearest word
+                                               vectors to label it; search is served by an
+                                               optional hnswlib HNSW index over the same
+                                               vectors.
+[LOW      ] guillaume-be__rust-bert.txt        A Rust port of Hugging Face transformers built on
+                                               the tch-rs libtorch bindings (with optional ONNX
+                                               Runtime via ort), whose sentence_embeddings
+                                               pipeline reproduces the Sentence-Transformers
+                                               modules.json chain (Transformer -> Pooling ->
+                                               optional Dense -> optional Normalize) to turn
+                                               token sequences into fixed Vec<f32> embeddings.
+[REFERENCE] cpcdoy__rust-sbert.txt             A thin Rust port of sentence-transformers that
+                                               runs DistilUSE/DistilBERT multilingual
+                                               sentence-embedding models through libtorch
+                                               (tch-rs/rust-bert), producing fixed-size
+                                               embeddings via masked mean pooling plus a
+                                               dense+tanh projection.

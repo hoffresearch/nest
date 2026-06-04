@@ -1,0 +1,71 @@
+================================================================================================
+izihawa/summa
+category: fulltext-search   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        An IPFS-friendly, WASM-compatible full-text search server built on a fork of Tantivy (Rust
+             Lucene), whose key trick is a network-backed caching Directory that resolves BM25
+             queries over a remote, immutable, byte-range-addressable segment format by
+             downloading only the few 32KB blocks a query actually touches.
+innovation:  The whole search index is laid out as immutable, locality-optimized files where every structure
+             (FST term dictionary, bitpacked skip-list postings, block-max metadata) is
+             byte-range addressable, so a query is resolved by fetching only the handful of
+             small blocks it touches instead of loading the index. This decouples "index size on
+             disk" from "bytes needed to answer a query" - the same property nest already
+             exploits by scoring embeddings straight off mmap, but Summa extends it to the
+             lexical/inverted-index side.
+techniques:
+  - FST (finite-state transducer) term dictionary via the fst crate: shares common prefixes AND
+    suffixes into a minimal acyclic automaton, compresses term keys better than a trie or
+    general compressor while keeping O(key-len) random access plus wildcard/range lookup
+  - Posting-list compression: delta-encode sorted doc-ids then SIMD-bitpack in fixed blocks of
+    128 docs (each block uses the minimum bit-width for its deltas), with term-frequencies
+    bitpacked in a parallel block stream
+  - Skip-list over posting blocks storing per-block partial sums of deltas, giving O(log L) seek
+    to a target doc-id without decoding the whole list
+  - Block-Max WAND / MaxScore dynamic pruning: per-block upper-bound score lets the scorer skip
+    whole posting blocks that cannot enter the top-k
+  - Immutable append-only segment model enabling content-addressing and aggressive caching
+  - Network/caching Directory (CachingDirectory + HotCache): turns internal file reads into
+    chunked 32KB HTTP/IPFS range requests with speculative sequential prefetch and indefinite
+    chunk caching
+  - HotCache: a precomputed bundle of the hottest header/dictionary bytes shipped up front to
+    cut first-query round trips
+nest steals: Target crate nest-runtime, the bm25 module (crates/nest-runtime/src/bm25/codec.rs + index.rs)
+             feeding the optional bm25_index section 0x08. Today the codec writes raw
+             uncompressed postings: per term it emits len-prefixed UTF-8 then a flat list of
+             (u32 doc, u32 tf) pairs (codec.rs lines 28-37), plus raw u32 doc_lengths. Steal
+             three additive, deterministic pieces: (1) delta+varint or SIMD-bitpack the doc-ids
+             within each posting list (docs are already sorted by doc-id at index.rs line 69)
+             and zigzag the tf stream - shrinks the bm25 section several-fold with zero recall
+             loss, staying inside layout 0x08 by bumping only BM25_PAYLOAD_VERSION, NOT
+             NEST_FORMAT_VERSION. (2) Replace the flat alphabetical term list with an FST built
+             from the already-sorted keys (fst crate is pure-Rust, MIT/Apache) - compresses the
+             dictionary and unlocks prefix/wildcard term queries for search-text. (3) Adopt
+             per-block upper-bound (Block-Max WAND) so search-text early-terminates instead of
+             scanning every posting - directly attacks the known search-text latency gap. The
+             remote/IPFS Directory is OUT of scope (nest is offline-by-construction, never opens
+             a socket), but its block-addressable philosophy validates nest's mmap-and-skip
+             design and could later inform a zstd block index for the canonical text section so
+             one chunk decompresses without inflating the whole section.
+compression: Directly on-mission for "compress more than everyone": bm25_index (0x08) is nest's
+             least-compressed section - raw 8 bytes per posting plus uncompressed UTF-8 terms.
+             Delta+bitpacked postings typically cut posting bytes 3-6x and an FST term
+             dictionary cuts dictionary bytes further while adding prefix/range query
+             capability. Because postings are read by the lexical path (not the SIMD dot-product
+             hot path), they can be compressed freely, unlike embeddings - pure upside for the
+             hybrid and tiny presets.
+perf:        SIMD bitpacking decodes fixed 128-doc blocks branch-free, pairing with nest's existing
+             AVX2/NEON/scalar dispatcher in nest-runtime; the same dispatch pattern can host a
+             bitpack decode kernel. Block-Max WAND turns full-posting scans into skips, cutting
+             the per-query work that currently dominates search-text. The 32KB-chunk + prefetch
+             caching is irrelevant to nest (the OS page cache already demand-pages the mmapped
+             file), so skip it. FST lookups are O(query-term-length) automaton walks over far
+             less memory than a HashMap, friendly to mmap-off-disk.
+license:     Summa itself is AGPL-3.0 (do not vendor its source). The reusable building blocks are permissive
+             and re-implementable: the fst crate (BurntSushi) is MIT/Apache-2.0;
+             delta/varint/zigzag, SIMD bitpacking, and Block-Max WAND are public algorithms and
+             Tantivy itself is MIT. Reimplement from algorithm descriptions, do not copy AGPL
+             code.

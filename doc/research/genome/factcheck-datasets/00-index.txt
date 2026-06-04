@@ -1,0 +1,112 @@
+================================================================================================
+genome :: factcheck-datasets (index)
+fact-checking / misinformation resources and datasets (nest demo domain + truth features)
+================================================================================================
+
+one file per project in this folder. open the one you need.
+
+[MEDIUM   ] yuxiaw__Factcheck-GPT.txt          An LLM-output fact-checking framework that
+                                               decomposes a document into context-independent
+                                               atomic claims, retrieves ranked evidence per
+                                               claim, runs 4-way stance detection
+                                               (support/partial-support/refute/irrelevant), and
+                                               emits per-claim verdict records, shipping
+                                               Factcheck-Bench (94 annotated ChatGPT responses)
+                                               plus FactBench (4,835 examples merged from
+                                               FacTool-KB/FELM-WK/HaluEval).
+[MEDIUM   ] wenhuchen__Table-Fact-Checking.txt TabFact is a fact-verification dataset (118k
+                                               statements over 16.5k Wikipedia tables,
+                                               ENTAILED/REFUTED) shipped with a Latent Program
+                                               Algorithm (LPA) that compiles each
+                                               natural-language statement into a small typed DSL
+                                               of ~60 table operations and verifies it by
+                                               symbolic execution via a memoized,
+                                               trigger-word-gated beam search.
+[MEDIUM   ] safe-graph__GNN-FakeNews.txt       A collection of GNN fake-news detectors (GCNFN,
+                                               BiGCN, GNN-CL, UPFD-GCN/GAT/SAGE) shipping the
+                                               UPFD dataset: tree-structured Twitter
+                                               retweet-propagation graphs (politifact 314 graphs
+                                               / gossipcop 5,464 graphs) classified fake/real,
+                                               with node features stored as scipy CSR sparse
+                                               .npz matrices and topology as a single global COO
+                                               edge list.
+[MEDIUM   ] KaiDMML__FakeNewsNet.txt           A fake-news research data repository that ships
+                                               only minimal CSV manifests (id, news_url, title,
+                                               tab-separated tweet_ids) plus per-object JSON
+                                               files, and reconstructs the full multi-GB corpus
+                                               (news content, tweets, retweets, user profiles,
+                                               social graph) on demand via a
+                                               rate-limit-coordinated parallel download harness.
+[MEDIUM   ] jghm-f__FACTCK.BR.txt              A 1,309-row UTF-8 TSV corpus of Brazilian
+                                               Portuguese fact-checks (9 columns) harvested from
+                                               agency RSS feeds by parsing schema.org
+                                               ClaimReview JSON-LD, where each claim carries a
+                                               normalizable truthfulness rating (ratingValue /
+                                               bestRating + human-readable alternativeName
+                                               label).</one_liner>
+<parameter name="core_innovation">The schema.org ClaimReview/reviewRating data model as a
+                                               portable, normalized "truth verdict": a claim is
+                                               represented by claimReviewed (text), a numeric
+                                               ratingValue on a per-agency scale with bestRating
+                                               as the scale maximum, and an alternativeName
+                                               string label (e.g. "falso", "verdadeiro").
+                                               Dividing ratingValue/bestRating yields a
+                                               source-agnostic truthfulness score in [0,1] that
+                                               lets you fuse incompatible agency label
+                                               vocabularies into one comparable axis. The
+                                               harvesting is itself a clean ETL: pull JSON-LD
+                                               (application/ld+json) out of fact-check pages,
+                                               map reviewRating fields directly to columns, drop
+                                               exact-row duplicates with URL as implicit primary
+                                               key.
+[MEDIUM   ] roneysco__Fake.br-Corpus.txt       A labeled fact-checking dataset (not software):
+                                               7,200 length-aligned Brazilian-Portuguese news
+                                               articles (3,600 fake / 3,600 true) shipped as
+                                               numbered plain-text files plus a fixed 25-field
+                                               line-by-line linguistic-metadata schema per
+                                               article and a stopword/diacritic-normalized
+                                               preprocessed CSV variant.
+[MEDIUM   ] sfu-discourse-lab__MisInfoText.txt A curated corpus-of-corpora that scrapes
+                                               fact-checking sites (Snopes, BuzzFeed,
+                                               PolitiFact, Emergent) and stores each article as
+                                               a row carrying the original news text, the
+                                               checked claim, the source URL, the fact-checker's
+                                               native veracity rating, and a hand-normalized
+                                               truth label projected onto a common ordinal
+                                               scale.
+[LOW      ] yuxiaw__OpenFactCheck.txt          A Python fact-checking/factuality-evaluation
+                                               framework that consolidates RARR, FacTool, and
+                                               FactCheckGPT into a YAML-configured solver DAG
+                                               (claim_processor -> retriever -> verifier)
+                                               passing a single FactCheckerState dict, plus four
+                                               human-annotated benchmark datasets (FactQA 6,480
+                                               examples, FactBench claims with
+                                               True/False/Unknown labels).
+[LOW      ] Gabriel-Lino-Garcia__FakeRecogna.txt A balanced PT-BR fake-news corpus of 11,902
+                                               labeled samples (5,951 fake / 5,951 real) shipped
+                                               as a single XLSX with an 8-column metadata schema
+                                               (Title, Sub-title, News, Category, Author, Date,
+                                               URL, Class), crawled and aggregated from 6
+                                               fact-check agencies and 4 reputable news portals.
+[LOW      ] viniciuszani__portuguese-fake-news-classifiers.txt A Poetry/Makefile-orchestrated
+                                               PT-BR fake-news ML benchmark that converts the
+                                               Fake.Br and FakeTrue.Br corpora into Parquet,
+                                               then trains/tunes logreg+TF-IDF, MLP+TF-IDF,
+                                               BiLSTM, and BERTimbau (Portuguese BERT)
+                                               classifiers via Optuna with HuggingFace-published
+                                               artifacts.
+[LOW      ] fabriziosalmi__UglyFeed.txt        A pure-Python RSS pipeline that fetches feeds,
+                                               deduplicates and clusters near-duplicate articles
+                                               via TF-IDF/cosine + agglomerative clustering,
+                                               LLM-rewrites each cluster, and scores output with
+                                               a ~30-metric text-quality evaluation suite
+                                               (BLEU/ROUGE-L/METEOR/CIDEr/NIST,
+                                               edit/Levenshtein/Hamming, TF-IDF & BoW & LSA
+                                               cosine, plus readability indices) merged into a
+                                               single weighted Ugly Score.
+[REFERENCE] Cartus__Automated-Fact-Checking-Resources.txt A curated, MIT-licensed "awesome list"
+                                               / paper-and-dataset link index companion to two
+                                               survey papers (TACL 2022 "A Survey on Automated
+                                               Fact-Checking" and EMNLP 2023 multimodal survey)
+                                               that organizes the automated-fact-checking field
+                                               into a canonical pipeline taxonomy.

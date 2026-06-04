@@ -1,0 +1,60 @@
+================================================================================================
+tinysearch/tinysearch
+category: fulltext-search   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A static-site full-text search engine that replaces a traditional inverted index with one
+             approximate-membership Xor filter per document, serialized with bincode and
+             compiled into a tiny dependency-free WASM blob.
+innovation:  Invert the cost model of lexical search: instead of one global term->postings inverted index,
+             store one tiny per-document approximate-set-membership filter (Xor filter) keyed on
+             that document's token set, then answer a query by probing every document's filter
+             for each query term and ranking by the count of term hits. This trades exact recall
+             and term-frequency scoring for a drastically smaller, append-friendly index where
+             each document's lexical footprint is a fixed ~9-10 bits per unique token rather
+             than full postings lists.
+techniques:
+  - Xor8 filter (xorf crate): ~9.84 bits per key, ~0.39% FPR, fingerprint = u8; membership test
+    is f == B[h0(x)] XOR B[h1(x)] XOR B[h2(x)]
+  - 3-hash peeling construction: assign each key to one of three slots via reverse topological
+    order over a hypergraph so the xor of three table cells reproduces the fingerprint (single
+    static build, no incremental inserts)
+  - BinaryFuse8 successor filter: ~9.0 bits/key, denser slot packing, faster build than classic
+    Xor8, same xor-of-three-fingerprints probe
+  - per-document filter granularity: one filter per doc instead of a global inverted index;
+    query = AND of terms, rank by number of filters containing each term (score = hit count)
+  - bincode binary serialization of the Vec of (metadata, filter) tuples, with serde derive on
+    the filter structs
+  - build-time stop-word stripping to shrink the keyspace plus brotli/gzip post-compression
+    (~1KB/doc compressed)
+  - explicit rejection of tries (10x larger) in favor of probabilistic filters; abandoned prefix
+    search because it bloated the binary
+nest steals: Add an optional ultra-compact lexical mode to nest-runtime's bm25::Bm25Index path and a new
+             encoding inside the existing bm25_index section 0x08 (still v1, additive). Build a
+             deterministic Xor8/BinaryFuse8 filter per chunk over the chunk token set (seeded
+             hashing + alphabetical term order to preserve determinism), serialize the filter
+             arrays as little-endian repr(C), stored one filter per chunk_id parallel to
+             chunk_ids. nest-format gains a 'bm25-membership' codec variant: where full BM25
+             postings+tf are too big, the membership-only filter gives lexical pre-filtering at
+             ~9 bits/unique-token/chunk. In nest-runtime search-text, run the Xor probe over all
+             chunk filters as a cheap candidate generator (AND query terms, score by hit count)
+             feeding RRF, then the mandatory exact-cosine rerank still produces real scores, so
+             approximation is confined to candidate generation and never leaks into returned
+             scores, matching nest's search_contract. Unlocks a 'tiny+lexical' preset where
+             lexical search adds only kilobytes.
+compression: Directly on-mission. A per-chunk Xor8/BinaryFuse8 filter encodes lexical membership at a fixed
+             ~9-10 bits per unique token with no length-dependent postings or varint gaps, an
+             order of magnitude smaller than full BM25 postings+term frequencies, and it
+             compounds with nest's existing zstd on non-embedding sections. It is the smallest
+             way to keep a lexical/keyword channel alive in the 'tiny' preset, shrinking the
+             bm25_index footprint while still enabling hybrid search.
+perf:        Xor/BinaryFuse probes are three random table reads plus two XORs and one compare per term:
+             branch-light, cache-bound, data-parallel across chunks. Construction is O(n) via
+             peeling but build-time only (python side), so the Rust hot path stays read-only
+             over mmap. Filters can be probed in place from the mmapped 0x08 section with zero
+             deserialization if laid out as flat little-endian arrays. Xor8 FPR ~0.39% is
+             acceptable because the mandatory exact-cosine rerank removes false positives.
+license:     MIT (tinysearch); xorf crate MIT/Apache-2.0; BinaryFuse algorithm (Graf/Lemire) permissively
+             published

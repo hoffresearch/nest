@@ -1,0 +1,64 @@
+================================================================================================
+cruppstahl/libfor
+category: compression-integer   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A tiny Apache-2.0 ANSI-C scalar codec for Frame-of-Reference (FOR) integer compression that
+             bit-packs 32-bit integer residuals against a per-block minimum and supports random
+             access, search, and append operating directly on the compressed bytes.
+innovation:  Frame-of-Reference: store one block minimum (base) plus a single bit-width b =
+             ceil(log2(max-min+1)), then bit-pack every value as a fixed-width b-bit residual
+             (value - base). This makes the compressed array a flat, addressable bit-matrix so
+             you can random-access element i in O(1) (bit offset = i*b), binary-search a sorted
+             block, and append in place WITHOUT decoding the whole stream -- the codec computes
+             over compressed bytes, not just stores them.
+techniques:
+  - 5-byte block metadata header: 4-byte LE uint32 base/min + 1-byte bit-width b (#define
+    METADATA 5)
+  - Residual = value - block_min, bit-packed at b = ceil(log2(max-min+1)) bits (frame of
+    reference removes the high-order common prefix)
+  - Cascaded byte-aligned bitpacking via dispatch tables for_pack32/16/8/x[bits] with fully
+    unrolled generated kernels in for-gen.c (32-, 16-, 8-, remainder groups)
+  - for_select_bits(): O(1) random access by index*bits offset, mask across word boundary, add
+    base -- no full decode
+  - for_lower_bound_search_bits(): binary search executed directly on the compressed sorted
+    block
+  - for_append_*(): in-place append, only re-encodes (widen b) when new value exceeds current
+    bit width
+  - sorted vs unsorted variants: sorted extracts min/max from endpoints instead of full scan
+  - for_compressed_size_bits/sorted/unsorted: precompute exact output size before allocating
+nest steals: Adopt FOR as a new additive encoding id (reserve one in 4-255) in nest-format/src/encoding.rs,
+             targeting the integer-heavy required sections: chunk_ids and especially
+             chunks_original_spans (byte-offset/length pairs that are monotonic and small-range
+             -> ideal for delta+FOR). The select()/lower_bound primitives map directly onto
+             nest-runtime materialize and citation resolution (nest://content_hash/chunk_id): a
+             FOR-packed spans section lets the reader fetch span[i] with one O(1) bit-extract
+             straight off mmap, no decode of the whole section, preserving the zero-copy hot
+             path. For bm25_index(0x08) posting lists (doc ids in deterministic
+             alphabetical-term order), delta-code doc ids then FOR-pack each term's postings --
+             shrinks the index while keeping deterministic byte layout. Because FOR residual
+             width is data-derived and the base is stored, builds stay byte-identical
+             (deterministic). Implement as a small repr(C)-friendly Rust module (<300 loc, pure
+             scalar, no panic / thiserror on malformed bits) since the C is trivially portable;
+             gives a cheaper alternative to zstd for integer sections where random access
+             matters and zstd block decode would break zero-copy.
+compression: High for the specific axis of integer-section compression with preserved random access. FOR is
+             the canonical first stage for compressing chunk_ids, chunks_original_spans, and
+             bm25 posting lists. Unlike zstd (which nest already uses but must decode a whole
+             block, breaking mmap zero-copy), FOR keeps elements individually addressable, so it
+             compresses AND serves directly from disk -- exactly nest's north star. It is a
+             building block, not a finished codec: pairing delta-coding + FOR (and later
+             PFOR-style patching for outliers, which libfor omits) is the path to beating
+             general-purpose compressors on the structured-integer sections.
+perf:        Pure scalar ANSI C, intentionally no SIMD (author trades peak throughput for
+             portability/simplicity; runs on Linux/Windows/any sane system). Speed comes from
+             fully unrolled, byte-aligned, table-dispatched pack/unpack kernels generated in
+             for-gen.c rather than vectorization. Decode and especially select() are
+             branch-light; select is O(1) per element with at most a 2-word read+mask. Memory
+             overhead is just 5 bytes per block. Used in production in upscaledb to compress
+             32-bit keys. Caps at bits<=32 (no 64-bit path in the header). For nest, a NEON/AVX2
+             unpack kernel could be added later under nest-runtime's existing SIMD dispatcher to
+             recover the throughput libfor leaves on the table.
+license:     Apache License 2.0

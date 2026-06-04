@@ -1,0 +1,64 @@
+================================================================================================
+valeriansaliou/sonic
+category: fulltext-search   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A lightweight schema-less search backend in Rust that pairs a RocksDB inverted index (term ->
+             packed 32-bit IID arrays) with a per-bucket memory-mapped BurntSushi-fst
+             Finite-State Transducer for typo-tolerant autocomplete, returning external
+             identifiers rather than documents and running in a few MB of RAM.
+innovation:  Decouple the ranked inverted index from the lexical/fuzzy lookup layer: postings live in a
+             compact KV index (term -> packed u32 ids), and a separate immutable memory-mapped
+             FST holds only the vocabulary for prefix/Levenshtein expansion, with all
+             term/document identity collapsed to 32-bit ids so raw strings never sit on the hot
+             path.
+techniques:
+  - OID<->IID 32-bit id indirection so postings are u32 arrays not strings (30-40% vs 64-bit)
+  - 9-byte radix key [idx<1B>|bucket<4B>|route<4B>] of XxHash32 hashes, little-endian
+  - Term-To-IIDs postings as raw little-endian u32 arrays; IID-To-Terms reverse map for GC
+  - Immutable mmap'd BurntSushi fst::Set per bucket, lexicographic insertion required
+  - FST consolidation tasker: buffer word push/pop, periodic sorted-merge rebuild to fresh
+    on-disk FST
+  - fst_levenshtein automaton for typo tolerance + FST prefix scan for autocomplete, as
+    exact-match fallback
+  - Language-aware lexer: stopword-count for long text / n-gram guess for short text, ISO-639-3
+    stopword stripping, word-level only
+  - RAM write-buffering + RocksDB atomic delete_range() flush to minimize SSD write
+    amplification
+nest steals: nest-format gets a redesign target for the optional bm25_index (0x08) section: store postings as
+             the term -> sorted u32 chunk-ordinal arrays exactly like Sonic's Term-To-IIDs, with
+             terms keyed by a deterministic hash (nest already mandates alphabetical term order,
+             which doubles as the FST/lexicographic-insertion guarantee). The chunk-ordinal
+             indirection mirrors OID<->IID: nest already has chunk_ids, so the bm25 section only
+             needs to carry u32 ordinals + per-term doc-freq, never raw strings, and these
+             arrays are highly zstd-friendly (zstd is allowed on non-embedding sections, so
+             delta+zstd over sorted u32 postings is a direct extreme-compression win).
+             nest-runtime's bm25::Bm25Index can mmap these postings straight off disk (Sonic
+             proves mmap'd lexical lookup at a few MB RAM) and feed the existing
+             reciprocal-rank-fusion + mandatory cosine rerank path. Crucially, nest can add an
+             OPTIONAL FST/vocabulary blob (a new RESERVED section id 0x09+, additive-only) built
+             with the BurntSushi fst crate to deliver typo-tolerant and prefix SUGGEST over
+             chunk vocabulary, run as a Levenshtein/prefix automaton in nest-runtime, then
+             resolve expanded terms back into the BM25 postings before rerank. This addresses
+             nest's known CJK/word-segmentation gap path (language-aware lexer + ISO-639-3
+             stopword tables) and gives nest-cli search-text a fuzzy mode. The immutable
+             consolidation model (rebuild FST from sorted merge) fits nest's
+             frozen/deterministic-build ethos perfectly: build it once in python, freeze it,
+             mmap in rust.
+compression: Direct: collapsing terms and documents to 32-bit hashed ids and storing postings as sorted
+             little-endian u32 arrays (Sonic's 30-40% saving over 64-bit ids) is exactly the
+             kind of dictionary+integer-indirection that makes the bm25_index section tiny;
+             sorted u32 postings are ideal for delta-encoding + zstd (already permitted on
+             non-embedding sections), so this could shrink the lexical index dramatically while
+             staying mmap-scorable. The FST itself is a state-of-the-art compressed vocabulary
+             representation (shared prefixes/suffixes via minimal DFA), aligning with nest's
+             compress-more-than-everyone north star.
+perf:        ~1M messages indexed in 20MB KV + 1.4MB FST on disk, peak 28MB RAM; ~4000 PUSH/s (275us avg) and
+             ~1000 QUERY/s (880us avg) single-thread, queries parallelize across CPUs. FST is
+             mmap'd so vocabulary access is page-cache served, not heap-resident. Achilles heel:
+             FST is immutable and must be fully rebuilt on vocabulary change (consolidation
+             batched at intervals), which is fine for nest's frozen build-once model. Word-level
+             only (no positional/phrase index) to keep the FST shallow.
+license:     MPL-2.0 (Mozilla Public License 2.0)

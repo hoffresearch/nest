@@ -1,0 +1,72 @@
+================================================================================================
+google/sentencepiece
+category: tokenizers   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Language-agnostic subword tokenizer that trains a unigram-LM (or BPE) vocabulary by EM + Viterbi
+             over a lattice and ships the whole model (pieces, float scores, byte-fallback, NFKC
+             normalizer FST) self-contained in one protobuf, decoded at runtime via a Darts
+             double-array trie.
+innovation:  A tokenizer is a self-contained, deterministic compression codec: a vocabulary of
+             variable-length pieces with floating-point scores plus a single best-path
+             (Viterbi-over-lattice) decoder segments arbitrary text losslessly into ID streams.
+             The whole model (vocab + scores + normalization rules + byte-fallback) is one
+             frozen byte-stable blob, and the hot-path lookup structure is a double-array trie
+             that holds 80k+ pieces in ~2 MB instead of ~83 MB. This is exactly the
+             deterministic, single-file, compress-text primitive nest needs, sitting in front of
+             (or instead of) zstd for the canonical-text section.
+techniques:
+  - Unigram LM training: suffix-array-seeded large vocabulary, then EM (E:
+    forward-backward/Viterbi expected piece counts, M: update piece probabilities) with
+    loss-ranked pruning by shrinking_factor=0.75 until target size -- inverse of BPE's
+    grow-by-merge
+  - Viterbi best-path segmentation over a lattice where each piece is an arc scored by log
+    unigram prob; O(n) memory by storing only best_path score+backpointer per char position
+    (lattice nodes recognized then discarded, no node pool)
+  - Darts double-array trie: 4 parallel arrays base[]/check[]/value[]/score[], transition
+    next=base[node]+byte validated by check[next]==node; collapses 256-pointer-per-node tries to
+    ~2 MB for 80k pieces
+  - first_byte_max_len[256] table for early trie-traversal termination (2x on CJK where most
+    byte continuations are invalid)
+  - byte_fallback: OOV chars decompose into 256 raw BYTE-type pieces (Type=6) so the model is
+    total/lossless over any input, never emitting <unk>
+  - Self-contained proto2 ModelProto: repeated SentencePiece{piece, float score, Type} plus
+    NormalizerSpec, all behavior-changing params embedded for reproducible portable artifact
+  - precompiled_charsmap: NFKC normalization compiled into a second double-array trie +
+    '\0'-delimited rewrite string, layout [u32 trie_len][trie][normalized], so normalization is
+    a data table not code
+  - U+2581 meta-symbol marks whitespace so detokenization is a pure string replace -> fully
+    reversible round-trip
+nest steals: Two distinct steals. (1) New section + codec for extreme text compression: add a frozen
+             unigram-LM tokenizer model as an optional v1 section (reserved id 0x09+) and a new
+             encoding id (range 4-255) that stores chunks_canonical as Viterbi-segmented
+             piece-ID streams instead of raw/zstd bytes. Python (nest-python) trains the EM
+             model offline; nest-format/src/encoding/ gets a unigram_codec.rs holding the
+             read-only double-array trie + scores and running O(n)-memory Viterbi decode; the ID
+             stream is then varint/range-coded and optionally zstd'd. Because IDs index a shared
+             vocab, this beats per-chunk zstd on short repetitive corpora and is deterministic
+             (seeded EM + stable tie-break) so byte-identical builds hold. Segmentation is
+             reversible so content_hash over decoded canonical text stays stable. (2) Fix the
+             known CJK/Thai bm25 gap: replace the word-split tokenizer at
+             crates/nest-runtime/src/bm25/tokenize.rs with subword Viterbi segmentation from the
+             same shipped model, giving script-agnostic BM25 terms (alphabetical term order
+             preserved for determinism). The Darts double-array trie fits nest's repr(C),
+             little-endian, mmap, never-panic constraints: it is just integer arrays read
+             straight off disk.
+compression: Directly central to compress-data-more-than-everyone. A shared subword vocabulary turns
+             canonical text into dense small-integer ID streams; on repetitive/structured
+             corpora (news, JSON keys, code) this routinely cuts entropy-coder input vs raw
+             bytes, and stacking range/zstd on the ID stream compounds it. Unlike a general byte
+             compressor the model is trained ON the corpus so it captures domain-specific
+             morphemes, and byte_fallback guarantees losslessness on any input. The double-array
+             trie keeps the decoder tiny and mmap-resident, fitting the light/portable mandate.
+perf:        ~50k sentences/sec segmentation, ~6 MB runtime footprint (vocab ~1.5 MB + trie ~2 MB +
+             score/hash arrays). Inference is O(n*L) time, O(n) memory (L = max piece len 16-32
+             bytes). Hot path is pointer-light integer indexing into base/check, ideal for mmap.
+             SIMD upside is modest: community ARM64 port used CRC32 only for model-load hashing,
+             not Viterbi; trie traversal is lookup/branch-bound not a dot-product kernel, so it
+             does not contend with nest's AVX2/NEON cosine path. Stack-allocated Viterbi buffers
+             (cap ~8192 chars) with heap fallback keep allocation off the hot path.
+license:     Apache-2.0

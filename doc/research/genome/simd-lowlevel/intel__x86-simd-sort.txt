@@ -1,0 +1,61 @@
+================================================================================================
+intel/x86-simd-sort (now numpy/x86-simd-sort)
+category: simd-lowlevel   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A C++ header library of SIMD (AVX-512/AVX2) sorting primitives - quicksort, quickselect,
+             partialsort, argsort/argselect, and key-value sort for 16/32/64-bit ints and floats
+             - built as a hybrid of vectorized quicksort partitioning plus branch-free bitonic
+             sorting networks for small partitions.
+innovation:  Branch-free vectorized partitioning via AVX-512 compressstore (the single most transferable
+             idea).
+techniques:
+  - AVX-512 compressstore partitioning: cmp-vs-pivot -> mask -> _mm512_mask_compressstoreu
+    writes selected lanes densely, branch-free
+  - Branch-free bitonic sorting networks for small arrays (<= ~512 elems) built purely from
+    min/max COEX (compare-exchange) over SIMD registers, sorting N vectors simultaneously
+  - Hybrid quicksort: recurse with vectorized partition until partition size drops below a
+    power-of-2 threshold (512/256/128/64), then switch to the in-register network
+  - Key-value / argsort: a parallel index (or value) vector is permuted in lockstep with the
+    keys using the same shuffle/permute masks, so the sort carries a payload
+  - Runtime CPU-feature dispatch: pick AVX-512F+DQ / AVX2 / scalar kernel at load time
+  - NaN canonicalization: NaNs hoisted to array end and rewritten as a single quiet-NaN bit
+    pattern so the comparator stays total/branch-free
+  - Per-march tuning (skylake-avx512 for 32/64-bit, icelake for 16-bit) showing the network must
+    be specialized per lane-width
+nest steals: nest-runtime/src/simd (the dispatcher that already does AVX2/NEON/scalar dot products) is the
+             natural home. Two concrete steals: (1) Branch-free top-k / threshold filtering on
+             the search hot path. After exact-cosine rerank, nest must select top-k and filter
+             candidates above a score threshold; today that is a scalar scan with branches.
+             Adapt the compressstore trick - compute scores in a SIMD register, mask = (score >=
+             threshold), then compressstore the surviving candidate indices densely (vpcompressd
+             on AVX2 via _mm256_maskz_compress on AVX-512, or a NEON shuffle-table fallback).
+             This collapses the candidate-pruning loop to branch-free SIMD and pairs directly
+             with the existing dot-product kernel. (2) The key-value/argsort pattern maps onto
+             materialize/search returning (score, chunk_id) pairs: permute the id payload in
+             lockstep with the score vector so the final sorted top-k comes out without a
+             separate gather. Keep all of this in the existing simd dispatcher behind the same
+             AVX2/NEON/scalar feature-gates, never panic, scalar fallback mandatory. This does
+             NOT touch the FROZEN nest-format container (no new section/encoding id), so it
+             respects additive-only constraints - it is pure runtime acceleration.
+compression: Low-to-indirect. This library is about sort/select throughput, not bytes-on-disk, so it does not
+             advance the 'compress more than everyone' north star directly. Indirect leverage:
+             (a) a fast branch-free argsort enables cheap reordering of chunks/embeddings by a
+             similarity or cluster key at build time, and clustered/sorted embeddings compress
+             better under delta+int8 quantization (locality improves residual entropy) - a real
+             but second-order win for the tiny/compressed presets; (b) faster top-k keeps the
+             mandatory exact-cosine rerank cheap even as corpora grow. It buys serving speed and
+             a modest compression-locality assist, not a new codec.
+perf:        Reported 4-10x over std::sort for object/key-value sort on AVX-512; the upstream research
+             (Bramas) reports ~8x on small arrays (<16 SIMD vectors), ~4x vs libstdc++ and ~1.4x
+             vs Intel IPP on large arrays. Performance comes entirely from eliminating branch
+             mispredictions (compressstore) and from branch-free min/max networks that saturate
+             SIMD ports; OpenMP variant adds up to ~3x with <=16 threads. Memory: object/argsort
+             needs arrsize*sizeof(key) + arrsize*4 bytes aux (O(N) scratch). Critical caveat for
+             nest: compressstore (vpcompressd) is an AVX-512 instruction; on AVX2 it must be
+             emulated with a 256-entry precomputed permute LUT, and on aarch64/NEON there is no
+             compress so it needs a shuffle-table fallback - the scalar fallback path is
+             mandatory under nest constraints.
+license:     BSD-3-Clause

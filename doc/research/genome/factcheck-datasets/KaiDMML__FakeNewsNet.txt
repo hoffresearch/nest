@@ -1,0 +1,46 @@
+================================================================================================
+KaiDMML/FakeNewsNet
+category: factcheck-datasets   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A fake-news research data repository that ships only minimal CSV manifests (id, news_url, title,
+             tab-separated tweet_ids) plus per-object JSON files, and reconstructs the full
+             multi-GB corpus (news content, tweets, retweets, user profiles, social graph) on
+             demand via a rate-limit-coordinated parallel download harness.
+innovation:  Dehydrated-dataset / manifest-plus-pointers pattern with dedup-by-reference: ship a tiny
+             canonical ID+URL manifest and store every heavy object once in a shared,
+             content-addressed pool that records reference by natural key.
+techniques:
+  - Manifest CSV with stable string IDs decoupling identity from payload
+  - Tab-separated ID reference lists as foreign keys into a shared object pool
+  - Content-addressed-by-natural-key per-object JSON files (<tweet_id>.json, <user_id>.json)
+    stored once, referenced many times
+  - Two-layer split: canonical shareable manifest vs reconstructable hydrated payload
+  - Flask key-broker coordinating rate-limited parallel reconstruction across workers
+  - Factory-dispatched resumable partial collection driven by config.json
+  - newspaper3k HTML-to-canonical-JSON article normalization (text/images/publish date)
+nest steals: nest-format gets an additive RESERVED section (0x09+) for external source refs (stable id + url)
+             so a .nest can be a dehydrated manifest that deterministically re-hydrates chunks;
+             nest-python builder gets a pre-zstd chunk-dedup pass that stores duplicate
+             canonical spans once and emits pointer indices in chunk_ids; the
+             tweet_ids->object-pool model becomes the data layout for a future deterministic
+             graph_edges section in nest-runtime for offline graph search.
+compression: High conceptually, indirect in practice. FakeNewsNet itself uses no entropy coder or
+             quantization - its "compression" is structural: dedup-by-reference (each user/tweet
+             stored once, referenced by ID) and dehydration (ship the recipe, not the corpus).
+             This is exactly the lever nest needs for the 'compress whole datasets/repos more
+             than everyone' goal: deduplicate identical chunks before zstd, and offer a manifest
+             mode where a .nest references external sources instead of inlining them. Both
+             shrink the container without touching the embedding hot path.
+perf:        No SIMD, no entropy coding, no on-disk binary format - pure filesystem-of-JSON plus CSV.
+             Performance characteristic worth noting is the parallel-reconstruction harness: a
+             Flask key-broker fronts num_process workers to amortize external API rate limits, a
+             useful pattern for nest-cli batch-build throughput but irrelevant to the mmap/SIMD
+             serving path. Dedup magnitude depends on object sharing (users/tweets recur heavily
+             across news items), so structural savings are corpus-dependent, not guaranteed.
+license:     Repository is research/academic; code under an open-source license (no SPDX header prominently
+             shown), but the underlying tweet/news payloads are NOT redistributable (Twitter ToS
+             + publisher copyright) - which is precisely why the dehydration pattern exists.
+             Treat as reference-only for ideas, not vendored code.

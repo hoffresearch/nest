@@ -1,0 +1,85 @@
+================================================================================================
+genome :: compression-general (index)
+general-purpose byte compression and entropy coding
+================================================================================================
+
+one file per project in this folder. open the one you need.
+
+[HIGH     ] facebook__zstd.txt                 A general-purpose LZ77-family compressor that
+                                               pairs a fast match-finder with two entropy
+                                               back-ends (Huff0 Huffman for literals, FSE/tANS
+                                               table-based ANS for sequence symbols), plus
+                                               trained dictionaries, long-distance matching, and
+                                               a repeat-offset cache, all wrapped in a
+                                               self-describing frame/block format.
+[HIGH     ] google__brotli.txt                 A general-purpose lossless byte compressor
+                                               combining a modern LZ77 with a 16 MiB sliding
+                                               window, a 121-transform static dictionary,
+                                               per-category Huffman prefix codes selected by
+                                               2nd-order context modeling, and block-type
+                                               switching, standardized in RFC 7932.
+[HIGH     ] ebiggers__libdeflate.txt           A heavily optimized MIT-licensed C library for
+                                               DEFLATE/zlib/gzip that beats stock zlib ~2x on
+                                               both compress and decompress by combining a
+                                               minimum-cost-path ("near-optimal") parser at high
+                                               levels with a two-level Huffman decode table and
+                                               a 64-bit branchless bit-buffer refill on the
+                                               decode side.
+[HIGH     ] klauspost__compress.txt            A pure-Go suite of optimized compression codecs
+                                               (zstd, S2/Snappy, flate/deflate) built on
+                                               separable entropy primitives - huff0 (Huffman)
+                                               and fse (Finite State Entropy / tANS) - with
+                                               dictionary training, four match-finder tiers, and
+                                               assembly-accelerated decode.
+[HIGH     ] Blosc__c-blosc2.txt                A meta-compressor that does not invent an entropy
+                                               coder but front-loads a SIMD-vectorized,
+                                               pipelinable byte-transform stage (shuffle /
+                                               bitshuffle / delta / bytedelta / trunc_prec)
+                                               ahead of stock LZ codecs (BloscLZ, LZ4, Zstd),
+                                               restructuring numerical byte streams so the
+                                               downstream coder sees long runs and small
+                                               residuals, all wrapped in a documented blocked
+                                               chunk/superchunk/frame container.
+[HIGH     ] Cyan4973__FiniteStateEntropy.txt   Reference C implementation of Finite State
+                                               Entropy (tANS, table-based Asymmetric Numeral
+                                               Systems) plus Huff0, the entropy-coder backends
+                                               that power zstd, providing near-arithmetic
+                                               compression accuracy at hundreds of MB/s via a
+                                               single state-transition table lookup per symbol.
+[MEDIUM   ] google__snappy.txt                 A speed-first LZ77 byte compressor that emits a
+                                               stream of tag-byte-prefixed elements (literals +
+                                               back-reference "copies") with no entropy coding,
+                                               hitting ~250 MB/s compress / ~500 MB/s decompress
+                                               at ~1.5-4x ratio, plus a chunked framing format
+                                               with per-chunk masked CRC-32C for streaming.
+[MEDIUM   ] lz4__lz4.txt                       A byte-aligned LZ77 compressor with no entropy
+                                               coder, whose block format is a stream of [token |
+                                               literal-length-extension | literals | 2-byte LE
+                                               offset | match-length-extension] sequences
+                                               decodable at multiple GB/s per core via
+                                               branch-light wildcopy.
+[MEDIUM   ] madler__zlib.txt                   The canonical C reference implementation of
+                                               DEFLATE (RFC 1951) and its zlib/gzip wrappers:
+                                               LZ77 sliding-window matching via hash chains plus
+                                               per-block dynamic Huffman entropy coding, with a
+                                               table-driven multi-level inflate decoder.
+[MEDIUM   ] zlib-ng__zlib-ng.txt               A modernized, SIMD-accelerated fork of zlib
+                                               implementing DEFLATE (RFC 1951), zlib (RFC 1950)
+                                               and gzip (RFC 1952) with runtime CPU dispatch
+                                               over per-hot-path optimized kernels (CRC32,
+                                               adler32, longest_match, slide_hash, compare256,
+                                               inflate_fast).
+[MEDIUM   ] mcmilk__zstdmt.txt                 A C library (BSD/GPL, ~96% C, posix-threads) that
+                                               adds multithreaded streaming
+                                               compression/decompression on top of seven codecs
+                                               (Zstandard, LZ4, LZ5, Lizard, Brotli, Snappy-c,
+                                               LZFSE) by chunking input and wrapping each
+                                               independently-compressed chunk in a
+                                               self-describing skippable-frame header.
+[REFERENCE] ZongqianLi__500xCompressor.txt     An autoencoder-style neural prompt compressor
+                                               that uses a frozen LLaMA-3-8B (with ~0.3%
+                                               trainable LoRA params) as the encoder to squeeze
+                                               up to ~500 natural-language tokens into the
+                                               per-layer KV-cache values of a single learned
+                                               special token, which the same frozen LLM then
+                                               decodes for text regeneration or QA.

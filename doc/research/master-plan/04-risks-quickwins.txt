@@ -1,0 +1,86 @@
+================================================================================================
+master plan :: risks + quick wins
+================================================================================================
+
+part 4 of 5.
+
+risks
+------------------------------------------------------------------------------------------------
+  - CONTRACT INTEGRITY (highest): score_subset (search.rs:84-121) reranks against the SAME lossy
+    stored dtype, so 'returned score is real cosine' is already only 'real cosine at stored
+    precision' for quantized presets. Shipping int4/RaBitQ/PQ without the SECTION_EMBEDDINGS_FP
+    rerank source turns the headline guarantee into a half-truth - Phase 0 MUST land the fp
+    rerank source before any sub-int8 preset.
+  - IN-PLACE-SCORING RAM LEAK: materialize_f32_vectors (materialize.rs:32-41) expands every
+    dtype to n*dim*4 f32 whenever HNSW is attached (mmap_file.rs:113), so a 4-bit codec halves
+    disk but keeps a dense f32 copy in RAM on exactly the tiny/hybrid presets that need it. The
+    ANN distance path must score packed blocks (or keep f16) or the compression win is paid back
+    in memory - a Phase-0 blocker, not a Phase-3 detail.
+  - DETERMINISM: every seeded/iterative quantizer (FWHT/FHT rotation, PCA, RaBitQ rotation,
+    FastCDC mask, ZDICT, k-means) must be a pure seeded fixed-iteration stable-tie-break
+    function or 'same chunks + same model fingerprint => byte-identical file' breaks. Float
+    horizontal-sum is non-associative (FMA-vs-mul/add can flip a sign near zero), so compute
+    build-time codes backend-independently and verify byte-identical output across two builds
+    AND across SIMD backends per codec; do NOT adopt calibration that depends on a calibration
+    corpus.
+  - CODEC/DEDUP ORDERING is load-bearing: dedup and CDC MUST run on DECOMPRESSED bytes with
+    compression applied per unique block AFTER, or the dedup ratio collapses to near-zero.
+    Encode this as a code-level invariant + regression test, not a comment.
+  - NEVER compress/dedup/shuffle the embeddings section with zstd/CDC: they are scored from mmap
+    on the SIMD hot path; only fixed-stride quantization codecs are legal there (the only safe
+    shuffle target is the int8 SCALE array, never the i8 bodies). Gate non-embedding encodings
+    to reject the embeddings section explicitly.
+  - content_hash / citation stability: content_hash hashes DECODED canonical bytes, so
+    dedup/intpack/frontcode codecs MUST decode byte-identically or every nest:// citation
+    breaks; quantized embeddings already make content_hash encoding-dependent for that section,
+    which is documented and accepted - keep the canonical six the stable anchor and never claim
+    cross-precision citation stability.
+  - SCOPE / LINE-CAP / SOLO-AUTHOR REALITY: <=300 lines/file (333 hard), single-responsibility,
+    edition-2024, never-panic typed thiserror including on malformed/truncated mmap bytes. Split
+    every codec (pack/unpack/kernel/select) and do the SIMD functable refactor BEFORE
+    multiplying dtypes; sequence the high-ROI dict+bitpack+int8 wins first and keep the FSE/tANS
+    entropy stage, graph engine, json tape, and edit journal deferrable.
+  - LICENSE CONTAMINATION: clean-room from format descriptions/papers - TurboPFor (GPL),
+    VectorChord/sqlite-vector (AGPL/ELv2), Neo4j/GDS/memgraph/FalkorDB/blazegraph
+    (GPL/BSL/SSPL), nightly portable_simd/packed_simd ports. Reimplement on nest's stable
+    AVX2/NEON/scalar dispatcher; the algorithms (RaBitQ/PFOR/FOR/front-coding/CDC) are public,
+    the engines are not. License-vet every demo dataset (FEVER/TabFact CC BY-SA, FakeNewsNet
+    academic-only) before shipping it in a .nest.
+  - RECALL CLIFFS + CJK/THAI: 1-bit excels at high dim and can fail at low dim - validate
+    recall@10 on the actual PT-BR demo model before defaulting any nano preset, keep int8/RQ the
+    safe default, and never ship a 1-bit preset without bm25 (and the tokenizer fix) as a recall
+    backstop; aggressive vector quantization makes the lexical path more load-bearing.
+  - MTEB HARNESS NEEDS QRELS the PT-BR demo lacks; the recall-vs-exact-f32 overlap metric works
+    with zero labels as the interim, but real nDCG/MRR needs a seeded synthetic or hand-labeled
+    qrels set or the numbers are vacuous - budget for building it before claiming quality
+    non-regression.
+
+quick wins
+------------------------------------------------------------------------------------------------
+  - Replace hardcoded zstd level-19 (zstd_codec.rs:10) with level/LDM params and bump to level
+    22 + long-distance-matching for large payloads - one-time build cost, level-independent
+    decode, no format change.
+  - Store chunk_ids as 32 raw SHA-256 bytes instead of the 71-byte 'sha256:<64 hex>' ascii
+    (~2.2x on that section, content_hash invariant, single roundtrip test) - highest size/effort
+    ratio in the project.
+  - Add int8 scale_kind=1 block-scaled int8 (one f16 scale per 32-dim block) reusing the float16
+    codec: recovers per-vector-outlier recall at ~same size, NO new encoding id and NO version
+    bump because the scale_kind field already exists at int8.rs:18 and parse() already rejects
+    unknown kinds.
+  - 1-byte log-quantized BM25 doc_lengths (replace raw u32) - 4x on the doc-length array,
+    absorbed by the exact rerank, bump only BM25_PAYLOAD_VERSION.
+  - Add the per-codec roundtrip+content_hash-equality test template now (mirrors the existing
+    zstd_roundtrip_preserves_bytes test) so every later codec ships behind a hard merge gate.
+  - Enable clap's suggestions feature for Jaro did_you_mean over the 8 subcommand names and real
+    chunk_ids - error-branch only, zero hot-path cost, pure ergonomics.
+  - Add a u32 offset table at the head of chunk_ids/canonical/spans so cite/materialize reach
+    chunk N in O(1) off mmap instead of the current O(n) length-prefixed scan -
+    compression-neutral but unblocks serving large compressed corpora.
+  - Add an F16C tier to the AVX2 f16 dot path (vcvtph2ps) so the compressed/tiny f16 preset
+    stops falling back to scalar on x86 (~25 lines, parity test already exists).
+  - Replace query.extract::<Vec<f32>>() (nest_file.rs:23) with a zero-copy PyBuffer<f32> borrow
+    + Python::detach - removes a per-search heap alloc+memcpy and gives free multi-thread
+    concurrency on the read-only mmap.
+  - Reserve and name encoding ids 4-9 and section ids 0x09-0x10 as constants in layout/mod.rs
+    now (no behavior change) so the additive lanes are claimed and every later PR is a small
+    additive diff.

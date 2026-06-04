@@ -1,0 +1,66 @@
+================================================================================================
+google/brotli
+category: compression-general   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A general-purpose lossless byte compressor combining a modern LZ77 with a 16 MiB sliding window,
+             a 121-transform static dictionary, per-category Huffman prefix codes selected by
+             2nd-order context modeling, and block-type switching, standardized in RFC 7932.
+innovation:  The static dictionary + word-transform layer: ~13,504 base words (4-24 bytes) expanded by 121
+             reversible word transforms (prefix/suffix add, FermentFirst/FermentAll case-shifts,
+             OmitFirstN/OmitLastN cuts) into ~1.6M effective entries, addressed as ordinary LZ77
+             back-references whose distance overflows the sliding-window range. A tiny shipped
+             dictionary acts as a giant priming corpus so the very first occurrence of a domain
+             string compresses to one short reference, killing cold-start redundancy that pure
+             window-based LZ cannot touch.
+techniques:
+  - 121 word transforms over 13,504 base words: Identity, FermentFirst (uppercase first),
+    FermentAll (uppercase all), OmitFirst1-9, OmitLast1-9, plus optional literal prefix/suffix
+    bytes (RFC 7932 Appendix B); reconstruction is word_id=distance-(maxdist+1),
+    index=word_id%NWORDS[len], transform_id=word_id>>NDBITS[len]
+  - Static dictionary addressed through the SAME LZ77 <length,distance> mechanism: distance <
+    maxdist+1 means window back-reference, distance >= maxdist+1 means dictionary lookup; one
+    unified copy path, no separate opcode
+  - 2nd-order context modeling: per-literal Huffman tree chosen via CMODE[blocktype] +
+    context-id from last two output bytes, indexing a 64-entry-per-blocktype context map CMAPL;
+    distances use a 4-entry context map keyed on copy length
+  - Block-type switching: independent block-length counters for Literals/InsertCopy/Distances;
+    when a counter hits zero a new block type and run-length are read, swapping the active
+    Huffman trees mid-stream (adaptive without re-sending tables)
+  - Combined insert-and-copy command codes that fuse literal-run length with copy length into
+    one symbol, cutting command overhead
+  - Variable sliding window from 1 KiB-16 to 16 MiB-16, negotiated per stream
+  - RFC 9841 Shared Brotli: custom/context-dependent dictionaries and custom transform lists
+    that override Appendix B, enabling domain-trained shared dictionaries
+nest steals: Two distinct steals, both in nest-format encoding/sections. (1) Domain shared-dictionary for
+             text sections: nest already vendors zstd for non-embedding sections; zstd natively
+             supports trained dictionaries (zstd --train / ZDICT). Train one deterministic
+             dictionary over chunks_canonical at build time in nest-python, store it as a new
+             additive section (reserved id 0x09+, encoding id stays a zstd variant in the 4-255
+             reserved range), and have nest-runtime mmap+prime the zstd decoder with it. For
+             nest's corpora (PT-BR fake-news, repeated boilerplate, JSON/YAML keys) this is
+             exactly brotli's cold-start win and should materially shrink the 'tiny' preset's
+             text bytes below the current 0.283 ratio while keeping content_hash stable (dict
+             affects only physical encoding, not decoded canonical bytes). (2) The transform
+             idea itself adapts to a nest-native lightweight text codec: a small frozen
+             word-list + reversible transforms (case/prefix/suffix/cut) is a deterministic,
+             dependency-free way to squeeze repetitive structured text (JSON/YAML field names,
+             URL prefixes, dataset schemas) without pulling brotli's C core into the small rust
+             core. Either way it lives entirely on the non-embedding text path, never touching
+             the float embedding hot path that must stay raw-scored from mmap.
+compression: Directly on the north-star 'compress more than everyone' axis. The shared-dictionary trick is
+             the single highest-leverage gain for nest's text/JSON/YAML sections: it attacks
+             inter-chunk and cold-start redundancy that per-chunk zstd misses, and is the
+             standard way trained dictionaries beat generic compressors on many small similar
+             records. Window/context/Huffman details are reference-grade but lower priority
+             since nest delegates byte entropy coding to vendored zstd.
+perf:        Brotli decompresses at deflate-class speed (browser-grade) and compresses 17-25% denser than
+             gzip on web text; levels 10-11 do near-exhaustive dictionary+transform search and
+             are slow, levels 1-9 are fast. The transform table is data-only (no SIMD);
+             dictionary lookup is O(1) array indexing. For nest the relevant cost is build-time
+             only (dictionary training in python) plus a one-time decoder prime in rust; runtime
+             decode stays cheap and the embedding hot path is untouched, so zero impact on SIMD
+             dot-product latency.
+license:     MIT (brotli reference implementation); RFC 7932/9841 formats are open standards

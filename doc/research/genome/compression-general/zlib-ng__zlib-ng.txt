@@ -1,0 +1,59 @@
+================================================================================================
+zlib-ng/zlib-ng
+category: compression-general   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A modernized, SIMD-accelerated fork of zlib implementing DEFLATE (RFC 1951), zlib (RFC 1950) and
+             gzip (RFC 1952) with runtime CPU dispatch over per-hot-path optimized kernels
+             (CRC32, adler32, longest_match, slide_hash, compare256, inflate_fast).
+innovation:  A central runtime "functable": a struct of function pointers (one per hot operation) resolved
+             exactly once at startup from CPU feature detection, so every hot-loop call is a
+             single indirect jump to the best kernel
+             (scalar/SSE2/AVX2/AVX512/VPCLMULQDQ/NEON/PMULL+EOR3/RVV) with zero per-call CPUID
+             branching. This cleanly decouples algorithm from microarchitecture across ~10 ISAs
+             behind one stable dispatch surface.
+techniques:
+  - functable: one-time-resolved struct of fn pointers per hot op, indirect call per hot loop,
+    no per-call feature check
+  - CRC32 via carryless multiply folding (PCLMULQDQ/VPCLMULQDQ on x86, ARMv8.2 PMULL+EOR3)
+    instead of byte-at-a-time table
+  - CRC32-C hardware intrinsic reused AS the hash function for the hash-chain match finder
+  - Intel-derived deflate 'quick' and 'medium' match-finding strategies as fast tiers distinct
+    from greedy/lazy slow tiers
+  - longest_match / compare256 SIMD match extension (Cloudflare + fast_zlib lineage) comparing
+    256 bytes per SIMD step
+  - slide_hash SIMD to bulk-decrement hash-chain heads on window slide
+  - inflate_fast chunked copy (chunkmemset): overlapping vector loads/stores for LZ
+    back-references instead of byte loops
+  - ZLIB_COMPAT vs zlib-ng-native dual ABI: one engine, two header surfaces
+nest steals: Two concrete steals plus a reference boundary. (1) HASHING fast-path: nest's four SHA-256
+             surfaces in nest-format/src/hashing are the integrity contract and must stay
+             cryptographic, but non-crypto work (dedup keys, section identity probes, future
+             bm25 term hashing in nest-runtime) should use CRC32-C via carryless-multiply /
+             ARMv8 CRC behind nest's existing OnceLock dispatcher in
+             nest-runtime/src/simd/mod.rs, reusing the exact 'resolve once, indirect-call
+             forever' pattern nest already uses for dot products. (2) DISPATCH PATTERN:
+             generalize nest's SimdBackend OnceLock into a small functable-style struct of fn
+             pointers so new kernels (f16 convert, i8 widen, a future bitpacked decoder)
+             register one entry each instead of growing match arms inside every dot_* fn,
+             keeping each simd/*.rs file under the 300-line cap as kernels multiply. (3)
+             REFERENCE only for codecs: nest must NOT add a DEFLATE codec -- zstd-19 already
+             beats DEFLATE on nest's text sections; the value is the engineering scaffolding,
+             not the entropy coder.
+compression: Low-to-moderate for ratio: DEFLATE's Huffman+LZ77 is strictly weaker than the zstd
+             FSE/Huffman+large-window nest already uses, so adopting zlib-ng's codec yields NO
+             ratio win. Transferable compression-adjacent value: the SIMD inflate chunking
+             pattern (overlapping vector copies for back-references) is the right template if
+             nest ever ships a lightweight bitpacked/varint section decoder, and CRC-as-hash
+             speeds dedup/identity work that precedes compression. Serves the 'compress more
+             than everyone' north star only indirectly.
+perf:        Kernels resolved once at startup; hot loops pay one indirect call. VPCLMULQDQ+AVX512 CRC32 folds
+             ~64 bytes/iter; ARMv8.2 PMULL+EOR3 is the aarch64 analog (directly relevant to
+             nest's NEON target). inflate_fast replaces byte-wise LZ expansion with overlapping
+             16/32/64-byte vector moves; compare256 extends matches a full vector register per
+             step. Tight inner loops, minimal extra memory.
+license:     zlib license (permissive, BSD-like, no binary-attribution requirement). Vendor-friendly for
+             nest's single-file ethos, but nest should reimplement the patterns in Rust rather
+             than vendor C.

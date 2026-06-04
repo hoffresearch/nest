@@ -1,0 +1,85 @@
+================================================================================================
+NixOS/nix
+category: content-addressed   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A purely-functional package manager whose store is a content-addressed object graph: artifacts
+             are identified by SHA-256 hashes of a canonical, metadata-stripped serialization
+             (NAR) plus a structured "fingerprint" string, enabling deterministic builds and
+             distributed substitution from untrusted binary caches.
+innovation:  Decoupling logical-content identity from physical-byte identity via a canonical serialization
+             (NAR) hashed independently of its on-disk compressed encoding: the narinfo carries
+             BOTH NarHash/NarSize (uncompressed canonical content) and FileHash/FileSize
+             (compressed artifact), and signatures/addresses are computed only over the
+             uncompressed canonical form. This makes the content identity stable across any
+             compression codec while still verifying the physical bytes you downloaded.
+techniques:
+  - NAR canonical serialization: 64-bit LE length-prefixed strings padded to 8-byte boundaries,
+    magic 'nix-archive-1', directory entries sorted by name, all timestamps/metadata stripped
+    except executable-bit and symlink target -> byte-identical output for identical trees
+  - Structured hash 'fingerprint' string: type ':sha256:' inner-digest ':' store ':' name,
+    SHA-256'd then truncated/compressed from 256 to 160 bits and rendered in a custom base-32
+    alphabet (omits e,o,u,t, reverse byte order)
+  - Dual-identity addressing: NarHash/NarSize (logical, uncompressed) vs FileHash/FileSize
+    (physical, compressed .nar.xz/.zst) tracked separately in narinfo
+  - Hash-modulo-self-references: replace the object's own not-yet-known store path with a fixed
+    sentinel/scratch placeholder before hashing, so a self-referential CA digest is computable
+    and placement-independent
+  - Ed25519 signing over a fingerprint '1;StorePath;NarHash;NarSize;refs' covering only
+    uncompressed content, so recompression never invalidates signatures
+  - Minimal HTTP substitution protocol: GET /<storehash>.narinfo (metadata keyed by content
+    hash) + GET /nar/<filehash>.nar.<ext> (content-addressed blob), trivially
+    mirrorable/offline-cacheable
+  - Content-defined chunking lesson (nix-casync/Tvix): whole-NAR dedup is weak (one changed bit
+    busts the whole file); CDC into a chunk-store + index-store (caibx) enables sub-file dedup,
+    and compression must sit OUTSIDE the chunking layer because payloads are chunked
+    decompressed
+  - Fixed-output derivations: declare expected flat-or-recursive hash up front, decoupling
+    content address from build inputs (intrinsic vs extrinsic addressing)
+nest steals: nest-format already has the right skeleton (content_hash = decoded canonical sections, stable
+             across encodings; per-section checksum = physical bytes) -- Nix validates this
+             split is the correct primitive and supplies hardening details. Concretely: (1) In
+             crates/nest-format/src/hashing.rs, adopt NAR's structured-fingerprint discipline --
+             prefix the content_hash preimage with a typed, length-delimited domain string
+             (version + section-id + logical-length) rather than concatenating raw section
+             bytes, eliminating canonicalization ambiguity and giving the same domain-separation
+             Nix gets from its 'type:sha256:...:store:name' fingerprint. (2) In
+             sections/encoding, formalize that content_hash is computed over the NAR-style
+             canonical decoded form while per-section checksum stays over compressed physical
+             bytes -- making content_hash provably codec-invariant (raw==zstd==f16 for
+             non-embedding sections), the exact NarHash-vs-FileHash separation; this lets nest
+             re-encode a .nest (raw->tiny preset) and prove identical content_hash, a killer
+             sovereign re-packaging guarantee. (3) For citation layer
+             nest://content_hash/chunk_id, borrow length-prefixed+8-byte-padded framing for
+             chunk_ids/spans so the canonical form is unambiguous and deterministic across
+             platforms. (4) Future additive section id 0x09+: a content-defined-chunking
+             'chunk_store'+'index' pair (FastCDC, gear-hash rolling) for the
+             chunks_canonical/text section, giving sub-document dedup across many .nest files or
+             repeated boilerplate inside one corpus -- directly serving 'compress more than
+             everyone' by deduplicating shared substrings before zstd, with the Nix-learned
+             constraint that CDC runs on DECOMPRESSED bytes and compression is applied per-chunk
+             afterward. (5) nest-cli could gain a Nix-style 'verify' checking both surfaces and
+             a 'cite'/export emitting a narinfo-like sidecar for distributed mirroring -- all
+             offline, no socket.
+compression: High. The content-defined-chunking + chunk-store/index model is a concrete path to
+             sub-file/cross-file deduplication that compounds with nest's existing zstd (dedupe
+             shared substrings BEFORE entropy coding). The NarHash/FileHash separation is the
+             formal license to aggressively re-encode (zstd/f16/int8) while keeping a stable
+             content identity -- you can ship the smallest preset and still prove it carries the
+             same content_hash as the exact preset. The Nix lesson 'compression outside the
+             chunking layer, CDC on decompressed bytes' prevents a classic mistake that would
+             otherwise destroy nest's dedup ratio.
+perf:        NAR/store-path hashing is single-threaded SHA-256 over a streaming serialization; cheap relative
+             to builds. Binary cache supports multi-threaded xz and zstd compression of NARs
+             (only xz/zstd are MT-capable); cache.nixos.org defaults to xz (smallest) with zstd
+             as the faster-decompress alternative. The 256->160-bit truncation keeps store-path
+             digests short (32 base-32 chars) at negligible collision risk for the namespace
+             size. CDC (nix-casync) adds chunk-lookup overhead but turns O(file) re-uploads into
+             O(changed-chunks); reassembly is sequential concatenation of zstd-decompressed
+             chunks.
+license:     LGPL-2.1-or-later. Use as design reference / clean-room reimplementation only -- do NOT vendor
+             code into nest's permissively-licensed Rust crates; the algorithms (NAR framing,
+             fingerprint scheme, CDC) are ideas/specs, not copyrightable, so reimplementing from
+             the published protocol spec is safe.

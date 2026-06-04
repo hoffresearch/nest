@@ -1,0 +1,67 @@
+================================================================================================
+intel/neural-compressor
+category: vector-quantization   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A multi-backend (PyTorch/ONNX/TF) post-training quantization toolkit whose LLM core implements
+             weight-only quantization (RTN, GPTQ, AWQ, AutoRound/SignRound) and microscaling
+             block-float formats (MXFP4/NVFP4, NF4/FP4) at 1-8 bits with group-wise scales and
+             zero-points.
+innovation:  Block/group-wise affine quantization with a shared per-group scale (and optional zero-point)
+             where the scale maps the group amax to the format max, combined with learned
+             rounding direction (AutoRound SignSGD) and microscaling block-float element formats
+             (MXFP4 E2M1+E8M0, NVFP4 E2M1+E4M3+FP32) to hit near-lossless 4-bit.
+techniques:
+  - RTN group-wise affine quant: per-group scale=amax/qmax, sym (signed, no zero-point) vs asym
+    (unsigned + zero-point) schemes, group_size from 32/128 down to per-channel(-1)
+  - AutoRound/SignRound: SignSGD optimization of per-weight rounding offset v in [-0.5,0.5] plus
+    learned clip scales alpha/beta over ~200 steps, block-wise output reconstruction, no
+    inference overhead
+  - GPTQ: Hessian-based (inverse activation covariance) error-compensated quantization,
+    column-by-column with percdamp dampening and actorder reordering
+  - AWQ: protect ~1% salient channels (chosen by activation magnitude) via per-channel scaling
+    before quant
+  - MXFP4 microscaling: E2M1 4-bit element (values +/-{0,.5,1,1.5,2,3,4,6}) + shared E8M0 8-bit
+    power-of-two scale per 32-element block (decode = pure exponent add, no multiply)
+  - NVFP4 two-level scaling: E4M3 FP8 scale per 16 elements + per-tensor FP32, finer
+    granularity, amax encoded near-FP8 precision
+  - NF4 non-uniform codebook: information-theoretically optimal 4-bit levels for
+    normally-distributed weights (QLoRA), plus FP4
+  - Double quantization: quantize the scales themselves (fp16->fp8->int4) to amortize per-group
+    scale overhead; layer-wise quant to stay within memory
+nest steals: Adapt block/group-wise quantization to nest's embeddings section codec in nest-format
+             (crates/nest-format/src/encoding.rs + sections.rs). Today nest has only flat int8
+             and float16 for embeddings. Add a new additive encoding id (4-255 reserved) for
+             grouped/microscaled vectors: split each embedding vector into fixed groups of 16 or
+             32 dims sharing one scale (mirroring MXFP4/NVFP4), giving int4-equivalent footprint
+             at far better recall than per-vector int8 because the scale adapts to local dynamic
+             range. Two concrete codecs worth adding: (1) group-int8 with per-group fp16 scale
+             (asym), and (2) an MXFP4-style block-float (E2M1 nibble-packed, one E8M0 byte scale
+             per 32 dims) for a ~4x size cut over f32. Critically, the E8M0 power-of-two scale
+             means decode is an exponent-add not a multiply, so the nest-runtime SIMD
+             dot-product hot path (crates/nest-runtime simd dispatcher, AVX2/NEON) can
+             dequant-on-the-fly cheaply during the mandatory exact-cosine rerank without
+             breaking the score-straight-off-mmap design. AutoRound's learned rounding is a
+             build-time (python, nest builder) one-shot pass that picks better int4/fp4 rounding
+             per dimension to recover recall lost at 4 bits; it adds zero runtime cost and keeps
+             determinism (seeded, fixed 200 steps). Store per-group scales contiguously after
+             the packed codes so layout stays repr(C), little-endian, and reproducible.
+compression: Directly central to nest's north star of compressing embeddings harder than anyone.
+             Group/block-wise scaling is the proven path from int8 (0.5x) to int4-equivalent
+             (~0.25x) without the recall collapse of naive flat int4, because each group of
+             16-32 dims gets its own scale matching local amax. MXFP4-style E8M0 power-of-two
+             scales keep dequant cheap enough to survive nest's mmap-and-score hot path, and
+             AutoRound recovers near-lossless accuracy at 4 bits as a free build-time step,
+             advancing nest past its current tiny preset (0.283 ratio, recall 0.992) toward a
+             sub-0.2 ratio preset while preserving the exact-cosine rerank guarantee.
+perf:        Group sizes 32/128 are the sweet spot in INC; -1 is per-channel. MXFP4 block=32 single
+             power-of-two scale (decode via exponent add, shift-friendly, no FMA); NVFP4
+             block=16 two-level (needs real multiplies but tighter error). Int4 codes are
+             nibble-packed two-per-byte. AutoRound quantizes a 72B model in ~37min on one A100
+             (build-time only, zero inference overhead). INC validated 20+ LLMs at 4-bit WOQ
+             reaching ~99% of FP32 accuracy. For nest, the hot-path cost is one extra scale
+             fetch + exponent-add per group of dims inside the existing SIMD dot kernel;
+             nibble-unpack is a shift+mask, vectorizable on AVX2/NEON.
+license:     Apache-2.0
