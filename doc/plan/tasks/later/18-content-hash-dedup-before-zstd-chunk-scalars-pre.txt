@@ -1,0 +1,81 @@
+============================================================================================
+TASK #18 :: Content-hash dedup before zstd + chunk_scalars pre-filter
+column: later    priority: MEDIUM
+status:  [ ] todo    [ ] doing    [ ] done
+============================================================================================
+
+this file is the ONLY thing you need for this task. work top to bottom and
+check each [ ] as you finish it. if something is missing, ADD a [ ] line and
+note it. never skip a box silently. that is how we avoid drift.
+
+--- goal ---
+Build-time dedup of identical chunks (SECTION_DEDUP_MAP=0x0B, unique pool + u32 back-ref) on
+DECOMPRESSED bytes, zstd after - encode the order as a code-level invariant + test.
+Re-expand to identical bytes so content_hash/citations invariant. Add
+SECTION_CHUNK_SCALARS=0x0D columnar pre-filter, opt-in.
+
+--- depends on (must be done + merged first) ---
+  task #08
+
+--- READ THESE COMPLETE FILES FIRST (do not summarize, do not skip) ---
+[ ] doc/research/genome/content-addressed/NixOS__nix.txt
+[ ] doc/research/synthesis/content-addressed.txt
+[ ] doc/plan/master-plan/01-compression.txt
+[ ] doc/plan/master-plan/02-format.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and read the current code you will change:)
+[ ] crates/nest-format/src/encoding/dedup.rs
+[ ] crates/nest-format/src/sections/chunk_scalars.rs
+[ ] crates/nest-format/src/writer/payload.rs
+
+--- OWNS THESE CODE FILES (no other parallel task may edit them) ---
+  crates/nest-format/src/encoding/dedup.rs
+  crates/nest-format/src/sections/chunk_scalars.rs
+  crates/nest-format/src/writer/payload.rs
+
+--- STEPS (check each) ---
+[ ] Build-time content-hash dedup of identical chunks_canonical (store unique once + a u32
+    back-reference array in SECTION_DEDUP_MAP=0x0B); run on DECOMPRESSED bytes, zstd the
+    unique pool after
+[ ] Encode 'dedup-then-compress, never compress-then-dedup' as a code-level invariant +
+    regression test; decode re-expands to identical bytes so content_hash and citations are
+    invariant
+[ ] Add SECTION_CHUNK_SCALARS=0x0D columnar pre-filter (lang/byte_len/source_id,
+    low-cardinality enums dictionary-coded) scanned before SIMD scoring, opt-in so it never
+    weakens the exact rerank
+
+--- watch out ---
+  Inverting the order (compress then dedup) collapses the ratio to near-zero; encode the
+  invariant as a test, and never dedup/CDC the embeddings section (breaks contiguous SIMD
+  layout).
+
+--- NEST RULES (do not violate; check each) ---
+[ ] edition 2024, resolver 3. never panic in lib code: typed thiserror, incl. on malformed
+    mmap bytes.
+[ ] format v1 is FROZEN + ADDITIVE: do NOT bump NEST_FORMAT_VERSION. use reserved encoding
+    ids 4-9 / section ids 0x09-0x10 (already named in layout/mod.rs).
+[ ] content_hash is over DECODED bytes: any new codec must decode byte-identically so
+    nest:// citations stay stable.
+[ ] never zstd/dedup/shuffle the embeddings section (scored from mmap on the SIMD hot path);
+    only fixed-stride quantization codecs there.
+[ ] deterministic: same input + seed => byte-identical output; verify across two builds (and
+    SIMD backends for rotations).
+[ ] <=300 lines per rust file in crates/**/src/**; split pack/unpack/kernel/select.
+[ ] docs lowercase, no emoji, no em-dash. work on a feature branch off main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace
+[ ] cargo test --workspace  (add a roundtrip + content_hash-equality test for any new codec)
+[ ] cargo fmt --all --check  &&  cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if you touched nest-format / nest-runtime / nest-python
+[ ] ./scripts/release_check.sh passes (the project gate; do not bypass)
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ______   after: ______
+  recall@10   before: ______   after: ______
+
+--- MERGE ---
+[ ] commit on branch feat/later-18-content-hash-dedup-before-zstd-chunk-scalars-pre
+[ ] gate green -> merge, then mark this task done in plan/kanban.txt

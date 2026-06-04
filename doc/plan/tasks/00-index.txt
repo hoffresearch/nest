@@ -1,0 +1,44 @@
+============================================================================================
+nest build :: task index (work orders)
+============================================================================================
+
+one file per task. each is a self-contained checklist: what to read, what it
+owns, the steps, and the done gate. an agent opens ONE file and executes it.
+
+parallel rule: two tasks can run at once ONLY if their OWNS lists do not overlap
+and their depends-on are merged. run in waves, each agent in its own git worktree.
+
+
+### NOW
+--------------------------------------------------------------------------------------------
+  #06 [CRITICAL] now/06-land-section-embeddings-fp-0x09-rerank-source-ma.txt
+  #07 [CRITICAL] now/07-fix-materialize-to-f32-ram-leak-in-the-ann-dista.txt
+  #08 [HIGH    ] now/08-codec-registry-refactor-reserve-encoding-ids-4-9.txt
+  #09 [HIGH    ] now/09-per-codec-roundtrip-content-hash-equality-test-t.txt
+
+### NEXT
+--------------------------------------------------------------------------------------------
+  #10 [HIGH    ] next/10-shared-intpack-codec-delta-zigzag-per-128-block-.txt  <- needs #08
+  #11 [HIGH    ] next/11-re-encode-hnsw-neighbor-ids-bm25-postings-with-i.txt  <- needs #10
+  #12 [HIGH    ] next/12-chunk-ids-as-32-raw-sha-256-bytes-spans-source-u.txt  <- needs #10
+  #13 [HIGH    ] next/13-trained-shared-zstd-dictionary-fsst-zstd-level-l.txt  <- needs #08
+  #14 [HIGH    ] next/14-block-scaled-rotational-int8-scale-kind-1-no-new.txt  <- needs #09
+  #15 [MEDIUM  ] next/15-zero-copy-pybuffer-query-maturin-cp312-abi3-whee.txt
+
+### LATER
+--------------------------------------------------------------------------------------------
+  #16 [MEDIUM  ] later/16-int4-block-64-codec-fused-dequant-dot-kernel.txt  <- needs #06, #07, #08, #09
+  #17 [MEDIUM  ] later/17-rabitq-1-bit-codec-popcount-kernel-nano-preset.txt  <- needs #06, #07, #08, #09
+  #18 [MEDIUM  ] later/18-content-hash-dedup-before-zstd-chunk-scalars-pre.txt  <- needs #08
+  #19 [MEDIUM  ] later/19-matryoshka-prefix-truncation-micro-nano-preset-l.txt  <- needs #14
+  #20 [LOW     ] later/20-csr-graph-adjacency-section-search-graph-subcomm.txt  <- needs #10
+  #21 [LOW     ] later/21-byte-level-subword-tokenizer-for-cjk-thai-bm25-t.txt
+  #22 [LOW     ] later/22-append-only-edit-journal-deterministic-compact.txt  <- needs #13
+
+### RESEARCH
+--------------------------------------------------------------------------------------------
+  #23 [LOW     ] research/23-blake3-merkle-root-content-hash-the-one-true-v2.txt
+  #24 [LOW     ] research/24-structured-tape-json-yaml-parquet-per-column-cod.txt  <- needs #08
+  #25 [LOW     ] research/25-sovereign-in-house-fse-tans-entropy-floor-over-d.txt  <- needs #10
+  #26 [LOW     ] research/26-pdf-audio-video-ingestion-copy-without-recode-me.txt
+  #27 [LOW     ] research/27-algorithm-4-diversity-neighbor-selection-generat.txt

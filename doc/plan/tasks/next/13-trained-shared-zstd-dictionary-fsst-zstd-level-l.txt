@@ -1,0 +1,81 @@
+============================================================================================
+TASK #13 :: Trained shared zstd dictionary + FSST + zstd level/LDM knobs
+column: next    priority: HIGH
+status:  [ ] todo    [ ] doing    [ ] done
+============================================================================================
+
+this file is the ONLY thing you need for this task. work top to bottom and
+check each [ ] as you finish it. if something is missing, ADD a [ ] line and
+note it. never skip a box silently. that is how we avoid drift.
+
+--- goal ---
+SECTION_DICTIONARY=0x0A + SECTION_ENCODING_ZSTD_DICT=5 (ZDICT over sorted samples,
+deterministic) kills cross-chunk redundancy on many-short-similar PT-BR chunks. FSST (id 9)
+for O(1) single-chunk citation reopen. Replace hardcoded level-19 (zstd_codec.rs:10) with
+level/LDM params. Headline text ratio lever.
+
+--- depends on (must be done + merged first) ---
+  task #08
+
+--- READ THESE COMPLETE FILES FIRST (do not summarize, do not skip) ---
+[ ] doc/research/genome/embedded-db/facebook__rocksdb.txt
+[ ] doc/research/synthesis/embedded-db.txt
+[ ] doc/plan/master-plan/01-compression.txt
+[ ] doc/plan/master-plan/02-format.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and read the current code you will change:)
+[ ] crates/nest-format/src/encoding/zstd_dict.rs
+[ ] crates/nest-format/src/encoding/fsst.rs
+[ ] crates/nest-format/src/encoding/zstd_codec.rs
+[ ] crates/nest-python/src/build_fn.rs
+
+--- OWNS THESE CODE FILES (no other parallel task may edit them) ---
+  crates/nest-format/src/encoding/zstd_dict.rs
+  crates/nest-format/src/encoding/fsst.rs
+  crates/nest-format/src/encoding/zstd_codec.rs
+  crates/nest-python/src/build_fn.rs
+
+--- STEPS (check each) ---
+[ ] Train a shared zstd dictionary build-time (ZDICT over sorted
+    chunks_canonical/spans/provenance/bm25 terms, deterministic pure function); store in
+    SECTION_DICTIONARY=0x0A, encode text via SECTION_ENCODING_ZSTD_DICT=5
+[ ] Add FSST transparent text codec (SECTION_ENCODING_FSST=9) so single-chunk citation
+    reopen decodes O(1) without whole-section inflate; chosen vs zstd_dict by the
+    cost-driven selector
+[ ] Replace hardcoded zstd level-19 with level/LDM knobs (level 22 + long-distance-matching
+    for large whole-db/repo payloads)
+
+--- watch out ---
+  ZDICT must be fed sorted/identical samples and pinned to a zstd version or reproducible
+  builds break; verify byte-identical output across two builds.
+
+--- NEST RULES (do not violate; check each) ---
+[ ] edition 2024, resolver 3. never panic in lib code: typed thiserror, incl. on malformed
+    mmap bytes.
+[ ] format v1 is FROZEN + ADDITIVE: do NOT bump NEST_FORMAT_VERSION. use reserved encoding
+    ids 4-9 / section ids 0x09-0x10 (already named in layout/mod.rs).
+[ ] content_hash is over DECODED bytes: any new codec must decode byte-identically so
+    nest:// citations stay stable.
+[ ] never zstd/dedup/shuffle the embeddings section (scored from mmap on the SIMD hot path);
+    only fixed-stride quantization codecs there.
+[ ] deterministic: same input + seed => byte-identical output; verify across two builds (and
+    SIMD backends for rotations).
+[ ] <=300 lines per rust file in crates/**/src/**; split pack/unpack/kernel/select.
+[ ] docs lowercase, no emoji, no em-dash. work on a feature branch off main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace
+[ ] cargo test --workspace  (add a roundtrip + content_hash-equality test for any new codec)
+[ ] cargo fmt --all --check  &&  cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if you touched nest-format / nest-runtime / nest-python
+[ ] ./scripts/release_check.sh passes (the project gate; do not bypass)
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ______   after: ______
+  recall@10   before: ______   after: ______
+
+--- MERGE ---
+[ ] commit on branch feat/next-13-trained-shared-zstd-dictionary-fsst-zstd-level-l
+[ ] gate green -> merge, then mark this task done in plan/kanban.txt

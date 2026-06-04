@@ -1,0 +1,83 @@
+============================================================================================
+TASK #14 :: Block-scaled + rotational int8 (scale_kind=1, no new id, no version bump)
+column: next    priority: HIGH
+status:  [ ] todo    [ ] doing    [ ] done
+============================================================================================
+
+this file is the ONLY thing you need for this task. work top to bottom and
+check each [ ] as you finish it. if something is missing, ADD a [ ] line and
+note it. never skip a box silently. that is how we avoid drift.
+
+--- goal ---
+One f16 scale per 32-dim block recovers per-vector-outlier loss at the same 4x size; seeded
+FWHT rotation before quantize pushes recall@10 toward ~0.99. The int8 scale_kind field
+already exists at int8.rs:18 and parse() rejects unknown kinds, so old readers stay safe.
+Pair with VNNI/dotprod for bit-determinism.
+
+--- depends on (must be done + merged first) ---
+  task #09
+
+--- READ THESE COMPLETE FILES FIRST (do not summarize, do not skip) ---
+[ ] doc/research/genome/model-runtime/ggerganov__ggml.txt
+[ ] doc/research/genome/rag-orchestration/weaviate__recipes.txt
+[ ] doc/research/synthesis/model-runtime.txt
+[ ] doc/research/synthesis/rag-orchestration.txt
+[ ] doc/plan/master-plan/01-compression.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and read the current code you will change:)
+[ ] crates/nest-format/src/encoding/int8.rs
+[ ] crates/nest-format/src/encoding/fwht.rs
+[ ] crates/nest-runtime/src/simd/avx2.rs
+[ ] crates/nest-runtime/src/simd/neon.rs
+
+--- OWNS THESE CODE FILES (no other parallel task may edit them) ---
+  crates/nest-format/src/encoding/int8.rs
+  crates/nest-format/src/encoding/fwht.rs
+  crates/nest-runtime/src/simd/avx2.rs
+  crates/nest-runtime/src/simd/neon.rs
+
+--- STEPS (check each) ---
+[ ] Add int8 scale_kind=1 (one f16 scale per 32-dim block) reusing the float16 codec for
+    scales: near-lossless 4x with NO new encoding id and NO format bump (the field already
+    exists at int8.rs:18)
+[ ] Add seeded FWHT Rotational Quantization before quantize (gaussianize, push recall@10
+    toward ~0.99 at 4x, store only the seed; rotate query at search time via a shared fwht
+    helper)
+[ ] Wire integer-domain VNNI/dotprod kernels (vpdpbusd/vdotq_s32) for ~4x speed and true
+    cross-CPU bit-determinism on the int8 path
+
+--- watch out ---
+  FWHT rotation determinism hinges on identical float ops across SIMD backends
+  (FMA-vs-mul/add can flip a sign near zero); compute rotation backend-independently at
+  build time, verify byte-identical codes across two builds and across backends.
+
+--- NEST RULES (do not violate; check each) ---
+[ ] edition 2024, resolver 3. never panic in lib code: typed thiserror, incl. on malformed
+    mmap bytes.
+[ ] format v1 is FROZEN + ADDITIVE: do NOT bump NEST_FORMAT_VERSION. use reserved encoding
+    ids 4-9 / section ids 0x09-0x10 (already named in layout/mod.rs).
+[ ] content_hash is over DECODED bytes: any new codec must decode byte-identically so
+    nest:// citations stay stable.
+[ ] never zstd/dedup/shuffle the embeddings section (scored from mmap on the SIMD hot path);
+    only fixed-stride quantization codecs there.
+[ ] deterministic: same input + seed => byte-identical output; verify across two builds (and
+    SIMD backends for rotations).
+[ ] <=300 lines per rust file in crates/**/src/**; split pack/unpack/kernel/select.
+[ ] docs lowercase, no emoji, no em-dash. work on a feature branch off main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace
+[ ] cargo test --workspace  (add a roundtrip + content_hash-equality test for any new codec)
+[ ] cargo fmt --all --check  &&  cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if you touched nest-format / nest-runtime / nest-python
+[ ] ./scripts/release_check.sh passes (the project gate; do not bypass)
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ______   after: ______
+  recall@10   before: ______   after: ______
+
+--- MERGE ---
+[ ] commit on branch feat/next-14-block-scaled-rotational-int8-scale-kind-1-no-new
+[ ] gate green -> merge, then mark this task done in plan/kanban.txt

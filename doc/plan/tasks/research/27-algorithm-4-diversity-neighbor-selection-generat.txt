@@ -1,0 +1,67 @@
+============================================================================================
+TASK #27 :: Algorithm-4 diversity neighbor selection + generational visited set
+column: research    priority: LOW
+status:  [ ] todo    [ ] doing    [ ] done
+============================================================================================
+
+this file is the ONLY thing you need for this task. work top to bottom and
+check each [ ] as you finish it. if something is missing, ADD a [ ] line and
+note it. never skip a box silently. that is how we avoid drift.
+
+--- goal ---
+Replace the _simple top-m HNSW neighbor selection (ann/mod.rs:33 flags this as planned) with
+Malkov-Yashunin Algorithm-4 so recall rises at fixed M, letting tiny/nano presets LOWER M
+and shrink the index. Route traversal through the SIMD dispatcher and swap the per-query
+HashSet for a generational buffer.
+
+--- depends on ---
+  nothing. ready to run.
+
+--- READ THESE COMPLETE FILES FIRST (do not summarize, do not skip) ---
+[ ] doc/research/genome/ann-index/djc__instant-distance.txt
+[ ] doc/research/genome/ann-index/nmslib__hnswlib.txt
+[ ] doc/research/synthesis/ann-index.txt
+[ ] doc/plan/master-plan/02-format.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and read the current code you will change:)
+[ ] crates/nest-runtime/src/ann/select_neighbors.rs
+
+--- OWNS THESE CODE FILES (no other parallel task may edit them) ---
+  crates/nest-runtime/src/ann/select_neighbors.rs
+
+--- STEPS (check each) ---
+[ ] Replace the _simple top-m HNSW neighbor selection (ann/mod.rs:33 flags this as planned)
+    with Malkov-Yashunin Algorithm-4 so recall rises at fixed M, letting tiny/nano presets
+    LOWER M and shrink the index. Route traversal through the SIMD dispatcher and swap the
+    per-query HashSet for a generational buffer.
+
+--- NEST RULES (do not violate; check each) ---
+[ ] edition 2024, resolver 3. never panic in lib code: typed thiserror, incl. on malformed
+    mmap bytes.
+[ ] format v1 is FROZEN + ADDITIVE: do NOT bump NEST_FORMAT_VERSION. use reserved encoding
+    ids 4-9 / section ids 0x09-0x10 (already named in layout/mod.rs).
+[ ] content_hash is over DECODED bytes: any new codec must decode byte-identically so
+    nest:// citations stay stable.
+[ ] never zstd/dedup/shuffle the embeddings section (scored from mmap on the SIMD hot path);
+    only fixed-stride quantization codecs there.
+[ ] deterministic: same input + seed => byte-identical output; verify across two builds (and
+    SIMD backends for rotations).
+[ ] <=300 lines per rust file in crates/**/src/**; split pack/unpack/kernel/select.
+[ ] docs lowercase, no emoji, no em-dash. work on a feature branch off main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace
+[ ] cargo test --workspace  (add a roundtrip + content_hash-equality test for any new codec)
+[ ] cargo fmt --all --check  &&  cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if you touched nest-format / nest-runtime / nest-python
+[ ] ./scripts/release_check.sh passes (the project gate; do not bypass)
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ______   after: ______
+  recall@10   before: ______   after: ______
+
+--- MERGE ---
+[ ] commit on branch feat/research-27-algorithm-4-diversity-neighbor-selection-generat
+[ ] gate green -> merge, then mark this task done in plan/kanban.txt

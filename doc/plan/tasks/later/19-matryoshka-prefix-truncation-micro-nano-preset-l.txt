@@ -1,0 +1,72 @@
+============================================================================================
+TASK #19 :: Matryoshka prefix truncation + micro/nano preset ladder
+column: later    priority: MEDIUM
+status:  [ ] todo    [ ] doing    [ ] done
+============================================================================================
+
+this file is the ONLY thing you need for this task. work top to bottom and
+check each [ ] as you finish it. if something is missing, ADD a [ ] line and
+note it. never skip a box silently. that is how we avoid drift.
+
+--- goal ---
+Build-time truncate+L2-renorm to mrl_dim, two-pass coarse(prefix)->exact(full) search,
+multiplicative with quantization. Ship micro (block/RQ-int8) and nano (int4/rabitq) presets
+below tiny's 0.283 with measured recall.
+
+--- depends on (must be done + merged first) ---
+  task #14
+
+--- READ THESE COMPLETE FILES FIRST (do not summarize, do not skip) ---
+[ ] doc/research/genome/embeddings-models/QwenLM__Qwen3-Embedding.txt
+[ ] doc/research/synthesis/embeddings-models.txt
+[ ] doc/plan/master-plan/01-compression.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and read the current code you will change:)
+[ ] crates/nest-python/src/build_fn.rs
+[ ] crates/nest-runtime/src/search.rs
+
+--- OWNS THESE CODE FILES (no other parallel task may edit them) ---
+  crates/nest-python/src/build_fn.rs
+  crates/nest-runtime/src/search.rs
+
+--- STEPS (check each) ---
+[ ] Build-time Matryoshka prefix truncation + L2-renormalize to mrl_dim (manifest fields,
+    multiplicative with int8), two-pass coarse(prefix)->exact(full) search
+[ ] Ship a micro preset (zstd_dict/FSST text + block/RQ-int8 + hnsw) below tiny's 0.283 and
+    report measured recall@10 vs exact
+
+--- watch out ---
+  Matryoshka needs an MRL-trained model AND per-prefix L2-renorm; skipping the renorm
+  silently corrupts cosine - bake it into the writer or the score path and validate recall
+  on the demo model.
+
+--- NEST RULES (do not violate; check each) ---
+[ ] edition 2024, resolver 3. never panic in lib code: typed thiserror, incl. on malformed
+    mmap bytes.
+[ ] format v1 is FROZEN + ADDITIVE: do NOT bump NEST_FORMAT_VERSION. use reserved encoding
+    ids 4-9 / section ids 0x09-0x10 (already named in layout/mod.rs).
+[ ] content_hash is over DECODED bytes: any new codec must decode byte-identically so
+    nest:// citations stay stable.
+[ ] never zstd/dedup/shuffle the embeddings section (scored from mmap on the SIMD hot path);
+    only fixed-stride quantization codecs there.
+[ ] deterministic: same input + seed => byte-identical output; verify across two builds (and
+    SIMD backends for rotations).
+[ ] <=300 lines per rust file in crates/**/src/**; split pack/unpack/kernel/select.
+[ ] docs lowercase, no emoji, no em-dash. work on a feature branch off main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace
+[ ] cargo test --workspace  (add a roundtrip + content_hash-equality test for any new codec)
+[ ] cargo fmt --all --check  &&  cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if you touched nest-format / nest-runtime / nest-python
+[ ] ./scripts/release_check.sh passes (the project gate; do not bypass)
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ______   after: ______
+  recall@10   before: ______   after: ______
+
+--- MERGE ---
+[ ] commit on branch feat/later-19-matryoshka-prefix-truncation-micro-nano-preset-l
+[ ] gate green -> merge, then mark this task done in plan/kanban.txt

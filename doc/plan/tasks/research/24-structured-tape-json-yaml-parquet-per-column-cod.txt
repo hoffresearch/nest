@@ -1,0 +1,77 @@
+============================================================================================
+TASK #24 :: Structured tape (json/yaml/parquet) + per-column codec cascade
+column: research    priority: LOW
+status:  [ ] todo    [ ] doing    [ ] done
+============================================================================================
+
+this file is the ONLY thing you need for this task. work top to bottom and
+check each [ ] as you finish it. if something is missing, ADD a [ ] line and
+note it. never skip a box silently. that is how we avoid drift.
+
+--- goal ---
+Fixed-stride u64 tape + length-prefixed value blob (simdjson-style) + min-width offsets +
+key-interning, sub-document citable. Per-column DuckDB-style Analyze-and-pick cascade.
+Portable parity scan (no PCLMULQDQ) for cross-CPU determinism. The
+compress-AND-serve-structured-data lever.
+
+--- depends on (must be done + merged first) ---
+  task #08
+
+--- READ THESE COMPLETE FILES FIRST (do not summarize, do not skip) ---
+[ ] doc/research/genome/serialization-parsing/simdjson__simdjson.txt
+[ ] doc/research/genome/embedded-db/duckdb__duckdb.txt
+[ ] doc/research/synthesis/serialization-parsing.txt
+[ ] doc/research/synthesis/embedded-db.txt
+[ ] doc/plan/master-plan/01-compression.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and read the current code you will change:)
+[ ] crates/nest-format/src/encoding/structure.rs
+[ ] crates/nest-python/src/build_fn.rs
+
+--- OWNS THESE CODE FILES (no other parallel task may edit them) ---
+  crates/nest-format/src/encoding/structure.rs
+  crates/nest-python/src/build_fn.rs
+
+--- STEPS (check each) ---
+[ ] Add SECTION_STRUCTURE_TAPE (fixed-stride u64 tape + length-prefixed value blob,
+    simdjson-style) + min-width offset tables + key-interning for json/yaml/parquet,
+    sub-document citable (nest://content_hash/chunk_id#json_pointer)
+[ ] Per-column DuckDB-style codec cascade (RLE/FOR/delta/dictionary/FSST/bitpack) chosen by
+    a deterministic Analyze pass; byte-shuffle+zstd on cold numeric planes
+[ ] Canonicalize PDF to deterministic text before chunking (build-time, Python); store media
+    verbatim by content_hash with a CDC chunk index (copy-without-recode)
+
+--- watch out ---
+  Any SIMD structural scanner needs input padding so 64-byte loads never read past the mmap;
+  use a portable parity scan (no PCLMULQDQ dependency) for cross-CPU determinism.
+
+--- NEST RULES (do not violate; check each) ---
+[ ] edition 2024, resolver 3. never panic in lib code: typed thiserror, incl. on malformed
+    mmap bytes.
+[ ] format v1 is FROZEN + ADDITIVE: do NOT bump NEST_FORMAT_VERSION. use reserved encoding
+    ids 4-9 / section ids 0x09-0x10 (already named in layout/mod.rs).
+[ ] content_hash is over DECODED bytes: any new codec must decode byte-identically so
+    nest:// citations stay stable.
+[ ] never zstd/dedup/shuffle the embeddings section (scored from mmap on the SIMD hot path);
+    only fixed-stride quantization codecs there.
+[ ] deterministic: same input + seed => byte-identical output; verify across two builds (and
+    SIMD backends for rotations).
+[ ] <=300 lines per rust file in crates/**/src/**; split pack/unpack/kernel/select.
+[ ] docs lowercase, no emoji, no em-dash. work on a feature branch off main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace
+[ ] cargo test --workspace  (add a roundtrip + content_hash-equality test for any new codec)
+[ ] cargo fmt --all --check  &&  cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if you touched nest-format / nest-runtime / nest-python
+[ ] ./scripts/release_check.sh passes (the project gate; do not bypass)
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ______   after: ______
+  recall@10   before: ______   after: ______
+
+--- MERGE ---
+[ ] commit on branch feat/research-24-structured-tape-json-yaml-parquet-per-column-cod
+[ ] gate green -> merge, then mark this task done in plan/kanban.txt
