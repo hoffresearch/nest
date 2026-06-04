@@ -1,6 +1,6 @@
 ==============================================================================================
 TASK #11 :: trained dict + fsst + block/rotational int8 + micro preset
-phase: phase 2 (post-gate)   layer: nest
+phase: phase 1 (PRE-GATE, pulled forward in the compression rebalance)   layer: nest
 status:  [ ] todo    [ ] doing    [ ] done
 ==============================================================================================
 
@@ -9,16 +9,19 @@ files listed before coding. do not summarize, do not skip. add a [ ] if somethin
 is missing. never skip silently.
 
 --- goal ---
-land the two biggest near-term ratio levers (trained zstd dict + fsst; block/rotational int8),
-open forge to heavy heterogeneous inputs via the opt-in belt, build the net-new original-byte
-reopen path, and ship catalog mode so the osint-lake vertical becomes possible.
+land the two SAFE headline ratio levers PRE-GATE so the flagship is born compressing: trained
+zstd dict + fsst on text, and block/rotational int8 at ~4x near-lossless. ship a micro preset
+below tiny 0.283 with measured recall - this is the number the gate publishes. the risky
+sub-byte step (int4/rabitq) stays post-gate.
 
 --- depends on ---
-  previous phase merged  + the FLAGSHIP-PROVEN GATE
+  phase-0 codec registry (#02) + honest-rerank handle (#01) + roundtrip/recall harness (#03),
+  all merged. PRE-GATE: this IS part of the flagship proof, not gated behind it.
 
 --- READ THESE COMPLETE FILES FIRST ---
-[ ] doc/plan/tasks/next/13-trained-shared-zstd-dictionary-fsst-zstd-level-l.txt
-[ ] doc/plan/tasks/next/14-block-scaled-rotational-int8-scale-kind-1-no-new.txt
+[ ] doc/plan/master-plan/01-compression.txt
+[ ] doc/research/genome/compression-general/facebook__zstd.txt
+[ ] doc/research/synthesis/vector-quantization.txt
 [ ] doc/plan/master-plan/02-format.txt
 [ ] doc/plan/master-plan/03-roadmap.txt
 [ ] doc/plan/master-plan/04-risks-quickwins.txt
@@ -78,5 +81,5 @@ facebook/zstd, ggml-org/ggml, weaviate/recipes, QwenLM/Qwen3-Embedding
   recall@10   before: ____  after: ____
 
 --- MERGE ---
-[ ] commit on branch feat/p2-11-trained-dict-fsst-block-rotational-int8-micro-
+[ ] commit on branch feat/p1-11-trained-dict-fsst-block-rotational-int8-micro-
 [ ] gate green -> merge, mark done in plan/kanban.txt

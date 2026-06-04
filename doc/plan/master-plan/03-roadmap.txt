@@ -109,7 +109,7 @@ goal:         land the guardrails that de-risk the whole roadmap, the ONE parame
 phase: phase 1
 free integer/string wins + chunk-graph G1 + the flagship front door
 ----------------------------------------------------------------------------------------------
-goal:         ship ratio at near-zero risk on cold metadata sections, land the chunk-to-chunk csr (named
+goal:         ship the first REAL ratio leap - free metadata wins PLUS the two safe headline levers (trained zstd dict + fsst on text, and block/rotational int8 at ~4x near-lossless, micro preset below tiny 0.283), so the flagship is born compressing, not at the int8 baseline. also land the chunk-to-chunk csr (named
               graph-search + reclaims chunk_overlap), and stand up the agent-native flagship
               (ask + cite + retrieve()) on phase 0-1. this is the first thing a stranger can
               pip-install and trust.
@@ -130,6 +130,23 @@ goal:         ship ratio at near-zero risk on cold metadata sections, land the c
             canonically sorted before delta or builds vary. NOTE: spans (0x03) re-encoding
             must stay BYTE-IDENTICAL in decoded content_hash terms - it is a canonical
             section, never version-bumped.
+
+  * [nest] trained dict + fsst + block/rotational int8 + micro preset (the safe headline ratio, PRE-GATE)
+    owns:   crates/nest-format/src/encoding/zstd_dict.rs, crates/nest-format/src/encoding/fsst.rs,
+            crates/nest-format/src/encoding/int8.rs, crates/nest-format/src/encoding/fwht.rs
+      - trained shared zstd dictionary(0x0A) + fsst(9) + zstd level/ldm knobs (sorted samples,
+        pinned zstd version for reproducibility)
+      - int8 scale_kind=1 block-scaled + seeded-FWHT rotational int8 (~0.99 recall at 4x, no
+        new id), rotation computed backend-independently at build time for cross-cpu determinism
+      - matryoshka prefix truncation + micro preset below tiny 0.283 with measured recall; THIS
+        is the number the gate publishes
+    from:   facebook/zstd, ggml-org/ggml, weaviate/recipes, QwenLM/Qwen3-Embedding
+    risk:   PULLED PRE-GATE in the compression rebalance: no-recall-risk levers, so the flagship is
+            born compressing and the gate proves a real number, not the int8 baseline. ZDICT needs
+            sorted samples + a pinned zstd version; fwht rotation determinism hinges on identical
+            float ops, compute backend-independently at build time. the risky sub-byte step
+            (int4/rabitq) stays post-gate. depends on the phase-0 codec registry + honest-rerank
+            handle + roundtrip/recall harness.
 
   * [cross] G1: chunk-to-chunk csr graph_adjacency(0x0C) + search-graph + drop chunk_overlap
     owns:   crates/nest-format/src/sections/graph/mod.rs,
@@ -188,7 +205,8 @@ phase: FLAGSHIP-PROVEN GATE
 hard gate between the flagship and pillars 5-8
 ----------------------------------------------------------------------------------------------
 goal:         NOTHING past this point gets code until BOTH conditions hold: (1) the headline number is
-              proven and published - sub-0.1 ratio NET OF the mandatory fp source on ONE real,
+              proven and published - the micro preset (dict + fsst + block/rotational int8, landed
+              pre-gate) measured well below the current tiny 0.283 on ONE real,
               named, license-clean corpus with recall@10 held by the exact rerank; (2) the
               agent-native flagship has external users. this gate is structural, not
               aspirational: it converts the discipline from 'build everything additively' into
@@ -209,27 +227,12 @@ goal:         NOTHING past this point gets code until BOTH conditions hold: (1) 
 
 ----------------------------------------------------------------------------------------------
 phase: phase 2 (post-gate)
-text dictionary + safe embedding step + forge-belt + catalog wedge
+original-byte reopen + catalog mode + forge-belt (post-gate)
 ----------------------------------------------------------------------------------------------
-goal:         land the two biggest near-term ratio levers (trained zstd dict + fsst; block/rotational int8),
+goal:         the dict/fsst/block-int8 ratio levers moved PRE-GATE in the rebalance;
               open forge to heavy heterogeneous inputs via the opt-in belt, build the net-new
               original-byte reopen path, and ship catalog mode so the osint-lake vertical
               becomes possible.
-
-  * [nest] trained dict + fsst + block/rotational int8 + micro preset
-    owns:   crates/nest-format/src/encoding/zstd_dict.rs, crates/nest-format/src/encoding/fsst.rs,
-            crates/nest-format/src/encoding/int8.rs, crates/nest-format/src/encoding/fwht.rs
-      - trained shared zstd dictionary(0x0A) + fsst(9) + zstd level/ldm knobs (sorted samples,
-        pinned zstd version for reproducibility)
-      - int8 scale_kind=1 block-scaled + seeded-FWHT rotational int8 (~0.99 recall at 4x, no
-        new id), rotation computed backend-independently at build time for cross-cpu
-        determinism
-      - matryoshka prefix truncation + micro preset below tiny 0.283 with measured recall,
-        ratio reported net of fp where sub-int8
-    from:   facebook/zstd, ggml-org/ggml, weaviate/recipes, QwenLM/Qwen3-Embedding
-    risk:   ZDICT must be fed sorted samples and pinned to a zstd version or reproducible builds break;
-            fwht rotation determinism hinges on identical float ops - compute
-            backend-independently at build time.
 
   * [nest] original-byte reopen path + catalog blob_refs(0x14) + 0x16 overlay + .nestpack
     owns:   crates/nest-cli/src/cmd/cite.rs, crates/nest-format/src/sections/blob_refs.rs,

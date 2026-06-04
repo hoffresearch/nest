@@ -88,7 +88,7 @@ tagged by layer (forge/nest/lens/cross)
 
 
 ##############################################################################################
-# NEXT  (7 cards)
+# NEXT  (9 cards)
 ##############################################################################################
 
 [ ] shared intpack codec (delta+zigzag+per-128-block bitpack/FOR, O(1) select)   (HIGH/nest)
@@ -144,14 +144,31 @@ tagged by layer (forge/nest/lens/cross)
     refs: forge-core/src/normalize/, forge-core/src/extract/pdf_text.rs,
           python/forge/adapter.py
 
+[ ] trained shared zstd dictionary + fsst + zstd level/ldm knobs (PRE-GATE, rebalanced)   (HIGH/nest)
+    dictionary(0x0A) + zstd_dict(5) over sorted samples (deterministic, pinned zstd version) +
+    fsst(9) for O(1) single-chunk reopen; replace hardcoded level-19. headline text lever;
+    also serves forge's heterogeneous text inputs unchanged.
+    refs: crates/nest-format/src/encoding/zstd_dict.rs,
+          crates/nest-format/src/encoding/fsst.rs, facebook/zstd
+
+[ ] block-scaled + rotational int8 (scale_kind=1, no new id, no version bump) (PRE-GATE, rebalanced)
+    (HIGH/nest)
+    one f16 scale per 32-dim block + seeded fwht rotation toward ~0.99 recall@10 at 4x; the
+    int8 scale_kind field already exists. compute rotation backend-independently for cross-cpu
+    determinism. ships the micro preset below tiny 0.283 - the number the gate publishes.
+    refs: crates/nest-format/src/encoding/int8.rs, crates/nest-format/src/encoding/fwht.rs,
+          ggml-org/ggml
+
 
 ##############################################################################################
 # GATE  (1 cards)
 ##############################################################################################
 
 [ ] FLAGSHIP-PROVEN gate (blocks all of later/research)   (CRITICAL/cross)
-    NOTHING in later/research gets code until BOTH: (1) sub-0.1 ratio NET OF the mandatory fp
-    source proven and published on ONE real, named, license-clean corpus with recall@10 held;
+    NOTHING in later/research gets code until BOTH: (1) the micro preset (dict + fsst +
+    block/rotational int8, landed pre-gate) measured well below tiny 0.283, proven and published
+    on ONE real, named, license-clean corpus, recall@10 held (sub-0.1 is the post-gate stretch
+    with int4/rabitq, net-of-fp);
     (2) the agent-native pip package has external users. converts the discipline from 'build
     everything additively' into 'build the wedge, prove it, earn the rest'. the single most
     important artifact missing from the draft.
@@ -160,23 +177,8 @@ tagged by layer (forge/nest/lens/cross)
 
 
 ##############################################################################################
-# LATER  (9 cards)
+# LATER  (7 cards)
 ##############################################################################################
-
-[ ] trained shared zstd dictionary + fsst + zstd level/ldm knobs (post-gate)   (HIGH/nest)
-    dictionary(0x0A) + zstd_dict(5) over sorted samples (deterministic, pinned zstd version) +
-    fsst(9) for O(1) single-chunk reopen; replace hardcoded level-19. headline text lever;
-    also serves forge's heterogeneous text inputs unchanged.
-    refs: crates/nest-format/src/encoding/zstd_dict.rs,
-          crates/nest-format/src/encoding/fsst.rs, facebook/zstd
-
-[ ] block-scaled + rotational int8 (scale_kind=1, no new id, no version bump) (post-gate)
-    (HIGH/nest)
-    one f16 scale per 32-dim block + seeded fwht rotation toward ~0.99 recall@10 at 4x; the
-    int8 scale_kind field already exists. compute rotation backend-independently for cross-cpu
-    determinism.
-    refs: crates/nest-format/src/encoding/int8.rs, crates/nest-format/src/encoding/fwht.rs,
-          ggml-org/ggml
 
 [ ] original-byte reopen path + catalog blob_refs(0x14) + 0x16 overlay + .nestpack (post-gate)
     (MEDIUM/nest)
