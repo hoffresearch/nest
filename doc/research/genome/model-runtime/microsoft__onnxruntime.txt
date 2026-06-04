@@ -1,0 +1,72 @@
+================================================================================================
+microsoft/onnxruntime
+category: model-runtime   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Cross-platform ML inference runtime whose CPU math library (MLAS) executes weight-only quantized
+             matmuls via the MatMulNBits operator: block-wise sub-byte (int4/int8) weights with
+             separate per-block scale/zero-point tensors, fused dequant-and-dot SIMD kernels
+             (SQNBitGemm) dispatched per CPU feature level.
+innovation:  Block-wise (group-wise) weight quantization: instead of one scale per whole vector, the
+             contraction axis is cut into fixed-size blocks (e.g. 16/32/64/128 elements), each
+             block gets its own f16 scale (and optional zero-point), and sub-byte codes are
+             bit-packed (two int4 nibbles per byte) into a [N, k_blocks, blob_size] layout. The
+             decisive companion idea is the FUSED kernel: SQNBitGemm unpacks nibbles, applies
+             the per-block scale, and accumulates the dot product inside one SIMD pass, so the
+             dequantized weights never materialize in memory. Accuracy stays high at int4
+             because each small block tracks local dynamic range, killing the single-outlier
+             problem that ruins per-vector scaling.
+techniques:
+  - Block-wise / group-wise quantization: one scale per K-block (block_size power-of-2, >=16),
+    not per whole vector
+  - Sub-byte bit-packing: two int4 codes packed per byte, blob_size = block_size/2; generalizes
+    via blob_size = block_size/packed_size
+  - Separate parallel tensors: packed weights, _scales (one f16 per block), optional
+    _zero_points; dequant = (q - zp) * scale
+  - [N, k_blocks, blob_size] block-major layout so each block's codes are contiguous for
+    streaming SIMD unpack
+  - MLAS SQNBitGemm fused dequantize+dot kernel: nibble unpack + scale + MAC in one SIMD pass,
+    no materialized fp weights
+  - Runtime CPU feature dispatch ladder: scalar -> NEON/dotprod -> AVX2+FMA -> AVX512-VNNI,
+    picking widest kernel
+  - accuracy_level knob: accumulate dot products in fp32/fp16/bf16/int8 to trade recall vs speed
+  - Symmetric (int4, implicit zp=0) vs asymmetric (uint4, explicit zp) modes; RTN/GPTQ/HQQ
+    scale-selection calibration
+nest steals: nest-format: add a new int4 embeddings encoding (an additive encoding id in the RESERVED 4-255
+             range, leaving the FROZEN v1 header untouched) modeled on
+             crates/nest-format/src/encoding/int8.rs. Today int8.rs uses scale_kind=0 = ONE f32
+             scale per whole vector; introduce scale_kind=1 = block-wise: split each dim-length
+             row into fixed blocks (e.g. 64), store one f16 scale per block (reuse the existing
+             float16 codec), and bit-pack two int4 codes per byte in a block-contiguous [n,
+             dim/block, block/2] layout. This same block-wise scheme should ALSO be retrofitted
+             onto the existing int8 path as scale_kind=1 to recover accuracy int8 currently
+             loses to per-vector outliers. nest-runtime: add a fused dequant+dot kernel beside
+             crates/nest-runtime/src/simd/{neon,avx2,scalar}.rs that streams nibbles, applies
+             the per-block f16 scale, and accumulates cosine straight off mmap, never expanding
+             to f32 in RAM, mirroring SQNBitGemm. Determinism holds because
+             round-to-nearest-even max-abs per block is fully reproducible; split pack/unpack
+             from the kernel to stay under the 300-line cap. The mandatory exact-cosine rerank
+             in search.rs already absorbs quantization error, so int4 can drive the candidate
+             stage while ground-truth scores stay real cosine. This unlocks a new "nano" preset
+             roughly halving the tiny preset's 0.283 embedding footprint (int4 = 4 bits + ~0.25
+             bits/dim f16 scale at block 64 vs int8's 8 bits/dim) -- the single biggest
+             remaining lever on nest's compress-more-than-everyone north star, since embeddings
+             are the one section that CANNOT be zstd-compressed.
+compression: Directly central. Embeddings are nest's largest incompressible section (zstd is banned on the
+             hot path), so the only way to shrink them is better quantization. Block-wise int4
+             roughly halves bytes-per-dim vs the current int8 codec (~4.25 vs 8 bits/dim
+             including the per-block f16 scale) while the per-block scale plus mandatory
+             exact-cosine rerank protect recall. Pushing the tiny/nano preset below the 0.283
+             size ratio is the most concrete near-term win on the 'compress data more than
+             everyone' goal.
+perf:        SQNBitGemm fusion is the perf crux: nibble unpack + per-block scale + multiply-accumulate happen
+             in one SIMD pass so dequantized weights never hit memory, keeping the matmul
+             memory-bandwidth bound. MLAS dispatches at runtime across a feature ladder
+             (NEON/dotprod, AVX2+FMA+F16C, AVX512-BW/VNNI, AMX) -- the int8 VNNI dot path
+             (vpdpbusd) does 4 int8 MACs per lane and maps cleanly onto nest's simd/mod.rs
+             dispatcher. Block size trades footprint vs accuracy (smaller block = more scales =
+             bigger but more accurate); block_size 64-128 is the typical sweet spot. f16 scales
+             (not f32) keep scale overhead near 0.25 bits/dim at block 64.
+license:     MIT

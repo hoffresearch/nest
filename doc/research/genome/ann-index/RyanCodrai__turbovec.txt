@@ -1,0 +1,73 @@
+================================================================================================
+RyanCodrai/turbovec
+category: ann-index   |   steal priority: MUST
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Rust+PyO3 flat-scan ANN index implementing Google Research's TurboQuant: a data-oblivious
+             (training-free) quantizer that random-rotates unit vectors so every coordinate
+             follows a known Beta/Gaussian marginal, then applies precomputed Lloyd-Max 2/4-bit
+             scalar quantization plus a per-vector length-renormalization scalar, scored
+             directly in the compressed domain with FastScan-style nibble-LUT SIMD
+             (AVX-512BW/AVX2/NEON).
+innovation:  Data-oblivious quantization: because a single fixed random orthogonal rotation makes each
+             coordinate's distribution input-independent (Beta marginal converging to N(0,1/d)),
+             the quantizer boundaries can be PRECOMPUTED once from (dimension, bit-width) alone
+             -- no k-means, no codebook training, no per-corpus fit, no rebuild on insert. This
+             collapses "good ANN compression" from a stateful trained artifact into a pure
+             deterministic function of dim+bits, while a cheap per-vector scalar (||v|| /
+             <u,x_hat>) restores inner-product unbiasedness that scalar quantization otherwise
+             loses.
+techniques:
+  - TurboQuant pipeline: normalize (store ||v|| as f32) -> fixed random orthogonal rotation ->
+    2/4-bit Lloyd-Max scalar quantization tuned for the Beta marginal -> bit-pack
+  - Length-renormalized scoring: store ||v|| / <u, x_hat> per vector to debias the inner-product
+    estimate at zero extra runtime cost (adapted from RaBitQ, SIGMOD 2024)
+  - TQ+ per-coordinate calibration: fit one shift+scale per coordinate from empirical 5/95%
+    quantiles on the FIRST add, then freeze, mapping data onto the canonical Beta marginal
+  - FastScan-style SIMD scoring: rotate query once into codebook domain, score directly against
+    packed nibbles using nibble-split lookup tables + u16 accumulators at 32-vector block
+    granularity, no decompression of DB vectors
+  - Runtime SIMD dispatch: AVX-512BW primary, AVX2 (x86-64-v3) fallback gated by
+    is_x86_feature_detected!, hand-written NEON on ARM
+  - Lazy deterministic init via std::sync::OnceLock for rotation matrix, Lloyd-Max centroids,
+    and SIMD-blocked layout (one-time, lock-free reads after)
+  - Filtered search honored inside the kernel: ID allowlist / slot bitmask drops non-allowed
+    slots at heap-insert per 32-vector block, no over-fetch, no recall penalty
+  - IdMapIndex: stable external u64 IDs surviving deletes with O(1) removal, persisted as .tvim
+    alongside the flat .tq index
+nest steals: Add a new embedding codec in nest-format/src/encoding (alongside raw/zstd/f16/int8), reserving
+             one of the additive encoding ids 4-255: a "turboquant2bit"/"turboquant4bit" codec
+             that stores, in the embeddings section, (a) a header with dim+bitwidth
+             (rotation+codebook fully derived from these, so nothing per-corpus persisted), (b)
+             bit-packed quantized codes, (c) a per-vector f32 length-renorm scalar, and (d)
+             per-vector ||v||. nest-runtime/src/simd gains a nibble-LUT FastScan kernel beside
+             the existing AVX2/NEON dot-product dispatcher, scoring compressed codes straight
+             off the mmap on the hot path -- exactly nest's "score embeddings directly from
+             mmap, never decode" rule, which today blocks zstd on embeddings. The mandatory
+             exact-cosine rerank in nest-runtime search stays unchanged and absorbs the small
+             recall loss, so the returned score is still real cosine. This unlocks ~16x
+             embedding compression (6144B f32 -> 384B at 2-bit for d=1536) vs int8's 4x,
+             advancing the "tiny" preset and the compress-more-than-everyone north star.
+             Determinism holds because the rotation is a fixed seeded function of dim+bits
+             (compatible with nest's seeded-hnsw rule), so builds stay byte-identical. Keep each
+             new file <=300 loc, typed thiserror, no panics.
+compression: Directly central. Embeddings are nest's largest incompressible section (zstd is banned on them
+             because they're scored from mmap). TurboQuant breaks that wall: 16x embedding
+             compression at 2-bit AND scoring in the compressed domain, so it compresses the one
+             section nest currently cannot, without violating the no-decode-on-hot-path
+             constraint. At 10M vectors it shrinks 31GB f32 to ~4GB. This is the single biggest
+             available lever on nest's "most compact AI database in the world" goal, far beyond
+             the current int8 (4x) tiny preset.
+perf:        Hand-written kernels beat FAISS IndexPQFastScan by 12-20% on Apple M3 Max NEON and win most
+             4-bit configs by 1-6% on Intel Sapphire Rapids (within ~1% on 2-bit
+             single-threaded). Recall at R@1 vs FAISS IndexPQ: +0.4 to +3.4pp on OpenAI
+             d=1536/3072, slightly trailing (~1.2pp) on low-dim GloVe d=200 2-bit; high-dim
+             recall converges to 1.0 by k=4. Lloyd-Max distortion within 2.7x of the Shannon
+             rate-distortion lower bound. Flat scan (no graph/IVF), so O(N) per query -- best
+             paired with HNSW for large N (nest already has hnsw_index 0x07; the two compose:
+             HNSW for candidate gen, TurboQuant codes for compact storage + fast block scoring,
+             exact rerank on top). OnceLock caches make repeated queries lock-free; rayon for
+             parallel scan. Deps: ndarray, rayon, faer, rand.
+license:     MIT

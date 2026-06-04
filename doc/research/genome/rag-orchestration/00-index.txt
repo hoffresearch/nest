@@ -1,0 +1,145 @@
+================================================================================================
+genome :: rag-orchestration (index)
+RAG, agent, LLM orchestration, and memory systems
+================================================================================================
+
+one file per project in this folder. open the one you need.
+
+[HIGH     ] langchain-ai__langchain.txt        A Python/JS LLM-orchestration framework whose
+                                               retrieval layer contributes two reusable,
+                                               format-agnostic ideas: a content-hash
+                                               record-manager indexing API for incremental
+                                               dedup/sync of a vector store, and a
+                                               content-hash-keyed embedding cache namespaced by
+                                               model fingerprint.
+[HIGH     ] langchain-ai__langgraph.txt        A Pregel/BSP graph-execution runtime for stateful
+                                               LLM agents whose durable-execution layer persists
+                                               state as immutable, append-only checkpoints with
+                                               content-deduplicated channel blobs keyed by
+                                               per-channel version numbers.
+[HIGH     ] run-llama__llama_index.txt         A Python RAG/agent data framework whose core
+                                               abstraction is the Node (a chunk with typed
+                                               relationships, metadata, and a content/text hash
+                                               id) wired into a swappable StorageContext
+                                               (docstore + index_store + vector_store), with
+                                               retrieval strategies including hierarchical
+                                               multi-resolution chunking, auto-merging
+                                               retrieval, and reciprocal-rank fusion hybrid
+                                               search.
+[HIGH     ] run-llama__semtools.txt            A Rust CLI for document parsing (LlamaParse API)
+                                               plus local, API-free semantic line search built
+                                               on model2vec static embeddings
+                                               (potion-multilingual-128M, distilled from
+                                               bge-m3), simsimd SIMD cosine kernels, and an
+                                               embedded qdrant-edge IVF_PQ index with a
+                                               persistent on-disk workspace embedding cache.
+[HIGH     ] infiniflow__ragflow.txt            RAGFlow is a layout-aware RAG engine (DeepDoc
+                                               parser + template chunking) backed by the
+                                               Infinity AI-native database, which serves a
+                                               four-way hybrid search (dense vector via
+                                               HNSW+LVQ, sparse vector, BM25 full-text, and
+                                               ColBERT tensor/late-interaction) fused by RRF /
+                                               weighted-sum / tensor reranking.
+[HIGH     ] supermemoryai__supermemory.txt     A cloud-native (Cloudflare Workers + pgvector/D1)
+                                               "memory engine" for LLMs that unifies RAG, user
+                                               profiles, and a temporally-aware knowledge graph
+                                               behind one API, using Matryoshka (MRL)
+                                               truncatable embeddings, AST-aware
+                                               (cAST/tree-sitter) code chunking, and RRF hybrid
+                                               search with cross-encoder reranking under ~200ms.
+[HIGH     ] neo4j__neo4j-graphrag-python.txt   A Python GraphRAG orchestration library that
+                                               builds a lexical+entity knowledge graph from
+                                               text/PDF (chunk -> entity -> relation) via
+                                               schema-guided LLM extraction, then serves it
+                                               through vector, hybrid (vector+fulltext),
+                                               graph-traversal-Cypher, and text2cypher
+                                               retrievers backed by Neo4j's HNSW vector index
+                                               and Lucene fulltext index.
+[HIGH     ] FalkorDB__GraphRAG-SDK.txt         A Python GraphRAG orchestration SDK that does
+                                               schema-guided LLM entity/relation extraction into
+                                               a FalkorDB knowledge graph (a Redis module whose
+                                               engine stores every relation type as a GraphBLAS
+                                               sparse adjacency matrix and executes Cypher
+                                               traversals as sparse linear algebra), then
+                                               answers via multi-path retrieval (vector +
+                                               full-text + text-to-Cypher + relationship
+                                               expansion) merged by ranked fusion and a final
+                                               local cosine rerank.
+[HIGH     ] weaviate__recipes.txt              A collection of ~92% Jupyter notebooks
+                                               demonstrating Weaviate features and integrations
+                                               (RAG, agents, hybrid/multi-vector search,
+                                               multi-tenancy) whose only deeply transferable
+                                               systems content is the family of
+                                               vector-quantization codecs the recipes exercise:
+                                               Product Quantization (PQ), Scalar (SQ), Binary
+                                               (BQ), and the newest 8-bit Rotational
+                                               Quantization (RQ), all paired with an
+                                               exact-vector rescoring step.
+[MEDIUM   ] deepset-ai__haystack.txt           A Python LLM/RAG orchestration framework whose
+                                               pipelines are serializable component DAGs (now
+                                               with cycles), with a pure-Python
+                                               InMemoryDocumentStore that holds an
+                                               incrementally-maintained BM25 inverted index
+                                               (BM25Okapi/BM25L/BM25Plus) and does dense
+                                               retrieval via a single numpy matmul, persisting
+                                               everything to a single JSON file.
+[MEDIUM   ] langgenius__dify.txt               Dify is a Python LLM-app orchestration platform
+                                               whose RAG subsystem (api/core/rag) is a modular
+                                               multi-strategy retrieval pipeline: pluggable
+                                               vector stores, an "economical" jieba+TF-IDF
+                                               inverted keyword index, and a hybrid retriever
+                                               that fuses semantic and keyword results via
+                                               either a neural reranker or a transparent
+                                               weighted-score formula.
+[MEDIUM   ] langroid__langroid.txt             A Python multi-agent LLM framework whose
+                                               DocChatAgent implements a RAG retrieval pipeline
+                                               that fuses semantic + BM25 + fuzzy rankings via
+                                               Reciprocal Rank Fusion (c=60), then applies
+                                               deterministic post-rank reordering (diversity,
+                                               lost-in-middle periphery) and optional
+                                               cross-encoder/LLM relevance extraction.
+[MEDIUM   ] QuivrHQ__quivr.txt                 An opinionated, YAML-configured LangGraph RAG
+                                               engine (quivr-core) paired with MegaParse, a
+                                               "lossless" document-to-markdown ingestion tool
+                                               that combines layout models with vision-LLM table
+                                               reconstruction, plus a deterministic iterative
+                                               token-budget context-reduction algorithm.
+[MEDIUM   ] Mintplex-Labs__anything-llm.txt    A Node.js/Express provider-agnostic RAG + agent
+                                               platform that ingests documents, chunks them with
+                                               an embedder-aware TextSplitter, caches embeddings
+                                               deterministically by UUID v5 content hash, and
+                                               queries one of ~10 pluggable vector DBs (default
+                                               LanceDB/Arrow) with cosine distance normalized to
+                                               a 0-1 similarity and optional native reranking.
+[MEDIUM   ] jina-ai__jina.txt                  Jina is a gRPC/HTTP/WebSocket microservice
+                                               framework for multimodal AI serving whose real
+                                               reusable asset is its data layer DocArray, with a
+                                               columnar DocVec store that stacks all
+                                               per-document tensors into one contiguous tensor
+                                               and serializes via a typed protobuf schema
+                                               (DenseNdArrayProto = raw buffer bytes + shape +
+                                               dtype).
+[MEDIUM   ] supermemoryai__smfs.txt            A Rust daemon that exposes a remote Supermemory
+                                               container as a real mountable POSIX directory
+                                               (FUSE on Linux, a pure-Rust loopback NFSv3 server
+                                               on macOS) backed by a SQLite write-back cache, a
+                                               Semaphore(8) bidirectional sync engine, and a
+                                               transparent grep shim that turns flagless `grep`
+                                               inside the mount into a hybrid semantic-search
+                                               call.
+[MEDIUM   ] weaviate__Verba.txt                Verba ("The Golden RAGtriever") is a modular
+                                               Python RAG orchestrator over Weaviate, built
+                                               around swappable Manager stages
+                                               (Reader/Chunker/Embedder/Retriever/Generator)
+                                               whose retrieval-path innovations (WindowRetriever
+                                               neighbor expansion, document-level score
+                                               grouping, Weaviate semantic answer cache,
+                                               format-aware chunkers) are orchestration logic
+                                               layered on a remote vector DB.
+[LOW      ] supermemoryai__opensearch-ai.txt   A ~80-line TypeScript/Next.js edge-runtime
+                                               "personalized Perplexity" that fuses Brave/Bing
+                                               web results with user-scoped memories pulled from
+                                               the hosted Supermemory engine and streams them
+                                               through gpt-4o-mini; the real retrieval IP lives
+                                               in Supermemory (a vector-graph memory engine),
+                                               not in this thin client.

@@ -1,0 +1,68 @@
+================================================================================================
+powturbo/TurboPFor-Integer-Compression
+category: compression-integer   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A C library of the world's fastest integer-array codecs, anchored by TurboPFor (a SIMD/AVX2
+             patched-frame-of-reference scheme) that bitpacks fixed 128/256-int blocks with
+             per-block exception lists and integrated FOR/delta/zigzag, plus
+             directly-addressable random access into compressed data without full block decode.
+innovation:  Patched bitpacking on small fixed blocks: pick a base bit-width b sized so MOST values fit,
+             store the few outliers as cheap exceptions (either an exception bitmap + secondary
+             bit-width, or variable-byte), and lay the packed bits out vertically across SIMD
+             lanes so a whole block decodes branch-free. A 2-bit per-block header selects
+             {constant, plain bitpack, bitpack+bitmap-exceptions, bitpack+vbyte-exceptions}, and
+             dedicated DA functions allow O(1) random access to a single value without
+             decompressing the block.
+techniques:
+  - TurboPFor patched-FOR: per-block base bit-width b + exception list for outliers, 2-bit
+    block-type header (constant/bitpack/bitmap-exc/vbyte-exc)
+  - Exception encoding two ways: popcount-addressed exception BITMAP + secondary bit-width for
+    exception values, OR variable-byte for non-uniform exceptions
+  - SIMD vertical/interleaved bitpacking (TurboPackV128 SSE, TurboPackV256 AVX2): 8x uint32 LE
+    values packed across lanes, branch-free unpack >20 Gint/s (80 Gb/s)
+  - Integrated FOR (subtract min), delta (d/d1 for sorted-with-dup / strictly-increasing) and
+    zigzag (z) transforms folded into the codec, plus delta-of-delta + RLE for timestamps
+  - Direct/random access (TurboPForDA / TurboForDA): decode a single packed entry by bit-offset
+    arithmetic with zero block decompression
+  - Byte/nibble TRANSPOSE+XOR+zigzag (TPbyte, 2D/3D/4D) SIMD pre-transform that columnarizes
+    mantissa bytes before packing (~9.4 GB/s)
+  - Gorilla-style TurboFloat / TurboFloat-LzXor float codecs: delta-of-delta + RLE on f32/f64,
+    FCM/DFCM context-model prediction
+  - Space-efficient varbyte byte-range classifier: 0-176 in 1 byte, 177-240 -> 14 bit, 241-248
+    -> 19 bit, 249-255 -> 32 bit (denser than LEB128)
+nest steals: Build a new additive encoding id (reserved range 4-255) in nest-format
+             crates/nest-format/src/encoding/* that adds a TurboPFor-style patched-bitpacking
+             codec for INTEGER sections, not embeddings. First target: chunk_ids and
+             chunks_original_spans (offset/length arrays) and future bm25 posting lists in
+             nest-runtime/src/bm25 -- monotone-ish u32/u64 arrays where delta(d1)+FOR+bitpack
+             with exceptions crushes size below zstd. Highest-value target is hnsw_index(0x07)
+             neighbor-id adjacency lists: per-node sorted neighbor ids delta-encode and
+             patch-bitpack beautifully, shrinking the index section that dominates the tiny
+             preset. The DA random-read property lets nest-runtime read one neighbor id or one
+             span straight off mmap without decoding the whole block, preserving the zero-copy
+             hot path. Reimplement clean-room in pure safe Rust (GPL-2.0 forbids vendoring) with
+             portable u32 lane packing; gate SIMD unpack behind the existing simd dispatcher
+             (AVX2/NEON/scalar). Determinism is trivial: fixed block size 256, canonical b =
+             max-bits-after-FOR, exceptions in ascending index order -> byte-identical. Keep
+             little-endian repr per nest invariants. Each piece (block header, bitpack/unpack,
+             exception list, delta transform) fits under the 300-line cap as
+             single-responsibility modules.
+compression: Directly on the north star: patched-bitpacking + delta-FOR is state-of-the-art for the exact
+             data nest stores as integers (ids, spans, hnsw adjacency, bm25 postings), routinely
+             15-25% size at >10 Gint/s decode -- smaller than zstd on these arrays AND faster,
+             while direct-access compresses without sacrificing nest's mmap-and-score-off-disk
+             hot path. Single biggest lever to shrink the index/metadata sections (everything
+             except f32 embeddings) below the current tiny preset.
+perf:        Benchmarks (ZIPF/gov2): TurboPFor256 ~2.4 GB/s enc, ~11 GB/s dec at 15.7% ratio; SIMD bitpack
+             alone >20 Gint/s (80 Gb/s); TurboByte+TurboPack hybrid ~17 GB/s enc / 12 GB/s dec
+             at 25%; EliasFanoV ~3.2/3.6 GB/s at 15.8%. Fixed 128 (SSE) / 256 (AVX2) int blocks
+             are deliberate: whole-block decode fits L1/L2, vertical lane layout is branch-free.
+             Per-block overhead is tiny (2-bit header + width byte + exception list). Vertical
+             SIMD layout needs care to port to NEON (128-bit -> 4x u32) vs AVX2 (256-bit -> 8x
+             u32); scalar fallback is a straightforward bit-cursor unpack.
+license:     GPL-2.0 (dual-licensed; commercial license from author). GPL is incompatible with nest vendoring
+             -- the algorithm must be CLEAN-ROOM reimplemented in Rust from the format
+             description, never copied.

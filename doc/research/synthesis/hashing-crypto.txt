@@ -1,0 +1,258 @@
+================================================================================================
+synthesis :: hashing-crypto
+hashing, checksums, content addressing, authenticated encryption
+================================================================================================
+
+state of the art and concrete nest recommendations for this category.
+
+summary:     nest already lives in exactly the design space these five repos exemplify: domain-separated,
+             length-prefixed preimages (chunk.rs, content_hash_hex), four SHA-256 integrity
+             surfaces, and a deterministic SIMD-dispatch discipline (simd/mod.rs OnceLock +
+             scalar fallback) that mirrors crc32c/gxhash/RustCrypto runtime detection. The
+             collective state of the art has moved past "flat hash over the whole body" in three
+             directions that map directly onto nest's roadmap. (1) Merkle-tree-over-fixed-chunks
+             hashing (BLAKE3, RustCrypto blake3, bao) turns one stable root commitment into
+             cheap partial/incremental verification of any sub-range, plus 5-10x throughput via
+             independent-chunk SIMD+rayon -- the exact decoupling nest has between whole-file
+             content_hash and per-section/per-chunk integrity, and the substrate for
+             content-addressed dedup. (2) Tiered integrity: a near-free hardware checksum
+             (crc32c, or a fast non-crypto hash) as a detect-corruption-fast pre-check, falling
+             through to a cryptographic hash only on mismatch or when identity is needed. (3)
+             One hash family as KDF+MAC+commitment (chacha20-blake3) for an optional
+             committing-AEAD encrypted-at-rest container. The high-value, format-safe moves are:
+             factor the four hand-rolled SHA-256 call sites into one ~80-line domain-separated
+             hashing.rs trait wrapper (digest crate, zero format change); confirm sha2 0.11
+             runtime SHA-NI/sha2-ext dispatch is on (free validate/build speedup); and introduce
+             BLAKE3 as a NEW additive hash-algorithm id (never mutating the FROZEN sha256:
+             surfaces -- that is a true v2) feeding a content-defined chunk-dedup pass at build
+             time, which is the single biggest lever toward "compress more than everyone" on
+             repo/dataset/database corpora where cross-document redundancy dominates the codec.
+
+state of the art
+------------------------------------------------------------------------------------------------
+The field has converged on four ideas. (a) Hashing IS a Merkle tree over fixed-size chunks
+(BLAKE3: 1024B chunks, 64B blocks, 32B chaining values; parent = hash(left_CV || right_CV)); the
+root is one 32B commitment but every interior CV verifies an arbitrary byte range without
+re-hashing -- enabling free parallelism (chunks independent until a cheap combine) and verified
+streaming/slicing (bao: transmit only path CVs + chunk, ~3.1% metadata at 1KiB chunks, tunable
+to ~0.1% via chunk-grouped parents). (b) Domain separation by flags/contexts (BLAKE3
+ROOT/PARENT/CHUNK/KEYED/DERIVE_KEY) prevents length-extension and tree-substitution and lets one
+primitive serve hash, MAC, and KDF -- nest already does the moral equivalent with
+length-prefixed name||len framing in content_hash_hex and the "nest:chunk_id:v1\n" domain tag.
+(c) Runtime CPU-feature dispatch with a guaranteed byte-identical scalar fallback is universal
+(crc32c CanUseSse42/Arm64; RustCrypto cpufeatures zero-sized token; gxhash target_feature) --
+and determinism demands the scalar path produce identical output, which nest enforces and gxhash
+notably CANNOT (no scalar fallback). (d) Tiered integrity: hardware CRC32C (3-way interleaved
+crc32 + table combine, no PCLMULQDQ dependency) or AES-NI gxhash (>30 GB/s) as fast corruption
+detection, reserving cryptographic SHA-256/BLAKE3 for identity. Crypto trend: committing AEAD
+(chacha20-blake3) collapses KDF+subkey-separation+MAC+key-commitment into one keyed BLAKE3 XOF
+call, binding ciphertext to exactly one key -- the right guarantee for content-addressed
+citations. Throughput hierarchy on non-SHA-NI hardware: BLAKE3 ~5-10x SHA-256 (~2x even with
+SHA-NI), gxhash >30 GB/s (non-crypto), CRC32C multiple bytes/cycle (non-crypto). All cores share
+nest's exact discipline: N independent items per SIMD lane, runtime detection once, repr(C)
+little-endian, streaming/incremental.
+
+top transferable innovations
+------------------------------------------------------------------------------------------------
+1. BLAKE3 Merkle-tree-over-fixed-chunks: content_hash becomes a ROOT whose interior CVs verify a
+   single section/chunk byte-span without re-hashing the file, turning O(file) validate into
+   O(touched-bytes)
+2. Content-defined chunking + CV-addressed dedup before the entropy coder -- the highest-yield
+   path to 'compress more than everyone' on repo/dataset/database corpora
+3. Tiered integrity: near-free hardware CRC32C / fast-hash detect-corruption pre-check, falling
+   through to SHA-256 only on mismatch or for identity
+4. One BLAKE3 family as hash + keyed-MAC + derive_key KDF, giving domain-separated subkeys for
+   all four integrity surfaces from a single primitive
+5. Runtime CPU-feature dispatch with byte-identical scalar fallback (crc32c CanUseX / RustCrypto
+   cpufeatures) as the canonical template for any new hash kernel under nest's determinism
+   guarantee
+6. Committing AEAD binding ciphertext to exactly one key (Encrypt-then-MAC + keyed-BLAKE3 + LE
+   length framing) as the blueprint for an optional encrypted-at-rest codec
+7. Chunk-group metadata knob (bao-tree): same root, parent CVs only every N KiB, cutting
+   verification overhead from ~3-6% to ~0.1%
+8. Generic-over-hash digest trait surface so integrity code is written once and the crate
+   auto-selects SHA-NI/sha2-ext/AVX2/NEON backends with no format change
+
+nest recommendations
+------------------------------------------------------------------------------------------------
+* Extract the four hand-rolled SHA-256 surfaces (header.rs::compute_checksum,
+  section_entry.rs::compute_checksum, footer.rs::compute_file_hash,
+  decode.rs::file_hash_hex/content_hash_hex) plus chunk.rs::chunk_id into one new ~80-line
+  src/hashing.rs that exposes a single domain-separated, length-prefixed preimage builder over
+  `impl digest::Update + FixedOutput`. Each surface gets a distinct domain tag (already the
+  convention: 'nest:chunk_id:v1\n', section name||len framing). Pure refactor: byte-for-byte
+  identical output, validated by existing golden.rs + dual_integrity.rs tests.
+    where:  new crates/nest-format/src/hashing.rs; rewire callers in layout/header.rs,
+            layout/section_entry.rs, layout/footer.rs, reader/decode.rs, chunk.rs
+    impact: Eliminates preimage drift across five sites, makes the integrity spec auditable in one place,
+            and creates the single seam where a future BLAKE3 algorithm-id can be added
+            additively. Zero format/behavior change.
+    effort: low
+    from:   https://github.com/RustCrypto/hashes, https://github.com/skerkour/chacha20-blake3
+
+* Confirm sha2 0.11 default runtime-dispatch backends are enabled (no sha2_backend="soft"
+  override) so file_hash over the whole pre-footer body, content_hash over decoded canonical
+  sections, and per-section checksums get x86 SHA-NI / aarch64 sha2-ext acceleration for free.
+  Add a `nest stats`/benchmark line reporting the active SHA backend like SimdBackend::name()
+  already does for dot products.
+    where:  crates/nest-format/Cargo.toml (verify sha2="0.11" features), reader/decode.rs hot path; surface
+            backend in nest-cli/src/cmd/stats.rs + benchmark.rs
+    impact: ~2x faster integrity on SHA-NI CPUs (far more vs naive) with no format change -- speeds
+            `validate`, build determinism checks, and re-hashing of large compressed sections as
+            corpora grow. Keeps deterministic builds cheap.
+    effort: low
+    from:   https://github.com/RustCrypto/hashes
+
+* Add a build-time content-defined chunk dedup pass: fingerprint each chunks_canonical span (and
+  sub-block CDC boundaries) with a fast deterministic hasher, detect duplicate/identical spans
+  across the corpus, store each unique span once with refcounts in the chunk_ids section, BEFORE
+  zstd runs. Keep the frozen v1 layout unchanged (this is a build-time encoding decision);
+  reference each duplicate by its stored index. Use a deterministic fixed-seed hasher so
+  identical corpora stay byte-identical.
+    where:  crates/nest-format/src/writer/encoding_choice.rs and writer/build.rs; sections/chunk_ids.rs for
+            refcount/index representation; nest-python writer path
+    impact: Highest-yield compression lever on multi-document / repo / dataset / whole-database corpora
+            where cross-document redundancy dominates the codec. Dedup-then-compress
+            (restic/borg/casync style) can beat raw zstd ratio by a large margin before any
+            codec change.
+    effort: high
+    from:   https://github.com/BLAKE3-team/BLAKE3, https://github.com/ogxd/gxhash
+
+* Introduce BLAKE3 as a NEW additive hash-algorithm id (e.g. a 'blake3:' chunk_id prefix and a
+  hashing-algorithm field) WITHOUT touching any existing sha256: surface. Use BLAKE3's Merkle
+  structure so a future large-blob content_hash is a ROOT whose interior CVs verify a single
+  cited chunk_id's byte span against the root alone. The sha256: surfaces stay the FROZEN v1
+  default; blake3 is opt-in for large blobs (audio/video/datasets) where 5-10x throughput and
+  verified-streaming matter. Feed it large mmap slices (>=16 KiB) to reach full SIMD width.
+    where:  new algorithm-id plumbing through the unified src/hashing.rs; chunk.rs chunk_id prefix; a future
+            RESERVED merkle_index section id 0x09+ for interleaved parent CVs
+    impact: Removes hashing from the critical path for big-file content addressing as nest scales to whole
+            databases/repos/video; enables cryptographic verification of just a cited chunk.
+            Strictly additive -- v1 stays frozen, never bumps.
+    effort: medium
+    from:   https://github.com/BLAKE3-team/BLAKE3, https://github.com/RustCrypto/hashes
+
+* Add a RESERVED merkle_index / bao_tree section (id 0x09+, additive within v1) holding
+  interleaved parent-node chaining values (chunk-grouped so overhead is ~0.1%, not ~3%) so a
+  partial or remote consumer of a nest://content_hash/chunk_id citation can cryptographically
+  verify just the cited span against the root without the whole file. Tunable chunk-group size
+  is the knob that keeps verification metadata from eroding compression-ratio gains.
+    where:  new layout constant SECTION_MERKLE_INDEX (0x09) in layout/mod.rs; new sections/ module; consumed
+            by nest-cli/src/cmd/cite.rs and validate.rs
+    impact: Makes citations cryptographically verifiable for partial/remote consumers at ~0.1% overhead -- a
+            real differentiator for sovereign, content-addressed serving of large artifacts.
+            Additive, optional, off by default.
+    effort: high
+    from:   https://github.com/BLAKE3-team/BLAKE3
+
+* Optional fast-integrity pre-check tier for `nest validate`/`inspect`: store a near-free
+  non-cryptographic checksum (hardware CRC32C with 3-way interleaving, or an AES-NI/portable
+  hash) per section in a reserved metadata field, run it FIRST to detect corruption fast, and
+  only fall through to the SHA-256 per-section checksum on mismatch or when cryptographic
+  strength is requested. Must ship a deterministic byte-identical scalar fallback (slicing-by-4
+  reference) to honor nest's determinism + never-panic + <=300-line constraints.
+    where:  reserved field alongside SectionEntry checksum (or a sidecar reserved section); validate path in
+            reader/validate.rs and nest-cli/src/cmd/validate.rs
+    impact: Cheap per-chunk corruption detection lets nest push more aggressive lossy int8/f16 quantization
+            while still catching decode corruption almost for free. Speeds the validate hot path
+            on large files. Note: google recommends crypto/HighwayHash over CRC32C for primary
+            content addressing -- keep this as a detect-fast layer only, SHA-256 stays the
+            identity.
+    effort: medium
+    from:   https://github.com/google/crc32c, https://github.com/ogxd/gxhash
+
+* Swap the in-memory BuildHasher for hot-path tables that NEVER persist to disk -- bm25/index.rs
+  HashMap<String,TermEntry> + per-doc tf_map, bm25/fusion.rs RRF HashMap<usize,f32>,
+  ann/search.rs visited HashSet<u32>, ann/mod.rs recall HashSets -- from std SipHash to a fast
+  hasher (foldhash/ahash on portable targets, optionally AES-NI gxhash feature-gated behind
+  target_feature). Zero format impact because these are query-time/build-time scratch
+  structures, not serialized bytes.
+    where:  crates/nest-runtime/src/bm25/index.rs, bm25/fusion.rs, ann/search.rs, ann/mod.rs
+    impact: Cuts BM25 build/query and HNSW traversal CPU (latency win, not size). Helps the known
+            search-text overhead. Determinism preserved as long as iteration-order-dependent
+            outputs already sort (bm25 alphabetical term order, seeded hnsw) -- verify no output
+            depends on hash iteration order.
+    effort: low
+    from:   https://github.com/ogxd/gxhash, https://github.com/google/crc32c
+
+* Blueprint (not yet build) an optional committing-AEAD encrypted-at-rest codec under a RESERVED
+  encoding id (4-255, additive within v1) wrapping non-embedding section payloads: derive
+  enc_key|mac_key|nonce from one keyed-BLAKE3 XOF over (master_key, nonce), Encrypt-then-MAC
+  with explicit LE length framing, constant-time tag check. Depend on the upstream blake3 crate;
+  do NOT vendor a from-scratch ChaCha into never-panic format code -- only the
+  construction/dispatch pattern transfers. Determinism holds given (key, fixed-nonce).
+    where:  future crates/nest-format/src/encoding/ aead module under a reserved SECTION_ENCODING id; keep
+            embeddings unencrypted on the mmap hot scoring path
+    impact: Unlocks compress-then-encrypt single-file containers while staying
+            offline/single-file/deterministic; committing property binds ciphertext to exactly
+            one key -- the right guarantee for content-addressed citations. Orthogonal to ratio
+            but expands the sovereign story.
+    effort: high
+    from:   https://github.com/skerkour/chacha20-blake3, https://github.com/BLAKE3-team/BLAKE3
+
+compression wins
+------------------------------------------------------------------------------------------------
+  - Content-defined chunking + CV-addressed dedup BEFORE zstd: store each unique
+    chunks_canonical span once with refcounting, deduping identical content across
+    documents/datasets/versions. On repo/database/multi-doc corpora cross-artifact redundancy
+    usually dwarfs the codec's per-stream gain -- this is the single biggest lever toward
+    'compress more than everyone', and it stays additive (a build-time encoding decision, frozen
+    v1 layout unchanged).
+  - Sub-block near-duplicate detection via fast fingerprints (gxhash-speed hashing of CDC
+    boundaries) lets nest find and collapse near-identical spans across whole-repo ingestion,
+    extending dedup beyond exact matches before the entropy coder runs.
+  - Chunk-group Merkle metadata tuning (bao-tree): emit parent CVs only every N KiB so
+    verification/proof metadata is ~0.1% instead of ~3-6% -- keeps the integrity layer from
+    eroding the compression ratio when nest adds verifiable partial citations to large
+    artifacts.
+  - Cheap per-chunk corruption detection (hardware CRC32C / fast non-crypto checksum tier) makes
+    aggressive lossy quantization (int8, f16, future entropy coders) safer to push harder,
+    because decode integrity is verifiable almost for free per chunk -- indirectly enabling
+    smaller files at a given recall.
+  - Hardware-accelerated SHA-256 (SHA-NI/sha2-ext, free in sha2 0.11) plus optional BLAKE3 for
+    large blobs keep re-hashing of heavily-compressed/deduplicated content off the critical
+    path, so nest can afford to hash on every build/validate as corpora grow -- removing the
+    disincentive to compress more aggressively.
+  - Identical-subtree hashing (BLAKE3 Merkle): two artifacts sharing a sub-range hash that range
+    to the same CV, making block-level dedup across datasets/repos/whole-databases detectable by
+    hash equality -- the structural prerequisite for corpus-level (not just per-file)
+    compression.
+
+watch-outs (conflict with nest constraints)
+------------------------------------------------------------------------------------------------
+  - DETERMINISM: nest guarantees same chunks + same model fingerprint => byte-identical file.
+    Any new hasher used in build output (dedup fingerprints, chunk_id) MUST be fixed-seed and
+    cross-platform-stable (gxhash only guarantees stability within a major version and needs its
+    deterministic feature flag; foldhash/ahash default to randomized seeds). The scalar and SIMD
+    paths of any new kernel MUST produce byte-identical output, exactly as simd/mod.rs already
+    enforces.
+  - FROZEN FORMAT: the four sha256: surfaces (header_checksum, per-section checksum, file_hash,
+    content_hash) and the 'sha256:' chunk_id prefix are identity/citation anchors. Changing the
+    meaning of any existing hash field is a TRUE v2 (bump NEST_FORMAT_VERSION) -- do NOT swap
+    SHA-256 for BLAKE3 in place. BLAKE3 must enter only as a NEW additive algorithm-id; new
+    sections only at id 0x09+, new encodings only at id 4-255.
+  - gxhash NO SCALAR FALLBACK: requires AES+SSE2 (x86) or AES+NEON (aarch64) and fails to
+    compile on unsupported targets -- a direct collision with nest's scalar-fallback/portability
+    guarantee. It must be feature-gated behind target_feature detection with a portable fallback
+    hasher, NEVER a hard dependency, and confined to runtime in-memory tables / build-time dedup
+    -- never into never-panic nest-format library code.
+  - NEVER-PANIC + heavy unsafe: gxhash and the from-scratch ChaCha in chacha20-blake3 use
+    aggressive unsafe and are explicitly 'not for safety-critical use'. They must not enter
+    nest-format library code (typed thiserror, no panics). Depend on the upstream permissive
+    blake3 crate (no_std, scalar reference path) rather than re-vendoring crypto primitives;
+    only the construction/dispatch PATTERN transfers.
+  - EMBEDDINGS HOT PATH: embeddings are scored directly from mmap via SIMD dot products and are
+    never zstd-compressed. Do NOT route embeddings through an encrypted/AEAD codec or any
+    transform that breaks zero-copy mmap scoring -- confine any encryption codec to
+    non-embedding sections, exactly as zstd is.
+  - CRC32C IS NOT IDENTITY: google explicitly recommends a stronger hash (HighwayHash/crypto)
+    over CRC32C for new file formats. Use CRC32C/fast hashes only as a detect-corruption-fast
+    tier; SHA-256 content_hash must remain the stable content-addressing identity behind nest://
+    citations.
+  - BLAKE3 SIMD WIDTH: BLAKE3 update() only reaches full SIMD width on large buffers (>=16 KiB
+    for AVX-512; 8 KiB hits AVX2). Feeding it small per-chunk slices forfeits the throughput win
+    -- only adopt it where nest can hand it large mmap slices (large blobs), not for tiny
+    per-section hashing where SHA-NI SHA-256 is already competitive.
+  - FILE HYGIENE: <=300 lines/file (333 hard cap), single-responsibility, repr(C), little-endian
+    unsigned, lowercase docs no emoji/em-dash. The unified hashing.rs, any merkle_index module,
+    and dispatch glue must each stay within these limits and split rather than grow.

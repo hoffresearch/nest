@@ -1,0 +1,310 @@
+================================================================================================
+synthesis :: semantic-rdf
+RDF triple stores, semantic web, graph query languages
+================================================================================================
+
+state of the art and concrete nest recommendations for this category.
+
+summary:     The semantic-rdf category (Jena, RDF4J, Oxigraph, RDFLib, terminusdb-store/tdb-succinct,
+             openCypher) converges on one architecture nest can mine hard: store data as
+             integer-ID triples, dictionary-encode every repeated term once, and index those IDs
+             in multiple sorted permutations so any query shape is a prefix range scan. The
+             frontier splits into two storage philosophies. (A) Dictionary + B-tree/LSM (Jena
+             TDB2, RDF4J, Oxigraph): map terms to compact IDs, inline small scalars/strings into
+             the ID itself to skip the dictionary, and keep multiple permutation indexes. The
+             standout trick is value inlining: Jena packs
+             i56/decimal/date/bool/range-reduced-double into the 8-byte NodeId, Oxigraph inlines
+             <16-byte strings + native i64/i128/dateTime into a fixed 17-byte record, RDF4J uses
+             an order-preserving varint whose length is recoverable from byte 1 so encoded keys
+             binary-search WITHOUT decoding. (B) Succinct query-in-place (terminusdb-store,
+             tdb-succinct): the file IS the index, no decompress step, reaching ~13 bytes/triple
+             on billions of triples via Plain Front Coding string dictionaries, bit-packed
+             LogArrays (ceil(log2(max+1)) bits/int instead of fixed 32/64), and two-level
+             rank/select BitIndex over adjacency lists. This succinct family is the single most
+             important steal for nest: it is the missing middle between "raw f32 (fast, big)"
+             and "zstd block (small, must decompress to read one element)", and it is
+             architecturally identical to nest's mmap-and-scan-off-disk model. Grounding the
+             analysis in the codebase: nest's HNSW codec (crates/nest-runtime/src/ann/codec.rs)
+             stores neighbor IDs as fixed u32 regardless of N, and the BM25 codec
+             (crates/nest-runtime/src/bm25/codec.rs) stores raw term strings and u32 doc/tf
+             postings with no front-coding or delta/varint, so both optional sections carry
+             exactly the high-bit slack and structural redundancy LogArray/PFC/varint remove.
+             The encoding dispatch (crates/nest-format/src/encoding/mod.rs::decode_payload) and
+             reserved encoding IDs 4-255 plus reserved section IDs 0x09+
+             (crates/nest-format/src/layout/mod.rs) give clean additive extension points, so
+             every recommendation lands inside v1 with no NEST_FORMAT_VERSION bump. openCypher
+             is a non-storage spec (low value): it contributes only a conformance-harness
+             methodology for proving search determinism, not compression.
+
+state of the art
+------------------------------------------------------------------------------------------------
+Two coexisting storage philosophies. (1) Dictionary + permutation indexes: every distinct RDF
+term is mapped to a small integer ID; indexes store only IDs (4-17 bytes/term) in multiple
+sorted permutations (SPO/POS/OSP for triples, +context for quads) so any bound-prefix pattern is
+a sorted range scan with no query planner needed. Three increasingly aggressive inlining
+variants eliminate the dictionary for common values: Jena TDB2 inlines scalars into a tagged
+8-byte NodeId (bit63 ptr-vs-value, then i56/decimal/date/bool/range-reduced-double); RDF4J packs
+a 2-bit type tag into the ID and uses an order-preserving varint (length recoverable from byte
+1, byte-order == numeric-order so you binary-search encoded keys without decoding); Oxigraph
+uses a fixed 17-byte type-byte+16-byte record that inlines <16-byte UTF-8 strings and native
+i64/i128-fixed-point-decimal/dateTime, hashing only large strings into an id2str side table
+(content-addressed: identical value -> identical id, no forward index). (2) Succinct
+query-in-place (terminusdb-store, tdb-succinct): the compressed bytes ARE the queryable index,
+no decompression step. Plain Front Coding (sort strings, bucket by 8, store shared-prefix-len +
+suffix, implicit ID = sorted position, bidirectional via bucket binary search); LogArray (pack N
+ints at ceil(log2(max+1)) bits with an on-disk width header, entry(i) touches at most 2 words);
+two-level rank/select BitIndex (64-bit blocks, 52-block superblocks, precomputed popcount
+tables, O(1) rank / O(log superblocks) select, plus a cache-line linear-bitscan shortcut);
+adjacency lists as LogArray-of-values + BitIndex-marks so navigation needs zero stored pointers.
+This reaches ~13.6 bytes/triple at 17B triples with a full 6-way index. Cross-cutting:
+big-endian keys so lexicographic order == numeric order for range scans (nest must use
+little-endian per constraint, so it pays an explicit comparator or stores keys sorted and
+binary-searches by decoded value); content-addressed immutable delta layers (terminusdb) for
+git-for-data append-only edits with newest-wins resolution + periodic rollup. openCypher
+contributes only conformance methodology (canonical result serialization, ordered-vs-set
+comparison, side-effect-as-delta accounting), no storage or compression machinery.
+
+top transferable innovations
+------------------------------------------------------------------------------------------------
+1. Succinct LogArray (bit-pack ints at ceil(log2(max+1)) bits/slot, not fixed 32/64, with
+   on-disk width header) - query-in-place, O(1) random access off mmap, the highest-leverage
+   steal because it directly shrinks nest's existing fixed-u32 HNSW neighbor IDs and span/offset
+   arrays with zero decode (tdb-succinct, terminusdb-store)
+2. Plain Front Coding string dictionary (sort, bucket by 8, store shared-prefix-len + suffix,
+   implicit ID = sorted position, bidirectional binary search) - crushes
+   URI/path/repeated-prefix data below generic zstd while staying binary-searchable from mmap;
+   directly attacks BM25 vocabulary, chunk_ids, provenance, and future json/yaml/dataset keys
+   (tdb-succinct, terminusdb-store)
+3. Dictionary-encode-then-store-only-IDs with order-preserving varint (length recoverable from
+   byte 1, byte-order == numeric-order so encoded keys binary-search without decoding) - removes
+   structural redundancy before the entropy stage so it stacks under zstd (RDF4J, terminusdb
+   TFC)
+4. Hash-or-inline typed-value encoding (inline <16-byte strings + native
+   i64/i128-fixed-point/dateTime/bool; replace only large strings with a content hash into
+   id2str) - turns repetitive structured metadata into fixed content-addressed records,
+   deterministic and dedup-at-value-level before bytes (Oxigraph, Jena NodeId)
+5. Two-level rank/select BitIndex (64-bit blocks, 52-block superblocks, precomputed popcount
+   LogArrays, O(1) rank, cache-line linear-bitscan shortcut) - pointer-free navigation primitive
+   for sparse presence/tombstone bitmaps, BM25 posting lists, and graph adjacency (tdb-succinct)
+6. Multi-permutation sorted-ID indexes (SPO/POS/OSP) so any bound-prefix graph pattern is an
+   index-only range scan with no query planner - the on-disk substrate for nest's north-star
+   graph search (Jena, RDF4J, Oxigraph, RDFLib)
+7. Adjacency-list-as-LogArray+BitIndex (HDT bitmap-triples): store edges with zero pointers,
+   navigate src->rel->dst via rank/select - ~13 bytes/triple, makes graph edges highly
+   compressible (terminusdb-store)
+8. Content-addressed immutable delta layers (each commit = a hash-named layer of adds/removes,
+   newest-wins, periodic rollup) - blueprint for nest's real-time-edit goal without breaking
+   single-file determinism (terminusdb-store)
+9. Most-bound-first BGP triple-pattern reordering by count of bound variables (no cost
+   statistics needed) - a deterministic, seeded multi-hop graph join order that stays
+   reproducible (RDFLib, Jena stats.opt)
+10. xloader external-merge-sort bulk build (stream tuples, sort via external sort, compress
+   intermediate spill runs, build each index as a separate streamed pass) - removes the in-RAM
+   ceiling from nest's deterministic builder for corpora exceeding memory (Jena)
+
+nest recommendations
+------------------------------------------------------------------------------------------------
+* Add a LogArray codec: pack any monotone/bounded unsigned-int section at ceil(log2(max+1))
+  bits/slot into LE 64-bit words plus a trailing control word (u64 N, u8 width). entry(i) reads
+  at most 2 contiguous words and masks W bits, zero decode, O(1) random access off mmap.
+  Register a new reserved encoding id (4-255) in decode_payload's match arm.
+    where:  crates/nest-format/src/encoding/logarray.rs (new, <300 lines) wired into
+            crates/nest-format/src/encoding/mod.rs::decode_payload and a new
+            SECTION_ENCODING_LOGARRAY const in crates/nest-format/src/layout/mod.rs (id 4);
+            reader-side view in nest-runtime
+    impact: high
+    effort: medium
+    from:   terminusdb-store (tdb-succinct LogArray), rdf4j (order-preserving varint)
+
+* Shrink the HNSW section (0x07) by replacing fixed u32 neighbor IDs with LogArray-packed
+  ceil(log2(N))-bit IDs. The codec currently writes every neighbor as 4 raw bytes regardless of
+  corpus size (to_bytes loops `out.extend_from_slice(&id.to_le_bytes())`); for the tiny preset's
+  small/medium N this wastes 10-20 high bits per edge across the densest section. Directly
+  attacks the 0.283 size ratio while keeping deterministic seekable layout.
+    where:  crates/nest-runtime/src/ann/codec.rs::HnswIndex::to_bytes / from_bytes (bump
+            HNSW_PAYLOAD_VERSION inside the section, not NEST_FORMAT_VERSION); reuse the new
+            LogArray reader
+    impact: high
+    effort: medium
+    from:   terminusdb-store (LogArray over adjacency lists), rdflib (densified u32 arrays + binary-search
+            prefix walks)
+
+* Add a Plain Front Coding (PFC) dictionary codec for sorted repetitive string sections: sort
+  strings, bucket by 8, store bucket-head verbatim then each successor as
+  vbyte(shared-prefix-len)+suffix; implicit ID = sorted position; bidirectional id<->string via
+  bucket binary search off mmap. Apply first to the BM25 vocabulary, which today stores every
+  term as raw [len u32][bytes] with no prefix sharing, then to chunk_ids and provenance. Stays
+  binary-searchable and stacks under zstd on cold sections.
+    where:  crates/nest-format/src/encoding/pfc.rs (new) + FrontCodedDict reader; apply to term storage in
+            crates/nest-runtime/src/bm25/codec.rs::to_bytes/from_bytes and to
+            chunk_ids/provenance section codecs in crates/nest-format/src/sections
+    impact: high
+    effort: medium
+    from:   terminusdb-store (PFC dictionary, Martinez-Prieto), rdf4j (IRI namespace+localname factoring)
+
+* Delta+varint the BM25 posting lists. Postings are currently written as raw [doc u32][tf u32]
+  pairs per term; doc IDs within a term are monotonically increasing, so store first-doc then
+  gap-deltas with an order-preserving varint (length from byte 1) and small-value varint tf.
+  Term order is already alphabetical (deterministic constraint satisfied), so this is a pure
+  size win on the largest part of the bm25 section with no semantic change.
+    where:  crates/nest-runtime/src/bm25/codec.rs::to_bytes/from_bytes (bump BM25_PAYLOAD_VERSION); add a
+            shared LE varint helper in nest-format encoding
+    impact: medium
+    effort: low
+    from:   rdf4j (order-preserving varint), terminusdb-store (vbyte gap encoding in dictionary blocks)
+
+* Add an optional typed-column section (reserved id 0x09+) for structured payloads
+  (json/yaml/parquet cells, dataset columns, repeated provenance): each cell is a tagged word,
+  bit indicating inline-vs-span, then a small type tag + native payload (i56/i64 int,
+  8-bit-scale i48/i128-fixed-point decimal, ms-epoch date, bool, f16). Numbers/dates/bools cost
+  zero dictionary bytes and zero chunk-span indirection; only strings keep a
+  chunks_original_spans pointer or an id2str dictionary ref. Reuse nest's existing SHA-256
+  content_hash machinery (not SipHash) to dedup long strings, keeping the four-integrity-surface
+  story. Fully additive: new section id + the typed-dict can be zstd-wrapped since it is
+  non-embedding.
+    where:  new section id in crates/nest-format/src/layout/mod.rs (0x09) + CANONICAL/OPTIONAL_SECTIONS;
+            codec in crates/nest-format/src/encoding/typed_dict.rs; builder support in
+            crates/nest-python/src/build_fn.rs; gate behind a new capabilities flag
+    impact: high
+    effort: high
+    from:   apache/jena (tagged-NodeId inline scalars), oxigraph (hash-or-inline 17-byte typed value, i128
+            fixed-point, dateTime-as-decimal)
+
+* Add a graph-search section (reserved id 0x09+) storing edges as integer-densified
+  (src,rel,dst) triples in two-or-three sorted LE permutations (SPO + at least one inverse such
+  as OSP), each a LogArray, plus a PFC term dictionary. A graph::TripleIndex in nest-runtime
+  mmaps the arrays and answers any bound-prefix pattern via binary-search range scan with zero
+  allocation. Keep permutation count minimal (RDF4J reports ~120-130 bytes/quad with 3
+  permutations) and make the whole section optional so default builds stay tiny. Port
+  most-bound-first BGP reordering as a deterministic, id-order-tiebreak join order so multi-hop
+  stays reproducible and never panics (typed thiserror).
+    where:  crates/nest-runtime/src/graph/{term_dict.rs,index.rs,join.rs} (each <300 lines); new section id
+            + capability in nest-format; a search-graph subcommand in crates/nest-cli/src/cmd;
+            expose pattern queries in nest-python
+    impact: high
+    effort: high
+    from:   rdflib (3-permutation index, most-bound-first reorder), oxigraph (SPOG permutations + prefix
+            range scans), rdf4j (permutation indexes, varint IDs), terminusdb-store
+            (adjacency-as-LogArray+BitIndex)
+
+* Add a two-level rank/select BitIndex primitive (64-bit blocks, 52-block superblocks, popcount
+  tables stored as LogArrays, plus the cache-line linear-bitscan shortcut when a range fits 512
+  bytes) for sparse presence/tombstone bitmaps at ~1.05 bits/bit with O(1) navigation. Enables
+  optional-field presence maps and a deleted-chunks tombstone bitmap for real-time edit, and
+  underpins pointer-free graph adjacency and BM25 posting navigation.
+    where:  crates/nest-runtime/src/succinct/{logarray.rs,bitindex.rs} (each <300 lines, little-endian words
+            per constraint); consumed by the graph and bm25 modules
+    impact: medium
+    effort: medium
+    from:   terminusdb-store (two-level rank/select BitIndex)
+
+* Implement an append-only delta-layer section (reserved id 0x09+) for real-time edit: each edit
+  is an immutable additive section of added/removed chunk_ids + embeddings, resolved newest-wins
+  at query time, with periodic rollup that rewrites a fresh base .nest. Map the
+  content-addressed layer naming onto nest's existing content_hash +
+  nest://content_hash/chunk_id citation model so citations stay byte-exact, and budget
+  read-amplification growth (mitigated by rollup) explicitly.
+    where:  new optional section family in crates/nest-format/src/layout + reader resolution order in
+            crates/nest-format/src/reader; runtime newest-wins overlay in
+            crates/nest-runtime/src/mmap_file.rs
+    impact: medium
+    effort: high
+    from:   terminusdb-store (content-addressed immutable delta layers + rollup)
+
+* Adopt the xloader external-merge-sort pattern for the deterministic builder so corpora
+  exceeding RAM still build reproducibly: stream chunk/term tuples to spill files,
+  external-merge-sort with stable alphabetical order (matches the bm25 deterministic-term-order
+  constraint), zstd the intermediate spill runs to cut peak temp disk, then build
+  hnsw_index(0x07)/bm25_index(0x08) and any graph section as separate streamed passes. Removes
+  the in-RAM ceiling without touching the frozen format or determinism guarantee.
+    where:  crates/nest-python/src/build_fn.rs (builder driver) with sort/spill helpers; no format change
+    impact: medium
+    effort: medium
+    from:   apache/jena (xloader: external sort, compressed spill runs, per-index streamed phases)
+
+* Add a golden-file search-conformance harness that machine-checks the search_contract: assert
+  ann/hybrid results rerank to identical real-cosine top-k across exact/tiny/hybrid presets,
+  proving query-layer determinism the way content_hash proves storage-layer determinism. Pure
+  test scaffolding; the additive v1 format is untouched.
+    where:  crates/nest-cli/tests (alongside cli_e2e.rs) and crates/nest-runtime/tests
+    impact: low
+    effort: low
+    from:   opencypher (TCK canonical result serialization + ordered-vs-set comparison)
+
+compression wins
+------------------------------------------------------------------------------------------------
+  - LogArray on HNSW neighbor IDs: the tiny preset's index section currently stores every edge
+    as a fixed u32; packing at ceil(log2(N)) bits removes 10-20 wasted high bits per neighbor
+    across the densest part of the smallest preset, directly lowering the 0.283 size ratio with
+    zero query-time decode.
+  - LogArray on offset/length arrays (chunks_original_spans, per-section length tables, chunk
+    index): ~64k chunks need ~17 bits not 32/64, roughly halving those sections while keeping
+    O(1) mmap random access for cite/materialize.
+  - Plain Front Coding on sorted string sections (BM25 vocabulary, chunk_ids, provenance, future
+    json/yaml/dataset keys): prefix sharing beats per-field zstd on sorted short
+    strings/URIs/paths and stays binary-searchable, a domain-specific entropy win orthogonal to
+    and stackable with zstd.
+  - Delta+varint BM25 posting lists: monotone doc IDs become small gaps, and order-preserving
+    varint shrinks both doc gaps and tf to 1-2 bytes vs fixed 8 bytes/posting on the largest
+    part of the bm25 section.
+  - Dictionary-encode repeated provenance/metadata into one per-file string/namespace table
+    storing only small IDs: redundancy becomes integer locality, beating zstd-on-raw because
+    dedup happens at the semantic-value level before the entropy coder runs.
+  - Native typed-column encoding for structured payloads (json/yaml/parquet/datasets):
+    integers/dates/bools/decimals stored as i56/i64/i128-fixed-point/ms-epoch instead of
+    text+span, eliminating JSON text bloat and per-value span offsets that zstd still pays for,
+    then optionally zstd-wrapped on top.
+  - Graph-edge permutations compress near-free: each SPO/OSP permutation is a sorted integer
+    sequence, so delta-coding + zstd makes the multi-permutation redundancy cheap while
+    unlocking direction-agnostic queries; cross-context edge sharing dedups when swallowing
+    whole databases/repos.
+  - Succinct query-in-place is the strategic win: LogArray/PFC/BitIndex give near-entropy size
+    WITH random access, the missing middle between raw-f32 and zstd-block, letting nest compress
+    every non-embedding integer/string/offset/index section without the full-block decode zstd
+    forces, while leaving the embedding hot path untouched.
+
+watch-outs (conflict with nest constraints)
+------------------------------------------------------------------------------------------------
+  - Big-endian assumption: RDF stores use big-endian keys so lexicographic byte order equals
+    numeric order, enabling comparator-free range scans. nest mandates little-endian, so naive
+    LE packing breaks byte-order==value-order. Either store keys pre-sorted and binary-search by
+    decoded value, or use an explicit order-preserving codec; do not silently inherit the
+    big-endian range-scan trick.
+  - Permutation index storage multiplies: 6 SPOG permutations cost ~6x index storage (RDF4J
+    ~120-130 bytes/quad at 3 permutations). Graph/triple indexing MUST be an optional section
+    (0x09+) gated by a capability flag, and nest should ship the minimum permutation set (e.g.
+    SPO + one inverse), or default builds stop being tiny.
+  - Do NOT vendor RocksDB (Oxigraph), LMDB (RDF4J), tokio (terminusdb-store), or any Java
+    (Jena/RDF4J/RDFLib): these bring C++ LSM, server/async, or JVM dependencies that violate
+    nest's small single-file offline-by-construction core. Clean-room the encoding ideas in
+    Rust; reimplement layouts as flat mmap'd sorted sections, which is simpler and faster to
+    read than an LSM and matches nest's zero-server model.
+  - Keep the never-compress-embeddings rule intact: every steal here targets non-embedding
+    sections (IDs, strings, offsets, indexes, metadata, graph edges). The dense embedding matrix
+    stays raw f32/f16/int8 scored from mmap on the hot path; succinct structures do NOT shrink
+    it and must not be placed in its path.
+  - Substitute nest's SHA-256 for Oxigraph's SipHash and terminusdb's MD5/20-byte content hashes
+    to preserve the single four-integrity-surface hash family; SHA-256 is slower but is paid at
+    build time, not on the search hot path, so there is no runtime cost.
+  - Content-addressed delta layers add read amplification that grows with stack depth; adopting
+    append-only edit layers requires periodic rollup and an explicit depth budget, and must
+    preserve content_hash/citation byte-exactness so nest://content_hash/chunk_id never breaks.
+  - Determinism: HNSW must stay seeded and BM25 alphabetical; PFC bucketing, LogArray width
+    selection, varint encoding, and any graph term-id densification must be a pure deterministic
+    function of sorted input so same chunks + same model fingerprint still yields a
+    byte-identical file. Most-bound-first BGP reordering needs an explicit id-order tiebreak to
+    stay reproducible.
+  - Additive-only discipline: use reserved encoding ids 4-255 and section ids 0x09+; bump only
+    the in-section payload version (HNSW_PAYLOAD_VERSION, BM25_PAYLOAD_VERSION) for codec
+    changes, never NEST_FORMAT_VERSION, and never let new optional sections enter content_hash
+    (which is the canonical six only) or citations across corpora break.
+  - Library code must never panic: all new codecs (LogArray width overflow, PFC bucket bounds,
+    varint EOF, graph term-id range) must return typed thiserror NestError/RuntimeError,
+    matching the existing ByteCursor EOF-as-error pattern in ann/codec.rs and bm25/codec.rs, not
+    unwrap/index-panic.
+  - File hygiene: every new module must stay <=300 lines (333 hard cap) and
+    single-responsibility. Split graph into term_dict.rs/index.rs/join.rs and succinct into
+    logarray.rs/bitindex.rs/pfc.rs rather than one large file.
+  - openCypher is near-zero compression value: do not invest in Cypher grammar/TCK as a
+    compression source. Borrow only the conformance-test methodology for proving search
+    determinism, and only if cheap.

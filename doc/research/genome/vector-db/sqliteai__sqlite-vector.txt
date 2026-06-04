@@ -1,0 +1,83 @@
+================================================================================================
+sqliteai/sqlite-vector
+category: vector-db   |   steal priority: MUST
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A pure-C SQLite extension that does ANN over plain BLOB columns with zero index build, pairing a
+             runtime-dispatched SIMD distance table (SSE2/AVX2/NEON/RVV) with TurboQuant:
+             rotation-based data-oblivious 2/3/4-bit scalar quantization scored via SIMD nibble
+             lookup tables without vector reconstruction.
+innovation:  TurboQuant scalar quantization (Google Research, ICLR 2026, arXiv 2504.19874): apply a fast
+             structured random rotation (Hadamard-based, reproduced here as a reversible-LCG +
+             Fisher-Yates Hadamard rotation) to each vector so per-coordinate variance is
+             redistributed to a concentrated near-iid Beta/Gaussian distribution, THEN apply a
+             fixed per-coordinate Lloyd-Max scalar codebook (16 centroids at 4-bit, 4 at 2-bit)
+             with a per-vector scale+shift calibration. This is data-oblivious (no
+             training/codebook fitting, no centroid storage), gives near
+             information-theoretically optimal distortion (within ~2.7x of the proven lower
+             bound), and at query time scores ASYMMETRICALLY: the full-precision query is
+             rotated once and folded with 1/scale, so dot(q,x) is recovered as a lookup-table
+             sum over the stored 2/3/4-bit codes with zero per-vector decompression. The
+             decisive part for nest is that this beats plain int8 SQ at half the bytes (4-bit
+             ~8x compression matches/beats nest's current int8 4x; 2-bit hits 16x; 1-bit 32x)
+             while preserving recall.
+techniques:
+  - TurboQuant: fast structured random rotation (Hadamard/FFHT-style, O(d log d)) before
+    quantization so coordinates become near-iid and a single fixed scalar codebook applies
+    per-coordinate
+  - Per-coordinate fixed Lloyd-Max codebook from standard normal (16 centroids for 4-bit, 4 for
+    2-bit) plus per-vector (scale,shift) calibration x -> (x+shift)*scale
+  - Asymmetric scoring: dot(q,x) = <q/scale, x_codes> - <q, shift>, query rotated and folded
+    with 1/scale ONCE per query; stored vectors never decompressed
+  - SIMD nibble-split LUT kernel: codebook quantized to int8, pshufb does parallel 16-byte table
+    lookup, query split into low/high nibbles fed to _mm_maddubs_epi16 (or VPDPBUSD on VNNI /
+    NEON tbl / AVX-512BW)
+  - Two-stage PROD mode: MSE-optimal quantizer + 1-bit QJL (Quantized Johnson-Lindenstrauss)
+    transform on the residual to remove inner-product estimation bias at ~1 bit/vector extra
+    cost
+  - Index-free architecture: runtime dispatch_distance_table[metric][dtype] function-pointer
+    array selected by CPU feature detection (SSE2/AVX2/NEON/RVV), brute-force full scan over
+    BLOBs, zero-cost inserts/updates with no graph rebuild
+  - On-disk quantized row = rowid(8) + scale(4) + packed_codes(ceil(dim*qbits/8)); shadow table
+    vector0_{table}_{column}; streaming scan when k omitted (progressive WHERE/LIMIT)
+  - Native multi-format storage: float32/float16/bfloat16/int8/uint8/1-bit BLOBs with Hamming
+    distance for the 1-bit path
+nest steals: Add a TurboQuant codec as a new additive encoding id in nest-format/src/encoding/ (e.g.
+             turboquant.rs alongside int8.rs), reserved-range ids 4-6 for tq4/tq2/tq1, NO
+             NEST_FORMAT_VERSION bump (additive only). The embeddings section stores per-vector
+             [scale:f32][shift:f32][packed_codes] plus a section-level header carrying the
+             rotation seed (deterministic: seeded LCG + Fisher-Yates Hadamard, fits nest's
+             seeded-determinism constraint exactly) and qbits. Critically nest's hard rule is
+             embeddings are scored DIRECTLY from mmap on the hot path and never zstd-compressed;
+             TurboQuant respects this perfectly because codes are scored in place via LUT with
+             no decompression, so it slots straight into nest-runtime/src/search.rs and the SIMD
+             dispatcher in nest-runtime/src/simd/ (add a tq nibble-LUT kernel: pshufb+maddubs
+             for avx2.rs, NEON tbl for neon.rs, scalar fallback in scalar.rs). The mandatory
+             exact-cosine rerank stays unchanged and actually gets cheaper to justify because
+             TurboQuant is the ANN proxy. This unlocks a new preset 'nano' (tq2/hnsw) targeting
+             a size ratio well under the current tiny preset's 0.283 (2-bit is 16x vs int8's 8x
+             effective), and tq1 (32x, Hamming) for an extreme-compression tier, directly
+             advancing the compress-more-than-everyone north star. nest-cli stats/inspect
+             surface the qbits and rotation seed; nest-python build path picks tq presets.
+compression: Directly central to the north star. nest's smallest preset today is int8 (8x payload reduction,
+             0.283 ratio). TurboQuant 4-bit matches that at half the bits with equal-or-better
+             recall (it beats plain int8 SQ by 1-2 to ~5 recall points on real embeddings like
+             dbpedia-openai-ada: 0.93 vs 0.88), 2-bit reaches 16x, 1-bit 32x. It is the single
+             highest-leverage quantization upgrade available, is data-oblivious (no training,
+             fits offline+deterministic), is provably near-optimal distortion, and crucially
+             scores from packed codes with no decompression so it does not violate nest's
+             never-decompress-embeddings-on-hot-path rule.
+perf:        sqlite-vector benchmarks (1M x 768d, dot, k=10): tq4 218ms vs 3248ms full scan (14.9x) at 0.84
+             recall@10; tq3 188ms (9.2x) 0.74; tq2 85ms (38x) 0.48 on synthetic, but on real
+             embeddings recall is far higher (Fashion-MNIST 10k tq4 = 0.948). Preload of
+             quantized codes into RAM gives 4-5x. The SIMD win comes from pshufb 16-byte LUT +
+             _mm_maddubs_epi16 (VPDPBUSD on VNNI, NEON tbl on aarch64) processing 2/4-bit codes
+             without float ops; per-query cost is one rotation (O(d log d) Hadamard) plus a
+             folded 1/scale, amortized across the whole scan. Memory per quantized row ~ 8 + 4 +
+             ceil(dim*qbits/8) bytes; baseline footprint 30MB.
+license:     sqlite-vector is source-available under the Elastic License 2.0 (ELv2) per sqliteai repos;
+             verify before vendoring code. The TurboQuant ALGORITHM is from a public Google
+             Research paper (arXiv 2504.19874) and is freely reimplementable - nest should
+             reimplement from the paper, not copy ELv2 C source.

@@ -1,0 +1,69 @@
+================================================================================================
+NixOS/nixpkgs (Nix store / NAR model, implemented in NixOS/nix)
+category: content-addressed   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Nix is a content-addressed package store whose substrate is NAR (Nix Archive): a fully
+             deterministic, metadata-stripped, length-prefixed binary serialization of
+             filesystem trees, hashed with SHA-256 and truncated to a 160-bit nix-base32 digest
+             to form immutable, reproducible content-addressed store paths and derivations.
+innovation:  A canonical, reproducible serialization (NAR) that strips all non-reproducible metadata (mtime,
+             atime, uid/gid, all permission bits except the single executable bit) and sorts
+             directory entries by name, so "same logical content => byte-identical archive =>
+             identical hash" holds across machines and time. This is exactly the discipline nest
+             aspires to with content_hash; NAR proves the pattern at planet scale (all of
+             nixpkgs).
+techniques:
+  - NAR serialization: magic str("nix-archive-1"), recursive (...) framing of
+    regular/symlink/directory nodes, only the executable bit preserved, no timestamps
+  - str(s) framing: 64-bit little-endian length prefix + raw bytes + zero-pad to next 8-byte
+    boundary (the load-bearing canonicalization primitive)
+  - Directory entries serialized sorted-by-name so the archive is independent of source
+    filesystem ordering
+  - Two-level hashing: SHA-256 over NAR contents -> inner-digest (hex), then SHA-256 over typed
+    fingerprint 'type:sha256:inner:store:name', truncated to first 160 bits
+  - nix-base32: custom 32-char alphabet (omits e/o/u/t to avoid confusables and dirty words)
+    encoding the 160-bit digest into the store path
+  - Content-addressed derivations + deriving paths: refer to an output before its hash is known,
+    resolved post-build; flat/nar/text/git addressing methods
+  - Store-wide dedup via nix store optimise: hash every regular file, hard-link identical
+    NAR-content files into /nix/store/.links/<checksum> (25-35% savings, no correctness loss
+    because store is immutable+CA)
+  - Binary cache: NARs transported as independent zstd (or xz) compressed, content-addressed
+    blobs enabling distributed substitution without a central DB
+nest steals: nest-format already content_hashes decoded canonical sections; steal NAR's exact
+             canonicalization to harden it. In crates/nest-format/src/hashing.rs + sections.rs:
+             (1) adopt NAR's str() framing as the content_hash preimage -- u64-LE length prefix
+             + payload + zero-pad to 8 bytes per section, sections in fixed ID order, any
+             maps/sets (chunk_ids, bm25 terms) sorted -- so content_hash is provably
+             encoding-independent, making the 'STABLE across encodings' claim airtight and
+             matching the bm25 alphabetical-term-order rule already in spec. (2) Port the
+             store-optimise dedup pattern into nest-format/encoding: before zstd, SHA-256 each
+             canonical chunk and store duplicate chunks once with a back-reference table -- a
+             new additive encoding id (4-255 reserved) 'dedup' collapsing repeated
+             text/json/yaml fragments, directly serving 'compress more than everyone' on
+             boilerplate-heavy corpora (legal, PT-BR news templates, repeated JSON keys). Apply
+             to non-embedding sections only, never embeddings (hot-path rule). (3) Use
+             nix-base32 (160-bit, confusable-free) as a shorter, copy-paste-safe citation token
+             in nest-cli cite for nest://content_hash/chunk_id. All of this respects repr(C),
+             little-endian, additive, deterministic, offline constraints.
+compression: High and direct. NAR is not itself a compressor, but two ideas feed extreme compression: (a)
+             canonical content-addressing is the precondition for safe dedup -- you can only
+             collapse byte-identical regions if you can prove identity reproducibly, which nest
+             needs before any cross-chunk dedup codec; (b) Nix store-optimise hard-link dedup
+             yields real 25-35% reduction on redundant corpora purely by content-hash equality,
+             before any entropy coding. nest can layer a dedup pre-pass under its existing zstd
+             path on non-embedding sections, compounding with float16/int8 quantization in the
+             tiny preset.
+perf:        NAR's 8-byte-aligned length-prefixed framing makes parsing fast and unambiguous (no
+             escaping/quoting) but causes many tiny 8-byte reads in naive streaming readers -- a
+             non-issue for nest since sections are mmapped and reads are length-bounded.
+             Two-level SHA-256 (content then fingerprint) is cheap vs I/O. Store-wide dedup is
+             I/O-bound (10-30 min on full Nix store) and the giant .links dir slows GC; nest's
+             bounded single-file scope avoids that -- dedup is a one-shot build-time pass in
+             nest-python before freezing. zstd over NAR is ~8-12x faster than xz at competitive
+             ratio (xz 18.8s vs zstd 2.35s on a sample), validating nest's
+             zstd-over-heavier-coder choice on the build path.
+license:     MIT

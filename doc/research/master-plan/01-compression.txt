@@ -1,0 +1,53 @@
+================================================================================================
+master plan :: compression strategy
+compress more than everyone, per data type
+================================================================================================
+
+part 1 of 5.
+
+ONE layered codec stack applied per data type, with two invariants: embeddings are NEVER
+entropy-coded/zstd'd (scored in-place off mmap, shrink only via fixed-stride quantization read
+by stride); everything else is decorrelated then entropy-coded, codec chosen cost-driven
+(trial-encode, keep smallest, raw always a candidate) and recorded per section. (1) EMBEDDINGS
+(dominant bytes, never zstd): a deterministic rotation-first quantization ladder scored in-place
+and guarded by the mandatory exact rerank against an f16/f32 SECTION_EMBEDDINGS_FP source - (a)
+block-scaled int8 as int8.rs scale_kind=1, one f16 scale per 32-dim block (near-lossless 4x, NO
+new encoding id, NO version bump) drawn from ggml block_q8_0 + ARM-software/ComputeLibrary; (b)
+seeded Fast-Walsh-Hadamard Rotational Quantization on int8 (gaussianize before quantize, push
+recall@10 toward ~0.99 at 4x, store only the seed) drawn from weaviate/recipes; (c) int4
+block-64 ~4.25bpw with a fused dequant+dot kernel that never materializes f32 in RAM (SQNBitGemm
+pattern) drawn from microsoft/onnxruntime MLAS + ggml Q4_0; (d) RaBitQ 1-bit (sign codes + ~2
+f32 correctors, AND+popcount candidate scoring, ~32x, unbiased O(1/sqrt(D)) estimator) drawn
+from gaoj0017/RaBitQ + VectorDB-NTU/RaBitQ-Library; Matryoshka prefix truncation as a
+deterministic multiplicative dim knob drawn from QwenLM/Qwen3-Embedding. Integer-domain
+VNNI/dotprod (vpdpbusd/vdotq_s32) for ~4x speed AND true cross-CPU bit-determinism on the
+quantized path, drawn from rust-lang/stdarch. (2) INTEGER METADATA (the free wins, never touches
+hot path): one shared delta(d1)+zigzag+per-128-block minimal-bitpack/FOR codec with O(1) select
+- HNSW neighbor ids (sort-per-list, ~log2(n) bits vs 32, bump HNSW_PAYLOAD_VERSION), BM25 doc-id
+gaps + bitpacked tf (bump BM25_PAYLOAD_VERSION), span byte offsets (delta+varint per source) -
+drawn from lemire/FastPFor + cruppstahl/libfor + fast-pack/simdcomp; patched exceptions (PFOR)
+so one huge gap/high-degree node never widens a whole block, clean-room from the FastPFor format
+description (avoid GPL TurboPFor). (3) STRING METADATA: chunk_ids stored as 32 raw SHA-256 bytes
+not 71-byte ascii (~2.2x), then front-coded; BM25 term dictionary front-coded/FST
+(BurntSushi/fst, MIT) which ALSO unlocks prefix/typo lookup; deduped source_uri string pool
+referenced by index - drawn from blazegraph front-coding + google/flatbuffers raw-digest ids +
+terminusdb-store. (4) TEXT/JSON/YAML (chunks_canonical): build-time content-hash dedup of
+identical chunks BEFORE zstd (store unique once + u32 back-ref array, the Nix store-optimise
+lesson - dedup on DECOMPRESSED bytes, compress after) drawn from NixOS/nix + ipfs/kubo;
+corpus-trained shared zstd dictionary (ZDICT over sorted samples, deterministic) drawn from
+facebook/zstd + facebook/rocksdb; FSST as a transparent codec so single-chunk citation reopen
+decodes O(1) without whole-section inflate, drawn from duckdb/duckdb + lancedb/lance;
+cost-driven per-section selection drawn from duckdb Analyze + ebiggers/libdeflate. (5)
+PARQUET/COLUMNAR/DATASETS (roadmap): per-column lightweight cascade
+(RLE/FOR/delta/dictionary/FSST/bitpack) chosen by a deterministic Analyze pass,
+dictionary-encode low-cardinality enums (verdict/lang) to a few bits, byte-shuffle+zstd on cold
+numeric planes (Blosc bytedelta), drawn from duckdb + Blosc/c-blosc2. (6) PDF/AUDIO/VIDEO
+(roadmap): canonicalize PDF to deterministic text before chunking (then it IS the text path),
+store media payload verbatim addressed by content_hash with a CDC chunk index
+(copy-without-recode, the Deep Lake lesson), embeddings ride the same quantization ladder, drawn
+from KaiDMML/FakeNewsNet + activeloopai/deeplake. (7) WHOLE-DB/REPO: content-hash dedup before
+the entropy coder is the headline structural lever (cross-file duplication dominates), zstd
+level 22 + long-distance-matching for far cross-file matches, drawn from NixOS/nix. NET:
+headline single move is rotation-first sub-byte embedding quantization; headline structural move
+is content-hash dedup before zstd; headline free move is integer-section delta+bitpack; headline
+text move is trained dictionary + FSST.

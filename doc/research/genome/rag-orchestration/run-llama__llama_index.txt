@@ -1,0 +1,66 @@
+================================================================================================
+run-llama/llama_index
+category: rag-orchestration   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Python RAG/agent data framework whose core abstraction is the Node (a chunk with typed
+             relationships, metadata, and a content/text hash id) wired into a swappable
+             StorageContext (docstore + index_store + vector_store), with retrieval strategies
+             including hierarchical multi-resolution chunking, auto-merging retrieval, and
+             reciprocal-rank fusion hybrid search.
+innovation:  The HierarchicalNodeParser + AutoMergingRetriever pair: documents are parsed into a
+             multi-resolution tree of chunks (e.g. chunk_sizes [2048,512,128] tokens) where
+             every child stores a PARENT relationship to a coarser node; only leaf nodes are
+             embedded/searched, and at query time the retriever counts how many sibling leaves
+             under a common parent were hit -- if a majority threshold is crossed it recursively
+             replaces those leaves with the single larger parent node. This decouples
+             embedding/search granularity (fine) from returned/materialized granularity
+             (coarse); the parent-child relationship graph is the load-bearing data structure.
+techniques:
+  - HierarchicalNodeParser: one document -> N levels of chunks (2048/512/128 tokens) with
+    explicit child->parent references
+  - Node relationship enum: SOURCE / PARENT / CHILD / PREVIOUS / NEXT links forming a chunk DAG
+    via RelatedNodeInfo (target node_id + hash)
+  - AutoMergingRetriever majority-threshold merge: if > threshold of a parent's children are
+    retrieved, recursively collapse children into the parent node
+  - Leaf-only embedding: only finest chunks are vector-indexed; coarser nodes live in the
+    docstore and are fetched by id, not embedded
+  - Reciprocal-rank fusion (RECIPROCAL_RANK mode, k=60.0, score += 1/(k+rank+1)) to merge vector
+    + BM25 lists without an external model
+  - Content-hash node ids (id = hash of text) giving stable dedup keys across retriever lists
+    during fusion
+  - StorageContext split into docstore / index_store / vector_store so relationship graph and
+    embeddings persist independently
+  - fsspec-backed JSON persistence so the same index serializes to local FS, S3, R2 unchanged
+nest steals: Add an optional RESERVED section (id 0x09+, additive within format v1) named chunk_hierarchy to
+             nest-format/src/sections/: a repr(C), little-endian array of (child_chunk_id u32 ->
+             parent_chunk_id u32, level u8) edges plus per-parent child-count, hashed as its own
+             integrity surface. The python builder emits the tree; only leaf chunks get rows in
+             embeddings/hnsw_index, matching nest's existing leaf-search model. In
+             nest-runtime/src/search.rs, add a post-rerank auto-merge pass: after the mandatory
+             exact-cosine rerank, count retrieved leaves per parent and, above a deterministic
+             majority threshold, swap them for the parent before materialize() resolves
+             chunks_original_spans. This reuses chunk_ids + chunks_original_spans already in the
+             frozen format and stays offline/deterministic. Compression angle: parent canonical
+             text need NOT be stored -- a parent's chunks_canonical is reconstructed by
+             concatenating its children's chunks_original_spans against the source, so the
+             hierarchy gives coarse-context retrieval at ~9 bytes/edge of graph and zero extra
+             text bytes, directly serving 'compress more than everyone' while adding
+             multi-resolution retrieval. Do NOT re-steal RRF: nest already has it in
+             crates/nest-runtime/src/bm25/fusion.rs (k=60).
+compression: High and non-obvious: the parent-child edge table is ~9 bytes per edge, and because a parent's
+             text is fully derivable from its children's existing chunks_original_spans, the
+             multi-resolution hierarchy adds coarse-context retrieval with near-zero additional
+             text/embedding bytes (no parent text stored, no parent embedding stored). It turns
+             one stored leaf layer into multiple retrievable resolutions -- improving
+             recall-context per byte rather than spending bytes, a pure structural win for the
+             compression north star.
+perf:        The auto-merge pass is O(retrieved_k) hashmap counting after rerank, negligible vs the SIMD dot
+             products; no extra disk reads since parent text is reconstructed from
+             already-mmapped spans. Leaf-only embedding keeps the embeddings section (the hot
+             mmap-scored part nest never compresses) strictly minimal: coarser context costs no
+             embedding rows. llama_index itself is pure Python and not perf-relevant -- the
+             value is the algorithm and data model, not its implementation.
+license:     MIT

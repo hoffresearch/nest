@@ -1,0 +1,72 @@
+================================================================================================
+ipfs/kubo
+category: content-addressed   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Kubo is the reference Go implementation of IPFS: a content-addressed distributed store that
+             chunks files, wraps them in a UnixFS Merkle DAG of hash-linked blocks (each block
+             addressed by a CID = multibase + multicodec + multihash), and deduplicates at the
+             block level via a multihash-indexed blockstore.
+innovation:  Content-defined chunking (CDC): block boundaries are chosen by a rolling hash over the byte
+             stream (boundary when the top/low N bits of the fingerprint hit a target value),
+             NOT at fixed offsets. This makes chunk boundaries content-aligned, so a local edit
+             only perturbs the one or two chunks it touches instead of re-flowing every
+             downstream boundary, yielding stable hashes and high cross-version deduplication.
+             Pair this with a content address (multihash) that indexes storage independently of
+             the on-disk encoding/wrapper, so identical content collapses to one stored block
+             regardless of how it was transported.
+techniques:
+  - Rabin fingerprint CDC: 64-byte rolling polynomial window, boundary when low bits == target;
+    Kubo exposes rabin-[min]-[avg]-[max]
+  - Buzhash CDC: cyclic-polynomial rolling hash (left-rotate + xor over window), ~3x faster than
+    Rabin, judge on top bits
+  - Gear/FastCDC family: single left-shift+add rolling hash, zero-padded mask to widen effective
+    window, cut-point skipping below min-size, normalized chunking for tight size distribution,
+    ~1350 MB/s
+  - CID = multibase + cidv1 + multicodec(0x55 raw / 0x70 dag-pb / 0x71 dag-cbor) +
+    multihash(0x12 sha2-256,len,digest); multihash alone indexes the blockstore
+  - UnixFS Merkle DAG with selectable layout: balanced (fast random seek) vs trickle
+    (append-optimized); high fanout enables parallel/partial fetch and incremental verification
+  - raw-leaves: leaf blocks stored as raw bytes (codec 0x55) with no protobuf wrapper, so block
+    multihash equals plain content hash
+  - HAMT (hash array mapped trie) sharding for large directories/maps via max-hamt-fanout
+  - block-level dedup in the blockstore: same-content chunks across files/versions store once,
+    keyed by multihash
+nest steals: Add a content-defined chunker to nest-python's build pipeline (the stage producing
+             chunk_ids/chunks_canonical) as an alternative to current token/sentence
+             segmentation, used for large blob inputs (pdf/json/parquet/datasets/whole repos on
+             the roadmap). Implement a small deterministic Gear/FastCDC kernel in nest-format
+             under a new encoding-neutral chunking module (rolling hash + seeded mask, seeded
+             determinism to satisfy the deterministic-build constraint, <=300 loc, typed
+             thiserror errors, repr(C) little-endian if any state is serialized). This unlocks
+             edit-local rechunking for nest's promised real-time edit: editing one paragraph
+             re-emits only the touched chunk(s), so embeddings + chunks_canonical for unchanged
+             chunks stay byte-identical and the file diff stays tiny. Second, formalize a
+             block-level dedup pass in nest-format writer: hash each canonical chunk (already
+             done via content_hash machinery) and store duplicate chunks once, with chunk_ids
+             referencing the shared physical block. Third, nest's content_hash (STABLE across
+             encodings) and nest://content_hash/chunk_id citation already mirror Kubo's
+             multihash-indexes-storage / encoding-is-a-wrapper split; cite as prior-art
+             validation and consider chunk-level addressing so a citation resolves a single
+             deduped block.
+compression: Directly central. CDC + block dedup is the single biggest lever for 'compress more than
+             everyone' on repetitive/edited corpora: it removes redundancy ACROSS chunks and
+             versions before any entropy coder (zstd) runs, which nest currently does not do (it
+             chunks by tokens/sentences and zstd-compresses sections independently). Edit-local
+             boundaries also make incremental/append builds cheap, supporting real-time-edit and
+             'whole databases/repos' goals. Applies to non-embedding sections (canonical text,
+             original spans, future binary blob sections) since embeddings are intentionally
+             never compressed; the win is on text/json/span and blob payloads with zero recall
+             cost.
+perf:        Gear/FastCDC reaches ~1350 MB/s single-thread (Rust gearhash/fastcdc crates), ~3x Rabin; rolling
+             hash is a left-shift+add per byte (or 2 bytes/step in FastCDC), branch-predictor
+             and SIMD friendly, fits nest's scalar+SIMD dispatch philosophy. Dedup ratio of Gear
+             is within ~1% of Rabin typical (up to ~6% worse worst-case); FastCDC normalized
+             chunking closes the gap while staying fast. Memory is O(window) constant. Boundary
+             probability set purely by mask width (1/2^N), giving deterministic expected chunk
+             size with no separate average parameter.
+license:     Kubo is dual-licensed Apache-2.0 and MIT (permissive); standalone Rust gearhash and fastcdc
+             crates are MIT/Apache-2.0, so the algorithm and a vendored/clean-room kernel are
+             safe to adopt.

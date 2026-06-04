@@ -1,0 +1,49 @@
+================================================================================================
+Mintplex-Labs/anything-llm
+category: rag-orchestration   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Node.js/Express provider-agnostic RAG + agent platform that ingests documents, chunks them
+             with an embedder-aware TextSplitter, caches embeddings deterministically by UUID v5
+             content hash, and queries one of ~10 pluggable vector DBs (default LanceDB/Arrow)
+             with cosine distance normalized to a 0-1 similarity and optional native reranking.
+innovation:  A deterministic content-addressed embedding cache keyed by chunk content + embedder identity
+             (UUID v5), which makes re-ingestion skip already-computed vectors.
+techniques:
+  - UUID v5 namespaced-hash cache keys over chunk text + embedder identity, stored as per-file
+    JSON vectors
+  - Embedder-aware TextSplitter sizing chunks to min(user setting, model max token length) with
+    char overlap
+  - Self-describing chunks via <document_metadata> headers (title/published/source) prepended
+    before embedding
+  - distanceToSimilarity: normalize cosine/L2 distances to a uniform 0-1 similarity
+  - Retrieve-then-rerank with NativeEmbeddingReranker for precision over raw ANN recall
+  - Single storage directory that fully reconstructs all state (sqlite + lancedb + vector-cache
+    + documents JSON)
+  - Common VectorDatabase interface abstracting ~10 backends
+  - Agent Intelligent Skill Selection to prune tools and cut token usage up to 80%
+nest steals: Build a deterministic embedding cache in nest-python's builder backed by nest-format hashing:
+             key = SHA-256(canonical_chunk_text || model_fingerprint), value = stored f32
+             embedding. On rebuild the builder reuses cached vectors instead of re-running the
+             model, giving fast incremental rebuilds while keeping byte-identical output
+             (preserves the reproducible-build contract). Also adopt distanceToSimilarity-style
+             explicit 0-1 normalization of the exact-cosine rerank score in
+             nest-runtime/search.rs so returned scores are uniform across raw/f16/int8
+             encodings, and formalize per-chunk provenance headers tying chunks_original_spans +
+             provenance into nest://content_hash/chunk_id citations in nest-format/sections.
+compression: Low-to-indirect. anything-llm does no compression or quantization (it stores raw f32 vectors via
+             LanceDB/Arrow and delegates everything to external DBs), so it offers nothing for
+             nest's extreme-compression north star directly. Its value is
+             build-time/operational: the deterministic embedding cache removes recompute cost
+             during the encode/quantize loop, which is what makes aggressive re-encoding
+             experiments (int8, f16, future codecs) cheap to iterate. It validates nest's
+             content-hash determinism as a cache primitive, not as a size reducer.
+perf:        All-JS/Node runtime; no SIMD, no quantization, no on-disk compression of its own. LanceDB
+             (Rust/Arrow columnar, mmap-friendly) provides the fast local path and is reported
+             "blazing fast on low-end hardware" with ~100% of users on it. Embedding cache is
+             the main perf lever -- it eliminates redundant embedding API/model calls. Vectors
+             stored as raw f32, so memory/storage scales linearly with corpus and dimension (no
+             float16/int8 like nest).
+license:     MIT

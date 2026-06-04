@@ -1,0 +1,67 @@
+================================================================================================
+asg017/sqlite-vec
+category: vector-db   |   steal priority: MUST
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A pure-C, zero-dependency SQLite extension (vec0 virtual table) that stores float32/int8/bit
+             vectors in chunked shadow-table BLOBs and runs brute-force SIMD KNN with
+             metadata/partition filtering, optionally using 1-bit binary quantization plus a
+             coarse-search-then-float-rescore pattern.
+innovation:  Binary (1-bit) quantization as a coarse pre-filter: sign-bit-threshold each dimension into a
+             packed bitmap (32x smaller than f32), score candidates with Hamming distance via
+             popcount (integer-only, branchless, SIMD-friendly), then rerank the small candidate
+             set against full-precision vectors. This is the exact two-stage pattern nest
+             already mandates (ANN/coarse retrieve then mandatory exact cosine rerank), so it
+             slots in as a new ultra-compact embedding codec without weakening nest's "returned
+             score is real cosine" contract.
+techniques:
+  - binary quantization: sign-bit threshold (>=0 -> 1, <0 -> 0) packing 8 dims/byte = 1 bit/dim,
+    32x smaller than f32
+  - Hamming distance via XOR + popcount (count_ones) as the coarse metric for bit vectors
+  - two-pass coarse+rescore: retrieve k*8 candidates on bit vectors, rerank top-k with
+    vec_distance_L2 on stored float vectors
+  - per-vector int8 scalar quantization (1 byte/dim), 4x smaller than f32, selectable per column
+  - chunked contiguous storage: vectors packed into one BLOB per chunk per column (default 128
+    vectors/chunk) for SIMD locality, no per-row overhead
+  - validity bitmap per chunk for O(1) tombstone deletes (clear bit, zero rowid) without
+    rewriting/shifting the index
+  - shadow-table separation: _chunks (bitmap+rowids), _vector_chunksNN (packed vectors),
+    _metadatachunksNN (packed fixed-width metadata), _auxiliary (un-indexed + columns)
+  - partition keys + per-chunk packed metadata blobs to prune whole chunks before the distance
+    kernel runs
+nest steals: Add a binary/bit embedding codec to nest-format/src/encoding (new encoding id in the reserved
+             4-255 range, e.g. encoding=5 'bit1', additive-only so NEST_FORMAT_VERSION stays v1)
+             alongside the existing int8.rs: quantize each L2-normalized f32 vector to a
+             sign-bit bitmap (dim/8 bytes, deterministic, repr(C) little-endian). In
+             nest-runtime/src/simd add a hamming kernel (XOR + u64 count_ones; NEON vcntq_u8 on
+             aarch64, AVX2 on x86_64, scalar fallback) parallel to the dot-product dispatcher.
+             In nest-runtime/src/search.rs wire it as a coarse stage that over-fetches
+             candidates (e.g. k*8) ranked by Hamming, then feeds them into the EXISTING
+             mandatory exact-cosine rerank using full-precision (or int8) embeddings from the
+             embeddings section, so the search contract is unchanged and the returned score
+             stays real cosine. Expose a new preset (e.g. 'nano': zstd metadata / bit embeddings
+             / hnsw) in nest-cli targeting the smallest embeddings section. The chunked
+             validity-bitmap tombstone idea also transfers to nest's future real-time-edit goal:
+             a per-section validity bitmap marks deleted chunk_ids without rewriting embeddings,
+             preserving determinism by treating tombstones as content.
+compression: Directly central to the north-star 'compress more than everyone' for vectors: 1-bit binary
+             quantization is 32x smaller than f32 and 8x smaller than nest's current int8 floor,
+             dropping a 768-dim embedding from ~3KB to 96 bytes. Because nest already enforces
+             an exact-cosine rerank, nest can adopt the most aggressive quantization (which
+             would normally wreck recall) and recover full-precision accuracy at query time:
+             nest's architecture is uniquely positioned to ship binary embeddings WITHOUT the
+             usual recall penalty, since the bit vectors are only a coarse pre-filter, not the
+             scored answer. This is the single biggest embedding-size win available.
+perf:        Pure C, no dependencies, compiles everywhere SQLite runs; SIMD via AVX (x86_64) and NEON
+             (Apple/Android). Brute-force KNN over packed chunk BLOBs is cache-friendly because
+             vectors are contiguous (default 128/chunk), the same mmap-contiguous property nest
+             relies on for its hot-path dot products. Hamming/popcount is integer-only and
+             branchless, far cheaper per candidate than f32 cosine, which is why it works as a
+             coarse filter ahead of an expensive rerank. int8 path is 4x smaller than f32 with
+             minimal accuracy loss on normalized vectors; bit path is 32x smaller. Project
+             tradeoff: chunked OLTP writes are slow per-insert (transaction + chunk assignment)
+             vs a static read-only blob mode; nest's frozen-file build model sidesteps this
+             entirely since nest writes once, like sqlite-vec's faster static mode.
+license:     Apache-2.0 OR MIT (dual-licensed)

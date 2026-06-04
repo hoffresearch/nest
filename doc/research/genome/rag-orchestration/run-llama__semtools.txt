@@ -1,0 +1,67 @@
+================================================================================================
+run-llama/semtools
+category: rag-orchestration   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Rust CLI for document parsing (LlamaParse API) plus local, API-free semantic line search built
+             on model2vec static embeddings (potion-multilingual-128M, distilled from bge-m3),
+             simsimd SIMD cosine kernels, and an embedded qdrant-edge IVF_PQ index with a
+             persistent on-disk workspace embedding cache.
+innovation:  Replacing a neural embedding model with a precomputed static token-vector lookup table
+             (model2vec/POTION): distill a transformer into per-token vectors via PCA +
+             frequency weighting, then embed any text by mean-pooling its token vectors. This
+             makes embedding generation pure table lookup + averaging (no matmul, no GPU, no
+             network, fully deterministic), exactly the offline/sovereign/reproducible property
+             nest needs to own its embedding step.
+techniques:
+  - model2vec static embeddings: forward-pass vocab through sentence transformer (bge-m3),
+    mean-pool output positions per token, PCA to 256 dims, Zipf weighting using vocab rank as
+    frequency proxy (IDF-like downweighting of frequent tokens)
+  - POTION/Tokenlearn post-training: re-regularize with PCA + SIF weighting w=1e-3/(1e-3+proba)
+    for accuracy boost over plain Zipf
+  - Uncontextualized inference: embed = mean of constituent token vectors (single gather +
+    average, no attention, no forward pass at query time)
+  - simsimd 6.5.1 SIMD cosine/dot kernels (AVX2/NEON/SVE) for similarity scoring
+  - qdrant-edge embedded IVF_PQ: inverted-file coarse quantization + product quantization of
+    residuals, serverless in-process ANN
+  - persistent workspace embedding cache in ~/.semtools/workspaces/ via serde serialization with
+    automatic re-embed when source documents change
+  - per-line search with configurable context window (--n-lines) and --max-distance cosine
+    threshold instead of fixed-size chunking
+nest steals: Two distinct steals. (1) nest-python (or a tiny nest-runtime module): vendor a model2vec-style
+             static embedder as an offline, deterministic, zero-dependency embedding backend. A
+             potion token-vector table (vocab x 256 f32, nest-encoded as int8+zstd) ships inside
+             or beside the .nest file; provenance.model_fingerprint becomes the table hash.
+             Embedding = tokenize + gather + mean-pool, giving byte-identical builds with no
+             network and no PyTorch, matching nest's deterministic/reproducible/sovereign
+             guarantees and removing a heavy external dependency. (2) nest-format +
+             nest-runtime/ann: add IVF-PQ as a new optional encoding tier for the embeddings
+             section (new reserved encoding id 4-255 and/or section id 0x09+, additive within
+             v1). Product quantization (m subvectors, 256-centroid k-means codebook per
+             subspace, 1 byte/subvector) compresses 256-d f32 ~16-32x vs raw and far below the
+             current int8. Because nest already mandates an exact-cosine rerank after ANN, PQ
+             distances are only a candidate funnel and the returned score stays real cosine,
+             satisfying search_contract; seed k-means to keep it deterministic like the
+             seeded-hnsw rule.
+compression: Very high. The IVF-PQ/product-quantization tier directly advances the
+             compress-more-than-everyone north star: PQ encodes a 256-d float vector in ~8-16
+             bytes (m x 1 byte) vs 256 bytes raw f32 or 64 bytes int8, a 16-32x cut on the
+             embeddings section (usually the largest). With nest's mandatory exact rerank,
+             recall stays high while stored vectors shrink dramatically, going deeper than the
+             tiny preset's int8. Separately, the static-embedding table is itself highly
+             compressible (int8+zstd on a vocab x 256 matrix) and replaces a multi-GB neural
+             model with a few-MB lookup table, shrinking the whole embedding toolchain
+             footprint.
+perf:        model2vec inference is reportedly up to ~500x faster than the source transformer with a ~15-50x
+             smaller model; embedding is bandwidth-bound table gather + mean, ideal for CPU-only
+             offline use. potion-multilingual-128M: 256 dims, 101 languages, ~90.9% of LaBSE
+             quality, distilled from bge-m3. simsimd 6.5.1 ships AVX2/NEON/SVE cosine kernels
+             aligning with nest's AVX2/NEON/scalar dispatcher (could cross-check or replace
+             hand-rolled SIMD). IVF_PQ keeps the ANN index small and CPU-resident for serverless
+             search. Caveat: like nest's bm25, model2vec tokenization quality on CJK/Thai
+             depends on the underlying tokenizer (bge-m3 sentencepiece gives decent multilingual
+             coverage).
+license:     MIT (run-llama/semtools and model2vec-rs); potion-multilingual-128M weights MIT (MinishLab);
+             simsimd Apache-2.0; qdrant-edge Apache-2.0

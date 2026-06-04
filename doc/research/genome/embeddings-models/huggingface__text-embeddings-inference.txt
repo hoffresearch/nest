@@ -1,0 +1,65 @@
+================================================================================================
+huggingface/text-embeddings-inference
+category: embeddings-models   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Rust inference server for embedding/reranking transformers (BERT/XLM-R/GTE/ModernBERT/Qwen)
+             with a candle + ONNX-Runtime backend, token-based dynamic batching, and four
+             pooling heads (CLS, mean, last-token, SPLADE) exposing dense and sparse embeddings
+             plus cross-encoder rerank scores.
+innovation:  SPLADE: reuse the MaskedLM vocab-projection head, apply log(1+relu(logits)) then max-pool over
+             tokens to get a vocabulary-sized, ~99%-zero learned sparse embedding whose nonzeros
+             are (term_id, weight) pairs usable for inverted-index retrieval and trivially
+             compressible.
+techniques:
+  - SPLADE head: Linear+GELU -> LayerNorm -> decoder Linear to vocab -> relu -> log1p -> amax
+    over sequence (max-pool) = vocab-sized sparse vector
+  - Sparse encoding: filter nonzeros into (index:u32, value:f32) pairs, CSR-style
+    offsets/indices/values layout
+  - Token-based dynamic batching capped by --max-batch-tokens (16384) not request count, for
+    variable-length inputs
+  - Pooling head abstraction (CLS/mean/last-token/SPLADE) auto-detected from
+    1_Pooling/config.json
+  - Dual backend (candle native Rust + ONNX Runtime) behind one pooling interface; safetensors +
+    ONNX weight loading
+  - Cross-encoder rerank head emitting one real relevance score per pair as a final exact rerank
+    stage
+nest steals: Add a third index section alongside hnsw(0x07) and bm25(0x08): a SPLADE-style learned-sparse
+             index, e.g. splade_index(0x09) in nest-format (sections.rs + new encoding path),
+             built in nest-python at build time by running a ForMaskedLM model with the
+             log(1+relu) max-pool head. Store each chunk's sparse vector as deterministic
+             alphabetical/ascending term-id (index:u32 LE, value:f16/int8) pairs (CSR: offsets[]
+             + indices[] + values[]), which respects nest's additive v1 reservation (0x09+
+             reserved), little-endian, repr(C) rules. nest-runtime gains a splade::SparseIndex
+             that scores queries via sparse dot-product over an inverted index, then feeds
+             candidates into the EXISTING mandatory exact-cosine rerank (search contract
+             preserved: SPLADE/bm25 are ANN proxies, cosine stays ground truth) and fuses with
+             bm25 via the existing reciprocal-rank fusion. This is a strict upgrade over the
+             current word-segmented bm25 tokenizer (the known CJK/Thai gap): SPLADE term
+             expansion is model-learned and vocabulary-based, so it degrades far less on
+             non-space-delimited languages. Crucially for the north star, a SPLADE vector is
+             ~99% zeros, so CSR + zstd (allowed on non-embedding sections) compresses it
+             dramatically better than a dense f32 embedding, letting a 'sparse' preset ship
+             retrieval quality near dense embeddings at a fraction of the bytes.
+compression: High and direct. A SPLADE vector is a learned sparse vector that is ~99% zeros, so stored as CSR
+             (sorted term-id deltas + quantized weights) it is an order of magnitude smaller
+             than a dense f32 embedding while remaining a strong retrieval signal. Delta-coding
+             ascending term ids (varint or fixed u32) plus int8/f16 weights, then zstd on the
+             whole section (permitted because sparse indices are not on the SIMD dot-product hot
+             path), pushes nest's size ratio well below the current tiny preset for
+             text-dominant corpora. It also unlocks 'compress-and-still-search' for the bm25
+             replacement path.
+perf:        Sparse dot-product retrieval scales with nonzeros per query (tens to low hundreds of terms), not
+             embedding dimension, so it is cache-friendly and avoids dense vector scans; well
+             suited to nest's mmap-off-disk model. Dense pooling (mean/cls/max) is expressed as
+             framework tensor reductions; on CPU these map cleanly to nest's existing AVX2/NEON
+             dot-product dispatcher for the exact-cosine rerank stage. Dynamic batching is a
+             server-side throughput trick (offline nest does not need the queue) but the
+             per-token budget idea informs batched build-time embedding in nest-python. License:
+             Apache-2.0 (note: TEI's own server has a custom HFOIL license on newer releases;
+             only the algorithmic SPLADE/pooling math is being reused, not their code).
+license:     Apache-2.0 for older code; newer TEI releases carry a custom HFOIL source-available license.
+             Only the SPLADE/pooling math (public research, SPLADE paper) is adapted, not TEI
+             source, so nest stays clean.

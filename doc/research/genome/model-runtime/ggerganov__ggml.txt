@@ -1,0 +1,74 @@
+================================================================================================
+ggerganov/ggml
+category: model-runtime   |   steal priority: MUST
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A dependency-free C/C++ tensor library for on-device inference whose real innovation is its
+             block-quantization codec family (legacy Qn_0, K-quants with double-quantized
+             super-block scales, and i-quants with shared codebook grids) packed into the
+             mmap-aligned GGUF on-disk format and dequantized straight from disk by AVX2/NEON
+             kernels.
+innovation:  Hierarchical "double quantization" inside fixed-size super-blocks: a tensor is split into
+             256-value super-blocks, each holding one or two fp16 master factors (d for scale,
+             dmin for offset), and within that, eight 32-value sub-blocks whose own scale and
+             min are stored as 6-bit integers relative to the master factors. This
+             piecewise-affine scheme captures both global and local dynamic range at ~4.5
+             bits/weight (Q4_K) instead of fp16's 16, with metadata overhead amortized across
+             256 values, and every block is a self-contained repr(C) record dequantizable in
+             isolation directly off mmap'd memory.
+techniques:
+  - Q4_K super-block: struct{ fp16 d; fp16 dmin; uint8 scales[12] (6-bit packed scales+mins for
+    8 subblocks); uint8 qs[128] (4-bit nibble quants) } over 256 values = 4.5 bpw
+  - Double-quantization: per-32 sub-block scale/min stored as 6-bit ints reconstructed as
+    d*scale_idx and dmin*min_idx, so only two fp16 master values per 256 weights
+  - block_q8_0: struct{ fp16 d; int8 qs[32] } symmetric per-32 int8 with one fp16 scale = direct
+    upgrade to nest's flat int8 codec
+  - block_q6_K split-bit packing: ql[128] low 4 bits, qh[64] high 2 bits, int8 scales[16], one
+    fp16 d (6.5625 bpw)
+  - i-quants (IQ2_XXS, 2.0625 bpw): vector codewords indexed into shared lookup grids
+    (iq2xxs_grid, 64-bit packed entries) so weights cost log2(grid) bits not raw bits
+  - GGUF format: magic 0x46554747, u32 version, tensor-info table (name,dims,type,u64 offset),
+    every tensor 32-byte aligned for SIMD-loadable mmap, little-endian default
+  - Block-local self-containment: no cross-block state, enabling zero-allocation streaming
+    dequant and random access to any super-block from disk
+  - Importance-matrix (imatrix) quantization: error minimized against per-channel activation
+    importance not raw MSE, so bits go where they matter
+nest steals: Steal the K-quant super-block scheme as a new ENCODING ID (format reserves ids 4-255 inside v1,
+             so this is additive, no NEST_FORMAT_VERSION bump) applied ONLY to the embeddings
+             section in nest-format (crates/nest-format/src/encoding.rs plus a new block-codec
+             module under the 333-line cap). Today nest's hottest, largest section uses flat
+             float16 or per-vector int8 and is deliberately left out of zstd because it is
+             scored from mmap on the hot path. A Q4_K-style codec (256-dim super-blocks: fp16
+             d/dmin + 6-bit subblock scales + 4-bit quants) cuts embeddings from 16 bpw to ~4.5
+             bpw, ~3.5x shrink of the dominant section, while preserving the invariant: each
+             repr(C) little-endian super-block is self-contained and dequantized inline by the
+             existing nest-runtime SIMD dispatcher (AVX2/NEON/scalar) during the dot product, so
+             vectors stay scored directly from mmap with no decompress-to-heap step. The
+             mandatory exact-cosine rerank in nest-runtime's search path stays ground truth
+             since the codec only changes candidate-vector storage; pair it with a 'nano' preset
+             (Q4_K embeddings + zstd text + hnsw) targeting a size ratio well under tiny's
+             0.283. Determinism holds: fix super-block size at 256, quantization is a pure
+             function of input (no seed), emit blocks in tensor order so same chunks+model
+             fingerprint give byte-identical files. block_q8_0 is the lower-risk first step: a
+             drop-in higher-quality replacement for nest's int8 codec (one fp16 scale per 32
+             dims vs per-vector), shippable immediately. Note: K-quants require the quantized
+             dim be a multiple of 256 (768=3*256, 1024=4*256 are fine; 384 is not, so fall back
+             to block-32 Q8_0 for non-multiples).
+compression: Directly central to the north star. Embeddings are nest's largest section and the only one
+             excluded from compression; K-quant/i-quant block codecs are the proven way to take
+             that section from 16 bpw to 4.5 (Q4_K) or ~2 (IQ2_XXS) while keeping it scoreable
+             in place off mmap. This is the single biggest available win on the 'compress more
+             than everyone' axis without touching the frozen layout, since it slots in as an
+             additive encoding id. The 6-bit-scale double-quantization trick is the key insight:
+             spend metadata bits hierarchically so per-subblock precision is nearly free across
+             256 values.
+perf:        Blocks are designed for zero runtime allocation and SIMD: Q4_0/Q8_0 use 32-value blocks aligned
+             for one AVX2 256-bit / NEON 128-bit load; K-quants use 256-value super-blocks so
+             dequant-and-dot fuses without spilling. GGUF mandates per-tensor 32-byte alignment
+             so mmap'd block arrays start on SIMD boundaries. Dequant is a multiply-add against
+             the fp16 master scale, cheap relative to the dot product, so the codec adds little
+             hot-path cost. Constraint: K-quants need dim a multiple of 256 else fall back to
+             block-32 Q8_0.
+license:     MIT

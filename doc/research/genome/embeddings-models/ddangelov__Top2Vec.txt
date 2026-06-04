@@ -1,0 +1,82 @@
+================================================================================================
+ddangelov/Top2Vec
+category: embeddings-models   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Top2Vec is a topic-modeling pipeline that places documents AND words in one shared embedding
+             space, then derives topics geometrically: UMAP-reduce doc vectors, HDBSCAN-cluster
+             the dense regions, take each cluster's centroid as a "topic vector," and
+             cosine-rank the nearest word vectors to label it; search is served by an optional
+             hnswlib HNSW index over the same vectors.
+innovation:  The single most transferable idea is the joint document+word embedding space combined with the
+             "centroid-as-query" trick: because words and documents are embedded with the same
+             model into the same metric space, a cluster centroid (mean of member doc vectors)
+             is itself a valid query vector, and the n nearest WORD vectors to it become a free,
+             human-readable label for that cluster of chunks. No separate keyword extraction, no
+             supervised step, no extra index types are needed: one cosine kernel over one vector
+             pool produces clustering, topic labels, and semantic search. This turns "what is
+             this corpus / cluster of chunks about" into pure linear algebra over vectors nest
+             already stores.
+techniques:
+  - Joint doc+word embedding: embed corpus words alongside chunk text with the same model so
+    word and chunk vectors are cosine-comparable in one pool
+  - Centroid topic vectors: topic = arithmetic mean of member doc vectors in ORIGINAL full-dim
+    space, not the UMAP-reduced space
+  - Cosine-rank labeling: rank n-nearest word vectors to a centroid to auto-generate topic
+    keywords
+  - UMAP for clustering-prep only (n_neighbors=15, n_components=5, metric=cosine, min_dist=0.0)
+    to densify sparse high-dim vectors before clustering
+  - HDBSCAN density clustering (min_cluster_size=15, metric=euclidean,
+    cluster_selection_method=eom) that emits noise/outliers instead of forcing assignment; topic
+    count emerges from density, no preset k
+  - Hierarchical topic reduction: iteratively merge nearest topic centroids to collapse N topics
+    to a requested smaller count
+  - Optional hnswlib HNSW index (M / ef_construction / ef_search, space=cosine/ip/l2,
+    incremental add_items) over the same vectors for fast doc/word ANN
+nest steals: Two additive moves, both reusing the existing SIMD cosine kernel and embeddings section, no
+             heavy deps. (1) nest-runtime: a new offline `topics` module (~250 loc,
+             single-responsibility, under the 300-line cap) that streams centroids over the
+             already-mmapped embeddings section and, for labeling, cosine-ranks nearest
+             chunk/term vectors via the existing simd dispatcher + exact rerank path used by
+             `search`. Clustering should be a deterministic, seeded, dependency-light scheme
+             (seeded k-means or fixed-threshold greedy cosine agglomeration) to honor nest's
+             deterministic/never-panic/offline-by-construction rules instead of vendoring
+             UMAP/HDBSCAN (Numba/SciPy stacks that break single-file/offline). The
+             centroid-as-query trick fits nest's contract: a topic vector is just another query,
+             so exact-cosine ground truth still holds. (2) nest-format: an OPTIONAL additive
+             section in the RESERVED 0x09+ range, e.g. topics_index(0x09), holding repr(C)
+             little-endian records {topic_id, inline f16/int8 centroid or offset into
+             embeddings, member chunk_id ranges, top-k label term ids}; it is covered by the
+             existing per-section SHA-256 checksum and folds into content_hash via decoded
+             canonical bytes, preserving determinism and the four integrity surfaces. Centroids
+             are NOT on the hot scoring path, so they MAY be zstd-compressed (unlike
+             embeddings). nest-cli gains a thin `topics` subcommand mirroring the existing
+             8-subcommand clap surface. Unlocks: corpus summarization, cluster-scoped/faceted
+             "search within topic", graph-search seeds (centroids as nodes), and auto-labels for
+             citations.
+compression: Indirect but real. (a) Centroids are a coarse codebook: store K topic centroids plus per-chunk
+             topic_id (1-2 bytes) and keep each embedding as centroid + small residual -- the
+             IVF/PQ residual idea reached via Top2Vec's centroid geometry -- shrinking the
+             embeddings section (the largest in tiny/compressed presets) below flat int8,
+             composing with nest's existing int8/f16 codecs. (b) Reordering chunks by topic_id
+             places semantically similar embeddings adjacent, improving byte-locality and the
+             zstd ratio on the NON-embedding sections (chunks_canonical, provenance) that ARE
+             zstd-eligible. (c) Auto-generated label terms double as a tiny corpus dictionary
+             that can seed a zstd custom dictionary for chunks_canonical. Net: a path toward
+             "compress more than everyone" by exploiting redundancy ACROSS chunks (codebook +
+             residual + locality), not just within each chunk.
+perf:        Centroid computation is a single streaming mean over the embeddings section (one mmap pass,
+             O(N*d), SIMD-summable). Cosine-ranking labels reuses nest's AVX2/NEON/scalar
+             dot-product dispatcher -- no new kernel. The expensive/fragile upstream parts (UMAP
+             via Numba, HDBSCAN, hnswlib build) are training-time, heavyweight, and
+             non-deterministic by default; do NOT vendor them into the rust runtime -- push
+             optional clustering to the python BUILD side (nest-python / build pipeline) where
+             SciPy-class deps are acceptable, and keep the rust serve path to deterministic
+             centroid math plus existing HNSW (0x07) and cosine rerank. hnswlib's
+             M/ef_construction/ef_search and incremental add_items already overlap nest's seeded
+             ann::HnswIndex, so nothing new there. Memory: K centroids at d dims is negligible
+             (K << N); residual quantization is the only footprint lever and it strictly shrinks
+             the file.
+license:     BSD-3-Clause

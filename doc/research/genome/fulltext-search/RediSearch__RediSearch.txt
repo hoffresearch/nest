@@ -1,0 +1,66 @@
+================================================================================================
+RediSearch/RediSearch
+category: fulltext-search   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A C full-text/secondary-index engine for Redis whose inverted index is a custom block-structured
+             posting list using delta+varint gap coding with pluggable per-schema encoder
+             variants, backed by a HyperLogLog-driven adaptive numeric range tree.
+innovation:  Posting-list entries are encoded with delta (gap) coding of monotonically-increasing internal
+             32-bit doc-ids plus variable-byte (varint) packing, and the engine selects the
+             MINIMAL encoder variant (DocIdsOnly / FreqsOnly / FieldsOnly / Full) per index
+             based on which metadata the schema actually needs, so a doc-id-only posting
+             collapses to ~1-2 bytes/hit instead of carrying dead frequency/offset fields.
+techniques:
+  - Delta/gap encoding of internal monotonic 32-bit doc-ids so postings stay sorted and gaps
+    stay small
+  - Variable-byte (varint) integer coding: 1 byte for <255, 2 bytes for <16383 (~75% index
+    shrink, ~6 bytes best-case hit)
+  - Pluggable encoder family by IndexFlags: DocIdsOnly, FreqsOnly, FieldsOnly, Full - write only
+    fields the schema needs
+  - Variable record layout: docId_delta(1-4B) + freq(1-2B) + fieldMask(1-16B) + offsetsLen(1-2B)
+    + varint offset vector
+  - Block-structured posting lists: each IndexBlock stores firstId/lastId for binary-search
+    skip/seek across blocks
+  - TF*docRank pre-folded into stored hit score so only IDF applied at query time (cheaper
+    BM25/TF-IDF)
+  - Numeric range tree: binary tree of range nodes each owning its own inverted index, adaptive
+    median split via double-heap
+  - HyperLogLog (6-bit precision ~13% error) for per-node cardinality, depth-dependent split
+    threshold 16<<(depth*2) capped 2500
+nest steals: Target the optional bm25_index section (0x08) in nest-format and the bm25::Bm25Index reader in
+             nest-runtime. nest's bm25 today is word-segmented with alphabetical-term-order
+             layout; replace its posting storage with the delta+varint block scheme. (1) In
+             nest-format encoding/sections, store each term's postings as gap-coded internal
+             chunk-ordinals (already monotonic) packed with a LEB128/varint codec, plus a
+             minimal-encoder selector so a boolean/presence index ships DocIdsOnly (1-2 B/hit)
+             while a scoring index adds a varint term-freq; purely additive, no
+             NEST_FORMAT_VERSION bump, fits encoding-id/section reservation rules. (2) Add a
+             fixed-size repr(C) LE block header per posting list carrying first_id/last_id so
+             bm25 iterators binary-search the right block and skip across blocks, speeding
+             AND-intersection without a server. (3) Preserve determinism: fixed block size,
+             terms in existing alphabetical order. This advances 'compress more than everyone':
+             varint-delta postings are typically 3-5x smaller than naive ones, and since
+             bm25_index is a non-embedding section, zstd may layer on top for compounding gains.
+             The numeric range tree + HLL split is a blueprint for a future numeric/metadata
+             filter section (reserved id 0x09+) to compress and range-query provenance/json
+             columns.
+compression: High and direct. Delta+varint gap coding plus minimal-encoder selection is the canonical way to
+             shrink inverted indexes 3-5x; it is the lever for nest's bm25_index(0x08). Because
+             bm25_index is a non-embedding section, nest can layer zstd on the already-compact
+             varint stream for compounding gains. Block firstId/lastId skip lists keep the
+             compact form fast to query off mmap. The HLL-driven adaptive range tree shows how
+             to compress numeric/metadata columns (future sections) while staying queryable.
+perf:        Best-case ~6 bytes/posting hit, ~1-2 bytes for doc-id-only; varint claimed to cut index size
+             ~75% vs fixed 32-bit. Block firstId/lastId enables O(log n) skip to a block then
+             linear varint decode, avoiding full posting scans during intersections. TF*rank
+             pre-folded so query-time scoring only multiplies IDF. Byte-aligned varint is
+             SIMD-decodable (Stream-VByte/Masked-VByte family) - relevant to nest's SIMD
+             dispatcher if posting decode becomes hot, though embeddings stay the f32 hot path.
+             HyperLogLog at 6-bit precision keeps numeric cardinality tracking near-free.
+license:     RSALv2 / SSPLv1 (Redis Source Available License v2 + Server Side Public License) -
+             source-available, NOT OSI-open. Treat as reference/learn-from only; do NOT vendor
+             or copy code. The underlying techniques (delta+varint, range tree, HLL split) are
+             standard public-domain IR algorithms, safe to reimplement from scratch.

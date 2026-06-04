@@ -1,0 +1,60 @@
+================================================================================================
+simdutf/simdutf
+category: simd-lowlevel   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A dual-licensed (MIT/Apache-2.0) C++ library for SIMD-accelerated Unicode validation,
+             transcoding (UTF-8/16/32/Latin1), and WHATWG base64 codec that hits billions of
+             chars/sec via per-arch kernels (SSE2/AVX2/AVX-512-VBMI2/NEON/SVE/RVV/POWER)
+             selected by runtime CPU dispatch.
+innovation:  The "lookup" validation pattern: replace memory-bound finite-state machines with tiny
+             SIMD-register-resident nibble-indexed lookup tables consulted via the byte-shuffle
+             instruction (pshufb/vpshufb/tbl), aggregating all error conditions into a single
+             OR-accumulated "error register" so the hot loop is branchless and runs at <1
+             instruction per byte. The same nibble-LUT-via-shuffle idea generalizes to any
+             byte-classification or range-mapping task (UTF-8 validation, base64 alphabet
+             decode, charset filtering).
+techniques:
+  - UTF-8 lookup algorithm: 3 nibble-indexed pshufb LUTs (byte_1_high, byte_1_low, byte_2_high);
+    bitwise-AND non-zero iff invalid; OR-accumulated error register, <1 instr/byte
+  - Sliding-window vectorization with prev1/prev2/prev3 lane-shifts to validate multi-byte
+    sequences across register boundaries
+  - Muła/Lemire base64 nibble-LUT range+shift via pshufb then multiply-add pack
+    (vpmaddubsw/vpmulhuw+vpmullw) to repack 6-bit groups; 14 vec instrs / 32 bytes
+  - AVX-512 VBMI single-pass base64 decode via vpermb 256-entry permute
+  - Runtime per-arch implementation table chosen once via function pointer; AVX-512 gated on
+    VBMI2 to avoid pre-Ice-Lake throttling
+  - ASCII fast-path detecting zero high bits to skip full machinery (~66 GiB/s, 20x ICU)
+  - Non-allocating, exception-free pointer+length API compiling to a few hundred KB
+nest steals: Two concrete steals. (1) nest-format must validate/normalize text for content_hash stability
+             (chunks_canonical, section 0x...text) and for the word-segmented bm25 tokenizer;
+             vendor simdutf's lookup UTF-8 validation pattern as a small pure-Rust module under
+             nest-format/src/sections/ (or reuse the rusticstuff/simdutf8 crate which already
+             ports the exact algorithm and is MIT/Apache) to guarantee canonical sections are
+             valid UTF-8 at <1 instr/byte before hashing, killing a class of non-deterministic
+             decode bugs. (2) nest-runtime/src/simd/ already mirrors simdutf's dispatch design
+             (OnceLock + function-pointer, avx2.rs/neon.rs/scalar.rs); copy simdutf's per-arch
+             table discipline (add AVX-512-VBMI2 gating on VBMI2, an ASCII/zero-high-bit fast
+             path, and the same fallback ordering) so the int8/f16 dot kernels and any future
+             base64 codec follow one proven dispatch contract. (3) If nest ever base64-wraps
+             binary blobs (pdf/audio/video sections, citation payloads), adopt the Muła/Lemire
+             nibble-LUT+multiply-add-pack base64 kernel rather than a scalar encoder, keeping
+             the compress-and-serve hot path fast and offline.
+compression: Indirect but real. simdutf does not compress; it is a throughput-and-correctness library. Its
+             direct value to nest's "compress more than everyone" north star is the SIMD
+             dispatch discipline (cleanly reusable for the scoring hot path and any future
+             entropy/codec kernels) and the nibble-LUT-via-shuffle pattern, which is the generic
+             primitive behind fast byte-level codecs (base64, alphabet remap, and by extension
+             dictionary/RLE byte classification). The base64 kernel matters only when nest
+             base64-wraps binary modalities; embeddings stay raw for mmap scoring so no
+             compression kernel here touches the hot path.
+perf:        ~66 GiB/s on ASCII UTF-8 validation; transcoding >1 billion chars/sec on mixed scripts; 20x ICU
+             on ASCII, 3-10x on non-ASCII. Base64 decode ~7x and encode ~10x vs scalar (AVX2),
+             14 vector instrs per 32-byte decode. Scales naturally across w=16 (NEON/SSE2), w=32
+             (AVX2), w=64 (AVX-512) register widths with the same algorithm. Whole library
+             compiles to a few hundred KB, non-allocating, exception-free; AVX-512 path gated on
+             VBMI2 to avoid clock-throttling on pre-Ice-Lake silicon.
+license:     Dual MIT / Apache-2.0 (vendorable into nest; or use the MIT/Apache rusticstuff/simdutf8 Rust
+             port of the same lookup algorithm)

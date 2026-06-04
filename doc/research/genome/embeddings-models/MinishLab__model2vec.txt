@@ -1,0 +1,67 @@
+================================================================================================
+MinishLab/model2vec
+category: embeddings-models   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A dataset-free distillation method that collapses a sentence-transformer into a static
+             token-embedding lookup table, so encoding a sentence becomes tokenize +
+             table-lookup + mean-pool (no forward pass), shrinking models up to 50x and running
+             up to 500x faster on CPU.
+innovation:  Encoding is reduced from a neural forward pass to a pure memory operation: a frozen [vocab x
+             dim] static embedding matrix indexed by token ids, averaged per sentence. The
+             matrix is post-processed offline with PCA (which normalizes/whitens the embedding
+             space, giving ~2.8% gain even with no dim reduction) plus SIF/Zipf per-token
+             weights (w = 1e-3/(1e-3+p), p approximated from token rank via Zipf's law since
+             vocabularies are frequency-sorted), then optionally quantized to int8/f16 with no
+             measurable quality loss. The whole model is just three files: model.safetensors
+             (the matrix), tokenizer.json, config.json.
+techniques:
+  - Static embedding matrix as a [vocab~32K x dim] lookup table; encode = tokenize -> gather
+    rows -> mean-pool -> optional L2 normalize
+  - PCA whitening of the distilled matrix as a quality step even at full dimensionality
+    (decorrelates/normalizes the space), enabling cheap dimensionality reduction on top
+  - SIF/Zipf per-token weighting: w = 1e-3/(1e-3+p) with p derived from token vocabulary rank
+    (frequency-sorted), folded into the matrix offline so query time stays a plain gather+mean
+  - int8 and float16 scalar quantization of the embedding matrix (25% and 50% of f32 size) with
+    negligible recall loss because vectors are L2-normalized and PCA-conditioned
+  - safetensors on-disk format: single 'embeddings' tensor (f32/f16/i8) + zero-copy mmap load,
+    dtype and dim read from tensor shape, normalize flag in config.json
+  - token_mapping array for vocabulary quantization (remaps original token ids to a reduced row
+    set) plus optional per-token weights array
+  - median-token-length pre-trim and unk-token filtering to bound tokenization cost
+  - official Rust impl (model2vec-rs) proving the entire encode path runs with no Python, only
+    safetensors + tokenizers crate
+nest steals: Two concrete steals. (1) Builder-side codec for nest-format: add a deterministic 'static-embed'
+             build mode in nest-python that distills/loads a model2vec matrix and produces
+             embeddings via tokenize+lookup+mean-pool with PCA+SIF baked in offline. This makes
+             nest's embed step dataset-free, ~500x cheaper on CPU, and fully deterministic (no
+             GPU/transformer nondeterminism) -- directly serving the reproducible-build
+             guarantee (same chunks + same model fingerprint => byte-identical file). (2)
+             Validate and strengthen nest's int8 codec: model2vec confirms PCA-whitened +
+             L2-normalized vectors quantize to int8 at ~25% size with no measurable loss, which
+             is exactly nest's 'tiny' preset (int8, 0.283 ratio, recall@10 0.992) -- so nest
+             should add an optional offline PCA/whitening pass before int8 packing in
+             nest-format's encoding module to lift the int8 codec quality at the same byte cost.
+             The static matrix itself (~32K x 256 int8 ~= 8MB) could ship as an optional
+             dictionary/section to support on-device re-embedding of edited chunks without a
+             server. model2vec-rs (MIT, safetensors + tokenizers) is a near drop-in reference
+             for the nest-runtime side if nest wants to embed query text natively offline,
+             closing the search-text 300-500ms python boot gap.
+compression: High but indirect: model2vec compresses the MODEL not the stored vectors, yet its PCA-whitening
+             + SIF reweighting conditions the embedding space so int8/f16 scalar quantization
+             loses ~nothing -- the precise lever nest needs to make its 'tiny' int8 codec safe
+             and possibly push to lower-bit packing. It also enables a sovereign offline
+             re-embed path (no 500MB transformer), keeping the single-file footprint tiny. It
+             does not add a new entropy coder, but it is strong evidence for nest's quantization
+             presets and a path to compressing the embedding-generation dependency itself to
+             ~8-30MB.
+perf:        ~500x faster CPU encode than the parent sentence-transformer; distillation ~30s on CPU,
+             dataset-free. Models 8MB (smallest on MTEB) to ~30MB f32; int8 = 25% size, f16 =
+             50% size, both ~no quality loss. Encode is memory-bound (gather + mean over ~dozens
+             of rows), trivially SIMD/multiprocessing-friendly (multiprocessing kicks in >10K
+             sentences). safetensors load is zero-copy mmap, matching nest's mmap philosophy.
+             Only hard runtime dep on the Python side is numpy; the Rust port needs only
+             safetensors + tokenizers.
+license:     MIT (code and POTION models; authors Stephan Tulkens & Thomas van Dongen, Minish Lab)

@@ -1,0 +1,73 @@
+================================================================================================
+supermemoryai/supermemory
+category: rag-orchestration   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A cloud-native (Cloudflare Workers + pgvector/D1) "memory engine" for LLMs that unifies RAG,
+             user profiles, and a temporally-aware knowledge graph behind one API, using
+             Matryoshka (MRL) truncatable embeddings, AST-aware (cAST/tree-sitter) code
+             chunking, and RRF hybrid search with cross-encoder reranking under ~200ms.
+innovation:  Matryoshka Representation Learning (MRL): one embedding model emits vectors whose dimensions are
+             ordered by importance, so a 3072-dim vector can be truncated to a 256/512-dim
+             prefix (then L2-renormalized) and still preserve most recall. This turns embedding
+             dimensionality into a graceful, model-backed lossy compression knob and enables
+             coarse-to-fine two-pass search (cheap truncated dims for candidate recall, full
+             dims only to rerank survivors).
+techniques:
+  - Matryoshka Representation Learning: order-by-importance dims, truncate to prefix (e.g.
+    3072->512->256), then L2-renormalize the slice so cosine stays calibrated in the smaller
+    subspace
+  - Coarse-to-fine two-pass retrieval: recall top-N (e.g. 200) with truncated low-dim vectors,
+    then rerank that shortlist with full-dim exact cosine
+  - Post-truncation lightweight scalar quantization of the renormalized slice (stacks on top of
+    dim reduction)
+  - AST-aware chunking (cAST): tree-sitter parses source into an AST and splits on
+    function/class/method boundaries, line-based fallback for unsupported languages
+  - Reciprocal Rank Fusion (RRF) for vector+keyword hybrid: score = sum 1/(k+rank), k=60; ~91%
+    recall@10 before any reranker
+  - Optional ColBERT/cross-encoder rerank only on top 20-50 candidates, added after benchmarking
+    shows RRF alone misses recall target
+  - Eval rigor: hard negatives (500 same-repo distractor files) + IoU>=0.3 relevance threshold
+    to avoid trivially-easy retrieval benchmarks
+  - Temporal layer: fact contradiction-resolution (overwrite stale facts) and recency-decay
+    deprioritization over the knowledge graph
+nest steals: MRL is the single biggest steal and maps cleanly onto nest's frozen-but-additive format. (1)
+             nest-format: add an MRL-aware dimension layout to the embeddings section. Store the
+             full f32/f16 vectors AND record a manifest field `mrl_prefix_dims` (e.g.
+             [256,512,full]); because dims are importance-ordered, a truncated prefix is just
+             the first K contiguous floats already on disk, so an MRL-trained model lets the
+             `tiny` preset drop to a 256-dim int8 prefix for the hot scan with near-zero recall
+             loss. This is additive (new optional manifest field / reuses existing embeddings
+             section bytes, no NEST_FORMAT_VERSION bump) and deterministic. (2) nest-runtime:
+             add a coarse-to-fine path in search.rs alongside the existing exact-rerank
+             contract. Pass 1 runs the SIMD dot-product (AVX2/NEON) over the truncated prefix
+             straight off mmap to gather candidates; Pass 2 reuses nest's MANDATORY exact-cosine
+             rerank over the full-dim vectors. This fits nest's existing 'ann proxy then real
+             cosine rerank' contract perfectly and cuts the hot-loop bytes-touched by 6-12x with
+             no new index type. (3) The L2-renormalize-the-slice trick is the load-bearing
+             correctness detail: store a per-prefix renorm scale (or renormalize at materialize
+             time) so truncated cosine stays honest. Secondary steal: AST-aware chunking belongs
+             in nest-python's builder as a tree-sitter-backed chunker so chunks_canonical
+             respects code structure (better chunk_ids/spans), with line-based fallback. RRF is
+             already nest's hybrid model, so it is reference-only confirmation that k=60 and
+             exact rerank are the right defaults.
+compression: Directly on-mission. MRL prefix-truncation is a graceful, model-supported lossy compressor for
+             the embeddings section, which is nest's largest and the only section that cannot be
+             zstd-compressed (it is scored from mmap on the hot path). It is orthogonal to and
+             stacks with nest's existing f16/int8 quantization: dim-reduction (3072->256 ~= 12x)
+             times int8 (4x) compounds, and the two-pass coarse search means the smaller prefix
+             is what the hot SIMD loop actually reads, so it improves BOTH size ratio (toward
+             beating the 0.283 tiny preset) AND search throughput while the mandatory full-dim
+             exact rerank preserves real-cosine ground truth.
+perf:        Supermemory reports end-to-end retrieve+rerank routinely under 200ms using MRL truncation plus
+             lightweight quantization; RRF alone reaches ~91% recall@10. For nest: a 256-dim
+             int8 prefix vs a 3072-dim f32 full vector is ~48x fewer bytes touched per candidate
+             in Pass 1, which is pure win for cache-resident SIMD dot products off mmap
+             (AVX2/NEON). The key footgun is that truncated prefixes occupy a smaller subspace
+             and inflate/jitter cosine, so each slice must be L2-renormalized (scale by
+             1/||prefix||) before scoring; nest should bake this into the writer or materialize
+             path to keep determinism.
+license:     MIT (supermemory main repo and code-chunk are MIT-licensed); MRL itself is a published technique
+             (Kusupati et al.), not encumbered, and tree-sitter is MIT.
