@@ -1,0 +1,589 @@
+==================================================================================================
+nest master plan
+the most compact, portable, cheap, clean, sovereign ai database in the world
+==================================================================================================
+
+vision
+==================================================================================================
+nest becomes the most compact, portable, sovereign AI database in the world: a single FROZEN-v1
+.nest container that compresses every data type harder than the field while keeping four
+properties no competitor combines - sovereign/offline (never opens a socket), single-file (one
+mmap), deterministic (same chunks + same model fingerprint => byte-identical file), and citable
+(nest://content_hash/chunk_id reopens an exact byte span with a real-cosine score). The thesis,
+grounded in the actual tree: nest already half-implements the winning pattern - lossy candidate
+generation guarded by a MANDATORY exact-cosine rerank (search.rs::search_ann/search_hybrid ->
+score_subset), content_hash over DECODED canonical-six bytes with length-prefixed name-domain
+framing (a NAR-grade construction), decode_payload that fails closed on unknown encoding ids, an
+int8 codec that ALREADY carries a scale_kind discriminator (int8.rs:18), and a OnceLock SIMD
+dispatcher. The unrealized wins are concentrated and verifiable: embeddings are the dominant bytes
+sitting at an 8 bpw int8 floor while the field has converged on rotation-first sub-byte
+quantization (block-int8 4x near-lossless, int4 ~4.25bpw, RaBitQ 1-bit ~32x) all guarded by the
+rerank nest already mandates; the cold metadata sections (chunk_ids as 71-byte ascii, spans as
+repeated source_uri + raw u64, BM25 raw u32 doc/tf, HNSW raw u32 neighbor ids) carry zero
+structural compression and are textbook delta+bitpack/front-code/dedup targets; text runs
+hardcoded level-19 zstd with no trained dictionary; and there is no content-hash dedup before the
+entropy coder. Two correctness truths gate the aggressive path and are designed in from Phase 0,
+not bolted on: score_subset reranks against the SAME lossy stored dtype (so 'real cosine' becomes
+'real cosine at stored precision' below int8 - sub-int8 REQUIRES a separate f16/f32 rerank
+source), and materialize.rs expands EVERY dtype to an n*dim*4 f32 buffer whenever HNSW is attached
+(so any embedding shrink is paid back in RAM unless the ANN path scores packed blocks). Execute
+the additive codec stack in dependency order behind these two guardrails and nest pushes the tiny
+preset's 0.283 ratio toward sub-0.1 on embedding-dominated corpora with recall@10 held by the
+mandatory exact rerank - shipped incrementally by a solo author with AI agents, each codec a
+<=300-line single-responsibility module returning typed thiserror, every step additive within
+frozen v1.
+
+architecture
+==================================================================================================
+Crates stay four: nest-format (frozen container, grows a codec registry + new optional sections),
+nest-runtime (mmap + ann + bm25 + simd + search + new graph/journal modules), nest-cli (thin clap
+surface, grows search-graph + verify-reproducible + compact), nest-python (pyo3 abi3 bridge, gains
+maturin wheel + zero-copy query). CONCRETE FORMAT EVOLUTION, all additive within
+NEST_FORMAT_VERSION=1: (A) NEW WIRE ENCODING IDS in the reserved 4-255 space
+(raw=0/zstd=1/float16=2/int8=3 occupied): 4=intpack (delta+zigzag+per-128-block minimal
+bitpack/FOR with O(1) select, for spans/HNSW/BM25 integer streams), 5=zstd_dict (trained shared
+dictionary), 6=frontcode (sorted-string front-coding for chunk_ids/bm25 vocab), 7=int4 (block-64
+scaled, embeddings only), 8=rabitq (1-bit sign codes + 2 f32 correctors, embeddings only), 9=fsst
+(transparent text), with shuffle+zstd and tokenized reserved beyond. decode_payload's existing
+default arm rejects unknown ids with UnsupportedSectionEncoding, so old runtimes fail closed and
+new runtimes dispatch by id. (B) NEW OPTIONAL SECTION IDS at 0x09+ (0x01-0x08 occupied), all
+EXCLUDED from content_hash so they never invalidate citations: 0x09=embeddings_fp (f16/f32 rerank
+source for sub-int8 presets - the honest-rerank gate), 0x0A=dictionary (trained zstd dict blob),
+0x0B=dedup_map (content-hash refcount table), 0x0C=graph_adjacency (CSR chunk-to-chunk edges),
+0x0D=chunk_scalars (columnar pre-filter: lang/byte_len/source_id), 0x0E=tokenizer_model (frozen
+vocab for CJK/Thai bm25 + text codec), 0x0F=edit_journal (append-only deltas), 0x10=repro_manifest
+(sorted per-section content-hash + decoded_length + recipe). (C) PER-SECTION PAYLOAD-VERSION BUMPS
+(never NEST_FORMAT_VERSION): INT8_PAYLOAD_VERSION/scale_kind=1 (block-int8, the field already
+exists at int8.rs:18), HNSW_PAYLOAD_VERSION 1->2 (delta+bitpack neighbor ids + flat fixed-stride
+uint40 layout), BM25_PAYLOAD_VERSION 1->2 (delta-gap postings + bitpacked tf + front-coded/FST
+term dict). HARDENING that stays additive: a skippable-OPTIONAL vs unskippable-REQUIRED flag bit
+on SectionEntry (reserved field) so old runtimes serve unknown optional sections and error cleanly
+on unknown required ones; verify (not just declare) the 64-byte embeddings alignment at reader
+open for aligned SIMD loads. The decode_payload match in encoding/mod.rs becomes a visitor-style
+registry where each encoding id is one <=300-line module implementing decode(&[u8])->Cow. THE ONE
+TRUE v2 (NEST_FORMAT_VERSION=2), deferred to its own research lane and justified only by measured
+demand: make content_hash a BLAKE3 Merkle root over per-section/per-chunk hashes (changes the
+meaning of the existing content_hash field, so cannot be additive) for O(touched-bytes) partial
+verification and single-chunk citation proof; until then SHA-256 over decoded canonical-six stays
+frozen.
+
+pillars
+==================================================================================================
+1. Universal layered byte container (the moat)
+   Make .nest a self-describing additive codec engine: turn decode_payload into a visitor-style
+   registry where each encoding id is one <=300-line module implementing decode(&[u8])->Cow;
+   reserve encoding ids 4-255 and section ids 0x09+ as named constants; add a skippable-OPTIONAL
+   vs unskippable-REQUIRED flag on SectionEntry so old runtimes serve unknown optional sections
+   and fail closed on unknown required ones; cost-driven per-section codec selection (trial-encode
+   all candidates, keep smallest, record chosen id, raw always a candidate). decode_payload
+   already fails closed on unknown ids and content_hash already hashes DECODED canonical-six
+   bytes, so every new codec stays content_hash-stable and citation-safe.
+   draws from: facebook/zstd, ebiggers/libdeflate, duckdb/duckdb, serde-rs/serde, google/snappy
+
+2. Embedding compression frontier (the dominant bytes)
+   Drive the embeddings section from the 8 bpw int8 floor down a deterministic rotation-first
+   quantization ladder, all scored in-place off mmap and all guarded by the mandatory exact rerank
+   against a separate f16/f32 rerank-source section: block-scaled int8 (scale_kind=1,
+   near-lossless 4x, no new id) -> seeded-FWHT Rotational Quantization on int8 (~0.99 recall at
+   4x) -> int4 block-64 (~4.25bpw, fused dequant+dot, no f32 in RAM) -> RaBitQ 1-bit
+   (AND+popcount, ~32x, unbiased estimator). Matryoshka prefix truncation as a deterministic
+   multiplicative dim knob. Rotations/codebooks seeded from the model fingerprint ->
+   byte-identical builds. Integer-domain VNNI/dotprod kernels for speed AND true cross-CPU
+   bit-determinism on the quantized path.
+   draws from: gaoj0017/RaBitQ, VectorDB-NTU/RaBitQ-Library, weaviate/recipes, ggml-org/ggml,
+            microsoft/onnxruntime, ARM-software/ComputeLibrary, QwenLM/Qwen3-Embedding,
+            rust-lang/stdarch
+
+3. Integer + string metadata compression (the free wins)
+   Replace structurally-uncompressed cold sections with canonical integer/string codecs, all
+   decoding byte-identically so content_hash and citations are unchanged: one shared
+   delta(d1)+zigzag+per-128-block minimal-bitpack/FOR codec with O(1) select for HNSW neighbor ids
+   (sort-per-list), BM25 doc-id gaps + bitpacked tf, and per-source span offsets; 32 raw SHA-256
+   digest bytes instead of 71-byte ascii chunk_ids (~2.2x) with front-coding/FST term+id
+   dictionary that stays binary-searchable off mmap; a deduped source_uri string pool. Index
+   changes bump only HNSW/BM25 payload versions; spans/chunk_ids use a new reserved encoding id.
+   PFOR patched exceptions so one giant gap never widens a block.
+   draws from: lemire/FastPFor, fast-pack/simdcomp, cruppstahl/libfor, cruppstahl/libvbyte,
+            BurntSushi/fst, google/flatbuffers, blazegraph/database, apache/lucene
+
+4. Text + structured-document codec stack (compress-AND-serve everything)
+   Beat generic zstd on text by ordering the stack correctly: content-hash dedup of identical
+   chunks BEFORE zstd (Nix lesson: dedup on decompressed bytes, compress after); a corpus-trained
+   shared zstd dictionary (ZDICT over sorted samples, deterministic) to kill per-section
+   cold-start + cross-chunk redundancy on many-short-similar PT-BR chunks; FSST as a transparent
+   codec so single-chunk citation reopen decodes O(1) where block-zstd forces a whole-section
+   inflate; cost-driven pick-smallest per section; and for the json/yaml/parquet roadmap a
+   fixed-stride u64 structural tape + length-prefixed value blob plus per-column lightweight codec
+   cascade chosen by a deterministic Analyze pass. Canonical text stays byte-exact so content_hash
+   is stable.
+   draws from: NixOS/nix, ipfs/kubo, facebook/zstd, facebook/rocksdb, duckdb/duckdb,
+            lancedb/lance, simdjson/simdjson
+
+5. Honest serve path + sovereign runtime guarantees
+   Two runtime fixes are the precondition for compression to actually pay off and stay honest: (a)
+   fix the materialize-to-f32 leak so the ANN distance path scores packed int8/int4 blocks (or
+   keeps f16, never expands to n*dim*4 f32 in RAM); (b) decouple rerank precision from storage
+   precision via a SECTION_EMBEDDINGS_FP rerank source so score_subset reranks survivors against
+   true precision below int8. Plus: generalize the SimdBackend OnceLock into a functable so new
+   kernels (f16/F16C, VNNI/dotprod, popcount, nibble-unpack) register one entry each; route HNSW
+   traversal through the SIMD dispatcher instead of the scalar cosine_dist loop and swap the
+   per-query HashSet visited set for a generational buffer; zero-copy PyBuffer<f32> query borrow +
+   Python::detach around the read-only mmap search; one cp312-abi3 maturin wheel.
+   draws from: microsoft/onnxruntime, rust-lang/stdarch, nmslib/hnswlib, djc/instant-distance,
+            PyO3/pyo3
+
+6. Corpus dedup, graph search, real-time edit + reproducibility
+   Add the structural and capability pillars as cheap additive overlays: content-defined chunking
+   (FastCDC/Gear, seeded) + content-hash dedup with refcounts (the field's biggest lever on
+   whole-repo/dataset payloads); an optional CSR graph_adjacency section (chunk-to-chunk
+   semantic/citation/NEXT_CHUNK edges, reusing the intpack codec) traversed off mmap, seeded from
+   exact-cosine top-k and feeding the SAME mandatory exact rerank (and letting nest drop
+   chunk-overlap text by reconstructing neighbor context from edges); an append-only edit journal
+   overlaid in memory at open (frozen bytes immutable) plus a deterministic compact() that re-runs
+   the dictionary, re-quantizes, drops dead chunks; a reproducibility manifest (sorted per-section
+   content-hash + decoded_length + recipe) making byte-identical builds third-party verifiable
+   offline; a byte-level subword tokenizer closing the CJK/Thai BM25 gap and doubling as a
+   text-compression front-end.
+   draws from: NixOS/nix, ipfs/kubo, tidwall/buntdb, vesoft-inc/nebula,
+            neo4j/neo4j-graphrag-python, google/sentencepiece,
+            jvm-repo-rebuild/reproducible-central
+
+compression strategy (compress more than everyone)
+==================================================================================================
+ONE layered codec stack applied per data type, with two invariants: embeddings are NEVER
+entropy-coded/zstd'd (scored in-place off mmap, shrink only via fixed-stride quantization read by
+stride); everything else is decorrelated then entropy-coded, codec chosen cost-driven
+(trial-encode, keep smallest, raw always a candidate) and recorded per section. (1) EMBEDDINGS
+(dominant bytes, never zstd): a deterministic rotation-first quantization ladder scored in-place
+and guarded by the mandatory exact rerank against an f16/f32 SECTION_EMBEDDINGS_FP source - (a)
+block-scaled int8 as int8.rs scale_kind=1, one f16 scale per 32-dim block (near-lossless 4x, NO
+new encoding id, NO version bump) drawn from ggml block_q8_0 + ARM-software/ComputeLibrary; (b)
+seeded Fast-Walsh-Hadamard Rotational Quantization on int8 (gaussianize before quantize, push
+recall@10 toward ~0.99 at 4x, store only the seed) drawn from weaviate/recipes; (c) int4 block-64
+~4.25bpw with a fused dequant+dot kernel that never materializes f32 in RAM (SQNBitGemm pattern)
+drawn from microsoft/onnxruntime MLAS + ggml Q4_0; (d) RaBitQ 1-bit (sign codes + ~2 f32
+correctors, AND+popcount candidate scoring, ~32x, unbiased O(1/sqrt(D)) estimator) drawn from
+gaoj0017/RaBitQ + VectorDB-NTU/RaBitQ-Library; Matryoshka prefix truncation as a deterministic
+multiplicative dim knob drawn from QwenLM/Qwen3-Embedding. Integer-domain VNNI/dotprod
+(vpdpbusd/vdotq_s32) for ~4x speed AND true cross-CPU bit-determinism on the quantized path, drawn
+from rust-lang/stdarch. (2) INTEGER METADATA (the free wins, never touches hot path): one shared
+delta(d1)+zigzag+per-128-block minimal-bitpack/FOR codec with O(1) select - HNSW neighbor ids
+(sort-per-list, ~log2(n) bits vs 32, bump HNSW_PAYLOAD_VERSION), BM25 doc-id gaps + bitpacked tf
+(bump BM25_PAYLOAD_VERSION), span byte offsets (delta+varint per source) - drawn from
+lemire/FastPFor + cruppstahl/libfor + fast-pack/simdcomp; patched exceptions (PFOR) so one huge
+gap/high-degree node never widens a whole block, clean-room from the FastPFor format description
+(avoid GPL TurboPFor). (3) STRING METADATA: chunk_ids stored as 32 raw SHA-256 bytes not 71-byte
+ascii (~2.2x), then front-coded; BM25 term dictionary front-coded/FST (BurntSushi/fst, MIT) which
+ALSO unlocks prefix/typo lookup; deduped source_uri string pool referenced by index - drawn from
+blazegraph front-coding + google/flatbuffers raw-digest ids + terminusdb-store. (4) TEXT/JSON/YAML
+(chunks_canonical): build-time content-hash dedup of identical chunks BEFORE zstd (store unique
+once + u32 back-ref array, the Nix store-optimise lesson - dedup on DECOMPRESSED bytes, compress
+after) drawn from NixOS/nix + ipfs/kubo; corpus-trained shared zstd dictionary (ZDICT over sorted
+samples, deterministic) drawn from facebook/zstd + facebook/rocksdb; FSST as a transparent codec
+so single-chunk citation reopen decodes O(1) without whole-section inflate, drawn from
+duckdb/duckdb + lancedb/lance; cost-driven per-section selection drawn from duckdb Analyze +
+ebiggers/libdeflate. (5) PARQUET/COLUMNAR/DATASETS (roadmap): per-column lightweight cascade
+(RLE/FOR/delta/dictionary/FSST/bitpack) chosen by a deterministic Analyze pass, dictionary-encode
+low-cardinality enums (verdict/lang) to a few bits, byte-shuffle+zstd on cold numeric planes
+(Blosc bytedelta), drawn from duckdb + Blosc/c-blosc2. (6) PDF/AUDIO/VIDEO (roadmap): canonicalize
+PDF to deterministic text before chunking (then it IS the text path), store media payload verbatim
+addressed by content_hash with a CDC chunk index (copy-without-recode, the Deep Lake lesson),
+embeddings ride the same quantization ladder, drawn from KaiDMML/FakeNewsNet +
+activeloopai/deeplake. (7) WHOLE-DB/REPO: content-hash dedup before the entropy coder is the
+headline structural lever (cross-file duplication dominates), zstd level 22 +
+long-distance-matching for far cross-file matches, drawn from NixOS/nix. NET: headline single move
+is rotation-first sub-byte embedding quantization; headline structural move is content-hash dedup
+before zstd; headline free move is integer-section delta+bitpack; headline text move is trained
+dictionary + FSST.
+
+format evolution (additive within v1)
+==================================================================================================
+v1 STAYS FROZEN AND ADDITIVE for the entire compression roadmap. NEST_FORMAT_VERSION is bumped
+ONLY when an existing field changes meaning. Three additive lanes carry everything, and the
+in-tree machinery already supports all three. LANE A - NEW WIRE ENCODINGS in reserved 4-255
+(raw=0/zstd=1/float16=2/int8=3 occupied): intpack(4), zstd_dict(5), frontcode(6), int4(7),
+rabitq(8), fsst(9), with shuffle+zstd and tokenized reserved beyond. The existing decode_payload
+default arm (encoding/mod.rs:50) already rejects unknown ids with UnsupportedSectionEncoding, so
+an old runtime fails closed and a new runtime dispatches by id - additive by construction.
+content_hash hashes DECODED canonical-six bytes, so any codec that round-trips bit-exactly yields
+the SAME content_hash (enforce with a roundtrip+hash-equality test per codec, mirroring the
+existing zstd_roundtrip_preserves_bytes test); only embeddings are precision-dependent, which is
+already documented and accepted. LANE B - NEW OPTIONAL SECTIONS at 0x09+ (0x01-0x08 occupied),
+EXCLUDED from content_hash by the existing spec (layout/mod.rs:101-107) so adding them never
+invalidates citations: embeddings_fp(0x09, the f16/f32 rerank source that gates sub-int8),
+dictionary(0x0A), dedup_map(0x0B), graph_adjacency(0x0C), chunk_scalars(0x0D),
+tokenizer_model(0x0E), edit_journal(0x0F), repro_manifest(0x10), and reserved
+merkle_index/eval_results beyond. LANE C - PER-PAYLOAD VERSION BUMPS internal to an
+already-defined section: INT8 scale_kind=1 (the field already exists at int8.rs:18 and parse()
+already rejects unknown kinds, so old readers stay safe), HNSW_PAYLOAD_VERSION 1->2,
+BM25_PAYLOAD_VERSION 1->2 - never NEST_FORMAT_VERSION. HARDENING that stays additive: add a
+skippable-OPTIONAL vs unskippable-REQUIRED flag bit on SectionEntry (a reserved field, no layout
+change) so old runtimes serve unknown optional sections and error cleanly on unknown required
+ones; verify the 64-byte embeddings alignment at reader open (SECTION_ALIGNMENT=64 is declared but
+not verified). THE ONE TRUE v2 (NEST_FORMAT_VERSION=2, deferred to its own research lane,
+justified ONLY by measured demand for partial/single-chunk citation verification + corpus-level
+subtree dedup): make content_hash a BLAKE3 Merkle ROOT over per-section/per-chunk hashes instead
+of a flat SHA-256 over concatenated canonical-six bytes. This CHANGES the meaning of the existing
+content_hash field (the citation identity anchor), so it cannot be additive - it must be v2 with
+v1 readers retained. Until then SHA-256 over decoded canonical-six stays frozen and a NEW additive
+blake3 algorithm-id can be offered for large-blob addressing without touching the v1 default.
+
+roadmap
+==================================================================================================
+
+--------------------------------------------------------------------------------------------------
+phase Phase 0 - guardrails + scaffolding (unblock everything, zero ratio yet): Make the format a clean additive codec engine and remove the two correctness/RAM blockers before any codec
+--------------------------------------------------------------------------------------------------
+goal:        De-risk the whole roadmap: resolve the rerank-fidelity contract, fix the in-place-scoring leak,
+             land the reproducibility/determinism harness, and reserve the additive-format rails -
+             so every later codec ships behind proven guardrails.
+
+  * Honest-rerank gate + RAM-leak fix
+    path:   crates/nest-runtime/src/search.rs, crates/nest-runtime/src/materialize.rs,
+            crates/nest-runtime/src/ann/mod.rs, crates/nest-format/src/sections/contract.rs
+      - Reserve SECTION_EMBEDDINGS_FP=0x09 (optional f16/f32 rerank source, excluded from
+        content_hash) and plumb it through the writer + manifest capability
+      - Make score_subset rerank against embeddings_fp when present (not the stored lossy dtype),
+        keeping today's behavior when absent
+      - Teach the ANN distance path to score packed int8 blocks (or keep f16) so
+        materialize_f32_vectors no longer expands every dtype to n*dim*4 f32 when HNSW is attached
+      - Document in search_contract: 'real cosine at stored precision' unless an fp rerank source
+        is present
+    from:   gaoj0017/RaBitQ, microsoft/onnxruntime, ggml-org/ggml
+    risk:   Touching score_subset/materialize risks regressing the exact-rerank ground truth; gate with the
+            golden recall harness and assert byte-identical results on f32 corpora before/after.
+
+  * Codec registry refactor + cost-driven selection
+    path:   crates/nest-format/src/encoding/mod.rs, crates/nest-format/src/layout/mod.rs,
+            crates/nest-format/src/writer/encoding_choice.rs,
+            crates/nest-format/src/writer/payload.rs
+      - Turn encoding/mod.rs decode_payload into a visitor-style registry where each encoding id
+        is one <=300-line module implementing decode(&[u8])->Cow
+      - Reserve encoding ids 4-9 and section ids 0x09-0x10 as named constants in layout/mod.rs (no
+        behavior change)
+      - Generalize writer encoding_choice.rs + payload.rs from a binary raw-vs-zstd switch into a
+        deterministic try-all-pick-smallest chooser recording the chosen id per section (raw
+        always a candidate)
+    from:   serde-rs/serde, ebiggers/libdeflate, duckdb/duckdb
+    risk:   Registry churn could break the frozen wire format; the refactor must be byte-identical on existing
+            presets, enforced by the golden/v01_compat tests.
+
+  * SIMD functable + alignment verify
+    path:   crates/nest-runtime/src/simd/mod.rs, crates/nest-runtime/src/simd/avx2.rs,
+            crates/nest-format/src/reader/parse.rs
+      - Generalize the SimdBackend OnceLock into a functable struct of fn pointers so new kernels
+        register one entry each, keeping each simd/*.rs under 300 lines
+      - Add an F16C tier to the AVX2 f16 path (vcvtph2ps) so the compressed/tiny f16 preset stops
+        falling back to scalar on x86
+      - Verify 64-byte embeddings alignment at reader open; keep NEST_FORCE_SCALAR parity tests
+        with exact-equality where integer-domain
+    from:   rust-lang/stdarch, nemequ/simde, simd-r-drive
+    risk:   A missed #[inline(always)] silently de-optimizes the hot loop; gate the refactor with
+            assert_instr-style disassembly checks and the existing simd parity tests.
+
+  * Reproducibility + per-codec roundtrip gates + distribution
+    path:   crates/nest-cli/src/cmd/benchmark.rs, crates/nest-runtime/src/metrics/,
+            crates/nest-python/src/nest_file.rs, pyproject.toml
+      - Add a roundtrip+content_hash-equality test template every new codec must pass
+        (decode==input, content_hash stable)
+      - Add an MTEB-style seeded quality harness to the benchmark subcommand:
+        nDCG@k/MRR@k/Recall@k vs the exact f32 baseline per preset, plus a byte-identical-build CI
+        check
+      - Reserve SECTION_REPRO_MANIFEST=0x10 (sorted per-section content-hash + decoded_length +
+        recipe) and a verify-reproducible subcommand
+      - Wire a maturin cp312-abi3 wheel + zero-copy PyBuffer<f32> query borrow + Python::detach
+        around the read-only mmap search
+    from:   embeddings-benchmark/mteb, jvm-repo-rebuild/reproducible-central, PyO3/pyo3,
+            weaviate/weaviate-python-client
+    risk:   MTEB metrics need qrels the PT-BR demo lacks; build a seeded synthetic/hand-labeled qrels set or
+            the nDCG numbers are vacuous (recall-vs-exact-f32 overlap works with zero labels as
+            the interim).
+
+
+--------------------------------------------------------------------------------------------------
+phase Phase 1 - the free integer + string wins (ship ratio at near-zero risk): Compress the structurally-uncompressed cold metadata sections, all decoding byte-identically
+--------------------------------------------------------------------------------------------------
+goal:        Shrink every non-embedding integer/string section below generic zstd while keeping it
+             searchable/citable in place, building the reusable integer-codec + front-code
+             primitives the rest of the plan depends on. Lowest risk - never touches the hot path
+             or recall.
+
+  * Shared intpack integer codec
+    path:   crates/nest-format/src/encoding/intpack.rs
+      - Build encoding/intpack.rs: delta(d1)+zigzag+per-128-block minimal-bitpack with a varint
+        tail and O(1) select by bit-offset (FOR semantics), branch-free scalar decode, never panic
+        on truncated input
+      - Register SECTION_ENCODING_INTPACK=4; add PFOR patched-exceptions variant clean-room from
+        the FastPFor format description (avoid GPL TurboPFor)
+    from:   lemire/FastPFor, cruppstahl/libfor, fast-pack/simdcomp
+    risk:   Bit-cursor/varint reads on malformed mmap bytes must return typed thiserror, never index-panic;
+            cover with negative tests mirroring negative_zstd/negative_int8.
+
+  * HNSW + BM25 index re-encoding
+    path:   crates/nest-runtime/src/ann/codec.rs, crates/nest-runtime/src/bm25/codec.rs
+      - HNSW neighbor ids: sort-per-list + delta+bitpack in ann/codec.rs, move to flat
+        fixed-stride uint40 layout, bump HNSW_PAYLOAD_VERSION 1->2 (identical id set => zero
+        recall change)
+      - BM25 postings: delta-gap doc ids + bitpacked tf + 1-byte log-quantized doc_lengths in
+        bm25/codec.rs, bump BM25_PAYLOAD_VERSION 1->2
+      - Front-code or FST the alphabetical BM25 term dictionary (unlocks prefix/typo lookup, seam
+        for CJK/Thai)
+    from:   lemire/FastPFor, apache/lucene, BurntSushi/fst, quickwit-oss/tantivy
+    risk:   HNSW neighbor lists must be canonically sorted before delta or on-disk bytes vary across builds;
+            assert byte-identical to_bytes across two builds (the existing
+            deterministic_build_same_seed test extends here).
+
+  * chunk_ids + spans + frontcode
+    path:   crates/nest-format/src/sections/chunk_ids.rs, crates/nest-format/src/sections/spans.rs,
+            crates/nest-format/src/encoding/frontcode.rs
+      - Store chunk_ids as 32 raw SHA-256 digest bytes (reconstruct sha256:<hex> on decode) via
+        SECTION_ENCODING_FRONTCODE=6; ~2.2x, content_hash unchanged because decoded ids are
+        identical
+      - Re-encode chunks_original_spans: dedup source_uri into a string pool + delta+varint
+        per-source monotone byte offsets via intpack; decode byte-identical to OriginalSpan
+      - Add a u32 offset table at the head of chunk_ids/canonical/spans so cite/materialize reach
+        chunk N in O(1) off mmap instead of an O(n) length-prefixed scan
+    from:   google/flatbuffers, blazegraph/database, cruppstahl/libvbyte, activeloopai/deeplake
+    risk:   content_hash must stay invariant across the chunk_ids encoding switch (it hashes the decoded
+            canonical representation); add a roundtrip assertion that the decoded ids equal the
+            old ascii form.
+
+
+--------------------------------------------------------------------------------------------------
+phase Phase 2 - text dictionary + the safe embedding step (headline ratio levers): Beat generic zstd on text and take the first near-lossless embedding compression step that needs no rerank source
+--------------------------------------------------------------------------------------------------
+goal:        Land the two biggest near-term ratio levers that carry no recall risk: a trained shared text
+             dictionary + FSST, and block-scaled/rotational int8 that recovers recall at the same
+             4x size without needing the fp rerank source.
+
+  * Trained dictionary + FSST text codec
+    path:   crates/nest-format/src/encoding/zstd_dict.rs, crates/nest-format/src/encoding/fsst.rs,
+            crates/nest-format/src/encoding/zstd_codec.rs, crates/nest-python/src/build_fn.rs
+      - Train a shared zstd dictionary build-time (ZDICT over sorted
+        chunks_canonical/spans/provenance/bm25 terms, deterministic pure function); store in
+        SECTION_DICTIONARY=0x0A, encode text via SECTION_ENCODING_ZSTD_DICT=5
+      - Add FSST transparent text codec (SECTION_ENCODING_FSST=9) so single-chunk citation reopen
+        decodes O(1) without whole-section inflate; chosen vs zstd_dict by the cost-driven
+        selector
+      - Replace hardcoded zstd level-19 with level/LDM knobs (level 22 + long-distance-matching
+        for large whole-db/repo payloads)
+    from:   facebook/zstd, facebook/rocksdb, duckdb/duckdb, lancedb/lance
+    risk:   ZDICT must be fed sorted/identical samples and pinned to a zstd version or reproducible builds
+            break; verify byte-identical output across two builds.
+
+  * Block-scaled + rotational int8
+    path:   crates/nest-format/src/encoding/int8.rs, crates/nest-format/src/encoding/fwht.rs,
+            crates/nest-runtime/src/simd/avx2.rs, crates/nest-runtime/src/simd/neon.rs
+      - Add int8 scale_kind=1 (one f16 scale per 32-dim block) reusing the float16 codec for
+        scales: near-lossless 4x with NO new encoding id and NO format bump (the field already
+        exists at int8.rs:18)
+      - Add seeded FWHT Rotational Quantization before quantize (gaussianize, push recall@10
+        toward ~0.99 at 4x, store only the seed; rotate query at search time via a shared fwht
+        helper)
+      - Wire integer-domain VNNI/dotprod kernels (vpdpbusd/vdotq_s32) for ~4x speed and true
+        cross-CPU bit-determinism on the int8 path
+    from:   ggml-org/ggml, weaviate/recipes, ARM-software/ComputeLibrary, rust-lang/stdarch
+    risk:   FWHT rotation determinism hinges on identical float ops across SIMD backends (FMA-vs-mul/add can
+            flip a sign near zero); compute rotation backend-independently at build time, verify
+            byte-identical codes across two builds and across backends.
+
+  * Matryoshka + micro preset
+    path:   crates/nest-python/src/build_fn.rs, crates/nest-runtime/src/search.rs
+      - Build-time Matryoshka prefix truncation + L2-renormalize to mrl_dim (manifest fields,
+        multiplicative with int8), two-pass coarse(prefix)->exact(full) search
+      - Ship a micro preset (zstd_dict/FSST text + block/RQ-int8 + hnsw) below tiny's 0.283 and
+        report measured recall@10 vs exact
+    from:   QwenLM/Qwen3-Embedding, supermemoryai/supermemory
+    risk:   Matryoshka needs an MRL-trained model AND per-prefix L2-renorm; skipping the renorm silently
+            corrupts cosine - bake it into the writer or the score path and validate recall on the
+            demo model.
+
+
+--------------------------------------------------------------------------------------------------
+phase Phase 3 - sub-byte embeddings + corpus dedup (push toward sub-0.1): Cross the int8 floor with rotation-first sub-byte quantization and add dedup before the entropy coder
+--------------------------------------------------------------------------------------------------
+goal:        Take embeddings below int8 (int4 then RaBitQ 1-bit) guarded by the Phase-0 fp rerank source, and
+             add the content-hash dedup that attacks redundancy before zstd - the deepest
+             compression levers, now safe to ship.
+
+  * int4 + fused dequant kernel
+    path:   crates/nest-format/src/encoding/int4.rs, crates/nest-runtime/src/simd/int4.rs,
+            crates/nest-runtime/src/search.rs
+      - Add SECTION_ENCODING_INT4=7 block-64 codec (~4.25bpw) with split pack/unpack and a fused
+        dequant+dot kernel (SQNBitGemm pattern) that never materializes f32 in RAM; DType::Int4
+        arm in score_all/score_subset
+      - Deterministic RTN max-abs-per-block (no calibration corpus); dim%64 fallback to block-32
+        int8
+      - Optional build-time PCA-whitening before quantize for free quality (rotation stored in
+        provenance)
+    from:   microsoft/onnxruntime, ggml-org/ggml, intel/neural-compressor
+    risk:   Without the Phase-0 fp rerank source int4 makes the contract a half-truth; gate the int4 preset on
+            embeddings_fp being present, and verify it scores packed blocks (no f32 RAM blow-up).
+
+  * RaBitQ 1-bit + nano preset
+    path:   crates/nest-format/src/encoding/rabitq.rs, crates/nest-runtime/src/simd/popcount.rs
+      - Add SECTION_ENCODING_RABITQ=8: seeded rotation + sign bits + ~2 f32 correctors,
+        AND+popcount kernel (popcnt/vcnt/count_ones) as candidate generation, then mandatory exact
+        rerank against embeddings_fp -> real cosine
+      - Store the rotation as a seeded FHT (O(D log D), store the seed not a dense matrix);
+        validate recall@10 on the PT-BR corpus before defaulting
+      - Ship a nano preset; keep int8/RQ as the safe default and never ship a 1-bit preset without
+        bm25 as a recall backstop
+    from:   gaoj0017/RaBitQ, VectorDB-NTU/RaBitQ-Library, antgroup/vsag
+    risk:   1-bit excels at high dim and can fail at low dim; validate recall@10 on the actual demo model
+            first and keep it opt-in, never the default.
+
+  * Content-hash dedup before zstd
+    path:   crates/nest-format/src/encoding/dedup.rs, crates/nest-format/src/writer/payload.rs,
+            crates/nest-format/src/sections/chunk_scalars.rs
+      - Build-time content-hash dedup of identical chunks_canonical (store unique once + a u32
+        back-reference array in SECTION_DEDUP_MAP=0x0B); run on DECOMPRESSED bytes, zstd the
+        unique pool after
+      - Encode 'dedup-then-compress, never compress-then-dedup' as a code-level invariant +
+        regression test; decode re-expands to identical bytes so content_hash and citations are
+        invariant
+      - Add SECTION_CHUNK_SCALARS=0x0D columnar pre-filter (lang/byte_len/source_id,
+        low-cardinality enums dictionary-coded) scanned before SIMD scoring, opt-in so it never
+        weakens the exact rerank
+    from:   NixOS/nix, ipfs/kubo, rom1504/img2dataset, activeloopai/deeplake
+    risk:   Inverting the order (compress then dedup) collapses the ratio to near-zero; encode the invariant
+            as a test, and never dedup/CDC the embeddings section (breaks contiguous SIMD layout).
+
+
+--------------------------------------------------------------------------------------------------
+phase Phase 4 - structured docs, graph search, edit + the v2 decision: Extend compress-AND-serve to json/yaml/parquet and whole-repos, add graph search and real-time edit, and only now evaluate the one true v2
+--------------------------------------------------------------------------------------------------
+goal:        Deliver the remaining north-star pillars as additive overlays and gate the single justified v2
+             (BLAKE3 Merkle content_hash) on measured demand.
+
+  * Structured tape + columnar cascade
+    path:   crates/nest-format/src/encoding/structure.rs, crates/nest-python/src/build_fn.rs
+      - Add SECTION_STRUCTURE_TAPE (fixed-stride u64 tape + length-prefixed value blob,
+        simdjson-style) + min-width offset tables + key-interning for json/yaml/parquet,
+        sub-document citable (nest://content_hash/chunk_id#json_pointer)
+      - Per-column DuckDB-style codec cascade (RLE/FOR/delta/dictionary/FSST/bitpack) chosen by a
+        deterministic Analyze pass; byte-shuffle+zstd on cold numeric planes
+      - Canonicalize PDF to deterministic text before chunking (build-time, Python); store media
+        verbatim by content_hash with a CDC chunk index (copy-without-recode)
+    from:   simdjson/simdjson, duckdb/duckdb, Blosc/c-blosc2, activeloopai/deeplake
+    risk:   Any SIMD structural scanner needs input padding so 64-byte loads never read past the mmap; use a
+            portable parity scan (no PCLMULQDQ dependency) for cross-CPU determinism.
+
+  * Graph search + neighbor-context dedup
+    path:   crates/nest-runtime/src/graph/, crates/nest-cli/src/cmd/search_graph.rs
+      - Add SECTION_GRAPH_ADJACENCY=0x0C (CSR chunk-to-chunk semantic/citation/NEXT_CHUNK edges,
+        reusing intpack); bounded-BFS seeded from exact-cosine top-k feeding the SAME exact rerank
+      - Drop chunk_overlap text from chunks_canonical by reconstructing neighbor context from
+        NEXT_CHUNK edges
+      - Add a 9th CLI subcommand search-graph mirroring search-ann
+    from:   vesoft-inc/nebula, neo4j/neo4j-graphrag-python, FalkorDB/FalkorDB, run-llama/llama_index
+    risk:   Do not vendor SSPL/GPL graph engines; clean-room the CSR + bounded-BFS from public descriptions.
+            Graph traversal must only generate candidates, never change returned scores.
+
+  * Real-time edit + sovereign tokenizer
+    path:   crates/nest-runtime/src/journal.rs, crates/nest-runtime/src/bm25/tokenize.rs,
+            crates/nest-cli/src/cmd/compact.rs
+      - Add SECTION_EDIT_JOURNAL=0x0F append-only deltas overlaid in memory at open (frozen bytes
+        immutable) + a deterministic compact() re-running ZDICT, re-quantizing, dropping dead
+        chunks, rebuilding indexes to the smallest preset
+      - Add SECTION_TOKENIZER_MODEL=0x0E byte-level subword tokenizer (byte_fallback + reversible
+        markup) closing the CJK/Thai BM25 gap and serving as a token-id text codec
+      - Optional sovereign static embedder (model2vec/POTION) for offline re-embed of queries and
+        edited chunks
+    from:   tidwall/buntdb, google/sentencepiece, openai/tiktoken, MinishLab/model2vec
+    risk:   The edit journal must never mutate frozen bytes and compact must be byte-identical for the same
+            live set; the tokenizer vocab must be frozen and fingerprinted or builds destabilize.
+
+  * v2 evaluation (deferred research lane)
+    path:   crates/nest-format/src/hashing.rs, crates/nest-format/src/sections/merkle_index.rs
+      - Prototype content_hash as a BLAKE3 Merkle root behind a NEST_FORMAT_VERSION=2 gate with v1
+        readers retained, justified only by measured demand for partial/single-chunk citation
+        verification + corpus-level subtree dedup
+      - Ship SECTION_MERKLE_INDEX (chunk-group parent CVs) and SECTION_EVAL_RESULTS
+        (self-certified nDCG/recall per preset) additively FIRST, before any v2 bump
+      - Offer a new additive blake3 algorithm-id for large-blob addressing without touching the v1
+        default
+    from:   BLAKE3-team/BLAKE3, RustCrypto/hashes, tigerbeetle/tigerbeetle
+    risk:   A v2 bump changes the citation identity anchor; defer until additive merkle_index proves demand,
+            and retain v1 readers forever.
+
+
+risks
+==================================================================================================
+  - CONTRACT INTEGRITY (highest): score_subset (search.rs:84-121) reranks against the SAME lossy
+    stored dtype, so 'returned score is real cosine' is already only 'real cosine at stored
+    precision' for quantized presets. Shipping int4/RaBitQ/PQ without the SECTION_EMBEDDINGS_FP
+    rerank source turns the headline guarantee into a half-truth - Phase 0 MUST land the fp rerank
+    source before any sub-int8 preset.
+  - IN-PLACE-SCORING RAM LEAK: materialize_f32_vectors (materialize.rs:32-41) expands every dtype
+    to n*dim*4 f32 whenever HNSW is attached (mmap_file.rs:113), so a 4-bit codec halves disk but
+    keeps a dense f32 copy in RAM on exactly the tiny/hybrid presets that need it. The ANN
+    distance path must score packed blocks (or keep f16) or the compression win is paid back in
+    memory - a Phase-0 blocker, not a Phase-3 detail.
+  - DETERMINISM: every seeded/iterative quantizer (FWHT/FHT rotation, PCA, RaBitQ rotation,
+    FastCDC mask, ZDICT, k-means) must be a pure seeded fixed-iteration stable-tie-break function
+    or 'same chunks + same model fingerprint => byte-identical file' breaks. Float horizontal-sum
+    is non-associative (FMA-vs-mul/add can flip a sign near zero), so compute build-time codes
+    backend-independently and verify byte-identical output across two builds AND across SIMD
+    backends per codec; do NOT adopt calibration that depends on a calibration corpus.
+  - CODEC/DEDUP ORDERING is load-bearing: dedup and CDC MUST run on DECOMPRESSED bytes with
+    compression applied per unique block AFTER, or the dedup ratio collapses to near-zero. Encode
+    this as a code-level invariant + regression test, not a comment.
+  - NEVER compress/dedup/shuffle the embeddings section with zstd/CDC: they are scored from mmap
+    on the SIMD hot path; only fixed-stride quantization codecs are legal there (the only safe
+    shuffle target is the int8 SCALE array, never the i8 bodies). Gate non-embedding encodings to
+    reject the embeddings section explicitly.
+  - content_hash / citation stability: content_hash hashes DECODED canonical bytes, so
+    dedup/intpack/frontcode codecs MUST decode byte-identically or every nest:// citation breaks;
+    quantized embeddings already make content_hash encoding-dependent for that section, which is
+    documented and accepted - keep the canonical six the stable anchor and never claim
+    cross-precision citation stability.
+  - SCOPE / LINE-CAP / SOLO-AUTHOR REALITY: <=300 lines/file (333 hard), single-responsibility,
+    edition-2024, never-panic typed thiserror including on malformed/truncated mmap bytes. Split
+    every codec (pack/unpack/kernel/select) and do the SIMD functable refactor BEFORE multiplying
+    dtypes; sequence the high-ROI dict+bitpack+int8 wins first and keep the FSE/tANS entropy
+    stage, graph engine, json tape, and edit journal deferrable.
+  - LICENSE CONTAMINATION: clean-room from format descriptions/papers - TurboPFor (GPL),
+    VectorChord/sqlite-vector (AGPL/ELv2), Neo4j/GDS/memgraph/FalkorDB/blazegraph (GPL/BSL/SSPL),
+    nightly portable_simd/packed_simd ports. Reimplement on nest's stable AVX2/NEON/scalar
+    dispatcher; the algorithms (RaBitQ/PFOR/FOR/front-coding/CDC) are public, the engines are not.
+    License-vet every demo dataset (FEVER/TabFact CC BY-SA, FakeNewsNet academic-only) before
+    shipping it in a .nest.
+  - RECALL CLIFFS + CJK/THAI: 1-bit excels at high dim and can fail at low dim - validate
+    recall@10 on the actual PT-BR demo model before defaulting any nano preset, keep int8/RQ the
+    safe default, and never ship a 1-bit preset without bm25 (and the tokenizer fix) as a recall
+    backstop; aggressive vector quantization makes the lexical path more load-bearing.
+  - MTEB HARNESS NEEDS QRELS the PT-BR demo lacks; the recall-vs-exact-f32 overlap metric works
+    with zero labels as the interim, but real nDCG/MRR needs a seeded synthetic or hand-labeled
+    qrels set or the numbers are vacuous - budget for building it before claiming quality
+    non-regression.
+
+quick wins
+==================================================================================================
+  - Replace hardcoded zstd level-19 (zstd_codec.rs:10) with level/LDM params and bump to level 22
+    + long-distance-matching for large payloads - one-time build cost, level-independent decode,
+    no format change.
+  - Store chunk_ids as 32 raw SHA-256 bytes instead of the 71-byte 'sha256:<64 hex>' ascii (~2.2x
+    on that section, content_hash invariant, single roundtrip test) - highest size/effort ratio in
+    the project.
+  - Add int8 scale_kind=1 block-scaled int8 (one f16 scale per 32-dim block) reusing the float16
+    codec: recovers per-vector-outlier recall at ~same size, NO new encoding id and NO version
+    bump because the scale_kind field already exists at int8.rs:18 and parse() already rejects
+    unknown kinds.
+  - 1-byte log-quantized BM25 doc_lengths (replace raw u32) - 4x on the doc-length array, absorbed
+    by the exact rerank, bump only BM25_PAYLOAD_VERSION.
+  - Add the per-codec roundtrip+content_hash-equality test template now (mirrors the existing
+    zstd_roundtrip_preserves_bytes test) so every later codec ships behind a hard merge gate.
+  - Enable clap's suggestions feature for Jaro did_you_mean over the 8 subcommand names and real
+    chunk_ids - error-branch only, zero hot-path cost, pure ergonomics.
+  - Add a u32 offset table at the head of chunk_ids/canonical/spans so cite/materialize reach
+    chunk N in O(1) off mmap instead of the current O(n) length-prefixed scan -
+    compression-neutral but unblocks serving large compressed corpora.
+  - Add an F16C tier to the AVX2 f16 dot path (vcvtph2ps) so the compressed/tiny f16 preset stops
+    falling back to scalar on x86 (~25 lines, parity test already exists).
+  - Replace query.extract::<Vec<f32>>() (nest_file.rs:23) with a zero-copy PyBuffer<f32> borrow +
+    Python::detach - removes a per-search heap alloc+memcpy and gives free multi-thread
+    concurrency on the read-only mmap.
+  - Reserve and name encoding ids 4-9 and section ids 0x09-0x10 as constants in layout/mod.rs now
+    (no behavior change) so the additive lanes are claimed and every later PR is a small additive
+    diff.
