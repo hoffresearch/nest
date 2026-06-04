@@ -1,0 +1,82 @@
+==============================================================================================
+TASK #11 :: trained dict + fsst + block/rotational int8 + micro preset
+phase: phase 2 (post-gate)   layer: nest
+status:  [ ] todo    [ ] doing    [ ] done
+==============================================================================================
+
+self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
+files listed before coding. do not summarize, do not skip. add a [ ] if something
+is missing. never skip silently.
+
+--- goal ---
+land the two biggest near-term ratio levers (trained zstd dict + fsst; block/rotational int8),
+open forge to heavy heterogeneous inputs via the opt-in belt, build the net-new original-byte
+reopen path, and ship catalog mode so the osint-lake vertical becomes possible.
+
+--- depends on ---
+  previous phase merged  + the FLAGSHIP-PROVEN GATE
+
+--- READ THESE COMPLETE FILES FIRST ---
+[ ] doc/plan/tasks/next/13-trained-shared-zstd-dictionary-fsst-zstd-level-l.txt
+[ ] doc/plan/tasks/next/14-block-scaled-rotational-int8-scale-kind-1-no-new.txt
+[ ] doc/plan/master-plan/02-format.txt
+[ ] doc/plan/master-plan/03-roadmap.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and the current code you will change:)
+[ ] crates/nest-format/src/encoding/zstd_dict.rs
+[ ] crates/nest-format/src/encoding/fsst.rs
+[ ] crates/nest-format/src/encoding/int8.rs
+[ ] crates/nest-format/src/encoding/fwht.rs
+
+--- OWNS THESE CODE FILES (no parallel task edits them) ---
+  crates/nest-format/src/encoding/zstd_dict.rs
+  crates/nest-format/src/encoding/fsst.rs
+  crates/nest-format/src/encoding/int8.rs
+  crates/nest-format/src/encoding/fwht.rs
+
+--- STEPS (check each) ---
+[ ] trained shared zstd dictionary(0x0A) + fsst(9) + zstd level/ldm knobs (sorted samples,
+    pinned zstd version for reproducibility)
+[ ] int8 scale_kind=1 block-scaled + seeded-FWHT rotational int8 (~0.99 recall at 4x, no new
+    id), rotation computed backend-independently at build time for cross-cpu determinism
+[ ] matryoshka prefix truncation + micro preset below tiny 0.283 with measured recall, ratio
+    reported net of fp where sub-int8
+
+--- draws from ---
+facebook/zstd, ggml-org/ggml, weaviate/recipes, QwenLM/Qwen3-Embedding
+
+--- watch out ---
+  ZDICT must be fed sorted samples and pinned to a zstd version or reproducible builds break;
+  fwht rotation determinism hinges on identical float ops - compute backend-independently at
+  build time.
+
+--- NEST RULES (check each) ---
+[ ] edition 2024; never panic in lib (typed thiserror). FORGE heavy/non-deterministic work
+    stays OUT of the sovereign crates/ workspace.
+[ ] format v1 FROZEN + ADDITIVE: no NEST_FORMAT_VERSION bump. use reserved encoding ids 4-9 /
+    section ids 0x09+.
+[ ] content_hash over DECODED bytes: codecs decode byte-identically so nest:// citations stay
+    stable.
+[ ] never zstd/dedup/shuffle the embeddings section (mmap SIMD hot path); only fixed-stride
+    quantization there.
+[ ] deterministic: the .nest build anchor is canonical extracted text + model fingerprint,
+    verify byte-identical across two builds.
+[ ] <=300 lines per rust src file; docs lowercase, no emoji, no em-dash. feature branch off
+    main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace ; cargo test --workspace (+ roundtrip+content_hash test
+    for new codecs)
+[ ] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if format/runtime/python changed ; ./scripts/release_check.sh
+    passes
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ____  after: ____
+  recall@10   before: ____  after: ____
+
+--- MERGE ---
+[ ] commit on branch feat/p2-11-trained-dict-fsst-block-rotational-int8-micro-
+[ ] gate green -> merge, mark done in plan/kanban.txt

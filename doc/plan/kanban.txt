@@ -1,185 +1,300 @@
-================================================================================================
-nest build board
-now / next / later / research
-================================================================================================
+==============================================================================================
+nest build board v2
+now / next / gate / later / research
+==============================================================================================
 
-see README.txt for the full map
+tagged by layer (forge/nest/lens/cross)
 
-################################################################################################
-# NOW  (4 cards)
-################################################################################################
+##############################################################################################
+# NOW  (9 cards)
+##############################################################################################
 
-[ ] Land SECTION_EMBEDDINGS_FP=0x09 rerank source + make score_subset use it   (CRITICAL)
-    The gate for all sub-int8 work. score_subset (search.rs:84-121) reranks against the SAME
-    lossy stored dtype today, so below int8 'real cosine' silently becomes 'real cosine at
-    stored precision'. Reserve an optional f16/f32 rerank-source section (excluded from
-    content_hash) and rerank survivors against it when present. Additive, no version bump.
+[ ] land SECTION_EMBEDDINGS_FP=0x09 + refactor score_subset to a rerank-source handle
+    (CRITICAL/nest)
+    the gate for ALL sub-int8 AND all per-space sub-int8 work. score_subset today
+    hard-dispatches on a single self.dtype and the single 0x04 section (search.rs:84-121);
+    refactor it to take an explicit rerank-source handle (fp slab when present) AND be ready
+    for per-space routing BEFORE any per-space/sub-int8/graph path lands. additive, no version
+    bump.
     refs: crates/nest-runtime/src/search.rs, crates/nest-format/src/sections/contract.rs,
           gaoj0017/RaBitQ
 
-[ ] Fix materialize-to-f32 RAM leak in the ANN distance path   (CRITICAL)
-    materialize_f32_vectors (materialize.rs:32-41) expands EVERY dtype to n*dim*4 f32 whenever
-    HNSW is attached (mmap_file.rs:113), so int8/int4 halve disk but keep a dense f32 copy in
-    RAM on exactly the tiny/hybrid presets that need it. Teach the ANN path to score packed int8
-    blocks (or keep f16). Pure runtime fix, no format change.
+[ ] ONE parameterized rerank-honesty contract test (gates the release check)   (CRITICAL/nest)
+    single test over every search entry point (ann/hybrid/graph/space/cross) asserting
+    returned_score == score_subset(union) byte-for-byte and recall is NaN for every non-exact
+    path. a new search verb without this test is a release-check FAILURE. the cheapest
+    insurance for the core honesty claim; must exist BEFORE any new search path.
+    refs: crates/nest-runtime/src/search.rs, crates/nest-cli/src/cmd/benchmark.rs,
+          gaoj0017/RaBitQ
+
+[ ] fix materialize-to-f32 ram leak in the ann distance path   (CRITICAL/nest)
+    materialize_f32_vectors expands every dtype to n*dim*4 f32 when hnsw is attached. teach
+    the ann path to score packed int8 blocks. pure runtime fix; carried per-space when
+    multimodal lands.
     refs: crates/nest-runtime/src/materialize.rs, crates/nest-runtime/src/ann/mod.rs,
           microsoft/onnxruntime
 
-[ ] Codec registry refactor + reserve encoding ids 4-9 / section ids 0x09-0x10   (HIGH)
-    Turn decode_payload (encoding/mod.rs:44-55) into a visitor-style registry, one <=300-line
-    module per encoding id; reserve the named constants in layout/mod.rs. Must be byte-identical
-    on existing presets (golden/v01_compat tests). Unblocks every later codec.
+[ ] flagship blocker: vendor a static model2vec/potion default embedder   (CRITICAL/forge)
+    a pip-install flagship that fetches a sentence-transformers model on first use (the
+    current python embed path) VIOLATES offline-by-construction for a new user. vendor a
+    static table as the default: tiny, fully offline, byte-identical-deterministic; support a
+    brought model whose fingerprint is recorded. moved OUT of open-decisions/research INTO a
+    now-blocker.
+    refs: python/forge/embed_default.py, crates/nest-cli/src/main.rs, minishlab/model2vec
+
+[ ] flagship blocker: pick ONE concrete license-clean demo corpus now   (HIGH/forge)
+    every vertical demo is currently 'a synthetic monolith' with no actual corpus chosen. the
+    one-gif flagship demo needs a concrete, vendored, permissively-licensed doc folder picked
+    NOW; it gates the whole go-to-market. cheap and currently absent. never academic-only
+    data.
+    refs: python/forge/demo_corpus/, doc/plan/master-plan/00-vision.txt, run-llama/semtools
+
+[ ] codec registry refactor + reserve ALL reconciled ids in one pass (incl 0x16 overlay)
+    (HIGH/nest)
+    visitor-style registry; reserve encoding 4-9 and section 0x09-0x10 (present) AND pre-claim
+    0x11 GRAPH_NODES / 0x12 GRAPH_EDGE_PROPS / 0x13 GRAPH_ENTITY_MAP / 0x14 BLOB_REFS / 0x15
+    SPACE_TABLE / 0x16 BLOB_SPAN_OVERLAY / 0x20-0x2F slabs / 0x30-0x3F fp, ALL excluded from
+    content_hash, disjoint-bands test. 0x16 REPLACES the illegal spans v1->2 bump. removes the
+    four-pillar 0x11 collision before any feature edits layout.
     refs: crates/nest-format/src/encoding/mod.rs, crates/nest-format/src/layout/mod.rs,
           serde-rs/serde
 
-[ ] Per-codec roundtrip+content_hash-equality test template + MTEB-style recall harness   (HIGH)
-    Every new codec must pass decode==input AND content_hash-stable (mirror
-    zstd_roundtrip_preserves_bytes). Extend benchmark with seeded nDCG/MRR/Recall@k vs exact f32
-    baseline per preset + a byte-identical-build CI check. The safety net that lets later codecs
-    push harder with proof.
-    refs: crates/nest-format/src/encoding/mod.rs, crates/nest-cli/src/cmd/benchmark.rs,
+[ ] manifest additivity guard: new fields Option-only + v01_compat test   (HIGH/nest)
+    Capabilities (manifest/mod.rs:21-40) is non-optional bools with a hand-written Default;
+    adding a required bool is a deserialization + file_hash break sold as byte-identical.
+    enforce: ALL new manifest fields Option<T> skip_serializing_if=is_none, new capability
+    flags in a new Option<CapabilitiesExt> or the flatten extra map, never new required bools.
+    test: old manifest deserializes, new default serializes byte-identical.
+    refs: crates/nest-format/src/manifest/mod.rs, crates/nest-format/src/reader/decode.rs,
+          serde-rs/serde
+
+[ ] per-codec roundtrip+content_hash template + mteb-style recall harness (net-of-fp)
+    (HIGH/nest)
+    every new codec AND every new space/graph/blob/overlay section must pass decode==input and
+    content_hash-stable; seeded recall@k vs exact f32 per preset + byte-identical-build ci
+    check; every sub-int8 RESULT reports the NET-OF-FP ratio (quantized + mandatory fp
+    source), never the bare quantized number.
+    refs: crates/nest-cli/src/cmd/benchmark.rs, crates/nest-format/src/encoding/mod.rs,
           embeddings-benchmark/mteb
 
+[ ] forge-0a: freeze .fci schema + forge-core skeleton (ONE chunker, zero core files)
+    (HIGH/forge)
+    forge-core as a SEPARATE cargo workspace (deps never touch the sovereign core).
+    ChunkRecord mirrors builder.ChunkSpec; EmbeddingRequest carries space+model_fingerprint;
+    Entity/Edge/BlobRef. do NOT duplicate the chunker: the python/forge adapter CALLS
+    builder.chunk_text so there is one authoritative chunker and no drift to reconcile.
+    unblocks real corpora, touches zero rust-core files.
+    refs: forge-core/src/fci/, python/builder.py, doc/research/synthesis/data-pipeline.txt
 
-################################################################################################
-# NEXT  (6 cards)
-################################################################################################
 
-[ ] Shared intpack codec (delta+zigzag+per-128-block bitpack/FOR with O(1) select)   (HIGH)
-    SECTION_ENCODING_INTPACK=4, the reusable primitive for HNSW/BM25/spans. Branch-free scalar
-    decode, never panic on truncated input, O(1) select by bit-offset so spans[i]/neighbor[i]
-    stay fetchable off mmap. Clean-room PFOR exceptions from the FastPFor format description
-    (avoid GPL TurboPFor).
+##############################################################################################
+# NEXT  (7 cards)
+##############################################################################################
+
+[ ] shared intpack codec (delta+zigzag+per-128-block bitpack/FOR, O(1) select)   (HIGH/nest)
+    SECTION_ENCODING_INTPACK=4, the reusable primitive for hnsw/bm25/spans AND graph csr AND
+    space row_index_map AND blob_refs offsets. branch-free decode, never panic on truncated
+    input -> typed thiserror.
     refs: crates/nest-format/src/encoding/intpack.rs, lemire/FastPFor, cruppstahl/libfor
 
-[ ] Re-encode HNSW neighbor ids + BM25 postings with intpack   (HIGH)
-    Sort-per-list + delta+bitpack HNSW neighbor ids (flat uint40, bump HNSW_PAYLOAD_VERSION,
-    identical id set => zero recall change). Delta-gap BM25 doc ids + bitpacked tf + 1-byte
-    log-quantized doc_lengths (bump BM25_PAYLOAD_VERSION). Biggest free shrink of the
-    tiny/hybrid index sections.
+[ ] re-encode hnsw neighbor ids + bm25 postings with intpack   (HIGH/nest)
+    sort-per-list + delta+bitpack hnsw (flat uint40, bump the OPTIONAL hnsw payload version,
+    zero recall change); delta-gap bm25 doc ids + bitpacked tf. biggest free shrink of the
+    tiny/hybrid index sections. spans stays canonical and is NEVER version-bumped.
     refs: crates/nest-runtime/src/ann/codec.rs, crates/nest-runtime/src/bm25/codec.rs,
           apache/lucene
 
-[ ] chunk_ids as 32 raw SHA-256 bytes + spans source_uri dedup + offset tables   (HIGH)
-    Store 32 raw digest bytes not 71-byte ascii (~2.2x, reconstruct sha256:<hex> on decode,
-    content_hash unchanged). Dedup repeated source_uri into a string pool + delta+varint span
-    offsets. Add a u32 offset table so cite/materialize reach chunk N in O(1) instead of an O(n)
-    scan.
+[ ] chunk_ids as 32 raw sha-256 bytes + spans source_uri dedup + offset tables   (HIGH/nest)
+    32 raw digest bytes not 71-byte ascii (~2.2x, content_hash unchanged); dedup source_uri
+    pool + delta+varint span offsets; u32 offset table for O(1) chunk-N reach off mmap.
+    decoded content_hash bytes stay identical so citations are stable.
     refs: crates/nest-format/src/sections/chunk_ids.rs,
           crates/nest-format/src/sections/spans.rs, google/flatbuffers
 
-[ ] Trained shared zstd dictionary + FSST + zstd level/LDM knobs   (HIGH)
-    SECTION_DICTIONARY=0x0A + SECTION_ENCODING_ZSTD_DICT=5 (ZDICT over sorted samples,
-    deterministic) kills cross-chunk redundancy on many-short-similar PT-BR chunks. FSST (id 9)
-    for O(1) single-chunk citation reopen. Replace hardcoded level-19 (zstd_codec.rs:10) with
-    level/LDM params. Headline text ratio lever.
-    refs: crates/nest-format/src/encoding/zstd_dict.rs, crates/nest-format/src/encoding/fsst.rs,
-          facebook/rocksdb
+[ ] G1: graph_adjacency(0x0C) chunk csr + search-graph + drop chunk_overlap   (HIGH/cross)
+    flat csr reusing intpack, bounded-bfs seeded from exact top-k feeding the refactored
+    score_subset handle (recall NaN, score real cosine, covered by the phase-0 parameterized
+    test), kept under the hood as the 9th subcommand. reclaims chunk_overlap via NEXT_CHUNK.
+    EARNS its phase-1 place on compression+retrieval merit; DECOUPLED from the entity graph -
+    landing G1 is not license to start G2/G3.
+    refs: crates/nest-format/src/sections/graph/adjacency.rs,
+          crates/nest-runtime/src/graph/csr.rs, graph-db/vesoft-inc__nebula
 
-[ ] Block-scaled + rotational int8 (scale_kind=1, no new id, no version bump)   (HIGH)
-    One f16 scale per 32-dim block recovers per-vector-outlier loss at the same 4x size; seeded
-    FWHT rotation before quantize pushes recall@10 toward ~0.99. The int8 scale_kind field
-    already exists at int8.rs:18 and parse() rejects unknown kinds, so old readers stay safe.
-    Pair with VNNI/dotprod for bit-determinism.
-    refs: crates/nest-format/src/encoding/int8.rs, ggml-org/ggml, weaviate/recipes
+[ ] flagship: ask + cite (tier-1) + retrieve() + SearchExplain   (HIGH/lens)
+    the FLAGSHIP. ship TWO user-facing verbs ask + cite; keep the existing 8 subcommands under
+    the hood (DEFER verb-collapse + nest-profile crate - churn with no user value pre-users).
+    retrieve() returns cited spans where the returned score IS the exact rerank value; cite is
+    TIER-1 ONLY (stored canonical text + verifying hashes, exactly cite.rs today) and MUST NOT
+    claim original-byte reopen; additive SearchExplain honesty line on ask. needs only phase
+    0-1.
+    refs: crates/nest-cli/src/cmd/ask.rs, crates/nest-cli/src/cmd/cite.rs,
+          python/forge/retrieve.py
 
-[ ] Zero-copy PyBuffer query + maturin cp312-abi3 wheel   (MEDIUM)
-    Replace query.extract::<Vec<f32>>() (nest_file.rs:23) with a PyBuffer<f32> borrow +
-    Python::detach around the read-only mmap search; ship one cp312-abi3 wheel to PyPI. Stops
-    the compression wins being paid back as per-search alloc+memcpy, and closes the install gap.
+[ ] zero-copy PyBuffer query + maturin cp312-abi3 wheel   (MEDIUM/nest)
+    PyBuffer<f32> borrow + Python::detach around the read-only mmap search; ship one wheel.
+    stops compression wins being paid back as per-search alloc+memcpy and closes the install
+    gap for the flagship.
     refs: crates/nest-python/src/nest_file.rs, pyproject.toml, PyO3/pyo3
 
+[ ] forge-0b: normalize + books profile + python adapter + drift lock   (HIGH/forge)
+    deterministic nfc/whitespace normalize; native-rust pdf-text + books.toml; python/forge
+    adapter driving the EXISTING builder.Pipeline and calling builder.chunk_text (one
+    chunker). ci golden test: forge-built == pipeline-built for the same canonical text (locks
+    the single chunker).
+    refs: forge-core/src/normalize/, forge-core/src/extract/pdf_text.rs,
+          python/forge/adapter.py
 
-################################################################################################
-# LATER  (7 cards)
-################################################################################################
 
-[ ] int4 block-64 codec + fused dequant+dot kernel   (MEDIUM)
-    SECTION_ENCODING_INT4=7 (~4.25bpw), split pack/unpack from kernel, fused SQNBitGemm-style
-    kernel that never materializes f32 in RAM, DType::Int4 arm. Gate the preset on the
-    embeddings_fp rerank source being present. Roughly halves embeddings vs int8.
-    refs: crates/nest-format/src/encoding/int4.rs, crates/nest-runtime/src/simd/int4.rs,
-          microsoft/onnxruntime
+##############################################################################################
+# GATE  (1 cards)
+##############################################################################################
 
-[ ] RaBitQ 1-bit codec + popcount kernel + nano preset   (MEDIUM)
-    SECTION_ENCODING_RABITQ=8: seeded FHT rotation + sign bits + ~2 f32 correctors, AND+popcount
-    candidate gen, then exact rerank against embeddings_fp -> real cosine. ~32x. Validate
-    recall@10 on the PT-BR demo model before defaulting; keep int8/RQ the safe default and never
-    ship without bm25 backstop.
-    refs: crates/nest-format/src/encoding/rabitq.rs, crates/nest-runtime/src/simd/popcount.rs,
-          VectorDB-NTU/RaBitQ-Library
+[ ] FLAGSHIP-PROVEN gate (blocks all of later/research)   (CRITICAL/cross)
+    NOTHING in later/research gets code until BOTH: (1) sub-0.1 ratio NET OF the mandatory fp
+    source proven and published on ONE real, named, license-clean corpus with recall@10 held;
+    (2) the agent-native pip package has external users. converts the discipline from 'build
+    everything additively' into 'build the wedge, prove it, earn the rest'. the single most
+    important artifact missing from the draft.
+    refs: doc/plan/master-plan/gate.txt, embeddings-benchmark/mteb,
+          jvm-repo-rebuild/reproducible-central
 
-[ ] Content-hash dedup before zstd + chunk_scalars pre-filter   (MEDIUM)
-    Build-time dedup of identical chunks (SECTION_DEDUP_MAP=0x0B, unique pool + u32 back-ref) on
-    DECOMPRESSED bytes, zstd after - encode the order as a code-level invariant + test.
-    Re-expand to identical bytes so content_hash/citations invariant. Add
-    SECTION_CHUNK_SCALARS=0x0D columnar pre-filter, opt-in.
-    refs: crates/nest-format/src/encoding/dedup.rs,
-          crates/nest-format/src/sections/chunk_scalars.rs, NixOS/nix
 
-[ ] Matryoshka prefix truncation + micro/nano preset ladder   (MEDIUM)
-    Build-time truncate+L2-renorm to mrl_dim, two-pass coarse(prefix)->exact(full) search,
-    multiplicative with quantization. Ship micro (block/RQ-int8) and nano (int4/rabitq) presets
-    below tiny's 0.283 with measured recall.
+##############################################################################################
+# LATER  (9 cards)
+##############################################################################################
+
+[ ] trained shared zstd dictionary + fsst + zstd level/ldm knobs (post-gate)   (HIGH/nest)
+    dictionary(0x0A) + zstd_dict(5) over sorted samples (deterministic, pinned zstd version) +
+    fsst(9) for O(1) single-chunk reopen; replace hardcoded level-19. headline text lever;
+    also serves forge's heterogeneous text inputs unchanged.
+    refs: crates/nest-format/src/encoding/zstd_dict.rs,
+          crates/nest-format/src/encoding/fsst.rs, facebook/zstd
+
+[ ] block-scaled + rotational int8 (scale_kind=1, no new id, no version bump) (post-gate)
+    (HIGH/nest)
+    one f16 scale per 32-dim block + seeded fwht rotation toward ~0.99 recall@10 at 4x; the
+    int8 scale_kind field already exists. compute rotation backend-independently for cross-cpu
+    determinism.
+    refs: crates/nest-format/src/encoding/int8.rs, crates/nest-format/src/encoding/fwht.rs,
+          ggml-org/ggml
+
+[ ] original-byte reopen path + catalog blob_refs(0x14) + 0x16 overlay + .nestpack (post-gate)
+    (MEDIUM/nest)
+    BUILD tier-2 original-byte reopen FIRST (cite today returns stored canonical text only,
+    never opens source_uri - cite.rs:43-62), then blob_refs. catalog blob-relative spans go in
+    the SEPARATE excluded 0x16 overlay keyed by chunk ordinal, NOT a spans v1->2 bump (spans
+    is canonical+content-hashed+required; a v2 there breaks every reader and changes
+    content_hash). cross-mode content_hash-equality test; .nestpack sidecar (magic NPAK)
+    strictly optional; 'verifiable, original unavailable' is a first-class typed state.
+    refs: crates/nest-cli/src/cmd/cite.rs, crates/nest-format/src/sections/blob_refs.rs,
+          content-addressed/ipfs__kubo
+
+[ ] int4 block-64 + rabitq 1-bit + dedup-before-zstd + chunk_scalars (post-gate)
+    (MEDIUM/nest)
+    int4(7) fused dequant+dot + rabitq(8) popcount candidate gen, both gated on the fp rerank
+    source via the score_subset handle -> real cosine; dedup(0x0B) on decompressed bytes
+    before zstd + chunk_scalars(0x0D) pre-filter. RESULT reports NET-OF-FP ratio (rabitq + f16
+    fp ~ roughly 2x, never bare 32x).
+    refs: crates/nest-format/src/encoding/int4.rs, crates/nest-format/src/encoding/rabitq.rs,
+          NixOS/nix
+
+[ ] forge-1: belt subprocess contract + paddleocr/clip/fonttools/stanza + osint/fonts profiles
+    (post-gate)   (MEDIUM/forge)
+    opt-in --belt heavy engines behind a json-over-stdio contract so deps never enter the rust
+    tree; engine_version recorded in provenance; each non-text space carries its own
+    model_fingerprint; cache keyed by (input_hash, engine_version). fail closed on missing
+    engine, never network-fetch.
+    refs: forge-core/src/belt/, python/forge/belt_engines/, openai/CLIP
+
+[ ] G2/G3: entity property graph + graphrag traversal + export api (post-gate)
+    (MEDIUM/cross)
+    graph_nodes(0x11)+graph_edge_props(0x12)+graph_entity_map(0x13), excluded from
+    content_hash; entity-aware bounded-bfs + integer edge-type filter feeding the score_subset
+    handle; versioned export api (node->citation). NO query language, NO planner, NO write
+    path. this is the second product the draft front-loaded; only after the flagship is
+    proven.
+    refs: crates/nest-format/src/sections/graph/nodes.rs,
+          crates/nest-runtime/src/graph/export.rs, semantic-rdf/terminusdb__terminusdb-store
+
+[ ] osint-lake vertical + cosmos.gl/webgl viewer (post-gate)   (MEDIUM/cross)
+    standalone lens/ web project reading the export json, accessibility-first (seeded layout,
+    type-as-color, keyboard, citation-on-click), no socket, svg/png fallback, vendored deps, a
+    check asserts no remote fetch(); lake build/search demo over a synthetic or permissive
+    monolith.
+    refs: lens/src/graph_view.ts, python/tools/demo_lake.py,
+          graph-db/neo4j__neo4j-graphrag-python
+
+[ ] matryoshka prefix truncation + micro/nano preset ladder (post-gate)   (MEDIUM/nest)
+    build-time truncate+L2-renorm to mrl_dim, two-pass coarse->exact, multiplicative with
+    quant; micro/nano presets below tiny's 0.283 with measured recall, ratio net-of-fp where
+    sub-int8.
     refs: crates/nest-python/src/build_fn.rs, QwenLM/Qwen3-Embedding
 
-[ ] CSR graph_adjacency section + search-graph subcommand   (LOW)
-    SECTION_GRAPH_ADJACENCY=0x0C (chunk-to-chunk edges, reusing intpack), bounded-BFS seeded
-    from exact top-k feeding the SAME exact rerank. Lets nest drop chunk_overlap text by
-    reconstructing neighbor context from NEXT_CHUNK edges. Delivers the graph-search pillar.
-    refs: crates/nest-runtime/src/graph/, crates/nest-cli/src/cmd/search_graph.rs,
-          vesoft-inc/nebula
-
-[ ] Byte-level subword tokenizer for CJK/Thai BM25 + text front-end   (LOW)
-    SECTION_TOKENIZER_MODEL=0x0E, byte-level BPE/Unigram + byte_fallback + reversible markup.
-    Closes the documented CJK/Thai BM25 gap (bm25/tokenize.rs word-segmenter) and doubles as a
-    token-id text compression front-end. Vocab frozen + fingerprinted for determinism.
-    refs: crates/nest-runtime/src/bm25/tokenize.rs, google/sentencepiece, openai/tiktoken
-
-[ ] Append-only edit journal + deterministic compact()   (LOW)
-    SECTION_EDIT_JOURNAL=0x0F overlaid in memory at open (frozen bytes immutable) + compact()
-    re-running ZDICT/re-quantize/drop-dead-chunks to the smallest preset. Same live set =>
-    byte-identical output. Delivers real-time edit without breaking single-file/determinism.
-    refs: crates/nest-runtime/src/journal.rs, crates/nest-cli/src/cmd/compact.rs, tidwall/buntdb
+[ ] byte-level subword tokenizer + append-only edit journal (post-gate)   (LOW/nest)
+    tokenizer_model(0x0E) byte-level subword closing CJK/Thai bm25 + doubling as a text
+    front-end; edit_journal(0x0F) overlaid in memory at open + deterministic compact(). vocab
+    frozen+fingerprinted.
+    refs: crates/nest-runtime/src/bm25/tokenize.rs, crates/nest-runtime/src/journal.rs,
+          google/sentencepiece
 
 
-################################################################################################
-# RESEARCH  (5 cards)
-################################################################################################
+##############################################################################################
+# RESEARCH  (7 cards)
+##############################################################################################
 
-[ ] BLAKE3 Merkle-root content_hash (the one true v2)   (LOW)
-    Make content_hash a Merkle root over per-section/per-chunk hashes for O(touched-bytes)
-    partial verification + single-chunk citation proof + corpus-level subtree dedup. Changes the
-    meaning of an existing field, so it MUST be NEST_FORMAT_VERSION=2 with v1 readers retained.
-    Ship SECTION_MERKLE_INDEX + a new additive blake3 algorithm-id FIRST; bump only on measured
-    demand.
-    refs: crates/nest-format/src/hashing.rs, BLAKE3-team/BLAKE3, tigerbeetle/tigerbeetle
+[ ] multimodal: SPACE_TABLE(0x15) + per-space route + per-space quant + atlas verb (post-gate)
+    (MEDIUM/nest)
+    the one genuinely new format capability and the pattern-lover prerequisite. named space
+    sections over 0x15/0x20-0x2F/0x30-0x3F, per-space route feeding the ALREADY-refactored
+    score_subset handle (phase 0) and already covered by the parameterized honesty test,
+    per-space quant gated by per-space fp source, RESULT net-of-fp. open question: named
+    sub-sections vs single tagged pool - prototype both on the .fci.
+    refs: crates/nest-format/src/sections/spaces/, crates/nest-runtime/src/spaces/,
+          vector-db/qdrant__qdrant
 
-[ ] Structured tape (json/yaml/parquet) + per-column codec cascade   (LOW)
-    Fixed-stride u64 tape + length-prefixed value blob (simdjson-style) + min-width offsets +
-    key-interning, sub-document citable. Per-column DuckDB-style Analyze-and-pick cascade.
-    Portable parity scan (no PCLMULQDQ) for cross-CPU determinism. The
-    compress-AND-serve-structured-data lever.
+[ ] pattern-lover instrument vertical (voynich/gematria/unicode/etymology) (post-gate)
+    (LOW/lens)
+    the soul; ships LAST on the proven engine. decide whether symbol/glyph search needs a
+    bespoke symbol embedder or can ride the clip space treating codepoints as images; this
+    decides one new model vs several. permissively-licensed corpus only.
+    refs: python/forge/profiles/pattern.toml, python/tools/demo_pattern.py,
+          embeddings-models/openai__CLIP
+
+[ ] catalog-3: sub-file range references + blob dedup + parquet/warc wiring (post-gate)
+    (LOW/forge)
+    reference parquet row groups / warc records / zip members by whole-blob content-hash +
+    advisory range; dedup identical references; ALL format parsing stays in python forge, the
+    core only stores+reopens byte ranges by hash. the duckdb/parquet-monolith antidote doc.
+    refs: crates/nest-format/src/sections/blob_refs_dedup.rs, python/forge/catalog.py,
+          content-addressed/NixOS__nix
+
+[ ] BLAKE3 Merkle-root content_hash (the one true v2)   (LOW/nest)
+    the ONLY justified format bump, deferred. changes the meaning of the citation anchor so it
+    cannot be additive. ship additive merkle_index + a blake3 algorithm-id for large-blob
+    addressing FIRST; bump only on measured demand for partial/single-chunk verification.
+    nothing in the redesign forces it.
+    refs: crates/nest-format/src/hashing.rs, crates/nest-format/src/sections/merkle_index.rs,
+          BLAKE3-team/BLAKE3
+
+[ ] structured tape (json/yaml/parquet) + per-column codec cascade (post-gate)   (LOW/nest)
+    fixed-stride u64 tape + length-prefixed value blob (simdjson-style), sub-document citable,
+    per-column duckdb-style analyze-and-pick. portable parity scan for cross-cpu determinism.
+    the compress-and-serve-structured-data lever for ml dataset catalogs.
     refs: crates/nest-format/src/encoding/structure.rs, simdjson/simdjson, duckdb/duckdb
 
-[ ] Sovereign in-house FSE/tANS entropy floor over delta-coded postings   (LOW)
-    In-house FSE/tANS + Huff0 (new reserved encoding ids) over delta-coded BM25 postings, HNSW
-    adjacency, term dictionaries - a deterministic table-build entropy floor below generic zstd
-    on skewed residuals; libdeflate-style two-level decode table for mmap-friendly decode.
-    Larger surface, lowest priority.
-    refs: crates/nest-format/src/encoding/fse.rs, Cyan4973/FiniteStateEntropy,
-          ebiggers/libdeflate
+[ ] optional redaction + provenance facet + at-rest encryption (ethics, never gates)
+    (LOW/cross)
+    build-time redaction pass (content_hash over redacted bytes, no new section, distinct
+    redacted corpus), post-rerank provenance facet (score stays real cosine), seal/unseal
+    outer encryption OUTSIDE the frozen container. every feature acts only on the user's own
+    data at their command; no policing, no telemetry.
+    refs: python/forge/redaction.py, crates/nest-cli/src/cmd/seal.rs,
+          content-addressed/NixOS__nix
 
-[ ] PDF/audio/video ingestion + copy-without-recode media payloads   (LOW)
-    Canonicalize PDF to deterministic text before chunking (then it IS the text path), store
-    media verbatim by content_hash with a CDC chunk index (never lossy-re-encode inside the
-    container), CLIP-style L2-normalized media embeddings ride the same quantization ladder.
-    FastCDC content-defined chunking for edit-local rechunking.
-    refs: crates/nest-python/src/build_fn.rs, activeloopai/deeplake, ipfs/kubo
-
-[ ] Algorithm-4 diversity neighbor selection + generational visited set   (LOW)
-    Replace the _simple top-m HNSW neighbor selection (ann/mod.rs:33 flags this as planned) with
-    Malkov-Yashunin Algorithm-4 so recall rises at fixed M, letting tiny/nano presets LOWER M
-    and shrink the index. Route traversal through the SIMD dispatcher and swap the per-query
-    HashSet for a generational buffer.
-    refs: crates/nest-runtime/src/ann/select_neighbors.rs, djc/instant-distance, nmslib/hnswlib
+[ ] sovereign in-house fse/tans entropy floor + algorithm-4 hnsw selection (post-gate)
+    (LOW/nest)
+    fse/tans entropy floor over delta-coded postings/adjacency below generic zstd;
+    malkov-yashunin algorithm-4 neighbor selection so tiny/nano presets lower M and shrink the
+    index. larger surface, lowest priority.
+    refs: crates/nest-format/src/encoding/fse.rs,
+          crates/nest-runtime/src/ann/select_neighbors.rs, Cyan4973/FiniteStateEntropy

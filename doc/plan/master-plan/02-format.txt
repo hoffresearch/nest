@@ -1,37 +1,46 @@
-================================================================================================
-master plan :: format evolution
+==============================================================================================
+nest master plan v2 :: format evolution
 additive within frozen v1
-================================================================================================
+==============================================================================================
 
-part 2 of 5.
+part 02.
 
-v1 STAYS FROZEN AND ADDITIVE for the entire compression roadmap. NEST_FORMAT_VERSION is bumped
-ONLY when an existing field changes meaning. Three additive lanes carry everything, and the
-in-tree machinery already supports all three. LANE A - NEW WIRE ENCODINGS in reserved 4-255
-(raw=0/zstd=1/float16=2/int8=3 occupied): intpack(4), zstd_dict(5), frontcode(6), int4(7),
-rabitq(8), fsst(9), with shuffle+zstd and tokenized reserved beyond. The existing decode_payload
-default arm (encoding/mod.rs:50) already rejects unknown ids with UnsupportedSectionEncoding, so
-an old runtime fails closed and a new runtime dispatches by id - additive by construction.
-content_hash hashes DECODED canonical-six bytes, so any codec that round-trips bit-exactly
-yields the SAME content_hash (enforce with a roundtrip+hash-equality test per codec, mirroring
-the existing zstd_roundtrip_preserves_bytes test); only embeddings are precision-dependent,
-which is already documented and accepted. LANE B - NEW OPTIONAL SECTIONS at 0x09+ (0x01-0x08
-occupied), EXCLUDED from content_hash by the existing spec (layout/mod.rs:101-107) so adding
-them never invalidates citations: embeddings_fp(0x09, the f16/f32 rerank source that gates
-sub-int8), dictionary(0x0A), dedup_map(0x0B), graph_adjacency(0x0C), chunk_scalars(0x0D),
-tokenizer_model(0x0E), edit_journal(0x0F), repro_manifest(0x10), and reserved
-merkle_index/eval_results beyond. LANE C - PER-PAYLOAD VERSION BUMPS internal to an
-already-defined section: INT8 scale_kind=1 (the field already exists at int8.rs:18 and parse()
-already rejects unknown kinds, so old readers stay safe), HNSW_PAYLOAD_VERSION 1->2,
-BM25_PAYLOAD_VERSION 1->2 - never NEST_FORMAT_VERSION. HARDENING that stays additive: add a
-skippable-OPTIONAL vs unskippable-REQUIRED flag bit on SectionEntry (a reserved field, no layout
-change) so old runtimes serve unknown optional sections and error cleanly on unknown required
-ones; verify the 64-byte embeddings alignment at reader open (SECTION_ALIGNMENT=64 is declared
-but not verified). THE ONE TRUE v2 (NEST_FORMAT_VERSION=2, deferred to its own research lane,
-justified ONLY by measured demand for partial/single-chunk citation verification + corpus-level
-subtree dedup): make content_hash a BLAKE3 Merkle ROOT over per-section/per-chunk hashes instead
-of a flat SHA-256 over concatenated canonical-six bytes. This CHANGES the meaning of the
-existing content_hash field (the citation identity anchor), so it cannot be additive - it must
-be v2 with v1 readers retained. Until then SHA-256 over decoded canonical-six stays frozen and a
-NEW additive blake3 algorithm-id can be offered for large-blob addressing without touching the
-v1 default.
+all additive within frozen v1, no NEST_FORMAT_VERSION bump, AND no payload-version bump on any
+canonical content-hashed section (the draft's spans v1->2 was a breaking change smuggled past
+the additive guard and is removed here). the reserved 0x09+ lanes plus a single RECONCILED
+disjoint section-id map (the four pillars each independently proposed 0x11; this resolves the
+collision once). LANE A wire encodings 4-9 unchanged
+(intpack/zstd_dict/frontcode/int4/rabitq/fsst); multimodal needs NO new encoding id (a space
+declares its own existing dtype). LANE B optional sections, all EXCLUDED from content_hash so
+they never invalidate a nest:// citation: 0x09-0x10 already reserved (embeddings_fp,
+dictionary, dedup_map, graph_adjacency=0x0C, chunk_scalars, tokenizer_model, edit_journal,
+repro_manifest). NEW contiguous reservations past 0x10, ALL excluded from content_hash:
+0x11=GRAPH_NODES (entity table), 0x12=GRAPH_EDGE_PROPS (columnar typed-edge props),
+0x13=GRAPH_ENTITY_MAP (entity-ordinal -> chunk-ordinal mention csr), 0x14=BLOB_REFS (catalog
+content-hash reference table), 0x15=SPACE_TABLE (the multimodal space registry),
+0x16=BLOB_SPAN_OVERLAY (NEW: catalog blob-relative span info keyed by chunk ordinal, REPLACING
+the illegal spans v1->2 bump; an optional excluded section so self_contained and catalog twins
+keep the SAME content_hash automatically and old readers still open the file). PER-SPACE
+VECTOR BANDS: 0x20-0x2F = SPACE_EMBEDDINGS (one fixed-stride 64-byte-aligned slab per non-text
+space, NEVER zstd), 0x30-0x3F = SPACE_EMBEDDINGS_FP (the matching per-space fp rerank source).
+the v1 required embeddings(0x04) stays canonical space[0]=text and stays IN content_hash;
+every space/graph/blob/overlay section is excluded. CANONICAL SECTIONS (0x01-0x06) ARE NEVER
+VERSION-BUMPED: chunks_original_spans stays v1 byte-identical; catalog span info lives in the
+separate excluded 0x16 overlay, never in 0x03. MANIFEST ADDITIVITY (the second smuggled break,
+fixed): the manifest is covered by file_hash and is JCS-canonical; ALL new manifest fields
+(spaces, storage_mode, every new capability) MUST be Option<T> with
+skip_serializing_if=is_none AND defaulted on read. the existing Capabilities struct is plain
+non-optional bools with a hand-written Default, so new capability flags
+(supports_multimodal/graph_present/graph_entities_present/supports_catalog) go into a new
+Option<CapabilitiesExt> (skip_serializing_if=is_none) or the flattened extra map, NEVER as new
+required bool fields on Capabilities; a v01_compat test asserts an old manifest still
+deserializes and a new default-valued manifest serializes byte-identically to the old one.
+storage_mode defaults to self_contained so existing files stay byte-identical. the .nestpack
+sidecar is a SEPARATE file format (magic NPAK) so it cannot collide with .nest layout. the
+.fci forge intermediate is a forge artifact, not a .nest section, versioned independently. a
+test asserts all reserved bands (0x01-0x08, 0x09-0x10, 0x11-0x16, 0x20-0x2F, 0x30-0x3F) are
+disjoint. THE ONE TRUE v2 stays deferred and is the ONLY justified bump: content_hash as a
+BLAKE3 Merkle root, justified only by measured demand for partial/single-chunk citation
+verification + subtree dedup, because it changes the meaning of the citation-anchor field.
+nothing in this redesign requires it; ship additive merkle_index + a blake3 algorithm-id
+first.
