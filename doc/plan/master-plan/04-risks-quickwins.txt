@@ -1,86 +1,115 @@
-================================================================================================
-master plan :: risks + quick wins
-================================================================================================
+==============================================================================================
+nest master plan v2 :: risks + quick wins
+==============================================================================================
 
-part 4 of 5.
+part 04.
 
 risks
-------------------------------------------------------------------------------------------------
-  - CONTRACT INTEGRITY (highest): score_subset (search.rs:84-121) reranks against the SAME lossy
-    stored dtype, so 'returned score is real cosine' is already only 'real cosine at stored
-    precision' for quantized presets. Shipping int4/RaBitQ/PQ without the SECTION_EMBEDDINGS_FP
-    rerank source turns the headline guarantee into a half-truth - Phase 0 MUST land the fp
-    rerank source before any sub-int8 preset.
-  - IN-PLACE-SCORING RAM LEAK: materialize_f32_vectors (materialize.rs:32-41) expands every
-    dtype to n*dim*4 f32 whenever HNSW is attached (mmap_file.rs:113), so a 4-bit codec halves
-    disk but keeps a dense f32 copy in RAM on exactly the tiny/hybrid presets that need it. The
-    ANN distance path must score packed blocks (or keep f16) or the compression win is paid back
-    in memory - a Phase-0 blocker, not a Phase-3 detail.
-  - DETERMINISM: every seeded/iterative quantizer (FWHT/FHT rotation, PCA, RaBitQ rotation,
-    FastCDC mask, ZDICT, k-means) must be a pure seeded fixed-iteration stable-tie-break
-    function or 'same chunks + same model fingerprint => byte-identical file' breaks. Float
-    horizontal-sum is non-associative (FMA-vs-mul/add can flip a sign near zero), so compute
-    build-time codes backend-independently and verify byte-identical output across two builds
-    AND across SIMD backends per codec; do NOT adopt calibration that depends on a calibration
-    corpus.
-  - CODEC/DEDUP ORDERING is load-bearing: dedup and CDC MUST run on DECOMPRESSED bytes with
-    compression applied per unique block AFTER, or the dedup ratio collapses to near-zero.
-    Encode this as a code-level invariant + regression test, not a comment.
-  - NEVER compress/dedup/shuffle the embeddings section with zstd/CDC: they are scored from mmap
-    on the SIMD hot path; only fixed-stride quantization codecs are legal there (the only safe
-    shuffle target is the int8 SCALE array, never the i8 bodies). Gate non-embedding encodings
-    to reject the embeddings section explicitly.
-  - content_hash / citation stability: content_hash hashes DECODED canonical bytes, so
-    dedup/intpack/frontcode codecs MUST decode byte-identically or every nest:// citation
-    breaks; quantized embeddings already make content_hash encoding-dependent for that section,
-    which is documented and accepted - keep the canonical six the stable anchor and never claim
-    cross-precision citation stability.
-  - SCOPE / LINE-CAP / SOLO-AUTHOR REALITY: <=300 lines/file (333 hard), single-responsibility,
-    edition-2024, never-panic typed thiserror including on malformed/truncated mmap bytes. Split
-    every codec (pack/unpack/kernel/select) and do the SIMD functable refactor BEFORE
-    multiplying dtypes; sequence the high-ROI dict+bitpack+int8 wins first and keep the FSE/tANS
-    entropy stage, graph engine, json tape, and edit journal deferrable.
-  - LICENSE CONTAMINATION: clean-room from format descriptions/papers - TurboPFor (GPL),
-    VectorChord/sqlite-vector (AGPL/ELv2), Neo4j/GDS/memgraph/FalkorDB/blazegraph
-    (GPL/BSL/SSPL), nightly portable_simd/packed_simd ports. Reimplement on nest's stable
-    AVX2/NEON/scalar dispatcher; the algorithms (RaBitQ/PFOR/FOR/front-coding/CDC) are public,
-    the engines are not. License-vet every demo dataset (FEVER/TabFact CC BY-SA, FakeNewsNet
-    academic-only) before shipping it in a .nest.
-  - RECALL CLIFFS + CJK/THAI: 1-bit excels at high dim and can fail at low dim - validate
-    recall@10 on the actual PT-BR demo model before defaulting any nano preset, keep int8/RQ the
-    safe default, and never ship a 1-bit preset without bm25 (and the tokenizer fix) as a recall
-    backstop; aggressive vector quantization makes the lexical path more load-bearing.
-  - MTEB HARNESS NEEDS QRELS the PT-BR demo lacks; the recall-vs-exact-f32 overlap metric works
-    with zero labels as the interim, but real nDCG/MRR needs a seeded synthetic or hand-labeled
-    qrels set or the numbers are vacuous - budget for building it before claiming quality
-    non-regression.
+----------------------------------------------------------------------------------------------
+  - the 'ten mediocre products' trap is the existential risk and the draft did not actually
+    enforce its own discipline. mitigation is now structural AND sequenced: a vertical is a
+    forge profile (toml) + a lens verb alias + a demo corpus, enforced by a test that the
+    profile layer produces byte-identical files; AND a hard FLAGSHIP-PROVEN gate blocks all of
+    catalog/entity-graph/multimodal/viewer code until the headline number is proven on one
+    real corpus and the flagship has external users. if a wedge needs a new crate, a required
+    section, or a format-version bump, it is wrong by construction.
+  - ADDITIVE-V1 BREACH #1 (fixed): the draft's CHUNKS_ORIGINAL_SPANS v1->2 bump is a breaking
+    change to a canonical, content-hashed, REQUIRED section sold as additive. read_prefix
+    (codec.rs:98-103) rejects any version != 1, and spans is in CANONICAL_SECTIONS so a v2
+    layout changes the decoded bytes and thus content_hash for the same corpus. fix:
+    catalog/blob-relative span info lives in a SEPARATE excluded
+    SECTION_BLOB_SPAN_OVERLAY=0x16 keyed by chunk ordinal; spans stays v1 byte-identical;
+    self_contained and catalog twins keep the SAME content_hash; old readers still open the
+    file.
+  - ADDITIVE-V1 BREACH #2 (fixed): the draft adds capability flags to the manifest 'so
+    existing files are byte-identical', but Capabilities (manifest/mod.rs:21-40) is plain
+    non-optional bools with a hand-written Default, so a new required bool is a
+    deserialization + file_hash break for every existing file. fix: ALL new manifest fields
+    Option<T> skip_serializing_if=is_none and defaulted on read; new capability flags go in
+    Option<CapabilitiesExt> or the flatten extra map, never new required bools; a v01_compat
+    test asserts old manifests still deserialize and a new default serializes byte-identical.
+  - CITATION GUARANTEE CONFLATION (fixed): the draft claimed citations 'reopen exact byte
+    spans' but cite (cite.rs:43-62) returns the stored canonical text and prints source_uri as
+    a string only - it never opens the original file. split into tier-1 (canonical-span
+    reopen, exists, all the flagship needs) and tier-2 (original-byte reopen + blob-digest
+    verify, NET-NEW, scheduled as its own card inside catalog mode). the flagship work-order
+    claims ONLY tier-1.
+  - the candidate-generator contract can leak: a graph edge weight, a graphrag relevance, or a
+    per-space ann score could surface as the returned score. score_subset today
+    hard-dispatches on a single dtype and the single 0x04 section, so adding
+    search_graph/search_space/search_cross without refactoring it would weaken the gate.
+    mitigation: refactor score_subset to an explicit rerank-source handle in phase 0, and a
+    SINGLE parameterized contract test (over ann/hybrid/graph/space/cross) asserts
+    returned_score == score_subset(union) byte-for-byte and recall is NaN, gating the release
+    check before any new path lands.
+  - sub-int8 anywhere without a per-section fp rerank source silently lies about cosine, AND
+    the headline ratio is dishonest without counting the fp source. mitigation: the writer
+    rejects a sub-int8 section/space with no fp source, re-checked at open; the --disclose
+    explain line states whether the score is full-precision; and every sub-int8 RESULT reports
+    the NET-OF-FP ratio (rabitq 1-bit + f16 fp source is roughly 2x, never the bare 32x).
+  - scope front-loading: the draft put the entity property graph (G2/G3) + graphrag traversal
+    + export api + a cosmos.gl/webgl viewer into phases 1-4 of a linear roadmap, which is a
+    second product the flagship does not need. mitigation: only G1 (chunk csr) is pre-gate (it
+    earns its place on compression+retrieval merit and reclaims chunk_overlap); ALL of G2/G3,
+    multimodal spaces, catalog .nestpack, and the viewer are behind the FLAGSHIP-PROVEN gate,
+    and G1 landing is explicitly decoupled from G2/G3 in the plan text.
+  - the determinism boundary is subtle: users expect 'same pdf => same .nest' but the real
+    guarantee is 'same canonical text + same model fingerprint => byte-identical .nest'.
+    mitigation: provenance records extractor+engine+embedder versions and forge plan prints
+    them before any heavy run; the default static embedder makes the common case fully
+    deterministic and offline.
+  - forge-core as a second rust workspace risks chunker drift from builder.chunk_text.
+    mitigation: do NOT duplicate the chunker; the python/forge adapter CALLS
+    builder.chunk_text so there is one authoritative chunker, locked by a golden ci test
+    (duplicate-then-reconcile was the more expensive path the draft chose).
+  - catalog mode and the .nestpack sidecar reintroduce multi-file fragility the single-file
+    thesis exists to kill, and they are post-gate. mitigation: catalog is strictly opt-in, the
+    .nest is fully functional for search/graph/verifiable-citation without the sidecar, and
+    'citation verifiable, original unavailable' is a first-class non-alarming typed (never
+    panicking) state.
+  - UX bloat: the draft's verb-collapse + hidden dev namespace + nest-profile crate + many new
+    verbs net INCREASE surface for a tool with no users. mitigation: the flagship ships
+    exactly ask + cite, keeps the existing 8 subcommands as-is under the hood, and DEFERS the
+    verb-collapse and the nest-profile crate until a second vertical actually needs a second
+    profile.
+  - the lens viewer could pull the project online (cdn cosmos.gl, remote fonts) breaking
+    offline-by-construction, and it is post-gate. mitigation: lens/ stays out of the cargo
+    workspace, vendors deps locally, opens no socket, and a check asserts no remote fetch().
+  - demo/corpus licensing: the most compelling osint/factcheck demos sit on academic-only or
+    no-clear-license data. mitigation: pick ONE concrete permissively-licensed flagship corpus
+    in phase 0; ship only synthetic or permissively-licensed demo corpora, never raw
+    academic-only data.
 
 quick wins
-------------------------------------------------------------------------------------------------
-  - Replace hardcoded zstd level-19 (zstd_codec.rs:10) with level/LDM params and bump to level
-    22 + long-distance-matching for large payloads - one-time build cost, level-independent
-    decode, no format change.
-  - Store chunk_ids as 32 raw SHA-256 bytes instead of the 71-byte 'sha256:<64 hex>' ascii
-    (~2.2x on that section, content_hash invariant, single roundtrip test) - highest size/effort
-    ratio in the project.
-  - Add int8 scale_kind=1 block-scaled int8 (one f16 scale per 32-dim block) reusing the float16
-    codec: recovers per-vector-outlier recall at ~same size, NO new encoding id and NO version
-    bump because the scale_kind field already exists at int8.rs:18 and parse() already rejects
-    unknown kinds.
-  - 1-byte log-quantized BM25 doc_lengths (replace raw u32) - 4x on the doc-length array,
-    absorbed by the exact rerank, bump only BM25_PAYLOAD_VERSION.
-  - Add the per-codec roundtrip+content_hash-equality test template now (mirrors the existing
-    zstd_roundtrip_preserves_bytes test) so every later codec ships behind a hard merge gate.
-  - Enable clap's suggestions feature for Jaro did_you_mean over the 8 subcommand names and real
-    chunk_ids - error-branch only, zero hot-path cost, pure ergonomics.
-  - Add a u32 offset table at the head of chunk_ids/canonical/spans so cite/materialize reach
-    chunk N in O(1) off mmap instead of the current O(n) length-prefixed scan -
-    compression-neutral but unblocks serving large compressed corpora.
-  - Add an F16C tier to the AVX2 f16 dot path (vcvtph2ps) so the compressed/tiny f16 preset
-    stops falling back to scalar on x86 (~25 lines, parity test already exists).
-  - Replace query.extract::<Vec<f32>>() (nest_file.rs:23) with a zero-copy PyBuffer<f32> borrow
-    + Python::detach - removes a per-search heap alloc+memcpy and gives free multi-thread
-    concurrency on the read-only mmap.
-  - Reserve and name encoding ids 4-9 and section ids 0x09-0x10 as constants in layout/mod.rs
-    now (no behavior change) so the additive lanes are claimed and every later PR is a small
-    additive diff.
+----------------------------------------------------------------------------------------------
+  - reserve ALL reconciled section-id bands (0x11-0x16, 0x20-0x2F, 0x30-0x3F) as named
+    constants in the phase-0 codec-registry card with a single disjoint-bands test, before any
+    feature branch edits layout/mod.rs - kills the four-pillar 0x11 collision AND pre-claims
+    the 0x16 overlay that replaces the illegal spans bump, for free.
+  - refactor score_subset to an explicit rerank-source handle and add the ONE parameterized
+    rerank-honesty test during phase 0, so every future search path (graph/space/cross) plugs
+    into a gate that already exists instead of weakening it.
+  - add the additive SearchExplain field to SearchResult during the phase-0 recall harness
+    work, so the --disclose explain honesty line and the agent-native retrieve() provenance
+    both come nearly free later.
+  - decide the default embedder NOW (vendor a static model2vec/potion table): it makes
+    byte-identical builds trivial, keeps the flagship pip-install tiny and fully offline, and
+    removes the first-use network fetch that breaks offline-by-construction - it is a flagship
+    blocker, not research.
+  - pick ONE concrete license-clean demo corpus in phase 0: it is cheap, currently absent, and
+    gates the whole one-gif go-to-market.
+  - keep ONE chunker: have the python/forge adapter call builder.chunk_text rather than
+    duplicate it in forge-core, removing the drift risk by construction instead of by a
+    reconcile test.
+  - pull the chunk-to-chunk csr (G1) into phase 1: it reuses the intpack primitive already
+    being built, delivers named graph-search, and pays for itself by letting nest drop
+    chunk_overlap - while staying decoupled from the entity graph.
+  - ship the agent-native retrieve() + ask + tier-1 cite as soon as phase 0-1 is green - it
+    fuses existing search + tier-1 cite, needs no new format and no original-byte reopen, and
+    is the cheapest provable wedge plus the one-gif demo.
+  - make storage_mode an Option defaulting to self_contained and force all new manifest fields
+    to be Option/skip_serializing_if so existing files stay byte-identical and all
+    golden/v01_compat tests pass untouched.
+  - when the entity graph eventually lands, build the cosmos.gl export and its
+    deterministic-ordering tests early against the EXISTING hnsw level-0 adjacency as a
+    stand-in, so the viewer and a11y surface come up cheaply on already-present data.

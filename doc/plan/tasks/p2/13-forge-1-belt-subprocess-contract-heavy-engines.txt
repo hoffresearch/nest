@@ -1,0 +1,84 @@
+==============================================================================================
+TASK #13 :: forge-1: belt subprocess contract + heavy engines + osint/fonts profiles
+phase: phase 2 (post-gate)   layer: forge
+status:  [ ] todo    [ ] doing    [ ] done
+==============================================================================================
+
+self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
+files listed before coding. do not summarize, do not skip. add a [ ] if something
+is missing. never skip silently.
+
+--- goal ---
+land the two biggest near-term ratio levers (trained zstd dict + fsst; block/rotational int8),
+open forge to heavy heterogeneous inputs via the opt-in belt, build the net-new original-byte
+reopen path, and ship catalog mode so the osint-lake vertical becomes possible.
+
+--- depends on ---
+  previous phase merged  + the FLAGSHIP-PROVEN GATE
+
+--- READ THESE COMPLETE FILES FIRST ---
+[ ] doc/research/genome/embeddings-models/openai__CLIP.txt
+[ ] doc/research/genome/rag-orchestration/run-llama__semtools.txt
+[ ] forge-core/src/fci/mod.rs
+[ ] doc/plan/master-plan/05-forge.txt
+[ ] doc/plan/master-plan/03-roadmap.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and the current code you will change:)
+[ ] forge-core/src/belt/
+[ ] forge-core/src/extract/image_meta.rs
+[ ] forge-core/src/extract/font_glyphs.rs
+[ ] forge-core/src/profile/osint.toml
+[ ] python/forge/belt_engines/
+
+--- OWNS THESE CODE FILES (no parallel task edits them) ---
+  forge-core/src/belt/
+  forge-core/src/extract/image_meta.rs
+  forge-core/src/extract/font_glyphs.rs
+  forge-core/src/profile/osint.toml
+  python/forge/belt_engines/
+
+--- STEPS (check each) ---
+[ ] belt/contract.rs json-over-stdio protocol capturing engine_version into provenance; spawn
+    only on --belt, fail closed on missing engine, never network-fetch; cache belt outputs
+    keyed by (input_hash, engine_version)
+[ ] image_meta/font_glyphs/archive/dataset_rows native handlers; paddleocr/clip/stanza belt
+    engines; each non-text space carries its own model_fingerprint
+[ ] osint.toml (zip/json/sql, ner, optional --redact) + fonts.toml (glyph+symbol spaces)
+
+--- draws from ---
+openai/CLIP, stanfordnlp/stanza, google/sentencepiece, run-llama/semtools
+
+--- watch out ---
+  belt engines are non-deterministic across versions/hardware; the determinism contract is
+  canonical-text-given not raw-file-given. pin+record engine versions, cache belt outputs.
+
+--- NEST RULES (check each) ---
+[ ] edition 2024; never panic in lib (typed thiserror). FORGE heavy/non-deterministic work
+    stays OUT of the sovereign crates/ workspace.
+[ ] format v1 FROZEN + ADDITIVE: no NEST_FORMAT_VERSION bump. use reserved encoding ids 4-9 /
+    section ids 0x09+.
+[ ] content_hash over DECODED bytes: codecs decode byte-identically so nest:// citations stay
+    stable.
+[ ] never zstd/dedup/shuffle the embeddings section (mmap SIMD hot path); only fixed-stride
+    quantization there.
+[ ] deterministic: the .nest build anchor is canonical extracted text + model fingerprint,
+    verify byte-identical across two builds.
+[ ] <=300 lines per rust src file; docs lowercase, no emoji, no em-dash. feature branch off
+    main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace ; cargo test --workspace (+ roundtrip+content_hash test
+    for new codecs)
+[ ] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if format/runtime/python changed ; ./scripts/release_check.sh
+    passes
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ____  after: ____
+  recall@10   before: ____  after: ____
+
+--- MERGE ---
+[ ] commit on branch feat/p2-13-forge-1-belt-subprocess-contract-heavy-engines
+[ ] gate green -> merge, mark done in plan/kanban.txt

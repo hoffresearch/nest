@@ -1,0 +1,369 @@
+==============================================================================================
+nest pillar :: lens: one verb, deep profiles - the consumption surface
+layer: lens
+==============================================================================================
+
+a design doc. the executable steps are in ../tasks/.
+
+thesis
+----------------------------------------------------------------------------------------------
+lens is the consumption surface: search, graph, edit, visualize. the ux problem is real but
+small once stated correctly: nest has hundreds of true knobs (which embedding space to route
+to, ef/candidates, fusion mode, graph hop budget, redaction, catalog blob resolution, preset
+ladder), but a newcomer must type ONE thing and get a cited answer. resolve it with three
+moves, all of which fit the frozen-v1, no-socket, no-panic core and reuse machinery the
+bindings-cli/graph/rag syntheses already prescribe.
+
+(1) COLLAPSE THE VERB SET. today's 8 imperative subcommands (search, search-text, search-ann,
+search-graph, benchmark, stats, inspect, validate, cite) leak the engine's internals as the
+user's mental model: a newcomer should never choose between search/search-text/search-ann.
+replace with FIVE intent verbs: `nest ask` (the one command: text in, cited hits out,
+auto-routes exact/hnsw/hybrid/graph by what the file carries and what the query looks like),
+`nest graph` (traverse + emit subgraph as json/dot/cosmos-json for lens-viz), `nest open`
+(inspect+validate+stats fused into one progressively-disclosed view), `nest cite` (resolve
+nest:// to exact bytes, unchanged), `nest export` (emit hits/subgraph/answer-pack as
+json/jsonl/markdown/dot for agents and viz). the existing
+search-ann/search-text/benchmark/inspect/validate/stats become hidden
+`--mode`/`--explain`/flags or `nest dev` power aliases - kept for tests and power users,
+demoted from the front page. did_you_mean (clap suggestions, deterministic jaro 0.7) over the
+verb set so a wrong verb teaches the right one.
+
+(2) PROFILES CARRY THE GRANULARITY, NOT FLAGS. the hundreds of options live in a declarative
+TOML profile (helm uniform-config-record + deterministic-fold, from bindings-cli synthesis):
+`[route]`, `[rerank]`, `[graph]`, `[fusion]`, `[catalog]`, `[redact]`, `[disclose]` tables,
+each a uniform {enabled, encoding/mode, params} record folded in declaration order. `nest ask
+Q` with no profile uses baked-in sane defaults; `nest ask Q --profile pattern-lover.toml`
+opens the full granularity. profiles are named and shippable (agent.toml, osint.toml,
+pattern-lover.toml = the three verticals). the SAME profile schema drives build (forge) and
+serve (lens), so the model fingerprint and codec ladder a corpus was built with are visible at
+query time and a mismatched profile fails closed with a typed error - never a silently-wrong
+score. profile resolution is pure rust, offline, deterministic.
+
+(3) PROGRESSIVE DISCLOSURE IS A FIRST-CLASS OUTPUT MODE, not a doc. every verb takes
+`--disclose <level>` (answer | hits | explain | trace), default `answer` for `ask` and `hits`
+for graph/export. `answer` prints the cited text + nest:// citations and nothing else (the
+newcomer + the agent both want this). `explain` adds the route taken, candidate counts per
+path, fusion weights, rerank source (real-cosine vs stored-precision), recall estimate.
+`trace` adds per-section byte/latency accounting (folds in today's benchmark + stats). this is
+the dial that turns one surface into a beginner tool AND a power instrument without a second
+binary.
+
+accessibility is the design driver, not a checkbox. the audience that thinks in images/graphs
+(gifted, autistic, adhd) gets: graph-first output by default for `graph`/`export`
+(cosmos.gl/webgl json the lens-viz renders, never in the rust core), low-cognitive-load text
+output (one answer, sources beneath, no wall of fields unless `--disclose explain`), stable
+deterministic ordering so the same query always lays out the same (re-find-ability), and
+color-independent / screen-reader-clean plain output (no emoji, no color-only signal - already
+a repo rule). cli-now is the full engine; gui-later is a thin webview over `nest export
+--format cosmos-json` and the json `--disclose` envelopes, so the gui never re-implements the
+engine and never opens a socket (it reads the same local files lens-cli reads). flagship
+vertical: the AGENT-NATIVE knowledge file, because `nest ask --disclose answer --format jsonl`
+is the smallest, most-demanded, most-defensible surface (clean cited offline retrieval vs
+markdown trash) and every other vertical reuses the same `ask`/`graph`/`export` verbs with a
+different profile.
+
+format impact
+----------------------------------------------------------------------------------------------
+none required for LENS-A/B (pure nest-cli + nest-runtime read-side; the verb collapse and
+profile fold add zero bytes to the container). additive-only where lens needs the file to
+advertise capability: (1) the existing provenance/manifest gains a small `[disclose]`/`route`
+capability map - reuse the manifest `extra` field (already additive, no NEST_FORMAT_VERSION
+bump) to record which embedding spaces, which fusion default, and which preset ladder a corpus
+was built with, so `ask` can auto-route without guessing. (2) LENS-C/E consume sections
+defined by OTHER pillars (graph_adjacency 0x0C, named-embedding-spaces in the reserved 0x09+
+range) - lens adds NO new section ids, it only reads them. (3) catalog mode (LENS-D) reads a
+blob-reference table that the nest-layer pillar owns; lens only resolves content_hash ->
+sidecar blob for cite/export. everything lens-side stays within frozen v1, additive,
+citation-stable: a lens that does not understand a new optional section degrades to
+text+exact-cosine, never errors.
+
+architecture changes
+----------------------------------------------------------------------------------------------
+all changes are read-side: nest-cli (the verb surface) and nest-runtime (route resolution +
+explain/trace plumbing), plus one new pure-rust profile crate. NO changes to nest-format's
+frozen container beyond the manifest `extra` capability map (already additive).
+
+new components:
+- crates/nest-cli/src/verb/ : one module per front-page verb (ask.rs, graph.rs, open.rs,
+export.rs; cite.rs stays). main.rs Commands enum collapses from 8 imperative to 5 intent verbs
++ a `dev` subcommand namespace holding the old
+search-ann/search-text/benchmark/inspect/validate as power aliases (keeps the e2e suite
+green). each verb file <=300 lines, single-responsibility.
+- crates/nest-cli/src/verb/disclose.rs : the --disclose answer|hits|explain|trace renderer;
+replaces the monolithic print_result in cmd/util.rs with four leveled renderers over the SAME
+SearchResult, all plain-text + a json envelope twin for gui/agent consumption.
+- crates/nest-cli/src/verb/route.rs : reads the manifest capability map + query shape to pick
+exact|hnsw|hybrid|graph; the auto-router that makes `ask` need zero flags. pure function of
+(manifest, query, profile), deterministic.
+- NEW crate crates/nest-profile/ : the declarative TOML profile schema + deterministic fold
+(serde + a tiny folder, no network, no codegen balloon - respects the <=300-line cap by
+splitting schema.rs / fold.rs / resolve.rs). owns parse+validate+fold; nest-cli depends on it;
+nest-runtime does NOT (keeps the runtime profile-free and minimal). a profile mismatch maps to
+a typed thiserror, surfaced as a clear cli error, never a panic.
+- crates/nest-runtime/src/search.rs : add an `explain: SearchExplain` field to SearchResult
+(route taken, per-path candidate counts, fusion mode/weights, rerank_source enum, recall
+estimate) - additive struct fields, no format change, feeds --disclose explain/trace. this is
+the one runtime change and it is the honesty backbone.
+- crates/nest-cli/Cargo.toml : enable clap `suggestions` (did_you_mean) and feature-gate
+`graph`/`viz-export` behind cargo features so the smallest sovereign binary ships only
+`ask`+`cite` (bindings-cli synthesis: feature-gated crate split).
+- crates/nest-cli/src/verb/complete.rs : clap CompleteEnv re-exec dynamic completion that
+mmaps the .nest (pure rust, NEVER the python embedder) to complete chunk_ids / content_hash /
+profile names / embedding-space names offline.
+
+owns boundaries are clean: the profile crate, the verb modules, and the
+disclose/route/complete files do not overlap with any compression-phase task's OWNS list, so
+lens work parallelizes safely against phases 1-3.
+
+ux
+----------------------------------------------------------------------------------------------
+verbs (5 front-page + 1 power namespace): `nest ask <file> "<query>"` (the one command;
+auto-routes; default --disclose answer); `nest graph <file> --from <chunk_id|query> --hops N`
+(traverse off mmap, emit subgraph; default --disclose hits, --format cosmos-json); `nest open
+<file>` (fused inspect+validate+stats, progressively disclosed); `nest cite <file> nest://...`
+(unchanged, exact bytes); `nest export <file> ...` (emit hits/subgraph/answer-pack as
+json|jsonl|markdown|dot|cosmos-json); `nest dev
+<inspect|validate|benchmark|search-ann|search-text>` (power/test aliases of today's verbs,
+demoted off the front page, kept for the e2e suite).
+
+defaults (sane, deterministic, offline): `ask` with no profile = route by manifest capability
+(exact if only embeddings; hybrid if bm25 present; +graph expand if graph_adjacency present),
+candidates = max(4k, 64) (today's default), fusion = rrf k=60 (today's default), rerank source
+= embeddings_fp if present else stored precision (and `explain` states which - honesty is the
+default), --disclose answer, --format text. zero flags needed for a correct cited answer.
+
+profiles (the deep granularity, opt-in TOML): one schema, helm-style uniform records folded in
+declaration order; shipped named profiles agent.toml / osint.toml / pattern-lover.toml map to
+the three verticals. tables: [route] (modality -> embedding-space name, lexical on/off,
+graph-expand hops), [rerank] (source=fp|stored, k_rerank), [fusion]
+(mode=rrf|relative-score|weighted-sum, weights, min_should_match), [graph] (edge types, hop
+budget, max nodes for viz), [catalog] (sidecar blob store path, resolve=lazy|eager), [redact]
+(optional provenance/access filters - features not gates, per the ethics stance), [disclose]
+(default level + which fields). a profile pins the model fingerprint + codec ladder so build
+and serve agree; mismatch = typed error, never a wrong score.
+
+progressive disclosure (the dial): --disclose answer (cited text + nest:// only) < hits
+(per-hit chunk_id/score/source) < explain (route, candidate counts, fusion weights,
+rerank-source honesty line, recall estimate) < trace (per-section bytes + per-stage latency =
+today's benchmark/stats folded in). newcomer never sees a knob; the obsessed reads trace and
+then edits a profile.
+
+accessibility (the driver): graph-first output for graph/export (cosmos.gl/webgl json the
+lens-viz renders; NEVER graph layout in the rust core); low-cognitive-load default (one
+answer, sources beneath, no field-wall); deterministic stable ordering so the same query lays
+out the same every time (re-find-ability for memory-different users); plain,
+color-independent, screen-reader-clean text (no emoji, no color-only signal - already repo
+rules); did_you_mean teaches the surface instead of erroring. cli-now is the full engine;
+gui-later is a thin local webview over the `export --format cosmos-json` and `--disclose` json
+envelopes - the gui reads the same local files, opens no socket, never re-implements the
+engine. flagship: agent-native knowledge file (`ask --disclose answer --format jsonl`), then
+osint data-lake (`open` + `graph` over giant monoliths), then pattern-lover instrument
+(multimodal `ask` routing text/glyph/symbol spaces).
+
+phase placement
+----------------------------------------------------------------------------------------------
+slots BETWEEN the consolidated compression phases as a thin, mostly-additive lens layer. phase
+0/1 unchanged (compression guardrails + free wins ship first; lens consumes whatever the file
+carries). the lens work is sequenced: LENS-A (verb collapse + disclose levels + did_you_mean)
+lands right after phase 0 task #09 (the recall harness) because it needs the
+SearchResult/explain fields to be stable - priority HIGH, it is the front door every demo
+uses. LENS-B (profile schema + deterministic fold) lands alongside phase 1 task #15 (it shares
+the declarative-profile idea the bindings-cli synthesis attaches to the maturin/wheel work) -
+priority HIGH. LENS-C (graph verb + cosmos-json export) depends on phase 4 task #20 (CSR
+graph_adjacency) - priority MEDIUM, it is the consumption half of the graph pillar. LENS-D
+(catalog-mode resolution in cite/export) depends on the catalog-mode container work from the
+nest-layer pillar - priority MEDIUM. LENS-E (multimodal route table in `ask`) depends on the
+named-embedding-spaces work from the nest-layer pillar - priority MEDIUM. net: two HIGH lens
+tasks slot into phases 0-1 with near-zero format cost, three MEDIUM lens tasks ride the
+graph/catalog/multimodal sections as their consumption surface.
+
+draws from
+----------------------------------------------------------------------------------------------
+clap-rs/clap, weaviate/weaviate-helm, weaviate/weaviate-python-client, weaviate/recipes,
+PyO3/pyo3, duckdb/duckdb, neo4j/neo4j-graphrag-python, FalkorDB/GraphRAG-SDK,
+run-llama/llama_index, langroid/langroid, langgenius/dify, weaviate/Verba, vesoft-inc/nebula
+
+proposed tasks
+----------------------------------------------------------------------------------------------
+* LENS-A: collapse 8 imperative subcommands into 5 intent verbs + 4 --disclose levels +
+  did_you_mean
+    goal:   make the front door ONE command. a newcomer types `nest ask file.nest "question"` and gets
+            cited text + nest:// citations and nothing else; the same SearchResult renders at
+            four disclosure levels (answer|hits|explain|trace) so the power user reads the
+            route, fusion weights, rerank-source honesty line, and per-section byte/latency
+            accounting without a second binary. demote
+            search-ann/search-text/benchmark/inspect/validate/stats under a hidden `nest dev`
+            namespace so the e2e suite stays green while the front page shrinks to
+            ask/graph/open/cite/export.
+    owns:   crates/nest-cli/src/main.rs, crates/nest-cli/src/verb/mod.rs, crates/nest-cli/src/verb/ask.rs,
+            crates/nest-cli/src/verb/open.rs, crates/nest-cli/src/verb/disclose.rs,
+            crates/nest-cli/src/verb/route.rs, crates/nest-cli/src/verb/dev.rs,
+            crates/nest-cli/Cargo.toml, crates/nest-runtime/src/search.rs
+      - add `verb/` module; create ask.rs (text query -> auto-route via route.rs ->
+        SearchResult -> disclose.rs), open.rs (fuse inspect+validate+stats into one
+        progressively-disclosed view), and dev.rs (a `nest dev
+        <inspect|validate|benchmark|search-ann|search-text>` namespace re-exporting today's
+        cmd/* fns verbatim so existing tests keep calling them)
+      - add SearchExplain { route, exact_candidates, ann_candidates, bm25_candidates,
+        fusion_mode, fusion_weights, rerank_source, recall_estimate } as an ADDITIVE field on
+        SearchResult in search.rs; populate it in the existing search/search_ann/search_hybrid
+        paths (no format change, no new bytes)
+      - write disclose.rs with four leveled renderers over one SearchResult: answer (cited
+        text + nest:// only), hits (today's print_result fields), explain (route + candidate
+        counts + fusion + the rerank-source honesty line 'real cosine' vs 'real cosine at
+        stored precision'), trace (explain + per-section bytes from open + query_time_ms
+        breakdown); each renderer also has a json-envelope twin for agents/gui
+      - write route.rs: pure fn (manifest capability, query, optional profile) -> chosen path;
+        default = exact if only embeddings, hybrid if bm25 present, +graph-expand if
+        graph_adjacency present; deterministic, offline, never panics
+      - collapse main.rs Commands enum to Ask/Graph/Open/Cite/Export + Dev(DevCmd); keep clap
+        derive; enable the clap `suggestions` feature and rely on built-in did_you_mean over
+        the 5 verbs
+      - update crates/nest-cli/tests/cli_e2e.rs call sites to the new verbs (and the `nest
+        dev` aliases) so the suite passes; add an e2e asserting `ask --disclose answer` prints
+        ONLY cited text + nest:// and `--disclose explain` prints the rerank-source honesty
+        line
+      - keep every new file <=300 lines, single-responsibility; docs lowercase, no emoji, no
+        em-dash
+    risk:   verb collapse is a breaking cli change that can desync the e2e suite and any scripts; mitigate
+            by keeping every old verb reachable under `nest dev`, landing AFTER phase-0 task
+            #09 so SearchResult/explain fields are stable, and asserting byte-identical search
+            output before/after via the recall harness so the refactor changes only the
+            surface, never a score.
+
+* LENS-B: declarative TOML profile crate + deterministic fold + build/serve fingerprint
+  agreement
+    goal:   move the hundreds of true knobs OFF the cli flag surface and INTO a named, shippable TOML
+            profile so newcomers use zero flags and the obsessed power user opens one file
+            with full granularity. a profile is a helm-style uniform-config-record (tables:
+            route, rerank, fusion, graph, catalog, redact, disclose) folded deterministically
+            in declaration order into a resolved config the verbs consume; the SAME schema
+            drives forge (build) and lens (serve), and a profile pins the model fingerprint +
+            codec ladder so a serve profile that disagrees with the corpus the file was built
+            with fails closed with a typed error instead of returning a silently-wrong score.
+            ship agent.toml / osint.toml / pattern-lover.toml as the three vertical presets.
+    owns:   crates/nest-profile/Cargo.toml, crates/nest-profile/src/lib.rs,
+            crates/nest-profile/src/schema.rs, crates/nest-profile/src/fold.rs,
+            crates/nest-profile/src/resolve.rs, crates/nest-profile/src/error.rs,
+            crates/nest-cli/src/verb/profile_arg.rs, profiles/agent.toml, profiles/osint.toml,
+            profiles/pattern-lover.toml
+      - create crates/nest-profile (workspace member, edition 2024, no network deps):
+        schema.rs = serde structs for
+        [route]/[rerank]/[fusion]/[graph]/[catalog]/[redact]/[disclose] as uniform {enabled,
+        mode, params} records; error.rs = typed thiserror (ProfileParse, UnknownTable,
+        FingerprintMismatch); never panic
+      - fold.rs: deterministic reduce of enabled records in declaration order into a
+        ResolvedProfile (helm ENABLE_MODULES pattern); pure fn, same input -> same
+        ResolvedProfile, no clock/env reads
+      - resolve.rs: merge defaults <- named profile <- explicit cli overrides, in that
+        precedence; expose the resolved model fingerprint + codec ladder so a verb can compare
+        against the corpus manifest
+      - wire profile_arg.rs into ask/graph/export so `--profile NAME.toml` resolves once at
+        start; with no profile, fall back to baked-in defaults (route by capability, rrf k=60,
+        candidates max(4k,64), rerank fp-if-present) so zero flags still yields a correct
+        cited answer
+      - fingerprint gate: if profile.model_fingerprint disagrees with manifest.model_hash,
+        return ProfileMismatch (typed) before any search runs - never silently wrong; mirror
+        the existing model_hash check in search_text.rs
+      - author profiles/agent.toml (disclose=answer, format=jsonl, fusion=rrf, no viz),
+        profiles/osint.toml (catalog.resolve=lazy, graph expand on, disclose=explain),
+        profiles/pattern-lover.toml (route maps text/glyph/symbol embedding-space names,
+        graph-first, disclose=hits) as the three vertical presets
+      - add a roundtrip test (parse->fold->serialize stable) and a determinism test (two folds
+        byte-identical); keep every file <=300 lines
+    risk:   a config compiler easily balloons past the 300-line cap and can introduce nondeterminism
+            (hashmap iteration order, env interpolation); mitigate by splitting
+            schema/fold/resolve, using declaration-order folds only, forbidding any env/clock
+            read in the crate, and keeping nest-runtime profile-free (only nest-cli depends on
+            nest-profile) so the sovereign runtime stays minimal.
+
+* LENS-C: `nest graph` traversal verb + cosmos-json / dot export for the lens-viz (graph-first
+  accessibility)
+    goal:   deliver the consumption half of the graph pillar and the accessibility north star: a
+            graph-first surface for the huge audience that thinks in images/graphs. `nest
+            graph file.nest --from <chunk_id|query> --hops N` walks the CSR graph_adjacency
+            off mmap, seeds from exact-cosine top-k, and emits a bounded subgraph as
+            cosmos.gl/webgl json (the format the future lens-viz renders) or graphviz dot -
+            the graph layout/visualization lives ENTIRELY in lens, NEVER in the rust core.
+            feeds the SAME mandatory exact rerank so node scores are real cosine, never a
+            traversal proxy. deterministic node/edge ordering so the same query lays out the
+            same graph every time (re-find-ability).
+    owns:   crates/nest-cli/src/verb/graph.rs, crates/nest-cli/src/verb/export.rs,
+            crates/nest-cli/src/verb/cosmos.rs, crates/nest-cli/Cargo.toml
+      - implement graph.rs: parse --from (a chunk_id, or a text query that is embedded+top-k'd
+        to seed nodes), --hops N (bounded BFS, default 2), --max-nodes (viz budget, default
+        256 to keep cognitive load + render cost bounded); call nest-runtime's graph::CsrIndex
+        traversal (owned by phase-4 task #20), collect the node/edge set, run the EXISTING
+        exact-cosine rerank on the node set so scores are real
+      - cosmos.rs: serialize the subgraph to cosmos.gl/webgl json
+        (nodes[id,label,score,space], edges[src,dst,type,weight]) and to graphviz dot;
+        deterministic ordering (sort nodes by chunk ordinal, edges by (src,type,dst)) so
+        layout is stable and re-findable
+      - export.rs: a general emitter that takes hits OR a subgraph and writes
+        json|jsonl|markdown|dot|cosmos-json; the agent-native answer-pack (jsonl of
+        {answer_text, citations[]}) is one format here
+      - feature-gate graph.rs + cosmos.rs behind a `graph` / `viz-export` cargo feature so the
+        minimal sovereign binary (ask+cite only) does not carry the viz emitter (bindings-cli
+        feature-gated split)
+      - add an e2e on a tiny fixture with a graph_adjacency section: `nest graph --from <id>
+        --hops 1 --format cosmos-json` emits valid json with stable ordering and real-cosine
+        node scores; gracefully degrade (clear typed message, exit) when the file has no
+        graph_adjacency section
+      - keep graph/export/cosmos each <=300 lines; no graph layout math in
+        nest-runtime/nest-format - only candidate generation + rerank in the core, all layout
+        in lens
+    risk:   depends on phase-4 task #20 (CSR graph_adjacency section + nest-runtime graph::CsrIndex);
+            until that lands, graph.rs has nothing to traverse. mitigate by building
+            cosmos.rs/export.rs first against the EXISTING hnsw level-0 adjacency as a
+            stand-in graph source so the viz surface and the deterministic-ordering tests land
+            early, then swap in the real CSR reader when #20 merges; never let graph layout
+            leak into the rust core.
+
+risks
+----------------------------------------------------------------------------------------------
+  - verb collapse is a user-visible breaking change to a published cli; if scripts or the e2e
+    suite hardcode `nest search-text`, the rename desyncs them. mitigation: every old verb
+    stays reachable under `nest dev`, the change lands after the recall harness so output is
+    proven byte-identical, and did_you_mean teaches the new verb on a wrong old one.
+  - the profile crate is the classic place a config compiler balloons past the <=300-line cap
+    and sneaks in nondeterminism (hashmap order, env interpolation). mitigation: split
+    schema/fold/resolve, declaration-order folds only, no env/clock reads, nest-runtime stays
+    profile-free so the sovereign runtime never grows a config surface.
+  - feature creep: lens could absorb a query language, a tui, a chart library, ten output
+    formats and become the '10 mediocre products' the critic forbids. mitigation: lens ships
+    exactly 5 verbs + 4 disclose levels + the named formats, gui is deferred to a thin webview
+    over the same json envelopes, and the flagship (agent-native ask --format jsonl) is the
+    only surface that must be excellent at v1.
+  - graph-viz pulling layout into the engine: a tempting shortcut is to compute node positions
+    in rust. that violates 'graph viz lives in lens, never in the rust core' and bloats the
+    runtime. mitigation: the core only generates candidates + reranks; cosmos.rs emits raw
+    nodes/edges; ALL layout is the webgl viewer's job.
+  - honesty regression in disclosure: if --disclose answer hides the rerank-source line, a
+    sub-int8 corpus could present a stored-precision score as 'real cosine' to a newcomer.
+    mitigation: the rerank-source honesty enum is computed in nest-runtime SearchExplain and
+    the explain/trace levels ALWAYS print it; answer level prints a one-word marker when the
+    score is not full-precision cosine.
+
+open questions
+----------------------------------------------------------------------------------------------
+  - does `nest ask` auto-embed the query (spawning python/embed_query.py, ~300-500ms boot) or
+    require a pre-embedded vector? proposal: ask auto-embeds by default for ergonomics but the
+    dev/agent path accepts a raw vector to skip the boot - and completion/route NEVER spawn
+    python (bindings-cli watch-out).
+  - where does the manifest capability map (which embedding spaces, default fusion, preset
+    ladder) physically live - manifest `extra` (additive, no version bump) or a new tiny
+    capability section? proposal: manifest `extra` to avoid any format churn, since lens only
+    reads it.
+  - should `nest open` replace inspect/validate/stats entirely or wrap them? proposal: `open`
+    is the fused human view at four disclose levels; inspect/validate/stats survive under
+    `nest dev` as machine-stable json for ci and the existing tests.
+  - catalog-mode citation UX: when a hit references a sidecar blob by content_hash, does
+    `cite` resolve into the blob transparently or print a 'blob not present, resolve from
+    <store>' typed message? proposal: lazy by default (print the resolvable nest:// + blob
+    hash), eager only when [catalog].resolve=eager in the profile, so
+    offline-without-the-store still cites honestly.
+  - multimodal route ux: does `ask` infer the target embedding space from the query type (text
+    vs an --image/--glyph/--symbol input) or require an explicit `--space NAME`? proposal:
+    explicit `--space` for v1 (deterministic, no guessing), profile [route] supplies the
+    default space per modality, auto-inference deferred until the named-embedding-spaces
+    section stabilizes.

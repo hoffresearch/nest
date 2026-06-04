@@ -1,0 +1,90 @@
+==============================================================================================
+TASK #01 :: honest-rerank gate + rerank-source handle + ram-leak fix
+phase: phase 0   layer: nest
+status:  [ ] todo    [ ] doing    [ ] done
+==============================================================================================
+
+self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
+files listed before coding. do not summarize, do not skip. add a [ ] if something
+is missing. never skip silently.
+
+--- goal ---
+land the guardrails that de-risk the whole roadmap, the ONE parameterized rerank-honesty test
+that gates every future search path, the reconciled additive rails, AND the two flagship
+blockers (default static embedder, one concrete demo corpus). zero ratio yet; everything later
+ships behind proven gates.
+
+--- depends on ---
+  previous phase merged
+
+--- READ THESE COMPLETE FILES FIRST ---
+[ ] doc/plan/tasks/now/06-land-section-embeddings-fp-0x09-rerank-source-ma.txt
+[ ] doc/plan/tasks/now/07-fix-materialize-to-f32-ram-leak-in-the-ann-dista.txt
+[ ] crates/nest-runtime/src/search.rs
+[ ] doc/plan/master-plan/02-format.txt
+[ ] doc/plan/master-plan/03-roadmap.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and the current code you will change:)
+[ ] crates/nest-runtime/src/search.rs
+[ ] crates/nest-runtime/src/materialize.rs
+[ ] crates/nest-runtime/src/ann/mod.rs
+[ ] crates/nest-format/src/sections/contract.rs
+
+--- OWNS THESE CODE FILES (no parallel task edits them) ---
+  crates/nest-runtime/src/search.rs
+  crates/nest-runtime/src/materialize.rs
+  crates/nest-runtime/src/ann/mod.rs
+  crates/nest-format/src/sections/contract.rs
+
+--- STEPS (check each) ---
+[ ] land SECTION_EMBEDDINGS_FP=0x09 rerank source
+[ ] REFACTOR score_subset to take an EXPLICIT rerank-source handle (fp slab when present,
+    dtype slab otherwise) and to be ready for per-space routing, BEFORE any
+    per-space/sub-int8/graph path lands - today it hard-dispatches on a single self.dtype and
+    the single 0x04 section (search.rs:84-121)
+[ ] add ONE parameterized contract test over every search entry point
+    (ann/hybrid/graph/space/cross) asserting returned_score == score_subset(union)
+    byte-for-byte and recall is NaN for every non-exact path; a new search verb without this
+    test is a release-check FAILURE
+[ ] fix the materialize-to-f32 ram leak so the ann path scores packed int8/int4 blocks
+[ ] document real-cosine-at-stored-precision unless an fp source is present
+
+--- draws from ---
+gaoj0017/RaBitQ, microsoft/onnxruntime, ggml-org/ggml
+
+--- watch out ---
+  score_subset hard-dispatches on a single dtype and the single 0x04 section today; refactor
+  it to a rerank-source handle FIRST or the per-space/sub-int8 gate cannot exist. gate every
+  change with the parameterized honesty test and assert byte-identical results on f32 corpora
+  before/after.
+
+--- NEST RULES (check each) ---
+[ ] edition 2024; never panic in lib (typed thiserror). FORGE heavy/non-deterministic work
+    stays OUT of the sovereign crates/ workspace.
+[ ] format v1 FROZEN + ADDITIVE: no NEST_FORMAT_VERSION bump. use reserved encoding ids 4-9 /
+    section ids 0x09+.
+[ ] content_hash over DECODED bytes: codecs decode byte-identically so nest:// citations stay
+    stable.
+[ ] never zstd/dedup/shuffle the embeddings section (mmap SIMD hot path); only fixed-stride
+    quantization there.
+[ ] deterministic: the .nest build anchor is canonical extracted text + model fingerprint,
+    verify byte-identical across two builds.
+[ ] <=300 lines per rust src file; docs lowercase, no emoji, no em-dash. feature branch off
+    main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace ; cargo test --workspace (+ roundtrip+content_hash test
+    for new codecs)
+[ ] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if format/runtime/python changed ; ./scripts/release_check.sh
+    passes
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ____  after: ____
+  recall@10   before: ____  after: ____
+
+--- MERGE ---
+[ ] commit on branch feat/p0-01-honest-rerank-gate-rerank-source-handle-ram-le
+[ ] gate green -> merge, mark done in plan/kanban.txt

@@ -1,0 +1,83 @@
+==============================================================================================
+TASK #19 :: structured docs + edit + sovereign tokenizer + v2 evaluation
+phase: phase 4 (post-gate)   layer: nest
+status:  [ ] todo    [ ] doing    [ ] done
+==============================================================================================
+
+self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
+files listed before coding. do not summarize, do not skip. add a [ ] if something
+is missing. never skip silently.
+
+--- goal ---
+land the one genuinely new format capability (named embedding spaces) on the
+already-refactored score_subset handle, ship the pattern-lover instrument as the third
+vertical, extend compress-and-serve to structured docs, and only now evaluate the single
+justified v2.
+
+--- depends on ---
+  previous phase merged  + the FLAGSHIP-PROVEN GATE
+
+--- READ THESE COMPLETE FILES FIRST ---
+[ ] doc/plan/tasks/research/24-structured-tape-json-yaml-parquet-per-column-cod.txt
+[ ] doc/plan/tasks/research/23-blake3-merkle-root-content-hash-the-one-true-v2.txt
+[ ] doc/plan/tasks/later/22-append-only-edit-journal-deterministic-compact.txt
+[ ] doc/plan/master-plan/02-format.txt
+[ ] doc/plan/master-plan/03-roadmap.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and the current code you will change:)
+[ ] crates/nest-format/src/encoding/structure.rs
+[ ] crates/nest-runtime/src/journal.rs
+[ ] crates/nest-runtime/src/bm25/tokenize.rs
+[ ] crates/nest-format/src/sections/merkle_index.rs
+
+--- OWNS THESE CODE FILES (no parallel task edits them) ---
+  crates/nest-format/src/encoding/structure.rs
+  crates/nest-runtime/src/journal.rs
+  crates/nest-runtime/src/bm25/tokenize.rs
+  crates/nest-format/src/sections/merkle_index.rs
+
+--- STEPS (check each) ---
+[ ] structured tape + per-column codec cascade for json/yaml/parquet (sub-document citable);
+    copy-without-recode media by content_hash
+[ ] edit_journal(0x0F) overlaid in memory + deterministic compact(); tokenizer_model(0x0E)
+    byte-level subword closing CJK/Thai bm25
+[ ] prototype BLAKE3 Merkle content_hash behind a v2 gate ONLY on measured demand; ship
+    additive merkle_index + blake3 algorithm-id first; nothing in this redesign forces v2
+
+--- draws from ---
+simdjson/simdjson, duckdb/duckdb, tidwall/buntdb, google/sentencepiece, BLAKE3-team/BLAKE3
+
+--- watch out ---
+  a v2 bump changes the citation identity anchor; defer until additive merkle_index proves
+  demand and retain v1 readers forever. nothing in the redesign forces v2.
+
+--- NEST RULES (check each) ---
+[ ] edition 2024; never panic in lib (typed thiserror). FORGE heavy/non-deterministic work
+    stays OUT of the sovereign crates/ workspace.
+[ ] format v1 FROZEN + ADDITIVE: no NEST_FORMAT_VERSION bump. use reserved encoding ids 4-9 /
+    section ids 0x09+.
+[ ] content_hash over DECODED bytes: codecs decode byte-identically so nest:// citations stay
+    stable.
+[ ] never zstd/dedup/shuffle the embeddings section (mmap SIMD hot path); only fixed-stride
+    quantization there.
+[ ] deterministic: the .nest build anchor is canonical extracted text + model fingerprint,
+    verify byte-identical across two builds.
+[ ] <=300 lines per rust src file; docs lowercase, no emoji, no em-dash. feature branch off
+    main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace ; cargo test --workspace (+ roundtrip+content_hash test
+    for new codecs)
+[ ] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if format/runtime/python changed ; ./scripts/release_check.sh
+    passes
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ____  after: ____
+  recall@10   before: ____  after: ____
+
+--- MERGE ---
+[ ] commit on branch feat/p4-19-structured-docs-edit-sovereign-tokenizer-v2-ev
+[ ] gate green -> merge, mark done in plan/kanban.txt
