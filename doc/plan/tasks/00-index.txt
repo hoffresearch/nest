@@ -21,6 +21,7 @@ their phase predecessors are merged. the GATE blocks p2+ until the flagship is p
   #07 [cross ] p1/07-g1-chunk-to-chunk-csr-graph-adjacency-0x0c-sea.txt
   #08 [lens  ] p1/08-flagship-retrieve-ask-cite-tier-1-only-searche.txt
   #09 [forge ] p1/09-forge-0b-normalize-books-profile-python-adapte.txt
+  #11 [nest  ] p1/11-trained-dict-fsst-block-rotational-int8-micro-.txt  (pulled pre-gate)
 
 ### GATE
 ----------------------------------------------------------------------------------------------
@@ -28,7 +29,6 @@ their phase predecessors are merged. the GATE blocks p2+ until the flagship is p
 
 ### P2
 ----------------------------------------------------------------------------------------------
-  #11 [nest  ] p2/11-trained-dict-fsst-block-rotational-int8-micro-.txt
   #12 [nest  ] p2/12-original-byte-reopen-path-catalog-blob-refs-0x.txt
   #13 [forge ] p2/13-forge-1-belt-subprocess-contract-heavy-engines.txt
 
