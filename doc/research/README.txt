@@ -1,3 +1,5 @@
+note: this folder is the RESEARCH (read-only reference). the ACTION layer (plan, kanban, task work-orders) lives in ../plan. the complete lossless source is _raw/genome.json (use it to train models).
+
 ================================================================================================
 nest research :: start here
 183 reference projects distilled into a build plan, in small navigable files

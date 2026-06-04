@@ -1,0 +1,78 @@
+============================================================================================
+TASK #21 :: Byte-level subword tokenizer for CJK/Thai BM25 + text front-end
+column: later    priority: LOW
+status:  [ ] todo    [ ] doing    [ ] done
+============================================================================================
+
+this file is the ONLY thing you need for this task. work top to bottom and
+check each [ ] as you finish it. if something is missing, ADD a [ ] line and
+note it. never skip a box silently. that is how we avoid drift.
+
+--- goal ---
+SECTION_TOKENIZER_MODEL=0x0E, byte-level BPE/Unigram + byte_fallback + reversible markup.
+Closes the documented CJK/Thai BM25 gap (bm25/tokenize.rs word-segmenter) and doubles as a
+token-id text compression front-end. Vocab frozen + fingerprinted for determinism.
+
+--- depends on ---
+  nothing. ready to run.
+
+--- READ THESE COMPLETE FILES FIRST (do not summarize, do not skip) ---
+[ ] doc/research/genome/tokenizers/google__sentencepiece.txt
+[ ] doc/research/genome/tokenizers/openai__tiktoken.txt
+[ ] doc/research/synthesis/tokenizers.txt
+[ ] doc/plan/master-plan/01-compression.txt
+[ ] doc/plan/master-plan/02-format.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and read the current code you will change:)
+[ ] crates/nest-runtime/src/bm25/tokenize.rs
+[ ] crates/nest-runtime/src/journal.rs
+[ ] crates/nest-cli/src/cmd/compact.rs
+
+--- OWNS THESE CODE FILES (no other parallel task may edit them) ---
+  crates/nest-runtime/src/bm25/tokenize.rs
+  crates/nest-runtime/src/journal.rs
+  crates/nest-cli/src/cmd/compact.rs
+
+--- STEPS (check each) ---
+[ ] Add SECTION_EDIT_JOURNAL=0x0F append-only deltas overlaid in memory at open (frozen
+    bytes immutable) + a deterministic compact() re-running ZDICT, re-quantizing, dropping
+    dead chunks, rebuilding indexes to the smallest preset
+[ ] Add SECTION_TOKENIZER_MODEL=0x0E byte-level subword tokenizer (byte_fallback +
+    reversible markup) closing the CJK/Thai BM25 gap and serving as a token-id text codec
+[ ] Optional sovereign static embedder (model2vec/POTION) for offline re-embed of queries
+    and edited chunks
+
+--- watch out ---
+  The edit journal must never mutate frozen bytes and compact must be byte-identical for the
+  same live set; the tokenizer vocab must be frozen and fingerprinted or builds destabilize.
+
+--- NEST RULES (do not violate; check each) ---
+[ ] edition 2024, resolver 3. never panic in lib code: typed thiserror, incl. on malformed
+    mmap bytes.
+[ ] format v1 is FROZEN + ADDITIVE: do NOT bump NEST_FORMAT_VERSION. use reserved encoding
+    ids 4-9 / section ids 0x09-0x10 (already named in layout/mod.rs).
+[ ] content_hash is over DECODED bytes: any new codec must decode byte-identically so
+    nest:// citations stay stable.
+[ ] never zstd/dedup/shuffle the embeddings section (scored from mmap on the SIMD hot path);
+    only fixed-stride quantization codecs there.
+[ ] deterministic: same input + seed => byte-identical output; verify across two builds (and
+    SIMD backends for rotations).
+[ ] <=300 lines per rust file in crates/**/src/**; split pack/unpack/kernel/select.
+[ ] docs lowercase, no emoji, no em-dash. work on a feature branch off main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace
+[ ] cargo test --workspace  (add a roundtrip + content_hash-equality test for any new codec)
+[ ] cargo fmt --all --check  &&  cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if you touched nest-format / nest-runtime / nest-python
+[ ] ./scripts/release_check.sh passes (the project gate; do not bypass)
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ______   after: ______
+  recall@10   before: ______   after: ______
+
+--- MERGE ---
+[ ] commit on branch feat/later-21-byte-level-subword-tokenizer-for-cjk-thai-bm25-t
+[ ] gate green -> merge, then mark this task done in plan/kanban.txt

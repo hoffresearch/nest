@@ -1,0 +1,74 @@
+============================================================================================
+TASK #20 :: CSR graph_adjacency section + search-graph subcommand
+column: later    priority: LOW
+status:  [ ] todo    [ ] doing    [ ] done
+============================================================================================
+
+this file is the ONLY thing you need for this task. work top to bottom and
+check each [ ] as you finish it. if something is missing, ADD a [ ] line and
+note it. never skip a box silently. that is how we avoid drift.
+
+--- goal ---
+SECTION_GRAPH_ADJACENCY=0x0C (chunk-to-chunk edges, reusing intpack), bounded-BFS seeded
+from exact top-k feeding the SAME exact rerank. Lets nest drop chunk_overlap text by
+reconstructing neighbor context from NEXT_CHUNK edges. Delivers the graph-search pillar.
+
+--- depends on (must be done + merged first) ---
+  task #10
+
+--- READ THESE COMPLETE FILES FIRST (do not summarize, do not skip) ---
+[ ] doc/research/genome/graph-db/vesoft-inc__nebula.txt
+[ ] doc/research/synthesis/graph-db.txt
+[ ] doc/plan/master-plan/01-compression.txt
+[ ] doc/plan/master-plan/02-format.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and read the current code you will change:)
+[ ] crates/nest-runtime/src/graph/
+[ ] crates/nest-cli/src/cmd/search_graph.rs
+
+--- OWNS THESE CODE FILES (no other parallel task may edit them) ---
+  crates/nest-runtime/src/graph/
+  crates/nest-cli/src/cmd/search_graph.rs
+
+--- STEPS (check each) ---
+[ ] Add SECTION_GRAPH_ADJACENCY=0x0C (CSR chunk-to-chunk semantic/citation/NEXT_CHUNK edges,
+    reusing intpack); bounded-BFS seeded from exact-cosine top-k feeding the SAME exact
+    rerank
+[ ] Drop chunk_overlap text from chunks_canonical by reconstructing neighbor context from
+    NEXT_CHUNK edges
+[ ] Add a 9th CLI subcommand search-graph mirroring search-ann
+
+--- watch out ---
+  Do not vendor SSPL/GPL graph engines; clean-room the CSR + bounded-BFS from public
+  descriptions. Graph traversal must only generate candidates, never change returned scores.
+
+--- NEST RULES (do not violate; check each) ---
+[ ] edition 2024, resolver 3. never panic in lib code: typed thiserror, incl. on malformed
+    mmap bytes.
+[ ] format v1 is FROZEN + ADDITIVE: do NOT bump NEST_FORMAT_VERSION. use reserved encoding
+    ids 4-9 / section ids 0x09-0x10 (already named in layout/mod.rs).
+[ ] content_hash is over DECODED bytes: any new codec must decode byte-identically so
+    nest:// citations stay stable.
+[ ] never zstd/dedup/shuffle the embeddings section (scored from mmap on the SIMD hot path);
+    only fixed-stride quantization codecs there.
+[ ] deterministic: same input + seed => byte-identical output; verify across two builds (and
+    SIMD backends for rotations).
+[ ] <=300 lines per rust file in crates/**/src/**; split pack/unpack/kernel/select.
+[ ] docs lowercase, no emoji, no em-dash. work on a feature branch off main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace
+[ ] cargo test --workspace  (add a roundtrip + content_hash-equality test for any new codec)
+[ ] cargo fmt --all --check  &&  cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if you touched nest-format / nest-runtime / nest-python
+[ ] ./scripts/release_check.sh passes (the project gate; do not bypass)
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ______   after: ______
+  recall@10   before: ______   after: ______
+
+--- MERGE ---
+[ ] commit on branch feat/later-20-csr-graph-adjacency-section-search-graph-subcomm
+[ ] gate green -> merge, then mark this task done in plan/kanban.txt

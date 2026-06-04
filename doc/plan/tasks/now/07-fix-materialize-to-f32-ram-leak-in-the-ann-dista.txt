@@ -1,0 +1,83 @@
+============================================================================================
+TASK #07 :: Fix materialize-to-f32 RAM leak in the ANN distance path
+column: now    priority: CRITICAL
+status:  [ ] todo    [ ] doing    [ ] done
+============================================================================================
+
+this file is the ONLY thing you need for this task. work top to bottom and
+check each [ ] as you finish it. if something is missing, ADD a [ ] line and
+note it. never skip a box silently. that is how we avoid drift.
+
+--- goal ---
+materialize_f32_vectors (materialize.rs:32-41) expands EVERY dtype to n*dim*4 f32 whenever
+HNSW is attached (mmap_file.rs:113), so int8/int4 halve disk but keep a dense f32 copy in
+RAM on exactly the tiny/hybrid presets that need it. Teach the ANN path to score packed int8
+blocks (or keep f16). Pure runtime fix, no format change.
+
+--- depends on ---
+  nothing. ready to run.
+
+--- READ THESE COMPLETE FILES FIRST (do not summarize, do not skip) ---
+[ ] doc/research/genome/model-runtime/microsoft__onnxruntime.txt
+[ ] doc/research/synthesis/model-runtime.txt
+[ ] doc/plan/master-plan/01-compression.txt
+[ ] doc/plan/master-plan/02-format.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and read the current code you will change:)
+[ ] crates/nest-runtime/src/materialize.rs
+[ ] crates/nest-runtime/src/ann/mod.rs
+[ ] crates/nest-runtime/src/search.rs
+[ ] crates/nest-format/src/sections/contract.rs
+
+--- OWNS THESE CODE FILES (no other parallel task may edit them) ---
+  crates/nest-runtime/src/materialize.rs
+  crates/nest-runtime/src/ann/mod.rs
+  crates/nest-runtime/src/search.rs
+  crates/nest-format/src/sections/contract.rs
+
+--- STEPS (check each) ---
+[ ] Reserve SECTION_EMBEDDINGS_FP=0x09 (optional f16/f32 rerank source, excluded from
+    content_hash) and plumb it through the writer + manifest capability
+[ ] Make score_subset rerank against embeddings_fp when present (not the stored lossy
+    dtype), keeping today's behavior when absent
+[ ] Teach the ANN distance path to score packed int8 blocks (or keep f16) so
+    materialize_f32_vectors no longer expands every dtype to n*dim*4 f32 when HNSW is
+    attached
+[ ] Document in search_contract: 'real cosine at stored precision' unless an fp rerank
+    source is present
+
+--- watch out ---
+  Touching score_subset/materialize risks regressing the exact-rerank ground truth; gate
+  with the golden recall harness and assert byte-identical results on f32 corpora
+  before/after.
+
+--- NEST RULES (do not violate; check each) ---
+[ ] edition 2024, resolver 3. never panic in lib code: typed thiserror, incl. on malformed
+    mmap bytes.
+[ ] format v1 is FROZEN + ADDITIVE: do NOT bump NEST_FORMAT_VERSION. use reserved encoding
+    ids 4-9 / section ids 0x09-0x10 (already named in layout/mod.rs).
+[ ] content_hash is over DECODED bytes: any new codec must decode byte-identically so
+    nest:// citations stay stable.
+[ ] never zstd/dedup/shuffle the embeddings section (scored from mmap on the SIMD hot path);
+    only fixed-stride quantization codecs there.
+[ ] deterministic: same input + seed => byte-identical output; verify across two builds (and
+    SIMD backends for rotations).
+[ ] <=300 lines per rust file in crates/**/src/**; split pack/unpack/kernel/select.
+[ ] docs lowercase, no emoji, no em-dash. work on a feature branch off main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace
+[ ] cargo test --workspace  (add a roundtrip + content_hash-equality test for any new codec)
+[ ] cargo fmt --all --check  &&  cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if you touched nest-format / nest-runtime / nest-python
+[ ] ./scripts/release_check.sh passes (the project gate; do not bypass)
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ______   after: ______
+  recall@10   before: ______   after: ______
+
+--- MERGE ---
+[ ] commit on branch feat/now-07-fix-materialize-to-f32-ram-leak-in-the-ann-dista
+[ ] gate green -> merge, then mark this task done in plan/kanban.txt
