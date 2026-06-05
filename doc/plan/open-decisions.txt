@@ -5,6 +5,46 @@ the forks only the owner can settle. each has a recommendation.
 
 read this and tell claude your call on each.
 
+##############################################################################################
+# OWNER'S CALLS  (recorded; interim, refine as we POC)
+##############################################################################################
+
+1. multimodal carrier  -> POC BOTH in an agentic workflow (named per-space sections AND the
+   single tagged pool). likely keep BOTH as selectable options. decide by measured perf.
+
+2. catalog sidecar     -> POC BOTH (flat content-addressed dir AND packed .nestpack). likely
+   keep both.
+
+3. agent-native distribution -> build in RUST (crate). DEFER the pip/mcp/langchain shape to the
+   very last step (launch is the final milestone); keep testing all the way; the three shapes
+   come after everything else is done.
+
+4. redaction / user data -> HARD RULE: never delete the user's source data. redaction must not
+   destroy it (keep the original; redact into a NEW derived corpus, never in place). NEW hard
+   requirement added here: INCREMENTAL, DISK-AWARE ingestion - for 50-100 GB zips (ml engineers,
+   osint), ingest gradually, emit the new .nest while keeping the source usable, never blow the
+   nvme. streaming / bounded-memory / resumable, not load-it-all.
+
+5. symbol/glyph embedder -> research the most efficient current model in a workflow (must cluster
+   groups, find old/aged images), BUT build ABSURD robustness for typography, glyphs,
+   hieroglyphs, sigils, sanskrit, multilingual, etymology, papyri (the compulsive-cataloger +
+   librarianship audience + unicode). must understand the object in FORM and COLOR; a smart
+   algorithm that OPTIONALLY optimizes the match (e.g. compensate faded/aged colors and worn
+   strokes on old documents). lean bespoke + form/color, optional in search.
+
+6. forge-core public vs internal -> not overridden; stays INTERNAL FIRST, stabilize the trait
+   after the flagship ships.
+
+general directives (recorded):
+  - no public api for now (maybe later).
+  - use the mixed reference repos (the original ~185 list) to test everything.
+  - constant briefing + checkpoints with the agents.
+  - write code strictly per nest principles.
+  - ethos (from the 3ch / bio references): optimize compressed information, reduce cognitive
+    load. these are REFERENCES, not gospel.
+
+below: the full forks with claude's recommendations, kept for context.
+
 1. multimodal carrier (post-gate): multiple additive named embedding sub-sections (one
    fingerprint each, clean per-space routing) or a single tagged vector pool with a (space_id,
    fingerprint) sidecar (better cache locality, one section)?
