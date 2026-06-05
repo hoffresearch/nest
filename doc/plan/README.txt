@@ -22,4 +22,5 @@ WHAT TO BUILD. knowledge it draws on is in ../research (read-only).
   tasks/                           one checklist work-order per workstream, by phase
 
 how a task gets done (separate chat, one agent): open one tasks/<phase>/<NN>-*.txt,
-read the complete files it lists, work the checklist, it owns its code files, merge when green.
+read the complete files it lists, work the checklist, it owns its code files, run the doc
+checkpoint (update the living docs for whatever changed, same commit), merge when green.

@@ -71,6 +71,20 @@ embeddings-benchmark/mteb, jvm-repo-rebuild/reproducible-central
   size ratio  before: ____  after: ____
   recall@10   before: ____  after: ____
 
+--- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
+update only what THIS task actually changed; check each:
+[ ] doc/arc/arc.md     architecture inventory + contract (boundaries/sections/data-flow/runtime)
+[ ] doc/arc/arc.yaml   machine architecture map (MUST move with arc.md, same commit)
+[ ] doc/arc/arc.mmd    mermaid build/query flow (if the flow changed)
+[ ] README.md          overview / cli / presets / highlights (if a user-visible surface changed)
+[ ] doc/usage.md       the how-to (if a command, flag, preset, or workflow changed)
+[ ] AGENTS.md          build/test cmds, conventions, gotchas, known gaps (if any changed)
+[ ] Cargo.toml         workspace version / deps / new crate (if crates or deps changed)
+[ ] pyproject.toml     python tooling / deps / targets (if the python surface changed)
+[ ] rustfmt.toml       only if a formatting rule must change (rare)
+the arc trio (arc.md + arc.yaml + arc.mmd) moves TOGETHER in the same commit when
+architecture / boundaries / data-flow / contracts / storage / runtime change.
+
 --- MERGE ---
 [ ] commit on branch feat/gate-10-gate-criteria-release-check-enforced
 [ ] gate green -> merge, mark done in plan/kanban.txt
