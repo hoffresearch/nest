@@ -1,7 +1,7 @@
 ==============================================================================================
 TASK #01 :: honest-rerank gate + rerank-source handle + ram-leak fix
 phase: phase 0   layer: nest
-status:  [ ] todo    [ ] doing    [ ] done
+status:  [ ] todo    [x] doing    [ ] done   (impl + gate green; pending owner ok to commit/merge)
 ==============================================================================================
 
 self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
@@ -38,17 +38,26 @@ ships behind proven gates.
   crates/nest-format/src/sections/contract.rs
 
 --- STEPS (check each) ---
-[ ] land SECTION_EMBEDDINGS_FP=0x09 rerank source
-[ ] REFACTOR score_subset to take an EXPLICIT rerank-source handle (fp slab when present,
-    dtype slab otherwise) and to be ready for per-space routing, BEFORE any
-    per-space/sub-int8/graph path lands - today it hard-dispatches on a single self.dtype and
-    the single 0x04 section (search.rs:84-121)
-[ ] add ONE parameterized contract test over every search entry point
-    (ann/hybrid/graph/space/cross) asserting returned_score == score_subset(union)
-    byte-for-byte and recall is NaN for every non-exact path; a new search verb without this
-    test is a release-check FAILURE
-[ ] fix the materialize-to-f32 ram leak so the ann path scores packed int8/int4 blocks
-[ ] document real-cosine-at-stored-precision unless an fp source is present
+[x] land SECTION_EMBEDDINGS_FP=0x09 rerank source
+    -> runtime read path: rerank::FpSlab::detect reads the optional 0x09 slab (dtype from
+       stride: 4->f32, 2->f16), wired into MmapNestFile; rerank source prefers it when present.
+       WRITER for 0x09 deferred to the sub-int8 card (p3 #14), which is what needs it
+       (owner's call). fp routing unit-tested synthetically in rerank.rs.
+[x] REFACTOR score_subset to take an EXPLICIT rerank-source handle (fp slab when present,
+    dtype slab otherwise) and to be ready for per-space routing
+    -> new module crates/nest-runtime/src/rerank.rs: RerankSource. score_all + score_subset
+       both route through self.rerank_source(); per-space path will hand a different slab.
+[x] add ONE parameterized contract test over every search entry point
+    -> crates/nest-runtime/tests/rerank_contract.rs: parameterized over ann + hybrid today
+       (list documented as the gate; graph/space/cross MUST join it when they land), asserts
+       returned score == exact-cosine rerank byte-for-byte (to_bits) and recall.is_nan().
+[x] fix the materialize-to-f32 ram leak so the ann path scores packed int8/int4 blocks
+    -> materialize.rs is now PackedVectors: int8 stays int8+scales, f16 stays f16, decoded one
+       row at a time into a scratch buffer. removes the n*dim*4 f32 snapshot. graph + search
+       byte-identical for all dtypes (build still uses the f32 store; row decode reproduces the
+       old int8*scale / f16->f32 arithmetic). int4 rides the same path when it lands.
+[x] document real-cosine-at-stored-precision unless an fp source is present
+    -> rerank.rs module docs + arc.md runtime contract.
 
 --- draws from ---
 gaoj0017/RaBitQ, microsoft/onnxruntime, ggml-org/ggml
@@ -74,16 +83,27 @@ gaoj0017/RaBitQ, microsoft/onnxruntime, ggml-org/ggml
     main.
 
 --- DONE WHEN (all green) ---
-[ ] cargo build --release --workspace ; cargo test --workspace (+ roundtrip+content_hash test
-    for new codecs)
-[ ] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
-[ ] rebuild python/_nest.so if format/runtime/python changed ; ./scripts/release_check.sh
-    passes
-[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+[x] cargo build --release --workspace ; cargo test --workspace  (62 rust tests pass)
+[x] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
+[x] rebuild python/_nest.so ; ./scripts/release_check.sh passes (ALL GATES PASS)
+[x] python/tools/measure_presets.py: size ratio + recall@10 unchanged (guardrail task)
+
+  scope notes (per AGENTS "add a [ ] if missing, never skip silently"):
+  - OWNS expanded (owner-approved) to mmap_file.rs + ann/{build,search,select_neighbors,codec}.rs
+    + lib.rs + the new rerank.rs/rerank_contract.rs; no parallel p0 task owns these.
+  - PRE-EXISTING blocker, NOT this task: crates/nest-format/tests/fixtures/golden_v1_minimal.nest
+    was an un-materialized git-lfs pointer (129 bytes) on this branch, failing 5 golden tests
+    even with this task stashed. restored from the lfs object (sha256 matches, 1366 bytes) so
+    the gate could run; the file is NOT staged in this task's commit. repo-hygiene fix for the
+    owner: the fixture is excluded from lfs by .gitattributes but committed as a pointer.
 
 --- RESULT (fill in) ---
-  size ratio  before: ____  after: ____
-  recall@10   before: ____  after: ____
+  size ratio  before: exact 1.000 / compressed 0.350 / tiny 0.283 / hybrid 0.668
+              after:  exact 1.000 / compressed 0.350 / tiny 0.283 / hybrid 0.668  (unchanged)
+  recall@10   before: 1.0000 / 1.0000 / 0.9920 / 1.0000
+              after:  1.0000 / 1.0000 / 0.9920 / 1.0000  (unchanged; guardrail, no ratio change)
+  ram:        ann vector store for int8 corpora drops from n*dim*4 (f32 snapshot) to ~n*dim
+              (packed int8 + n scales); f16 from n*dim*4 to n*dim*2. f32 unchanged.
 
 --- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
 update only what THIS task actually changed; check each:

@@ -37,6 +37,8 @@ mod codec;
 mod search;
 pub mod select_neighbors;
 
+use crate::materialize::PackedVectors;
+
 pub const HNSW_PAYLOAD_VERSION: u32 = 1;
 
 /// lDefault neighbor count at non-zero layers. 16 is a common HNSW sweet
@@ -68,11 +70,12 @@ pub struct HnswIndex {
     pub entry_point: u32,
     pub max_level: u32,
     pub(super) nodes: Vec<Node>,
-    /// lA snapshot of the f32 vectors used at search time. We copy
-    /// because we want the ANN graph to be dtype-independent: f16/i8
-    /// runtimes still get the same recall curve. Cost: ~n*dim*4 bytes
-    /// of RAM beyond the mmap.
-    pub(super) vectors: Vec<f32>,
+    /// lThe vectors used at search time, kept in their on-disk packing
+    /// (int8 stays int8 + scales, f16 stays f16) and decoded one row at a
+    /// time. The graph stays dtype-independent (f16/i8 runtimes get the
+    /// same recall curve) without the old `n*dim*4` f32 snapshot: the
+    /// resident footprint is the packed size, not 4x it.
+    pub(super) store: PackedVectors,
     pub(super) dim: usize,
     pub(super) n: usize,
     /// `ef_search` default. Caller can override per query.
@@ -96,6 +99,33 @@ pub(super) fn cosine_dist(a: &[f32], b: &[f32]) -> f32 {
         dot += x * y;
     }
     1.0 - dot
+}
+
+/// lDistance between an f32 query and stored row `i`, decoding `i` through
+/// `store` into `scratch` first. `scratch` is empty for the f32 store.
+#[inline]
+pub(super) fn dist_q(
+    store: &PackedVectors,
+    q: &[f32],
+    i: usize,
+    dim: usize,
+    scratch: &mut [f32],
+) -> f32 {
+    cosine_dist(q, store.row(i, dim, scratch))
+}
+
+/// lDistance between two stored rows `a` and `b`, each decoded through
+/// `store` into its own scratch buffer (`sa`, `sb`).
+#[inline]
+pub(super) fn dist_rr(
+    store: &PackedVectors,
+    a: usize,
+    b: usize,
+    dim: usize,
+    sa: &mut [f32],
+    sb: &mut [f32],
+) -> f32 {
+    cosine_dist(store.row(a, dim, sa), store.row(b, dim, sb))
 }
 
 #[cfg(test)]
