@@ -1,5 +1,5 @@
 project: nest
-last-updated: "2026-05-27"
+last-updated: "2026-06-05"
 domain: architecture
 summary: "single-file semantic knowledge stack: rust owns format, runtime, cli, and bindings; python owns ingestion, model fingerprinting, and support tooling."
 layers:
@@ -152,9 +152,10 @@ inventory:
     - {path: "crates/nest-runtime/src/bm25/tokenize.rs", kind: rust-source, purpose: "simple unicode-aware tokenizer", links: ["crates/nest-runtime/src/bm25/index.rs"]}
     - {path: "crates/nest-runtime/src/error.rs", kind: rust-source, purpose: "runtime error surface", links: ["crates/nest-format/src/error.rs"]}
     - {path: "crates/nest-runtime/src/lib.rs", kind: rust-source, purpose: "SearchHit, SearchResult, and runtime re-exports", links: ["crates/nest-runtime/src/mmap_file.rs", "crates/nest-runtime/src/search.rs"]}
-    - {path: "crates/nest-runtime/src/materialize.rs", kind: rust-source, purpose: "materialize stored embeddings to f32 vectors", links: ["crates/nest-runtime/src/mmap_file.rs"]}
-    - {path: "crates/nest-runtime/src/mmap_file.rs", kind: rust-source, purpose: "own mmap, decode metadata and optional indices, inspect, and revalidate, assuming embeddings remain directly readable from the mapped file", links: ["crates/nest-format/src/reader/mod.rs", "crates/nest-runtime/src/ann/mod.rs", "crates/nest-runtime/src/bm25/mod.rs"]}
-    - {path: "crates/nest-runtime/src/search.rs", kind: rust-source, purpose: "exact, ann, and hybrid search plus exact rerank", links: ["crates/nest-runtime/src/mmap_file.rs", "crates/nest-runtime/src/simd/mod.rs", "crates/nest-runtime/src/bm25/mod.rs"]}
+    - {path: "crates/nest-runtime/src/materialize.rs", kind: rust-source, purpose: "PackedVectors store: keep int8/float16 rows packed and decode one row at a time, removing the ann f32 snapshot while keeping distances byte-identical", links: ["crates/nest-runtime/src/ann/mod.rs", "crates/nest-runtime/src/mmap_file.rs"]}
+    - {path: "crates/nest-runtime/src/rerank.rs", kind: rust-source, purpose: "explicit rerank-source handle the exact rerank reads through (embeddings_fp 0x09 slab when present, else stored dtype slab), plus FpSlab detection; ready for per-space routing", links: ["crates/nest-runtime/src/search.rs", "crates/nest-runtime/src/mmap_file.rs", "crates/nest-runtime/src/simd/mod.rs"]}
+    - {path: "crates/nest-runtime/src/mmap_file.rs", kind: rust-source, purpose: "own mmap, decode metadata and optional indices (incl optional embeddings_fp slab and the packed ann vector store), inspect, and revalidate, assuming embeddings remain directly readable from the mapped file", links: ["crates/nest-format/src/reader/mod.rs", "crates/nest-runtime/src/ann/mod.rs", "crates/nest-runtime/src/bm25/mod.rs", "crates/nest-runtime/src/rerank.rs"]}
+    - {path: "crates/nest-runtime/src/search.rs", kind: rust-source, purpose: "exact, ann, and hybrid search; all scoring routes through the single rerank source so the returned score is real cosine", links: ["crates/nest-runtime/src/mmap_file.rs", "crates/nest-runtime/src/rerank.rs", "crates/nest-runtime/src/simd/mod.rs", "crates/nest-runtime/src/bm25/mod.rs"]}
     - {path: "crates/nest-runtime/src/simd/avx2.rs", kind: rust-source, purpose: "x86_64 avx2 kernels", links: ["crates/nest-runtime/src/simd/mod.rs"]}
     - {path: "crates/nest-runtime/src/simd/mod.rs", kind: rust-source, purpose: "simd backend detection and dispatch", links: ["crates/nest-runtime/src/simd/avx2.rs", "crates/nest-runtime/src/simd/neon.rs", "crates/nest-runtime/src/simd/scalar.rs"]}
     - {path: "crates/nest-runtime/src/simd/neon.rs", kind: rust-source, purpose: "aarch64 neon kernels", links: ["crates/nest-runtime/src/simd/mod.rs"]}
@@ -162,6 +163,7 @@ inventory:
     - {path: "crates/nest-runtime/src/simd/tests.rs", kind: rust-test, purpose: "simd parity tests", links: ["crates/nest-runtime/src/simd/mod.rs"]}
     - {path: "crates/nest-runtime/tests/fp16_topk_recall_vs_f32.rs", kind: rust-test, purpose: "float16 recall and drift regression", links: ["crates/nest-runtime/src/search.rs"]}
     - {path: "crates/nest-runtime/tests/hnsw_recall.rs", kind: rust-test, purpose: "ann recall regression", links: ["crates/nest-runtime/src/ann/mod.rs"]}
+    - {path: "crates/nest-runtime/tests/rerank_contract.rs", kind: rust-test, purpose: "honest-rerank gate: non-exact paths return the exact-cosine score byte-for-byte and recall is NaN, parameterized over every search entry point", links: ["crates/nest-runtime/src/search.rs", "crates/nest-runtime/src/rerank.rs"]}
     - {path: "crates/nest-runtime/tests/search_exact.rs", kind: rust-test, purpose: "exact-search integration coverage", links: ["crates/nest-runtime/src/search.rs"]}
   data_docs_python_scripts_tests:
     - {path: "doc/arc/arc.md", kind: markdown-doc, purpose: "single human architecture inventory and contract reference", links: ["doc/arc/arc.yaml", "doc/arc/arc.mmd"]}
