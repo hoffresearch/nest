@@ -108,6 +108,33 @@ pub const SECTION_TOKENIZER_MODEL: u32 = 0x0E;
 pub const SECTION_EDIT_JOURNAL: u32 = 0x0F;
 pub const SECTION_REPRO_MANIFEST: u32 = 0x10;
 
+// reconciled additive optional sections past 0x10 (see doc/plan/master-plan
+// 02-format.txt). the four redesign pillars each independently proposed
+// 0x11; this is the single disjoint map that resolves that collision in one
+// pass, BEFORE any feature edits this file. ALL are EXCLUDED from
+// content_hash, so adding any of them never invalidates a nest:// citation.
+// claimed as named constants; NOT yet emitted or read until each feature
+// ships its section codec and a manifest capability.
+pub const SECTION_GRAPH_NODES: u32 = 0x11;
+pub const SECTION_GRAPH_EDGE_PROPS: u32 = 0x12;
+pub const SECTION_GRAPH_ENTITY_MAP: u32 = 0x13;
+pub const SECTION_BLOB_REFS: u32 = 0x14;
+pub const SECTION_SPACE_TABLE: u32 = 0x15;
+// blob-relative span overlay: REPLACES the illegal chunks_original_spans
+// v1->2 bump (spans is canonical + content-hashed + required). an excluded
+// optional section keyed by chunk ordinal, so self_contained and catalog
+// twins keep the SAME content_hash and old readers still open the file.
+pub const SECTION_BLOB_SPAN_OVERLAY: u32 = 0x16;
+
+// per-space vector bands. each non-text embedding space gets one fixed-
+// stride 64-byte-aligned slab in 0x20-0x2F (NEVER zstd, scored by the
+// existing simd kernels) and an optional matching fp rerank source in
+// 0x30-0x3F. base + SPACE_BAND_LEN define each band; both excluded from
+// content_hash. space[0]=text stays the canonical embeddings(0x04).
+pub const SECTION_SPACE_EMBEDDINGS_BASE: u32 = 0x20;
+pub const SECTION_SPACE_EMBEDDINGS_FP_BASE: u32 = 0x30;
+pub const SPACE_BAND_LEN: u32 = 0x10;
+
 /// lCanonical order for content_hash. Sorted alphabetically by name; this
 /// order is fixed by spec so adding new section IDs cannot reshuffle the
 /// hash. Keep this list and section IDs in sync.
@@ -219,9 +246,28 @@ mod tests {
             assert_eq!(s, 0x09 + i as u32);
             assert!(s > SECTION_BM25_INDEX);
         }
+        // reconciled additive ids past 0x10 are contiguous 0x11..=0x16; the
+        // per-space bands start at 0x20 and 0x30 with 16 ids each. the
+        // exhaustive disjointness + content_hash-exclusion check lives in
+        // tests/reserved_ids.rs.
+        let recon = [
+            SECTION_GRAPH_NODES,
+            SECTION_GRAPH_EDGE_PROPS,
+            SECTION_GRAPH_ENTITY_MAP,
+            SECTION_BLOB_REFS,
+            SECTION_SPACE_TABLE,
+            SECTION_BLOB_SPAN_OVERLAY,
+        ];
+        for (i, &s) in recon.iter().enumerate() {
+            assert_eq!(s, 0x11 + i as u32);
+        }
+        assert_eq!(SECTION_SPACE_EMBEDDINGS_BASE, 0x20);
+        assert_eq!(SECTION_SPACE_EMBEDDINGS_FP_BASE, 0x30);
+        assert_eq!(SPACE_BAND_LEN, 0x10);
+
         // reserved sections are not yet advertised as active optional sections,
         // so section_name does not resolve them until their feature ships.
-        for &s in &sec {
+        for &s in sec.iter().chain(recon.iter()) {
             assert!(section_name(s).is_none());
         }
     }
