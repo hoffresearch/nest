@@ -41,7 +41,7 @@ general directives (recorded):
   - constant briefing + checkpoints with the agents.
   - write code strictly per nest principles.
   - ethos (from the 3ch / bio references): optimize compressed information, reduce cognitive
-    load. these are REFERENCES, not gospel.
+    load. these are REFERENCES, .
 
 below: the full forks with claude's recommendations, kept for context.
 

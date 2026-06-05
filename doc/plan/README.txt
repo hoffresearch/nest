@@ -17,6 +17,7 @@ WHAT TO BUILD. knowledge it draws on is in ../research (read-only).
   master-plan/10-verticals.txt     wedges + go-to-market sequencing
   open-decisions.txt               the forks for the owner to settle (READ THIS)
   critique.txt                     the adversarial review and how it was folded in
+  references.txt                   owner-influence NOTES (not decisions; context for agents)
   kanban.txt                       the board (now/next/gate/later/research)
   tasks/                           one checklist work-order per workstream, by phase
 
