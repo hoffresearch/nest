@@ -16,7 +16,8 @@ use nest_format::sections::{OriginalSpan, decode_chunk_ids, decode_chunks_origin
 use crate::ann;
 use crate::bm25;
 use crate::error::RuntimeError;
-use crate::materialize::materialize_f32_vectors;
+use crate::materialize::PackedVectors;
+use crate::rerank::FpSlab;
 use crate::simd::{self, SimdBackend};
 
 /// lRuntime view of the embeddings section dtype.
@@ -63,6 +64,10 @@ pub struct MmapNestFile {
     pub(crate) embeddings_offset: usize,
     /// lTotal physical bytes of the embeddings section.
     pub(crate) embeddings_size: usize,
+    /// lOptional full-precision rerank slab (`embeddings_fp`, 0x09). When
+    /// present, the exact rerank reads it instead of the stored dtype slab
+    /// so a sub-int8 candidate slab still returns a real cosine.
+    pub(crate) embeddings_fp: Option<FpSlab>,
     pub(crate) chunk_ids: Vec<String>,
     pub(crate) spans: Vec<OriginalSpan>,
     pub(crate) embedding_model: String,
@@ -94,6 +99,9 @@ impl MmapNestFile {
         let embeddings_offset = entry.offset as usize;
         let embeddings_size = entry.size as usize;
 
+        // lOptional full-precision rerank slab (0x09); see rerank::FpSlab.
+        let embeddings_fp = FpSlab::detect(&view.section_table, n, dim)?;
+
         // lDecoded chunk_ids / spans (handles zstd transparently).
         let chunk_ids = decode_chunk_ids(&view.decoded_section(SECTION_CHUNK_IDS)?, n)?;
         let spans =
@@ -110,8 +118,10 @@ impl MmapNestFile {
             let bytes = view.decoded_section(SECTION_HNSW_INDEX)?;
             let mut idx = ann::HnswIndex::from_bytes(&bytes, n, dim)?;
             let emb_bytes = view.get_section_data(SECTION_EMBEDDINGS)?;
-            let vectors = materialize_f32_vectors(&view.manifest.dtype, emb_bytes, n, dim)?;
-            idx.attach_vectors(vectors);
+            // lKeep the vectors in their on-disk packing (no n*dim*4 f32
+            // expansion): the graph decodes one row at a time on demand.
+            let store = PackedVectors::from_section(&view.manifest.dtype, emb_bytes, n, dim)?;
+            idx.attach_store(store);
             Some(idx)
         } else {
             None
@@ -142,6 +152,7 @@ impl MmapNestFile {
             dtype,
             embeddings_offset,
             embeddings_size,
+            embeddings_fp,
             chunk_ids,
             spans,
             embedding_model,
@@ -240,6 +251,14 @@ impl MmapNestFile {
 
     pub(crate) fn embeddings_bytes(&self) -> &[u8] {
         &self._mmap[self.embeddings_offset..self.embeddings_offset + self.embeddings_size]
+    }
+
+    /// lThe full-precision rerank slab + its dtype, if an `embeddings_fp`
+    /// (0x09) section is present. The rerank handle prefers this over the
+    /// stored dtype slab so a sub-int8 corpus still returns a real cosine.
+    pub(crate) fn embeddings_fp_slab(&self) -> Option<(&[u8], DType)> {
+        self.embeddings_fp
+            .map(|fp| (&self._mmap[fp.offset..fp.offset + fp.size], fp.dtype))
     }
 
     /// lHint to the OS that the mmap pages won't be needed soon. The

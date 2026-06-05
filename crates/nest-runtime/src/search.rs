@@ -2,12 +2,10 @@
 //! with the real cosine score (ANN/hybrid rerank candidates with the exact
 //! dot product before returning).
 
-use nest_format::Int8EmbeddingsView;
-
 use crate::bm25;
 use crate::error::RuntimeError;
-use crate::mmap_file::{DType, MmapNestFile};
-use crate::simd;
+use crate::mmap_file::MmapNestFile;
+use crate::rerank::RerankSource;
 use crate::{SearchHit, SearchResult};
 
 impl MmapNestFile {
@@ -41,81 +39,43 @@ impl MmapNestFile {
         Ok(qnorm)
     }
 
-    /// lScore every chunk against `qnorm` using the dtype-specific dot
-    /// product. Returns `(idx, score)` pairs in the natural index order.
+    /// lThe single rerank source the exact-cosine recompute reads from:
+    /// the full-precision `embeddings_fp` (0x09) slab when present, else
+    /// the stored dtype slab. Both `score_all` and `score_subset` route
+    /// through this so every path's returned score is the SAME real
+    /// cosine, and a future per-space path just hands a different slab.
+    fn rerank_source(&self) -> Result<RerankSource<'_>, RuntimeError> {
+        let (dtype, bytes) = match self.embeddings_fp_slab() {
+            Some((bytes, dtype)) => (dtype, bytes),
+            None => (self.dtype, self.embeddings_bytes()),
+        };
+        RerankSource::new(dtype, bytes, self.n_embeddings, self.embedding_dim)
+    }
+
+    /// lScore every chunk against `qnorm` via the rerank source. Returns
+    /// `(idx, score)` pairs in the natural index order.
     fn score_all(&self, qnorm: &[f32]) -> Result<Vec<(usize, f32)>, RuntimeError> {
         let n = self.n_embeddings;
-        let dim = self.embedding_dim;
-        let bytes = self.embeddings_bytes();
+        let src = self.rerank_source()?;
         let mut scores: Vec<(usize, f32)> = Vec::with_capacity(n);
-        match self.dtype {
-            DType::Float32 => {
-                let row_size = dim * 4;
-                for i in 0..n {
-                    let off = i * row_size;
-                    let s = simd::dot_f32_bytes(qnorm, &bytes[off..off + row_size]);
-                    scores.push((i, s));
-                }
-            }
-            DType::Float16 => {
-                let row_size = dim * 2;
-                for i in 0..n {
-                    let off = i * row_size;
-                    let s = simd::dot_f32_f16_bytes(qnorm, &bytes[off..off + row_size]);
-                    scores.push((i, s));
-                }
-            }
-            DType::Int8 => {
-                let view =
-                    Int8EmbeddingsView::parse(bytes, n, dim).map_err(RuntimeError::Format)?;
-                for i in 0..n {
-                    let scale = view.scale(i);
-                    let row = view.row(i);
-                    let s = simd::dot_f32_i8(qnorm, row, scale);
-                    scores.push((i, s));
-                }
-            }
+        for i in 0..n {
+            scores.push((i, src.score(qnorm, i)));
         }
         Ok(scores)
     }
 
     /// lScore a sliced subset of indices (used by ANN/BM25 rerank). The
-    /// returned vector mirrors `idxs.len()` in order.
+    /// returned vector mirrors `idxs.len()` in order. This IS the exact
+    /// rerank every candidate-generating path must end in.
     fn score_subset(
         &self,
         qnorm: &[f32],
         idxs: &[usize],
     ) -> Result<Vec<(usize, f32)>, RuntimeError> {
-        let dim = self.embedding_dim;
-        let bytes = self.embeddings_bytes();
+        let src = self.rerank_source()?;
         let mut out: Vec<(usize, f32)> = Vec::with_capacity(idxs.len());
-        match self.dtype {
-            DType::Float32 => {
-                let row_size = dim * 4;
-                for &i in idxs {
-                    let off = i * row_size;
-                    out.push((i, simd::dot_f32_bytes(qnorm, &bytes[off..off + row_size])));
-                }
-            }
-            DType::Float16 => {
-                let row_size = dim * 2;
-                for &i in idxs {
-                    let off = i * row_size;
-                    out.push((
-                        i,
-                        simd::dot_f32_f16_bytes(qnorm, &bytes[off..off + row_size]),
-                    ));
-                }
-            }
-            DType::Int8 => {
-                let view = Int8EmbeddingsView::parse(bytes, self.n_embeddings, dim)
-                    .map_err(RuntimeError::Format)?;
-                for &i in idxs {
-                    let scale = view.scale(i);
-                    let row = view.row(i);
-                    out.push((i, simd::dot_f32_i8(qnorm, row, scale)));
-                }
-            }
+        for &i in idxs {
+            out.push((i, src.score(qnorm, i)));
         }
         Ok(out)
     }
