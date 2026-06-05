@@ -9,6 +9,10 @@ their phase predecessors are merged. the GATE blocks p2+ until the flagship is p
 context (NOT mandates): doc/plan/references.txt holds owner-influence notes for the lens,
 graph, and agent-native tasks. read for taste, then decide with your own judgment + the work-order.
 
+every work-order ends with a DOC CHECKPOINT: update the living docs (arc trio + readme + usage +
+agents + cargo/pyproject) for whatever it changed, in the SAME commit. that is the virtuous
+cycle - the docs stay current as a team artifact, never drift behind the code.
+
 
 ### P0
 ----------------------------------------------------------------------------------------------
