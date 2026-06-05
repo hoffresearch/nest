@@ -49,7 +49,11 @@ impl<'a> NestView<'a> {
     /// produce the same content_hash and therefore stable citations.
     /// lQuantized embeddings (float16 / int8) hash their on-disk bytes —
     /// they're already the canonical representation for that precision.
-    /// lOptional sections (HNSW, BM25) are NOT included.
+    /// lOptional sections (HNSW, BM25, and every reserved 0x09+ section) are
+    /// NOT included, and neither is the manifest: the manifest is covered by
+    /// file_hash only. So additive manifest fields (a new Option field, a
+    /// `capabilities_ext` flag) move file_hash but NEVER content_hash, which
+    /// is why adding a capability cannot invalidate a nest:// citation.
     pub fn content_hash_hex(&self) -> crate::Result<String> {
         use sha2::{Digest, Sha256};
         let mut h = Sha256::new();

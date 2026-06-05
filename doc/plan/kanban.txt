@@ -61,7 +61,10 @@ tagged by layer (forge/nest/lens/cross)
     refs: crates/nest-format/src/encoding/mod.rs, crates/nest-format/src/layout/mod.rs,
           serde-rs/serde
 
-[ ] manifest additivity guard: new fields Option-only + v01_compat test   (HIGH/nest)
+[x] manifest additivity guard: new fields Option-only + v01_compat test   (HIGH/nest)
+    [p0 #03 step1: CapabilitiesExt + capabilities_ext Option, tests/manifest_additivity.rs,
+     byte-identical (golden+v01_compat). steps 2-4 (roundtrip template, recall harness,
+     maturin/PyBuffer) deferred to a separate task/OWNS]
     Capabilities (manifest/mod.rs:21-40) is non-optional bools with a hand-written Default;
     adding a required bool is a deserialization + file_hash break sold as byte-identical.
     enforce: ALL new manifest fields Option<T> skip_serializing_if=is_none, new capability
