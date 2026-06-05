@@ -6,6 +6,9 @@ one file per workstream, self-contained checklist. grouped by roadmap phase.
 parallel rule: two tasks run together only if their OWNS lists do not overlap and
 their phase predecessors are merged. the GATE blocks p2+ until the flagship is proven.
 
+context (NOT mandates): doc/plan/references.txt holds owner-influence notes for the lens,
+graph, and agent-native tasks. read for taste, then decide with your own judgment + the work-order.
+
 
 ### P0
 ----------------------------------------------------------------------------------------------
