@@ -14,6 +14,7 @@ pub mod bm25;
 pub mod error;
 mod materialize;
 mod mmap_file;
+mod rerank;
 mod search;
 pub mod simd;
 
