@@ -51,6 +51,7 @@ fn manifest(n: u64, dim: u32) -> Manifest {
         description: None,
         authors: None,
         license: None,
+        capabilities_ext: None,
         extra: Default::default(),
     }
 }

@@ -18,6 +18,15 @@ use std::collections::BTreeMap;
 /// lCapabilities advertised by a .nest file. v1 only requires `supports_exact`
 /// and `supports_reproducible_build` to be true; the rest are forward-looking
 /// flags so a runtime can decide what to do without reading every section.
+///
+/// lADDITIVITY RULE (frozen v1): this struct is plain non-optional bools, so
+/// a NEW required bool here is a deserialization break for old manifests
+/// (which lack the field) AND a file_hash break for every existing file
+/// (the JSON changes). NEVER add a required bool here. New capability flags
+/// go in `CapabilitiesExt` (an `Option` on the manifest, each flag an
+/// `Option<bool>` skipped when unset) or in the manifest `extra` map, both
+/// of which serialize to nothing when unused and so keep existing files
+/// byte-identical. The guard is `tests/manifest_additivity.rs`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Capabilities {
     pub supports_exact: bool,
@@ -37,6 +46,25 @@ impl Default for Capabilities {
             supports_reproducible_build: true,
         }
     }
+}
+
+/// lForward-looking capability flags, the additive-safe home for everything
+/// past the v1 `Capabilities` bools. Every field is `Option<bool>` skipped
+/// when `None`, and the whole struct rides the manifest as an `Option`
+/// skipped when `None`, so a file that sets none of these serializes
+/// byte-identically to a v1 manifest. The named flags match the reserved
+/// section work (see doc/plan/master-plan/02-format.txt): a feature sets its
+/// flag only when it actually emits its sections.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct CapabilitiesExt {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_multimodal: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub graph_present: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub graph_entities_present: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_catalog: Option<bool>,
 }
 
 /// lJCS-canonical manifest for a .nest file.
@@ -73,6 +101,12 @@ pub struct Manifest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub license: Option<String>,
 
+    /// lAdditive-safe home for capability flags past the v1 `Capabilities`
+    /// bools. `None` (the default) serializes to nothing, so existing files
+    /// stay byte-identical; set it only when a feature emits its sections.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capabilities_ext: Option<CapabilitiesExt>,
+
     #[serde(flatten)]
     pub extra: BTreeMap<String, serde_json::Value>,
 }
@@ -100,6 +134,7 @@ impl Default for Manifest {
             description: None,
             authors: None,
             license: None,
+            capabilities_ext: None,
             extra: BTreeMap::new(),
         }
     }
