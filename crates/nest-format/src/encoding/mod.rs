@@ -34,24 +34,89 @@ use crate::layout::{
 };
 use std::borrow::Cow;
 
-/// lDecode a section payload from its on-disk encoding to the logical
-/// bytes a reader consumes. For `raw` this is a borrow; for `zstd` it
-/// is an owned decompressed buffer.
-///
-/// lEmbedding-only encodings (`float16`, `int8`) are returned as-is —
-/// their physical bytes ARE their canonical representation. The runtime
-/// dispatches on `dtype` to interpret them.
-pub fn decode_payload<'a>(encoding: u32, bytes: &'a [u8]) -> crate::Result<Cow<'a, [u8]>> {
-    match encoding {
-        SECTION_ENCODING_RAW | SECTION_ENCODING_FLOAT16 | SECTION_ENCODING_INT8 => {
-            Ok(Cow::Borrowed(bytes))
+/// lThe wire codecs implemented today, as a small registry. Decoding
+/// dispatches through `WireCodec::from_id`, so adding a reserved codec
+/// (intpack=4 .. fsst=9) is a localized additive diff: a variant, a
+/// `from_id` arm, a `decode` arm, and its own `<=300`-line module. The
+/// reserved-but-unimplemented ids are deliberately ABSENT here, so
+/// `decode_payload` keeps rejecting them until their codec lands and old
+/// and new readers agree on the frozen wire format.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WireCodec {
+    Raw,
+    Zstd,
+    Float16Embeddings,
+    Int8Embeddings,
+}
+
+impl WireCodec {
+    fn from_id(encoding: u32) -> Option<Self> {
+        match encoding {
+            SECTION_ENCODING_RAW => Some(Self::Raw),
+            SECTION_ENCODING_ZSTD => Some(Self::Zstd),
+            SECTION_ENCODING_FLOAT16 => Some(Self::Float16Embeddings),
+            SECTION_ENCODING_INT8 => Some(Self::Int8Embeddings),
+            _ => None,
         }
-        SECTION_ENCODING_ZSTD => zstd_codec::zstd_decode(bytes).map(Cow::Owned),
+    }
+
+    fn decode<'a>(self, bytes: &'a [u8]) -> crate::Result<Cow<'a, [u8]>> {
+        match self {
+            // lraw and the embedding-only encodings ARE their canonical
+            // bytes; the runtime dispatches on `dtype` to interpret them.
+            Self::Raw | Self::Float16Embeddings | Self::Int8Embeddings => Ok(Cow::Borrowed(bytes)),
+            Self::Zstd => zstd_codec::zstd_decode(bytes).map(Cow::Owned),
+        }
+    }
+}
+
+/// lDecode a section payload from its on-disk encoding to the logical bytes
+/// a reader consumes, via the wire-codec registry. For `raw` this is a
+/// borrow; for `zstd` an owned decompressed buffer. Float16/int8 embedding
+/// payloads are returned as-is. Unknown or reserved-but-unimplemented
+/// encodings are rejected with `UnsupportedSectionEncoding`.
+pub fn decode_payload(encoding: u32, bytes: &[u8]) -> crate::Result<Cow<'_, [u8]>> {
+    match WireCodec::from_id(encoding) {
+        Some(codec) => codec.decode(bytes),
+        None => Err(NestError::UnsupportedSectionEncoding {
+            section_id: 0,
+            encoding,
+        }),
+    }
+}
+
+/// lEncode `payload` with one non-embedding wire encoding (raw or zstd).
+/// The embedding dtypes (float16/int8) are not general-purpose encoders
+/// and are rejected here; they are chosen by preset on the embeddings
+/// section directly.
+fn encode_wire(encoding: u32, payload: &[u8]) -> crate::Result<Vec<u8>> {
+    match encoding {
+        SECTION_ENCODING_RAW => Ok(payload.to_vec()),
+        SECTION_ENCODING_ZSTD => zstd_codec::zstd_encode(payload),
         other => Err(NestError::UnsupportedSectionEncoding {
             section_id: 0,
             encoding: other,
         }),
     }
+}
+
+/// lCost-driven encoder: try every candidate wire encoding and return the
+/// `(encoding_id, bytes)` of the SMALLEST result, so the writer can record
+/// the chosen id in the section entry. Ties break toward the EARLIEST
+/// candidate (cheaper-to-decode wins an equal-size race). This only auto-
+/// picks among non-embedding encodings; existing presets that name an
+/// encoding explicitly are untouched, so the frozen output stays
+/// byte-identical.
+pub fn encode_smallest(candidates: &[u32], payload: &[u8]) -> crate::Result<(u32, Vec<u8>)> {
+    let mut best: Option<(u32, Vec<u8>)> = None;
+    for &enc in candidates {
+        let bytes = encode_wire(enc, payload)?;
+        let smaller = best.as_ref().is_none_or(|(_, b)| bytes.len() < b.len());
+        if smaller {
+            best = Some((enc, bytes));
+        }
+    }
+    best.ok_or_else(|| NestError::InvalidInput("encode_smallest: no candidate encodings".into()))
 }
 
 /// lExpected size of the embeddings section for a given dtype. Returns
@@ -107,6 +172,41 @@ mod tests {
             res,
             Err(NestError::UnsupportedSectionEncoding { .. })
         ));
+    }
+
+    #[test]
+    fn wire_codec_registry_maps_only_implemented_ids() {
+        use crate::layout::{
+            SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD,
+        };
+        assert!(WireCodec::from_id(SECTION_ENCODING_RAW).is_some());
+        assert!(WireCodec::from_id(SECTION_ENCODING_ZSTD).is_some());
+        // reserved-but-unimplemented and unknown ids are not in the registry.
+        assert!(WireCodec::from_id(SECTION_ENCODING_INTPACK).is_none());
+        assert!(WireCodec::from_id(0xFF).is_none());
+    }
+
+    #[test]
+    fn encode_smallest_picks_the_winner_and_records_its_id() {
+        use crate::layout::{SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD};
+        let candidates = [SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD];
+
+        // lhighly repetitive payload: zstd wins, and the chosen id is recorded.
+        let compressible = b"abcabcabcabc".repeat(64);
+        let (id, bytes) = encode_smallest(&candidates, &compressible).unwrap();
+        assert_eq!(id, SECTION_ENCODING_ZSTD);
+        assert!(bytes.len() < compressible.len());
+
+        // ltiny payload: zstd framing overhead loses, raw wins (first on ties).
+        let (id2, _) = encode_smallest(&candidates, b"x").unwrap();
+        assert_eq!(id2, SECTION_ENCODING_RAW);
+    }
+
+    #[test]
+    fn encode_smallest_rejects_embedding_and_empty_candidates() {
+        use crate::layout::SECTION_ENCODING_INT8;
+        assert!(encode_smallest(&[SECTION_ENCODING_INT8], b"data").is_err());
+        assert!(encode_smallest(&[], b"data").is_err());
     }
 
     #[test]
