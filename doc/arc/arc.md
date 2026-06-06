@@ -1,6 +1,6 @@
 ---
 project: nest
-last-updated: "2026-06-05"
+last-updated: "2026-06-06"
 domain: architecture
 ---
 
@@ -17,6 +17,7 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - nest-cli is a thin clap surface over the runtime and format crates. each command does argument handling and output formatting, not core search math.
 - nest-python is the PyO3 bridge. python/nest.py loads the compiled extension, python/builder.py orchestrates chunking and caching, and python/embed_query.py preserves model parity for search-text.
 - scripts/release_check.sh is the release gate. it rebuilds the extension, runs rust and python suites, checks lint and format, measures presets, and compares against the committed baseline.
+- forge-core is the ingestion layer, a SEPARATE cargo workspace at the repo root OUTSIDE crates/, so its (eventually heavy, possibly non-deterministic) deps never enter nest-format or nest-runtime. this phase ships FORGE-0a: the frozen .fci canonical-intermediate schema only. forge never duplicates the one authoritative chunker (builder.chunk_text), and .fci is versioned independently of the .nest format. the sovereign release gate does not build it; it has its own cargo workspace.
 
 ## format and runtime contract
 
@@ -220,6 +221,20 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - python/tools/__pycache__ | cache dir | empty generated cache directory for the python/tools package.
 - ref | empty dir | no current implementation content.
 - target | cargo artifact dir | generated build tree, including debug, release, and target/tmp.
+
+## forge-core (separate workspace, ingestion layer)
+
+forge-core is a sibling cargo workspace at the repo root, deliberately OUTSIDE crates/, so its dependency tree never enters nest-format or nest-runtime. it is FORGE-0a: the frozen .fci schema only. build and test it with its own manifest (`cargo build --manifest-path forge-core/Cargo.toml`); the sovereign `cargo build --workspace` does not see it.
+
+- forge-core/Cargo.toml | crate manifest | standalone workspace plus package; minimal deps (serde, serde_json, thiserror); edition 2024.
+- forge-core/src/lib.rs | rust source | crate surface and the boundary doc: no chunker, no model runtime; determinism anchored on canonical text plus per-space fingerprint.
+- forge-core/src/error.rs | rust source | typed ForgeError variants (serialize, deserialize, invalid, unsupported schema version); never panics.
+- forge-core/src/fci/mod.rs | rust source | FciBundle container, FCI_SCHEMA_VERSION, and validate (cross-reference plus schema-version checks).
+- forge-core/src/fci/record.rs | rust source | ChunkRecord, mirroring builder.ChunkSpec exactly so the adapter is a 1:1 map and spans round-trip through nest cite.
+- forge-core/src/fci/embedding_request.rs | rust source | EmbeddingRequest, SpaceTag, and PayloadRef, the multimodal carrier (one chunk, several named-space requests).
+- forge-core/src/fci/entity.rs | rust source | Entity, MentionSpan, and the typed weighted Edge for the graph pillar.
+- forge-core/src/fci/blob_ref.rs | rust source | BlobRef, a content-hash reference to an original artifact for catalog mode.
+- forge-core/src/fci/serialize.rs | rust source | deterministic canonical serialize and deserialize (compact json, declaration order, verbatim strings) plus roundtrip, determinism, and validate tests.
 
 ## coverage
 
