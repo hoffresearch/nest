@@ -2,7 +2,7 @@
 
 `nest` is a single-file binary container for distributing semantic knowledge bases. one file: chunks, canonical text, byte-spans, embeddings, search contract, hashes. copy it, share it, search it.
 
-this guide covers the eight commands you'll actually use.
+this guide covers the commands you'll actually use: the agent-native flagship verbs `ask` and `retrieve` (the front door), and the engine subcommands beneath them (build via python, validate, stats, inspect, search/search-ann/search-graph/search-text, benchmark, cite).
 
 ## 1. build a `.nest` from chunks
 
@@ -103,6 +103,30 @@ seeds from the exact-cosine top-`ef`, expands a bounded breadth-first walk over 
 ```sh
 nest search-graph my_corpus.nest "[0.1, 0.2, ...]" -k 10 --hops 2 --ef 100
 ```
+
+### the flagship: ask and retrieve
+
+`ask` and `retrieve` are the agent-native front door: text query in, cited answer out, no flags needed. they embed the query OFFLINE with the default potion static table (`python/forge/embed_query_potion.py`), NOT sentence-transformers, so they work offline-by-construction; they validate the embedder's `model_hash` against the manifest exactly like `search-text`; and they route by manifest capability (exact if only embeddings, hnsw/hybrid/graph as the file advertises). every printed score IS the exact-cosine rerank value.
+
+`ask` prints one low-cognitive-load cited answer:
+
+```sh
+nest ask my_corpus.nest "can I use this offline" -k 3
+```
+
+`--disclose answer` (default) prints the cited canonical text and a `nest://` citation, nothing else. `--disclose explain` ALSO prints the rerank-source honesty line: `real cosine` when the score is full precision, `real cosine at stored precision` for a lossy stored slab (float16/int8/int4) with no full-precision source, plus the route and per-path candidate counts.
+
+`retrieve` is the agent-shaped surface: a json/jsonl answer-pack of cited spans.
+
+```sh
+nest retrieve my_corpus.nest "can I use this offline" -k 5 --format jsonl
+```
+
+each hit is `{chunk_id, score, score_type=cosine, source_uri, offset_start, offset_end, citation_id, text, file_hash, content_hash, rerank_source}`. the `score` is the exact rerank value (never a candidate-generator proxy), `text` is the tier-1 stored canonical text, and `citation_id` round-trips through `nest cite`. `--format json` emits a single pretty array instead of one object per line.
+
+the embedder runs under `python3` by default; set `NEST_PYTHON` to a venv that carries the forge deps (numpy + tokenizers + the vendored potion table) if `python3` does not. point `--model-path` at a copied potion table dir for a fully sealed offline run.
+
+the python convenience is `python python/forge/retrieve.py`: it builds a `.nest` from the cc0 demo corpus with the potion embedder, asks a question, and prints the cited answer with a `nest://` citation, all offline and deterministic (the one-gif demo).
 
 ## 6. presets
 
@@ -209,6 +233,8 @@ nest cite my_corpus.nest 'nest://sha256:1aa9.../sha256:8f314...'
 ```
 
 `content_hash` is hashed over the **decoded** bytes, so a corpus stored with `text_encoding=zstd` produces the same `content_hash` as the same logical content stored raw. citations are stable across wire encodings.
+
+`cite` is tier-1: it returns the stored canonical text plus the verifying hashes (`file_hash`, `content_hash`) and the byte span. it does NOT reopen the original source bytes; original-byte reopen with a blob-digest verify is net-new tier-2 work that belongs to catalog mode, not the flagship. `ask` and `retrieve` print the same tier-1 stored canonical text, so the answer you get is exactly what `cite` resolves.
 
 ## 10. release verification
 

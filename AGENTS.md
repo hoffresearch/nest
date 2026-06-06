@@ -47,7 +47,7 @@ the forge build-side default embedder is now the REAL SEMANTIC one: a vendored m
 ```
 nest-format  standalone library (binary format spec, reader, writer, manifest, encoding, hashing)
 nest-runtime depends on nest-format (mmap-backed search, MmapNestFile, ann::HnswIndex, bm25::Bm25Index, graph::CsrIndex, simd dispatcher)
-nest-cli     depends on nest-format + nest-runtime (clap binary, 9 subcommands)
+nest-cli     depends on nest-format + nest-runtime (clap binary, 9 engine subcommands + the ask/retrieve flagship verbs)
 nest-python  depends on nest-format + nest-runtime (cdylib _nest, PyO3 abi3-py312)
 
 forge-core   SEPARATE cargo workspace at the repo root, OUTSIDE crates/ (ingestion layer,
@@ -55,7 +55,7 @@ forge-core   SEPARATE cargo workspace at the repo root, OUTSIDE crates/ (ingesti
              sovereign crates; not in the `--workspace` set. .fci is versioned independently.
 ```
 
-CLI binary: `nest`. subcommands: `inspect`, `validate`, `search`, `search-ann`, `search-graph`, `search-text`, `benchmark`, `stats`, `cite`.
+CLI binary: `nest`. nine engine subcommands: `inspect`, `validate`, `search`, `search-ann`, `search-graph`, `search-text`, `benchmark`, `stats`, `cite`. plus two agent-native flagship verbs layered over the same engine: `ask` (text query in, cited answer out, `--disclose answer|explain`) and `retrieve` (json/jsonl answer-pack of cited spans where score IS the exact rerank value). the flagship keeps the nine subcommands as-is under the hood; verb-collapse, the `nest dev` namespace, and the nest-profile crate are deferred (churn with no user value pre-users).
 
 python entry: `sys.path.insert(0, "python"); import nest`. dynamic loader finds `_nest.so` or `lib_nest.dylib`.
 
@@ -136,6 +136,8 @@ documentation, comments, and commit messages follow the README's tone.
 - **PT-BR fingerprint corpus**: the model fingerprint is computed against the local sentence-transformers cache. first-time builders must `python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')"` to populate the cache, otherwise `nest_build_corpus.py` and the fingerprint test fail.
 - **squash merge breaks `dev` history**: when a PR squash-merges into `main`, the squashed commit hash differs from the originals on `dev`. subsequent merges of `main` into `dev` will conflict on any files the squash touched. resolve by `git checkout --ours` from `dev` (dev is always the source of truth post-squash; main is just a flat snapshot).
 - **avoid run `cargo clean` casually**: rebuild times are 30-60s for the full workspace. incremental compilation handles most edits.
+- **`ask`/`retrieve` embed OFFLINE with potion, NOT sentence-transformers**: the flagship verbs shell out to `python/forge/embed_query_potion.py` (the default potion static table, numpy + tokenizers, no torch, no socket), so they stay offline-by-construction. only `search-text` uses `python/embed_query.py` (sentence-transformers, network on first use). the embedder runs under `python3` unless `NEST_PYTHON` is set; point `NEST_PYTHON` at a venv that carries the forge deps (numpy + tokenizers + the git-lfs potion table) or the embed step fails with `ModuleNotFoundError`. the two flagship e2e tests in `cli_e2e.rs` and `python/forge/test_retrieve.py` need those deps and skip cleanly when absent; they are not run by `release_check.sh`.
+- **`cite` is tier-1 only**: it returns the stored canonical text + verifying hashes, NEVER an original-byte reopen. `ask`/`retrieve` print the same tier-1 text. do not let help text or docs claim original-byte reopen (that is net-new tier-2 catalog work, post-gate).
 
 # known gaps
 

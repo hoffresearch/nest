@@ -83,6 +83,24 @@ impl NestFile {
         Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
     }
 
+    /// lAgent-native flagship: a pre-embedded query in, cited spans out.
+    /// each hit's `score` IS the exact-cosine rerank value; routes by
+    /// manifest capability (hnsw/hybrid/graph/exact). every hit carries the
+    /// tier-1 stored canonical `text`, the verifying hashes, the stable
+    /// citation_id, and the rerank-source precision marker. embed the query
+    /// OFFLINE first (see python/forge/retrieve.py for the potion path).
+    #[pyo3(signature = (query, k, candidates=None, hops=1, ef=100))]
+    fn retrieve(
+        &self,
+        query: &Bound<PyAny>,
+        k: i32,
+        candidates: Option<usize>,
+        hops: usize,
+        ef: usize,
+    ) -> PyResult<Vec<crate::retrieve_fn::RetrieveHitPy>> {
+        crate::retrieve_fn::retrieve(&self.rt, query, k, candidates, hops, ef)
+    }
+
     #[getter]
     fn embedding_dim(&self) -> usize {
         self.rt.embedding_dim()

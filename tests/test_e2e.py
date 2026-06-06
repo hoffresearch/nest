@@ -149,8 +149,40 @@ def test_search_hit_carries_full_contract():
         os.unlink(path)
 
 
+def test_retrieve_score_equals_search_score_exactly():
+    """The flagship-is-a-lie guard in python: NestFile.retrieve(q, k) must
+    return cited spans whose `score` equals NestFile.search(q, k) byte-for-byte
+    (the retrieve score IS the exact rerank value, never a candidate proxy),
+    and each hit carries the tier-1 text + a well-formed nest:// citation."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".nest") as f:
+        path = f.name
+    try:
+        make_nest(path, dim=8, n=12, seed=3)
+        db = nest.open(path)
+        q = _unit_vec(random.Random(99), 8)
+
+        search_hits = db.search(q, 5)
+        retrieve_hits = db.retrieve(q, 5)
+        assert len(retrieve_hits) == len(search_hits)
+        for r, s in zip(retrieve_hits, search_hits, strict=False):
+            assert r.chunk_id == s.chunk_id
+            # the load-bearing guard: identical bits, not "close".
+            assert r.score == s.score, (r.score, s.score)
+            assert r.score_type == "cosine"
+            assert r.citation_id == f"nest://{db.content_hash}/{r.chunk_id}"
+            assert r.content_hash == db.content_hash
+            assert r.file_hash == db.file_hash
+            # tier-1 stored canonical text is attached and non-empty.
+            assert isinstance(r.text, str) and r.text
+            assert r.rerank_source == "full_precision"  # f32 corpus
+        print("retrieve score == search score (byte-identical) OK")
+    finally:
+        os.unlink(path)
+
+
 if __name__ == "__main__":
     test_python_build_then_python_search()
     test_validate_via_pyo3()
     test_reproducible_builds_match_byte_for_byte()
     test_search_hit_carries_full_contract()
+    test_retrieve_score_equals_search_score_exactly()
