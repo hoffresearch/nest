@@ -23,7 +23,8 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 ## format and runtime contract
 
 - required sections are chunk_ids, chunks_canonical, chunks_original_spans, embeddings, provenance, and search_contract. optional sections are hnsw_index and bm25_index.
-- additive section ids past the implemented 0x01-0x08 are reserved in one reconciled, disjoint map in layout/mod.rs: 0x09-0x10 (scalar reservations: embeddings_fp, dictionary, dedup_map, graph_adjacency, chunk_scalars, tokenizer_model, edit_journal, repro_manifest), 0x11-0x16 (graph_nodes, graph_edge_props, graph_entity_map, blob_refs, space_table, blob_span_overlay), and the per-space bands 0x20-0x2F (space embeddings) and 0x30-0x3F (space fp). all are excluded from content_hash and unresolved by section_name until their feature ships; tests/reserved_ids.rs asserts the bands are disjoint and content_hash-safe. wire encodings reserve 4-9 (intpack, zstd_dict, frontcode, int4, rabitq, fsst); decode_payload dispatches through a wire-codec registry that rejects reserved-but-unimplemented ids.
+- additive section ids past the implemented 0x01-0x08 are reserved in one reconciled, disjoint map in layout/mod.rs: 0x09-0x10 (scalar reservations: embeddings_fp, dictionary, dedup_map, graph_adjacency, chunk_scalars, tokenizer_model, edit_journal, repro_manifest), 0x11-0x16 (graph_nodes, graph_edge_props, graph_entity_map, blob_refs, space_table, blob_span_overlay), and the per-space bands 0x20-0x2F (space embeddings) and 0x30-0x3F (space fp). all are excluded from content_hash and unresolved by section_name until their feature ships; tests/reserved_ids.rs asserts the bands are disjoint and content_hash-safe.
+- wire encodings reserve ids 4-9 (intpack, zstd_dict, frontcode, int4, rabitq, fsst); decode_payload dispatches through a wire-codec registry that still rejects the reserved-but-unimplemented ids. intpack (id 4) is implemented: a content_hash-preserving repack of the canonical chunk_ids and spans sections. under a compressed (zstd-text) preset the writer stores chunk_ids as 32 raw digest bytes and spans as a deduped uri pool plus bitpacked offsets; both decode BYTE-IDENTICALLY to the raw payload, so content_hash and nest:// citations are unchanged. raw-text presets (and the golden fixture) keep the raw/zstd encodings and stay byte-identical. the shared intpack primitive (per-128-block frame-of-reference, O(1) select, never panics on truncated input) also backs the optional indices: the hnsw (0x07) and bm25 (0x08) payloads bumped to version 2, bitpacking neighbour ids and delta-gapped postings; readers still accept version 1, and the decoded graph/index is identical so recall and scores are unchanged. these are optional/non-content-hashed sections, so the bump is additive within v1.
 - raw and zstd apply to non-embedding payloads. float16 and int8 apply only to embeddings. embeddings never use zstd because the runtime scores them directly from mmap through the simd path.
 - the four integrity surfaces are header_checksum, section checksum over physical bytes, file_hash over the whole pre-footer body, and content_hash over decoded canonical sections.
 - the manifest is covered by file_hash, never content_hash. new manifest fields must be additive: Option with skip_serializing_if, so an unset field serializes to nothing (existing files stay byte-identical and old readers still deserialize). new capability flags go in the optional capabilities_ext or the flattened extra map, never as new required bools on Capabilities (which would break both deserialization and file_hash). tests/manifest_additivity.rs is the guard.
@@ -60,7 +61,7 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - crates/nest-format | crate directory | frozen binary format, manifest, reader, writer, sections, encodings, and tests.
 - crates/nest-format/examples | example dir | maintenance utilities such as golden fixture regeneration.
 - crates/nest-format/src | rust source dir | format implementation organized by layout, manifest, reader, sections, writer, and codecs.
-- crates/nest-format/src/encoding | rust module dir | float16, int8, and zstd codec support for the writer and reader.
+- crates/nest-format/src/encoding | rust module dir | float16, int8, zstd, and the intpack bitpacking primitive for the writer and reader.
 - crates/nest-format/src/layout | rust module dir | header, footer, and section-table structs that define the on-disk container layout.
 - crates/nest-format/src/manifest | rust module dir | manifest schema, canonical json serialization, and validation rules.
 - crates/nest-format/src/reader | rust module dir | zero-copy parse, decode, and validation logic over byte slices.
@@ -111,7 +112,8 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - crates/nest-format/src/chunk.rs | rust source | defines ChunkInput, validates per-chunk invariants, and derives deterministic chunk_id values.
 - crates/nest-format/src/encoding/float16.rs | rust source | float16 encode and decode helpers for compact embedding storage.
 - crates/nest-format/src/encoding/int8.rs | rust source | int8 quantization, scale handling, and parsed views over quantized embeddings.
-- crates/nest-format/src/encoding/mod.rs | rust source | wire-codec registry (WireCodec) that decode_payload dispatches through, the cost-driven encode_smallest try-all-pick-smallest encoder, and central encoding exports used by writer and runtime.
+- crates/nest-format/src/encoding/intpack.rs | rust source | shared integer bitpacking primitive (encoding id 4): per-128-block frame-of-reference, O(1) IntpackReader::get, typed errors (never panics) on truncated input. reused by the hnsw/bm25 codecs and the chunk_ids/spans repackers.
+- crates/nest-format/src/encoding/mod.rs | rust source | wire-codec registry (WireCodec) that decode_payload dispatches through (incl intpack id 4 -> the content_hash-preserving chunk_ids/spans repack), the cost-driven encode_smallest try-all-pick-smallest encoder, and central encoding exports used by writer and runtime.
 - crates/nest-format/src/encoding/zstd_codec.rs | rust source | zstd helpers for non-embedding sections that can be compressed without changing content_hash semantics.
 - crates/nest-format/src/error.rs | rust source | typed NestError variants that cover layout, manifest, checksum, query, and input failures.
 - crates/nest-format/src/layout/footer.rs | rust source | footer struct and file-hash trailer definitions.
@@ -127,12 +129,12 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - crates/nest-format/src/reader/parse.rs | rust source | parses header, footer, and section table from the raw file bytes.
 - crates/nest-format/src/reader/validate.rs | rust source | enforces magic, bounds, checksums, manifest, required-section validity, and the rule that embeddings cannot use zstd.
 - crates/nest-format/src/sections/canonical.rs | rust source | canonical payload handling used to compute content_hash over decoded bytes.
-- crates/nest-format/src/sections/chunk_ids.rs | rust source | encodes and decodes the chunk_ids section.
+- crates/nest-format/src/sections/chunk_ids.rs | rust source | encodes and decodes the chunk_ids section; adds the intpack repack (32 raw digest bytes) that decodes byte-identically to the raw ascii so content_hash is unchanged.
 - crates/nest-format/src/sections/codec.rs | rust source | generic section payload version and count framing helpers.
 - crates/nest-format/src/sections/contract.rs | rust source | search contract encoding, decoding, and manifest cross-check helpers.
-- crates/nest-format/src/sections/mod.rs | rust source | section exports and shared section-level types.
+- crates/nest-format/src/sections/mod.rs | rust source | section exports, shared section-level types, the intpack repack-kind constants, and the decode_intpack_repack dispatch.
 - crates/nest-format/src/sections/provenance.rs | rust source | provenance section encode and decode helpers for free-form metadata.
-- crates/nest-format/src/sections/spans.rs | rust source | original span encode and decode helpers for source_uri plus byte spans.
+- crates/nest-format/src/sections/spans.rs | rust source | original span encode and decode helpers for source_uri plus byte spans; adds the intpack repack (deduped uri pool + bitpacked offsets) that decodes byte-identically so content_hash is unchanged.
 - crates/nest-format/src/writer/build.rs | rust source | low-level deterministic byte assembly and final file layout emission, keeping embeddings directly mmap-readable.
 - crates/nest-format/src/writer/encoding_choice.rs | rust source | preset-facing enums and constants for text encoding and embedding dtype.
 - crates/nest-format/src/writer/mod.rs | rust source | high-level NestFileBuilder surface, manifest mutation, and optional index attachment.
@@ -161,11 +163,11 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 
 - crates/nest-runtime/Cargo.toml | crate manifest | declares the runtime crate and its dependencies on nest-format, mmap, rayon, half, serde, and sha2.
 - crates/nest-runtime/src/ann/build.rs | rust source | deterministic hnsw graph construction over normalized vectors.
-- crates/nest-runtime/src/ann/codec.rs | rust source | serializes and deserializes the optional hnsw section payload.
+- crates/nest-runtime/src/ann/codec.rs | rust source | serializes and deserializes the optional hnsw section payload; v2 bitpacks the level/count/neighbour-id columns with intpack (order-preserving, recall unchanged) and still reads v1.
 - crates/nest-runtime/src/ann/mod.rs | rust source | hnsw index types, defaults, distance model, and roundtrip tests.
 - crates/nest-runtime/src/ann/search.rs | rust source | performs ann candidate exploration over the hnsw graph.
 - crates/nest-runtime/src/ann/select_neighbors.rs | rust source | neighbor selection heuristic used during graph construction.
-- crates/nest-runtime/src/bm25/codec.rs | rust source | serializes and deserializes the optional bm25 section payload.
+- crates/nest-runtime/src/bm25/codec.rs | rust source | serializes and deserializes the optional bm25 section payload; v2 delta-gaps the sorted doc ids and bitpacks gaps/tfs/doc-lengths with intpack (scores unchanged) and still reads v1.
 - crates/nest-runtime/src/bm25/fusion.rs | rust source | reciprocal-rank fusion helper that merges lexical and vector candidates.
 - crates/nest-runtime/src/bm25/index.rs | rust source | builds and queries the bm25 inverted index kept in memory at open time.
 - crates/nest-runtime/src/bm25/mod.rs | rust source | bm25 module surface, payload contract, defaults, and tokenizer notes.

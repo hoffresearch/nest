@@ -19,6 +19,7 @@
 
 mod float16;
 mod int8;
+mod intpack;
 mod zstd_codec;
 
 pub use float16::{f16_bytes_to_f32, f32_to_f16_bytes};
@@ -26,11 +27,13 @@ pub use int8::{
     INT8_PAYLOAD_VERSION, INT8_PREFIX_SIZE, INT8_SCALE_KIND_PER_VECTOR, Int8EmbeddingsView,
     encode_int8_embeddings, quantize_f32_to_i8,
 };
+pub use intpack::{INTPACK_BLOCK, IntpackReader, pack_u64s, unpack_u64s};
 pub use zstd_codec::{DEFAULT_ZSTD_LEVEL, zstd_encode};
 
 use crate::error::NestError;
 use crate::layout::{
-    SECTION_ENCODING_FLOAT16, SECTION_ENCODING_INT8, SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD,
+    SECTION_ENCODING_FLOAT16, SECTION_ENCODING_INT8, SECTION_ENCODING_INTPACK,
+    SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD,
 };
 use std::borrow::Cow;
 
@@ -47,6 +50,7 @@ enum WireCodec {
     Zstd,
     Float16Embeddings,
     Int8Embeddings,
+    Intpack,
 }
 
 impl WireCodec {
@@ -56,6 +60,7 @@ impl WireCodec {
             SECTION_ENCODING_ZSTD => Some(Self::Zstd),
             SECTION_ENCODING_FLOAT16 => Some(Self::Float16Embeddings),
             SECTION_ENCODING_INT8 => Some(Self::Int8Embeddings),
+            SECTION_ENCODING_INTPACK => Some(Self::Intpack),
             _ => None,
         }
     }
@@ -66,6 +71,10 @@ impl WireCodec {
             // bytes; the runtime dispatches on `dtype` to interpret them.
             Self::Raw | Self::Float16Embeddings | Self::Int8Embeddings => Ok(Cow::Borrowed(bytes)),
             Self::Zstd => zstd_codec::zstd_decode(bytes).map(Cow::Owned),
+            // lintpack repacks a canonical section (chunk_ids / spans) into a
+            // smaller physical form that decodes BYTE-IDENTICALLY to the raw
+            // payload, so content_hash and citations are unchanged.
+            Self::Intpack => crate::sections::decode_intpack_repack(bytes).map(Cow::Owned),
         }
     }
 }
@@ -163,26 +172,33 @@ mod tests {
     }
 
     #[test]
-    fn reserved_encoding_not_yet_implemented() {
-        // intpack (id 4) is a reserved additive lane with no codec yet, so
-        // decode_payload must still reject it. when intpack ships, replace
-        // this with a roundtrip + content_hash-equality test.
-        let res = decode_payload(crate::layout::SECTION_ENCODING_INTPACK, &[]);
-        assert!(matches!(
-            res,
-            Err(NestError::UnsupportedSectionEncoding { .. })
-        ));
+    fn intpack_decode_payload_rebuilds_canonical_bytes() {
+        // intpack (id 4) repacks chunk_ids/spans; decode_payload must
+        // rebuild the BYTE-IDENTICAL raw payload so content_hash (hashed
+        // over decoded bytes) is unchanged and citations stay stable.
+        use crate::sections::{encode_chunk_ids, encode_chunk_ids_intpack};
+        let ids: Vec<String> = (0u8..3)
+            .map(|i| format!("sha256:{}", hex::encode([i; 32])))
+            .collect();
+        let packed = encode_chunk_ids_intpack(&ids).unwrap();
+        let decoded = decode_payload(SECTION_ENCODING_INTPACK, &packed).unwrap();
+        assert_eq!(decoded.as_ref(), encode_chunk_ids(&ids).unwrap().as_slice());
+        // a malformed intpack payload is a typed error, never a panic.
+        assert!(decode_payload(SECTION_ENCODING_INTPACK, &[]).is_err());
     }
 
     #[test]
     fn wire_codec_registry_maps_only_implemented_ids() {
         use crate::layout::{
             SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD,
+            SECTION_ENCODING_ZSTD_DICT,
         };
         assert!(WireCodec::from_id(SECTION_ENCODING_RAW).is_some());
         assert!(WireCodec::from_id(SECTION_ENCODING_ZSTD).is_some());
-        // reserved-but-unimplemented and unknown ids are not in the registry.
-        assert!(WireCodec::from_id(SECTION_ENCODING_INTPACK).is_none());
+        // intpack (id 4) is now implemented and in the registry.
+        assert!(WireCodec::from_id(SECTION_ENCODING_INTPACK).is_some());
+        // still-reserved-but-unimplemented and unknown ids are not.
+        assert!(WireCodec::from_id(SECTION_ENCODING_ZSTD_DICT).is_none());
         assert!(WireCodec::from_id(0xFF).is_none());
     }
 
