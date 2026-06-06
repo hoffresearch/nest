@@ -10,6 +10,7 @@ operating notes for ai agents and human contributors working in this repo. the p
 - `cargo clippy --workspace --all-targets -- -D warnings`: linting (warnings are errors)
 - `ruff check .` / `ruff format --check .`: python linting and formatting (config in `pyproject.toml`)
 - `./scripts/release_check.sh`: full pipeline + regression gates against `dat/measure/baseline.json`. single source of truth for "PR-ready". exits non-zero on any failure.
+- `forge-core` (the ingestion layer) is a SEPARATE cargo workspace OUTSIDE `crates/`; the sovereign `--workspace` commands and `release_check.sh` do not touch it. build and test it on its own manifest: `cargo build --manifest-path forge-core/Cargo.toml`, `cargo test --manifest-path forge-core/Cargo.toml`, `cargo clippy --manifest-path forge-core/Cargo.toml --all-targets -- -D warnings`, `cargo fmt --manifest-path forge-core/Cargo.toml --all --check`. the <=300-line rule applies there too (release_check's guard only scans `crates/`).
 
 # pyo3 extension
 
@@ -46,6 +47,10 @@ nest-format  standalone library (binary format spec, reader, writer, manifest, e
 nest-runtime depends on nest-format (mmap-backed search, MmapNestFile, ann::HnswIndex, bm25::Bm25Index, simd dispatcher)
 nest-cli     depends on nest-format + nest-runtime (clap binary, 8 subcommands)
 nest-python  depends on nest-format + nest-runtime (cdylib _nest, PyO3 abi3-py312)
+
+forge-core   SEPARATE cargo workspace at the repo root, OUTSIDE crates/ (ingestion layer,
+             FORGE-0a: the frozen .fci canonical-intermediate schema). its deps never enter the
+             sovereign crates; not in the `--workspace` set. .fci is versioned independently.
 ```
 
 CLI binary: `nest`. subcommands: `inspect`, `validate`, `search`, `search-ann`, `search-text`, `benchmark`, `stats`, `cite`.
