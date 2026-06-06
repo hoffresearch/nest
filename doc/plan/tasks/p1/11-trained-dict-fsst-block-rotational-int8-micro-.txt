@@ -85,6 +85,40 @@ facebook/zstd, ggml-org/ggml, weaviate/recipes, QwenLM/Qwen3-Embedding
   size ratio  before: ____  after: ____
   recall@10   before: ____  after: ____
 
+--- WO EMB-matryoshka RESULT (2026-06-06, branch research/nest-genome-v2) ---
+  step 3 of this task (matryoshka prefix truncation + micro preset) shipped as a
+  standalone WO. build-time truncate-then-renormalize (Qwen3/ST/BGE): nest.build
+  gains an mrl_dim kwarg; each l2-normalized f32 row is sliced to the prefix and
+  re-l2-normalized BEFORE quantization, so int8/int4 calibrate on the shorter
+  renormalized row. header/manifest embedding_dim becomes mrl_dim; full_dim +
+  mrl_dim recorded as additive optional manifest fields (unset files stay
+  byte-identical). NO runtime kernel change (reader strides by header.embedding_dim).
+  determinism verified: two builds at the same mrl_dim are byte-identical.
+
+  measured on dat/corpus_next.v1.nest (n=30725, dim=384 MiniLM, NOT mrl-trained),
+  100 queries, k=10, recall vs the full-dim float32 baseline:
+
+    f32 truncation-only curve (isolates the dimension axis):
+      mrl256 ratio 0.419 recall 0.811 | mrl192 0.353 0.732 | mrl128 0.288 0.657 | mrl96 0.255 0.574
+    int8 ladder {256,192,128,96}:
+      mrl256-int8 0.223 0.810 | mrl192 0.207 0.733 | mrl128 0.190 0.659 | mrl96 0.182 0.574
+    int4 ladder {256,192,128} (96 BLOCKED: 96%64=32, int4 needs dim%64==0):
+      mrl256-int4 0.191 0.777 | mrl192 0.183 0.713 | mrl128 0.174 0.627
+
+  honest finding: MiniLM front-loading is NOT guaranteed, so truncation costs
+  real recall (int8/f32 curves nearly identical => the loss is the dimension axis,
+  quant adds ~nothing at int8, ~3-5 pts at int4). NO ladder point holds the nano
+  floor (recall@10>=0.85): the existing nano (int4 full-dim, 0.209, 0.913) still
+  WINS on recall while every mrl point is smaller. the smallest point within a
+  reported tolerance is mrl256-int8 (0.223 ratio, 0.810 recall): the micro lever
+  to use ONLY when size beats the last ~10 recall points, or once a real
+  mrl-trained model lands (the curve front-loads and these numbers jump). reported
+  as a curve, not a cherry-pick; size lever disclosed with measured recall@10 +
+  stated dim/dtype per COMPRESSION-HONESTY. conditional micro-mrl gate added to
+  compare_measure.py (mrl256-int8: size_ratio<=0.25, recall@k>=0.78). all green:
+  build+fmt+clippy+test pass, measure shows recall held.
+  (the dict/fsst/rotational-int8 steps of #11 remain todo, out of this WO's scope.)
+
 --- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
 update only what THIS task actually changed; check each:
 [ ] doc/arc/arc.md     architecture inventory + contract (boundaries/sections/data-flow/runtime)

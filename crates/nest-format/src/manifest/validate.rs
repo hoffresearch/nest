@@ -112,7 +112,57 @@ impl Manifest {
                 "index_type=hybrid requires capabilities.supports_bm25=true".into(),
             ));
         }
+        self.validate_matryoshka()?;
         Ok(())
+    }
+
+    /// lMatryoshka disclosure invariants. `mrl_dim`/`full_dim` are additive
+    /// optional; when present they must be internally consistent:
+    ///   - `mrl_dim` must be > 0 (a zero prefix carries no signal),
+    ///   - `mrl_dim` must be <= `full_dim` (it is a prefix of the source dim),
+    ///   - `mrl_dim` must equal `embedding_dim` (the runtime strides the
+    ///     embeddings section exclusively by `embedding_dim`, so the effective
+    ///     stored dim IS the prefix dim),
+    ///   - if `mrl_dim` is set then `full_dim` must be set too (the source dim
+    ///     is the disclosure half that makes the truncation honest),
+    ///   - int4 needs the EFFECTIVE dim divisible by 64 (per-64-dim block
+    ///     scales), mirroring the build-time guard, so a truncated int4 file
+    ///     at mrl_dim%64!=0 (e.g. 96) is rejected.
+    fn validate_matryoshka(&self) -> crate::Result<()> {
+        match (self.mrl_dim, self.full_dim) {
+            (None, None) => Ok(()),
+            (Some(0), _) => Err(NestError::ManifestInvalid(
+                "mrl_dim must be > 0 when set".into(),
+            )),
+            (Some(_), None) => Err(NestError::ManifestInvalid(
+                "mrl_dim requires full_dim (the source dim) to be set".into(),
+            )),
+            (None, Some(_)) => Err(NestError::ManifestInvalid(
+                "full_dim requires mrl_dim to be set".into(),
+            )),
+            (Some(m), Some(f)) => {
+                if m > f {
+                    return Err(NestError::ManifestInvalid(format!(
+                        "mrl_dim ({}) must be <= full_dim ({})",
+                        m, f
+                    )));
+                }
+                if m != self.embedding_dim {
+                    return Err(NestError::ManifestInvalid(format!(
+                        "mrl_dim ({}) must equal embedding_dim ({}); the runtime \
+                         strides by embedding_dim",
+                        m, self.embedding_dim
+                    )));
+                }
+                if self.dtype == "int4" && m % 64 != 0 {
+                    return Err(NestError::ManifestInvalid(format!(
+                        "int4 requires mrl_dim divisible by 64, got {}",
+                        m
+                    )));
+                }
+                Ok(())
+            }
+        }
     }
 }
 
@@ -130,4 +180,92 @@ fn validate_model_hash(s: &str) -> crate::Result<()> {
         )));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod mrl_tests {
+    use super::Manifest;
+    use crate::error::NestError;
+
+    fn good() -> Manifest {
+        Manifest {
+            embedding_model: "demo".into(),
+            embedding_dim: 128,
+            n_chunks: 1,
+            chunker_version: "demo-chunker/1".into(),
+            model_hash: format!("sha256:{}", "0".repeat(64)),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn accepts_consistent_mrl_fields() {
+        let mut m = good();
+        m.embedding_dim = 128;
+        m.mrl_dim = Some(128);
+        m.full_dim = Some(384);
+        m.validate().unwrap();
+    }
+
+    #[test]
+    fn rejects_mrl_dim_greater_than_full_dim() {
+        let mut m = good();
+        m.embedding_dim = 512;
+        m.mrl_dim = Some(512);
+        m.full_dim = Some(384);
+        assert!(matches!(m.validate(), Err(NestError::ManifestInvalid(_))));
+    }
+
+    #[test]
+    fn rejects_zero_mrl_dim() {
+        let mut m = good();
+        m.mrl_dim = Some(0);
+        m.full_dim = Some(384);
+        assert!(matches!(m.validate(), Err(NestError::ManifestInvalid(_))));
+    }
+
+    #[test]
+    fn rejects_mrl_dim_not_equal_embedding_dim() {
+        let mut m = good();
+        m.embedding_dim = 128;
+        m.mrl_dim = Some(96);
+        m.full_dim = Some(384);
+        assert!(matches!(m.validate(), Err(NestError::ManifestInvalid(_))));
+    }
+
+    #[test]
+    fn rejects_mrl_dim_without_full_dim() {
+        let mut m = good();
+        m.mrl_dim = Some(128);
+        m.full_dim = None;
+        assert!(matches!(m.validate(), Err(NestError::ManifestInvalid(_))));
+    }
+
+    #[test]
+    fn rejects_full_dim_without_mrl_dim() {
+        let mut m = good();
+        m.mrl_dim = None;
+        m.full_dim = Some(384);
+        assert!(matches!(m.validate(), Err(NestError::ManifestInvalid(_))));
+    }
+
+    #[test]
+    fn rejects_int4_when_mrl_dim_not_multiple_of_64() {
+        let mut m = good();
+        m.embedding_dim = 96;
+        m.mrl_dim = Some(96);
+        m.full_dim = Some(384);
+        m.dtype = "int4".into();
+        assert!(matches!(m.validate(), Err(NestError::ManifestInvalid(_))));
+    }
+
+    #[test]
+    fn accepts_int4_when_mrl_dim_multiple_of_64() {
+        let mut m = good();
+        m.embedding_dim = 128;
+        m.mrl_dim = Some(128);
+        m.full_dim = Some(384);
+        m.dtype = "int4".into();
+        m.validate().unwrap();
+    }
 }

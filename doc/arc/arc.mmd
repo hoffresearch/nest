@@ -22,7 +22,8 @@ sequenceDiagram
 
     note over B,N: build · offline · reproducible
     B->>B: chunk + embed + model_hash
-    B->>F: nest.build(chunks, model_hash)
+    B->>F: nest.build(chunks, model_hash, mrl_dim?)
+    F->>F: optional matryoshka truncate + renorm, then quant
     F->>N: deterministic emit + four hashes
 
     note over R,Q: query · offline · mmap

@@ -98,7 +98,7 @@ nest search-ann my_corpus.nest "[0.1, 0.2, ...]" -k 10 --ef 200
 
 ## 6. presets
 
-`preset=` selects a (text encoding, embedding dtype, optional ANN, optional BM25) bundle. per-knob overrides win, see `BuildConfig.text_encoding`, `.dtype`, `.with_hnsw`, `.with_bm25`.
+`preset=` selects a (text encoding, embedding dtype, optional ANN, optional BM25) bundle. per-knob overrides win, see `BuildConfig.text_encoding`, `.dtype`, `.with_hnsw`, `.with_bm25`, `.mrl_dim`.
 
 | preset       | text encoding | embeddings | ANN | BM25 | size_ratio | recall@10 |
 |--------------|---------------|------------|-----|------|-----------:|----------:|
@@ -111,6 +111,12 @@ nest search-ann my_corpus.nest "[0.1, 0.2, ...]" -k 10 --ef 200
 numbers measured on the project's PT-BR fake-news corpus (n=30,725, dim=384), k=10 vs the float32 exact baseline. latency ranges (NEON, hot cache): exact p50 ~3.0 ms, tiny p50 ~1.3 ms, nano p50 ~2.1 ms, hybrid p50 ~4.5 ms.
 
 pick `nano` for the smallest distributable file: int4 block-64 embeddings (per-64-dim-group f16 absmax scales + packed 4-bit codes) take the embeddings section from int8's 11.92 MB down to 6.27 MB (~1.9x over int8, ~7.5x over float32). `nano` requires `embedding_dim` divisible by 64. its `score` and `recall@10` are real cosine AT THE INT4 STORED PRECISION (no separate full-precision rerank source, exactly like `tiny`/int8); `dtype=int4` shows in `nest stats` and on every result, so the precision is disclosed and never reported as a bare-slab ratio. pick `tiny` when you want a smaller file than `compressed` with recall still above 0.99, `compressed` when you need lossless cosine + 3x compression, `hybrid` when queries include rare terms, proper nouns, or siglas that pure embeddings underweight, and `exact` when storage isn't the bottleneck and you want the recall=1.0 ground truth.
+
+### matryoshka prefix truncation (`mrl_dim`)
+
+`nest.build(..., mrl_dim=K)` (or `BuildConfig.mrl_dim`) slices each l2-normalized vector to its first `K` components and re-l2-normalizes the prefix BEFORE quantization (Qwen3/ST/BGE truncate-then-renormalize). this is the dimension axis: orthogonal to and multiplicative with the dtype levers. the stored `embedding_dim` becomes `K`, the source dim is recorded as `full_dim`, and both appear in `nest stats`. queries are striped at `K` too, so a full-dim query against a truncated file is a dimension mismatch; slice + renorm the query to `K` first. truncation is a pure deterministic op, so builds stay byte-identical; `content_hash` is over the truncated embeddings, so a citation is tied to its `mrl_dim` (never claimed stable across dims). int4 still needs the effective dim divisible by 64, so `mrl_dim` in {256, 192, 128} works with int4 but 96 does not (use int8/f16/f32 at 96).
+
+matryoshka pays off on a model trained for it (information front-loads into the prefix). the shipped MiniLM corpus is NOT mrl-trained, so truncation costs real recall@10 there; `python/tools/measure_presets.py --variants mrl256-int8,mrl128-int4,...` reports the honest curve. on that baseline `nano` (full-dim int4) still beats every truncated point on recall, so reach for `mrl_dim` when raw size matters more than the last ~10 recall points, or once an mrl-trained embedder is in play.
 
 ## 7. model_hash and offline operation (`--model-path`)
 
