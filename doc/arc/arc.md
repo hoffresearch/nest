@@ -237,10 +237,10 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - python/model_fingerprint.py | python source | computes a reproducible model fingerprint and compact model_hash from inference-relevant files only.
 - python/nest.py | python source | dynamic loader and stable public python API over the _nest extension.
 - python/tools/_baseline_decoder.py | python source | decodes a baseline .nest directly so preset measurement can rebuild variants without re-embedding.
-- python/tools/_bench_runner.py | python source | pure timing and variant-build helpers for preset measurement.
+- python/tools/_bench_runner.py | python source | pure timing and variant-build helpers for preset measurement, incl parse_variant which resolves plain presets, the named sub-int8 rungs (nano = int4 full-dim; micro = the matryoshka mrl256-int8 alias), and the mrl<DIM>-<dtype> curve points into nest.build kwargs.
 - python/tools/_corpus_sources.py | python source | dataset loader registry that normalizes the seven PT-BR sources into a common dataframe shape.
-- python/tools/compare_measure.py | python source | validates measured preset metrics against regression gates and baseline headroom.
-- python/tools/measure_presets.py | python source | builds exact, compressed, tiny, nano, and hybrid variants and measures size, recall, drift, and latency.
+- python/tools/compare_measure.py | python source | validates measured preset metrics against regression gates and baseline headroom, incl the conditional sub-int8 gates (nano: size_ratio<=0.25, recall>=0.85; micro and the underlying mrl256-int8: size_ratio<=0.25, recall>=0.78) that fire only when the run includes those rungs.
+- python/tools/measure_presets.py | python source | builds and benchmarks the published preset ladder (compressed, tiny, micro, nano, hybrid plus the mrl<DIM>-<dtype> curve) over the LFS baseline, measuring size, recall@10 vs the f32 exact top-k, drift, and latency. publishes dat/measure/ladder.json (the whole curve) and refreshes the named rows of dat/measure/baseline.json. every sub-int8 row carries the honest net-of-fp disclosure (dtype, stored_precision, has_fp_source=false since the 0x09 embeddings_fp slab is not wired, net_of_fp_ratio==stored ratio) and matryoshka rows carry mrl_dim/full_dim, so the published ladder is machine-checkable and never a bare-slab claim.
 - python/tools/nest_build_corpus.py | python source | end-to-end corpus builder over the PT-BR demo sources, embedding model, cache, and validation flow.
 
 ## scripts, tests, and artifacts

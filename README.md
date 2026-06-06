@@ -130,7 +130,7 @@ nest.build(
     model_hash,            # sha256(canonical_json(fingerprint)), see python/model_fingerprint.py
     chunks,                # [{canonical_text, source_uri, byte_start, byte_end, embedding}]
     reproducible=True,
-    preset="exact",        # "compressed" | "tiny" | "nano" | "hybrid"
+    preset="exact",        # "compressed" | "tiny" | "nano" | "hybrid" (+ "micro" via measure ladder)
     # mrl_dim=256,         # optional matryoshka prefix dim (truncate + renorm)
 )
 ```
@@ -139,15 +139,16 @@ or via `Pipeline` in `python/builder.py` with chunker, SQLite cache, and auto-va
 
 ## presets
 
-| preset       | text encoding | embeddings | ANN | BM25 | size ratio | recall@10 |
-|--------------|---------------|------------|-----|------|-----------:|----------:|
-| `exact`      | raw           | float32    | no  | no   |     1.000  |   1.0000  |
-| `compressed` | zstd          | float16    | no  | no   |     0.350  |   1.0000  |
-| `tiny`       | zstd          | int8       | yes | no   |     0.283  |   0.9920  |
-| `nano`       | zstd          | int4       | yes | no   |     0.209  |   0.9130  |
-| `hybrid`     | zstd          | float32    | yes | yes  |     0.668  |   1.0000  |
+| preset       | text encoding | embeddings  | ANN | BM25 | size ratio | recall@10 |
+|--------------|---------------|-------------|-----|------|-----------:|----------:|
+| `exact`      | raw           | float32     | no  | no   |     1.000  |   1.0000  |
+| `compressed` | zstd          | float16     | no  | no   |     0.339  |   1.0000  |
+| `tiny`       | zstd          | int8        | yes | no   |     0.256  |   0.9920  |
+| `micro`      | zstd          | mrl256-int8 | yes | no   |     0.223  |   0.8100  |
+| `nano`       | zstd          | int4        | yes | no   |     0.209  |   0.9130  |
+| `hybrid`     | zstd          | float32     | yes | yes  |     0.609  |   1.0000  |
 
-numbers measured on a 30,725-chunk PT-BR corpus, dim=384, NEON, k=10 vs the float32 exact baseline. `nano` is the smallest distributable form: int4 block-64 stored-precision embeddings (the embeddings section drops from int8's 11.92 MB to 6.27 MB, ~1.9x smaller, ~7.5x over float32). its `recall@10` and `score` are real cosine AT THE INT4 STORED PRECISION (no separate fp source, like int8); `dtype=int4` is surfaced in `nest stats` and on every result, so the precision is disclosed, never a bare-slab claim. `nano` requires `embedding_dim` divisible by 64. `hybrid` recovers lexical recall on rare terms, `exact` is the recall-1.0 ground truth.
+numbers measured on a 30,725-chunk PT-BR corpus, dim=384, NEON, k=10 vs the float32 exact baseline, 100 queries (the published ladder, `dat/measure/ladder.json`; gated against `dat/measure/baseline.json`). these are the honest current sizes: the text-codec repack (intpack chunk_ids/spans, bitpacked hnsw/bm25) shrank the indexed presets below the v0.2 published figures (`tiny` 0.283 -> 0.256, `compressed` 0.350 -> 0.339, `hybrid` 0.668 -> 0.609). `nano` is the smallest distributable form: int4 block-64 stored-precision embeddings (the embeddings section drops from int8's 11.92 MB to 6.27 MB, ~1.9x smaller, ~7.5x over float32). `micro` is the matryoshka size lever (the documented honest point `mrl256-int8`: 256-of-384 prefix at int8). every sub-int8 preset (`micro`/`nano` and the whole mrl curve) is STORED-PRECISION: the 0x09 `embeddings_fp` rerank source is not wired, so the net-of-fp ratio equals the stored ratio and `recall@10`/`score` are real cosine AT THE STORED PRECISION (int4/int8), disclosed via `dtype` (and `mrl_dim`/`full_dim` for `micro`) in `nest stats` and on every result, never a bare-slab claim. `nano`/`micro` need `embedding_dim` divisible by 64. `hybrid` recovers lexical recall on rare terms, `exact` is the recall-1.0 ground truth.
 
 ### matryoshka prefix truncation (`mrl_dim`)
 
@@ -165,7 +166,7 @@ the lever earns its keep on a matryoshka-trained model (where information front-
 | `mrl192-int4` |     0.183  |   0.713   |
 | `mrl128-int4` |     0.174  |   0.627   |
 
-int4 needs the effective dim divisible by 64, so the int4 ladder is valid only at `mrl_dim` in {256, 192, 128} (96 is blocked). on this non-mrl baseline no ladder point holds `nano`'s 0.913 recall, so `nano` (full-dim int4) still wins on recall while every mrl point is smaller; `mrl256-int8` (0.223 ratio, 0.810 recall) is the smallest point within tolerance, the micro lever to reach for when size beats the last ~10 recall points or once a real mrl-trained model lands.
+int4 needs the effective dim divisible by 64, so the int4 ladder is valid only at `mrl_dim` in {256, 192, 128} (96 is blocked). on this non-mrl baseline no ladder point holds `nano`'s 0.913 recall, so `nano` (full-dim int4) still wins on recall while every mrl point is smaller; `mrl256-int8` (0.223 ratio, 0.810 recall) is the smallest point within tolerance, published as the named `micro` preset, the lever to reach for when size beats the last ~10 recall points or once a real mrl-trained model lands. the full curve is published in `dat/measure/ladder.json` (100 queries, k=10); `python/tools/measure_presets.py` emits it and `python/tools/compare_measure.py` gates `micro`/`nano` against `dat/measure/baseline.json`.
 
 ## v0.2 highlights
 
@@ -178,7 +179,7 @@ added on top, all inside v1 (no format break):
 - SIMD dispatcher: AVX2 on x86_64, NEON on aarch64, scalar fallback. `NEST_FORCE_SCALAR=1` for A/B benchmarks. accumulators are always f32 regardless of dtype.
 - `nest search-text` with reproducible model fingerprint and `--model-path` for fully offline operation. supersedes the v1 "vector only" CLI restriction.
 - `madvise-cold` benchmark for first-hit-after-boot latency bound.
-- five presets that bundle the above into named tradeoffs, incl `nano` (int4 block-64 embeddings, the first sub-int8 size lever).
+- six presets that bundle the above into named tradeoffs, incl `nano` (int4 block-64 embeddings, the first sub-int8 size lever) and `micro` (the matryoshka mrl256-int8 dimension lever).
 
 builds with `reproducible=True` are byte-identical for the same input.
 
