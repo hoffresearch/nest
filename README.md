@@ -65,9 +65,9 @@ four crates plus a python tooling layer:
 
 - `nest-format` owns the frozen v1 container: layout, manifest, sections, encodings, hashes.
 - `nest-runtime` owns the mmap, the simd dispatcher, hnsw, bm25, and the search path with mandatory exact rerank.
-- `nest-cli` is a thin clap surface with eight subcommands.
-- `nest-python` is the pyo3 bridge that exposes the runtime to python.
-- `python/` holds the writer pipeline, model fingerprint, and the query-time embedder used by `search-text`.
+- `nest-cli` is a thin clap surface with the nine engine subcommands plus the agent-native flagship verbs `ask` and `retrieve` layered over the same engine.
+- `nest-python` is the pyo3 bridge that exposes the runtime to python (incl the agent-native `NestFile.retrieve`).
+- `python/` holds the writer pipeline, model fingerprint, the query-time embedder used by `search-text`, and the offline potion embedder + retrieve convenience the flagship verbs use.
 
 full visual map: [doc/arc/arc.mmd](doc/arc/arc.mmd). human reference: [doc/arc/arc.md](doc/arc/arc.md). machine map: [doc/arc/arc.yaml](doc/arc/arc.yaml).
 
@@ -84,15 +84,20 @@ cp target/release/lib_nest.so   python/_nest.so    # linux
 ## CLI
 
 ```
+nest ask         <file> "query" -k K [--disclose answer|explain]   flagship: cited answer
+nest retrieve    <file> "query" -k K [--format jsonl|json]          flagship: cited answer-pack
 nest inspect     <file>                       header, manifest, hashes (--json available)
 nest validate    <file>                       full integrity check
 nest stats       <file>                       sizes, counts, dtype, model, simd backend
 nest search      <file> <qvec> -k K           exact top-k, query is a JSON array of f32
 nest search-ann  <file> <qvec> -k K --ef N    HNSW path with exact rerank
+nest search-graph <file> <qvec> -k K --hops N --ef N   chunk-graph bfs with exact rerank
 nest search-text <file> "query" -k K [--model-path PATH] [--skip-model-hash-check]
 nest benchmark   <file> -q N -k K [--ann EF] [--madvise-cold]
 nest cite        <file> nest://<content_hash>/<chunk_id>
 ```
+
+`ask` and `retrieve` are the agent-native flagship: text query in, cited answer out. they embed the query OFFLINE with the default potion static table (never sentence-transformers, so they work offline-by-construction), validate the embedder's `model_hash` against the manifest, and route by manifest capability. `ask --disclose answer` (default) prints the cited canonical text and a `nest://` citation; `--disclose explain` adds the rerank-source honesty line ("real cosine" vs "real cosine at stored precision"). `retrieve` emits a json/jsonl answer-pack where every hit's score IS the exact-cosine rerank value, with the tier-1 stored canonical text + verifying hashes + the citation. `cite` is tier-1: it returns the stored canonical text + verifying hashes, never an original-byte reopen.
 
 `search` takes a vector. `search-text` shells out to a python embedder, validates the model fingerprint against the manifest, then routes to the declared `index_type` (exact, hnsw, hybrid). a model mismatch fails with a typed error, never silently.
 
@@ -115,9 +120,17 @@ hits = db.search_ann(qvec, k=5, ef=100)
 # hybrid (BM25 union vector, then exact rerank):
 hits = db.search_hybrid(qvec, query_text, k=5, candidates=200)
 
+# agent-native: routes by manifest capability, score IS the exact rerank value,
+# each hit carries the tier-1 stored canonical text + the nest:// citation.
+hits = db.retrieve(qvec, k=5)
+hits[0].text            # tier-1 stored canonical text (same bytes cite returns)
+hits[0].rerank_source   # "full_precision" | "stored_precision"
+
 db.validate()
 db.inspect()
 ```
+
+for the offline one-gif demo (potion embed -> retrieve -> cited answer over the cc0 demo corpus): `python python/forge/retrieve.py`.
 
 build a file:
 

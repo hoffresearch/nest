@@ -162,6 +162,14 @@ tagged by layer (forge/nest/lens/cross)
     0-1.
     refs: crates/nest-cli/src/cmd/ask.rs, crates/nest-cli/src/cmd/cite.rs,
           python/forge/retrieve.py
+    note (p1#08, branch research/nest-genome-v2): IMPLEMENTED + gate-green (build/fmt/clippy/test
+      all pass; tiny measure recall@10 0.9900 held at the 0.256 ratio). additive SearchExplain +
+      RerankSourceKind on SearchResult (read-side, zero format bytes, no version bump); nest ask
+      (--disclose answer|explain) + nest retrieve (json/jsonl answer-pack, score IS the exact
+      rerank value) over the existing engine; NestFile.retrieve + python/forge/retrieve.py one-gif
+      demo over demo_corpus (offline potion embed, deterministic). cite stays TIER-1 ONLY. the 9
+      engine subcommands stay as-is under the hood. DEFERRED per WO: verb-collapse, nest dev,
+      nest-profile, tier-2 original-byte reopen. left unchecked per WO (append-note policy).
 
 [ ] zero-copy PyBuffer query + maturin cp312-abi3 wheel   (MEDIUM/nest)
     PyBuffer<f32> borrow + Python::detach around the read-only mmap search; ship one wheel.
