@@ -82,8 +82,10 @@ tagged by layer (forge/nest/lens/cross)
     refs: crates/nest-cli/src/cmd/benchmark.rs, crates/nest-format/src/encoding/mod.rs,
           embeddings-benchmark/mteb
 
-[ ] forge-0a: freeze .fci schema + forge-core skeleton (ONE chunker, zero core files)
-    (HIGH/forge)
+[x] forge-0a: freeze .fci schema + forge-core skeleton (ONE chunker, zero core files)
+    (HIGH/forge)  [p0 #05: forge-core separate workspace + frozen .fci (FciBundle/ChunkRecord/
+     EmbeddingRequest/Entity/Edge/BlobRef) + deterministic serialize; sovereign gate untouched.
+     normalize/pdf/adapter/cli ride forge-0b/#09]
     forge-core as a SEPARATE cargo workspace (deps never touch the sovereign core).
     ChunkRecord mirrors builder.ChunkSpec; EmbeddingRequest carries space+model_fingerprint;
     Entity/Edge/BlobRef. do NOT duplicate the chunker: the python/forge adapter CALLS
