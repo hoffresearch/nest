@@ -21,6 +21,7 @@ mod float16;
 mod int4;
 mod int8;
 mod intpack;
+mod txt_streams;
 mod zstd_codec;
 
 pub use float16::{f16_bytes_to_f32, f32_to_f16_bytes};
@@ -34,18 +35,22 @@ pub use int8::{
     encode_int8_embeddings, quantize_f32_to_i8,
 };
 pub use intpack::{INTPACK_BLOCK, IntpackReader, pack_u64s, unpack_u64s};
+pub use txt_streams::{
+    TXT_STREAMS_V1, TxtStreams, decode as decode_txt_streams_payload, encode_txt_streams,
+};
 pub use zstd_codec::{DEFAULT_ZSTD_LEVEL, zstd_encode};
 
 use crate::error::NestError;
 use crate::layout::{
     SECTION_ENCODING_FLOAT16, SECTION_ENCODING_INT4, SECTION_ENCODING_INT8,
-    SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD,
+    SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_ENCODING_TXT_STREAMS,
+    SECTION_ENCODING_ZSTD,
 };
 use std::borrow::Cow;
 
 /// lThe wire codecs implemented today, as a small registry. Decoding
 /// dispatches through `WireCodec::from_id`, so adding a reserved codec
-/// (intpack=4 .. fsst=9) is a localized additive diff: a variant, a
+/// (intpack=4 .. txt_streams=10) is a localized additive diff: a variant, a
 /// `from_id` arm, a `decode` arm, and its own `<=300`-line module. The
 /// reserved-but-unimplemented ids are deliberately ABSENT here, so
 /// `decode_payload` keeps rejecting them until their codec lands and old
@@ -58,6 +63,7 @@ enum WireCodec {
     Int8Embeddings,
     Int4Embeddings,
     Intpack,
+    TxtStreams,
 }
 
 impl WireCodec {
@@ -69,6 +75,7 @@ impl WireCodec {
             SECTION_ENCODING_INT8 => Some(Self::Int8Embeddings),
             SECTION_ENCODING_INT4 => Some(Self::Int4Embeddings),
             SECTION_ENCODING_INTPACK => Some(Self::Intpack),
+            SECTION_ENCODING_TXT_STREAMS => Some(Self::TxtStreams),
             _ => None,
         }
     }
@@ -85,6 +92,11 @@ impl WireCodec {
             // smaller physical form that decodes BYTE-IDENTICALLY to the raw
             // payload, so content_hash and citations are unchanged.
             Self::Intpack => crate::sections::decode_intpack_repack(bytes).map(Cow::Owned),
+            // ltxt_streams re-layouts chunks_canonical as per-chunk independent
+            // zstd streams + an intpack offset table (O(1) reopen); it decodes
+            // BYTE-IDENTICALLY to the raw chunks_canonical payload, so
+            // content_hash and citations are unchanged.
+            Self::TxtStreams => crate::sections::decode_txt_streams(bytes).map(Cow::Owned),
         }
     }
 }
@@ -204,8 +216,9 @@ mod tests {
     #[test]
     fn wire_codec_registry_maps_only_implemented_ids() {
         use crate::layout::{
-            SECTION_ENCODING_INT4, SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW,
-            SECTION_ENCODING_ZSTD, SECTION_ENCODING_ZSTD_DICT,
+            SECTION_ENCODING_FRONTCODE, SECTION_ENCODING_FSST, SECTION_ENCODING_INT4,
+            SECTION_ENCODING_INTPACK, SECTION_ENCODING_RABITQ, SECTION_ENCODING_RAW,
+            SECTION_ENCODING_TXT_STREAMS, SECTION_ENCODING_ZSTD, SECTION_ENCODING_ZSTD_DICT,
         };
         assert!(WireCodec::from_id(SECTION_ENCODING_RAW).is_some());
         assert!(WireCodec::from_id(SECTION_ENCODING_ZSTD).is_some());
@@ -213,8 +226,14 @@ mod tests {
         assert!(WireCodec::from_id(SECTION_ENCODING_INTPACK).is_some());
         // int4 (id 7) is now implemented and in the registry.
         assert!(WireCodec::from_id(SECTION_ENCODING_INT4).is_some());
-        // still-reserved-but-unimplemented and unknown ids are not.
+        // txt_streams (id 10) is now implemented and in the registry.
+        assert!(WireCodec::from_id(SECTION_ENCODING_TXT_STREAMS).is_some());
+        // still-reserved-but-unimplemented ids stay rejected: zstd_dict(5),
+        // frontcode(6), rabitq(8), fsst(9), and any unknown id.
         assert!(WireCodec::from_id(SECTION_ENCODING_ZSTD_DICT).is_none());
+        assert!(WireCodec::from_id(SECTION_ENCODING_FRONTCODE).is_none());
+        assert!(WireCodec::from_id(SECTION_ENCODING_RABITQ).is_none());
+        assert!(WireCodec::from_id(SECTION_ENCODING_FSST).is_none());
         assert!(WireCodec::from_id(0xFF).is_none());
     }
 
