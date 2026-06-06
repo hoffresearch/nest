@@ -14,8 +14,8 @@ use crate::layout::{
     NEST_FOOTER_SIZE, NEST_HEADER_SIZE, NEST_SECTION_ENTRY_SIZE, NestFooter, NestHeader,
     REQUIRED_SECTIONS, SECTION_ALIGNMENT, SECTION_BM25_INDEX, SECTION_CHUNK_IDS,
     SECTION_CHUNKS_CANONICAL, SECTION_CHUNKS_ORIGINAL_SPANS, SECTION_EMBEDDINGS,
-    SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_HNSW_INDEX, SECTION_PROVENANCE,
-    SECTION_SEARCH_CONTRACT, SectionEntry, align_up,
+    SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_GRAPH_ADJACENCY, SECTION_HNSW_INDEX,
+    SECTION_PROVENANCE, SECTION_SEARCH_CONTRACT, SectionEntry, align_up,
 };
 use crate::sections::{
     OriginalSpan, SearchContract, encode_chunk_ids, encode_chunk_ids_intpack,
@@ -169,6 +169,13 @@ impl NestFileBuilder {
             // lBM25 posting lists are integer-heavy; zstd usually halves
             // them. Honor text_encoding here too.
             sections.push(maybe_zstd(SECTION_BM25_INDEX, text_enc, payload)?);
+        }
+        if let Some(payload) = self.graph_adjacency.take() {
+            // lgraph_adjacency (0x0C) is a self-describing csr that already
+            // bitpacks its integer columns with intpack internally; like hnsw
+            // it stays RAW so the runtime mmaps it directly. it is OPTIONAL and
+            // EXCLUDED from content_hash (not in CANONICAL_SECTIONS).
+            sections.push((SECTION_GRAPH_ADJACENCY, SECTION_ENCODING_RAW, payload));
         }
 
         // lSanity: every required section is present (writer never drops one).

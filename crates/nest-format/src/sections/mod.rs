@@ -17,6 +17,7 @@ mod canonical;
 mod chunk_ids;
 mod codec;
 mod contract;
+pub mod graph;
 mod provenance;
 mod spans;
 

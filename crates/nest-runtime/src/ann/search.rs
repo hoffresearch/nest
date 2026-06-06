@@ -24,6 +24,19 @@ impl HnswIndex {
         self.store = store;
     }
 
+    /// lLevel-0 (densest layer) out-neighbors of node `i`, or an empty slice
+    /// if `i` is out of range. Read-only accessor the graph build path uses to
+    /// derive top-m semantic edges from the already-built hnsw graph without
+    /// re-running an O(n^2) exact knn. The neighbor SET is the build-order
+    /// hnsw adjacency; the graph builder sorts canonically before writing.
+    pub fn level0_neighbors(&self, i: usize) -> &[u32] {
+        self.nodes
+            .get(i)
+            .and_then(|node| node.neighbors.first())
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
+    }
+
     /// lSearch for the `ef` closest candidates to `q`. Returns ids only —
     /// the runtime reranks with the exact dot product to produce the
     /// final cosine score.

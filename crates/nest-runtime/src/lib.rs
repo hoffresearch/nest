@@ -12,6 +12,8 @@
 pub mod ann;
 pub mod bm25;
 pub mod error;
+pub mod graph;
+mod inspect;
 mod materialize;
 mod mmap_file;
 mod rerank;
