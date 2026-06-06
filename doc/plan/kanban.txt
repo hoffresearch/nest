@@ -109,20 +109,29 @@ tagged by layer (forge/nest/lens/cross)
 # NEXT  (9 cards)
 ##############################################################################################
 
-[ ] shared intpack codec (delta+zigzag+per-128-block bitpack/FOR, O(1) select)   (HIGH/nest)
+[x] shared intpack codec (delta+zigzag+per-128-block bitpack/FOR, O(1) select)   (HIGH/nest)
+    [p1 #06: encoding/intpack.rs, per-128-block FOR, IntpackReader::get O(1), typed errors,
+     never panics on truncated/hostile input (tamper test); implements reserved id 4]
     SECTION_ENCODING_INTPACK=4, the reusable primitive for hnsw/bm25/spans AND graph csr AND
     space row_index_map AND blob_refs offsets. branch-free decode, never panic on truncated
     input -> typed thiserror.
     refs: crates/nest-format/src/encoding/intpack.rs, lemire/FastPFor, cruppstahl/libfor
 
-[ ] re-encode hnsw neighbor ids + bm25 postings with intpack   (HIGH/nest)
+[x] re-encode hnsw neighbor ids + bm25 postings with intpack   (HIGH/nest)
+    [p1 #06: ann/codec.rs + bm25/codec.rs v2 payloads (readers accept v1+v2), order-preserving
+     FOR-bitpack (NOT sort+delta, to keep ef-pruning candidate set -> recall identical), hnsw v2
+     decode hardened vs hostile level/degree (adversarial review). tiny hnsw 3.61->1.69MB]
     sort-per-list + delta+bitpack hnsw (flat uint40, bump the OPTIONAL hnsw payload version,
     zero recall change); delta-gap bm25 doc ids + bitpacked tf. biggest free shrink of the
     tiny/hybrid index sections. spans stays canonical and is NEVER version-bumped.
     refs: crates/nest-runtime/src/ann/codec.rs, crates/nest-runtime/src/bm25/codec.rs,
           apache/lucene
 
-[ ] chunk_ids as 32 raw sha-256 bytes + spans source_uri dedup + offset tables   (HIGH/nest)
+[x] chunk_ids as 32 raw sha-256 bytes + spans source_uri dedup + offset tables   (HIGH/nest)
+    [p1 #06: sections/chunk_ids.rs + spans.rs intpack repacks; chunk_ids 32 raw digest bytes
+     (falls back to raw on any non-canonical id, guards uppercase hex), spans deduped uri pool
+     (O(1), 5efef331) + bitpacked offsets, pick-smaller vs zstd. decode byte-identical ->
+     content_hash stable. tiny chunk_ids 2.30->0.98MB. offset table deferred (not needed yet)]
     32 raw digest bytes not 71-byte ascii (~2.2x, content_hash unchanged); dedup source_uri
     pool + delta+varint span offsets; u32 offset table for O(1) chunk-N reach off mmap.
     decoded content_hash bytes stay identical so citations are stable.
