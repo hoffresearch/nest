@@ -24,7 +24,7 @@ sequenceDiagram
     B->>B: chunk + embed + model_hash
     B->>F: nest.build(chunks, model_hash, mrl_dim?)
     F->>F: optional matryoshka truncate + renorm, then quant
-    F->>F: per-section try-smaller wire encoding (content_hash-stable)
+    F->>F: per-section try-smaller wire encoding (text: zstd / txt_streams / dict / fsst / dedup; content_hash-stable)
     F->>N: deterministic emit + four hashes
 
     note over R,Q: query · offline · mmap

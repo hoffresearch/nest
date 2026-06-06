@@ -229,3 +229,16 @@ fn fp16_baseline_decodes_with_no_error() {
     assert_eq!(view.manifest.dtype, "float16");
     view.validate_embeddings_values().unwrap();
 }
+
+#[test]
+fn f16_codec_roundtrip_within_tolerance() {
+    // the f32<->f16 byte codec round-trips within f16 precision (relocated
+    // out of encoding/mod.rs to keep the wire-codec registry under 300 lines).
+    let v: Vec<f32> = (0..16).map(|i| (i as f32) * 0.05).collect();
+    let bytes = nest_format::f32_to_f16_bytes(&v);
+    let back = nest_format::f16_bytes_to_f32(&bytes);
+    assert_eq!(back.len(), v.len());
+    for (a, b) in v.iter().zip(back.iter()) {
+        assert!((a - b).abs() < 1e-3, "{} vs {}", a, b);
+    }
+}

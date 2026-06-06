@@ -6,9 +6,10 @@ use super::NestView;
 use crate::encoding::{Int4EmbeddingsView, Int8EmbeddingsView, expected_embeddings_size};
 use crate::error::NestError;
 use crate::layout::{
-    REQUIRED_SECTIONS, SECTION_EMBEDDINGS, SECTION_ENCODING_FLOAT16, SECTION_ENCODING_INT4,
-    SECTION_ENCODING_INT8, SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW,
-    SECTION_ENCODING_TXT_STREAMS, SECTION_ENCODING_ZSTD, SECTION_SEARCH_CONTRACT,
+    REQUIRED_SECTIONS, SECTION_EMBEDDINGS, SECTION_ENCODING_FLOAT16, SECTION_ENCODING_FSST,
+    SECTION_ENCODING_INT4, SECTION_ENCODING_INT8, SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW,
+    SECTION_ENCODING_TXT_STREAMS, SECTION_ENCODING_ZSTD, SECTION_ENCODING_ZSTD_DICT,
+    SECTION_SEARCH_CONTRACT,
 };
 use crate::sections::decode_search_contract;
 
@@ -162,9 +163,12 @@ impl NestView<'_> {
 /// lEncoding rules: the embeddings section gets dtype-specific encodings
 /// (float16, int8, int4) and rejects zstd (we want SIMD-friendly mmap
 /// reads). lAll other sections accept raw, zstd, intpack (the
-/// content_hash-preserving repack for chunk_ids / spans), or txt_streams
-/// (the per-chunk-streams repack for chunks_canonical). both repacks decode
-/// byte-identically to the raw payload, so content_hash stays stable.
+/// content_hash-preserving repack for chunk_ids / spans), txt_streams (the
+/// per-chunk-streams repack for chunks_canonical), zstd_dict (the
+/// trained-dictionary per-chunk-streams variant, decoded against section
+/// 0x0A), or fsst (the static-symbol-table per-chunk-streams variant). every
+/// non-embedding codec decodes byte-identically to the raw payload, so
+/// content_hash stays stable.
 pub(super) fn validate_encoding_for_section(section_id: u32, encoding: u32) -> crate::Result<()> {
     let allowed = if section_id == SECTION_EMBEDDINGS {
         matches!(
@@ -181,6 +185,8 @@ pub(super) fn validate_encoding_for_section(section_id: u32, encoding: u32) -> c
                 | SECTION_ENCODING_ZSTD
                 | SECTION_ENCODING_INTPACK
                 | SECTION_ENCODING_TXT_STREAMS
+                | SECTION_ENCODING_ZSTD_DICT
+                | SECTION_ENCODING_FSST
         )
     };
     if !allowed {

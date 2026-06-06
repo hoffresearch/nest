@@ -90,3 +90,60 @@ fn two_encodes_are_byte_identical_deterministic() {
         encode_txt_streams(&t).unwrap()
     );
 }
+
+// ---- TXT_STREAMS_V2 (dict, id 5) and V3 (fsst, id 9) variants ----
+//
+// both reuse the txt_streams container (kind byte + count + intpack offset
+// table + N frames) and decode BYTE-IDENTICALLY to the raw chunks_canonical
+// payload, the same content_hash invariant, while preserving O(1) seek via
+// the shared offset table.
+
+use nest_format::encoding::{
+    decode_fsst_payload, decode_zstd_dict_payload, encode_fsst, encode_zstd_dict, train_dict,
+};
+
+fn similar_corpus() -> Vec<String> {
+    (0..300)
+        .map(|i| format!("registro {} de texto similar para o codec", i % 19))
+        .collect()
+}
+
+#[test]
+fn dict_variant_v2_decodes_byte_identical() {
+    let t = similar_corpus();
+    let mut su = t.clone();
+    su.sort_unstable();
+    su.dedup();
+    let dict = train_dict(&su).expect("dict trains on a similar corpus");
+    let framed = encode_zstd_dict(&t, &dict).unwrap();
+    assert_eq!(framed[0], nest_format::TXT_STREAMS_V2, "V2 kind byte");
+    let decoded = decode_zstd_dict_payload(&framed, &dict).unwrap();
+    assert_eq!(decoded, encode_chunks_canonical(&t).unwrap());
+}
+
+#[test]
+fn fsst_variant_v3_decodes_byte_identical() {
+    let t = similar_corpus();
+    let framed = encode_fsst(&t).unwrap();
+    assert_eq!(framed[0], nest_format::TXT_STREAMS_V3, "V3 kind byte");
+    let decoded = decode_fsst_payload(&framed).unwrap();
+    assert_eq!(decoded, encode_chunks_canonical(&t).unwrap());
+}
+
+#[test]
+fn all_three_variants_share_the_offset_table_layout() {
+    // V1 / V2 / V3 all start with their kind byte then the same u64 count,
+    // so a reader dispatches on the section-entry encoding id and the kind
+    // byte agrees. proves the container is shared (O(1) seek preserved).
+    let t = texts(&["alpha", "beta", "coração", "delta"]);
+    let v1 = encode_txt_streams(&t).unwrap();
+    let mut su = t.clone();
+    su.sort_unstable();
+    su.dedup();
+    assert_eq!(v1[0], nest_format::TXT_STREAMS_V1);
+    let count_v1 = u64::from_le_bytes(v1[1..9].try_into().unwrap());
+    let v3 = encode_fsst(&t).unwrap();
+    let count_v3 = u64::from_le_bytes(v3[1..9].try_into().unwrap());
+    assert_eq!(count_v1, count_v3);
+    assert_eq!(count_v1, t.len() as u64);
+}

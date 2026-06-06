@@ -17,14 +17,22 @@
 //! files with the same logical content but different wire encoding
 //! still produce the same content_hash for non-quantized sections.
 
+mod dedup;
 mod float16;
+mod fsst;
 mod int4;
 mod int8;
 mod intpack;
 mod txt_streams;
 mod zstd_codec;
+mod zstd_dict;
 
+pub use dedup::{
+    DEDUP_MAP_V1, Deduped, decode_map as decode_dedup_map, dedup, encode_map as encode_dedup_map,
+    expand as expand_dedup,
+};
 pub use float16::{f16_bytes_to_f32, f32_to_f16_bytes};
+pub use fsst::{TXT_STREAMS_V3, decode as decode_fsst_payload, encode as encode_fsst};
 pub use int4::{
     INT4_BLOCK, INT4_PAYLOAD_VERSION, INT4_PREFIX_SIZE, INT4_SCALE_KIND_PER_GROUP,
     Int4EmbeddingsView, encode_int4_embeddings, int4_blocks_per_row, nibble_to_i4, pack_nibbles,
@@ -39,22 +47,25 @@ pub use txt_streams::{
     TXT_STREAMS_V1, TxtStreams, decode as decode_txt_streams_payload, encode_txt_streams,
 };
 pub use zstd_codec::{DEFAULT_ZSTD_LEVEL, zstd_encode};
+pub use zstd_dict::{
+    MAX_DICT_BYTES, TXT_STREAMS_V2, decode as decode_zstd_dict_payload, encode as encode_zstd_dict,
+    train_dict,
+};
 
 use crate::error::NestError;
 use crate::layout::{
-    SECTION_ENCODING_FLOAT16, SECTION_ENCODING_INT4, SECTION_ENCODING_INT8,
+    SECTION_ENCODING_FLOAT16, SECTION_ENCODING_FSST, SECTION_ENCODING_INT4, SECTION_ENCODING_INT8,
     SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_ENCODING_TXT_STREAMS,
-    SECTION_ENCODING_ZSTD,
+    SECTION_ENCODING_ZSTD, SECTION_ENCODING_ZSTD_DICT,
 };
 use std::borrow::Cow;
 
-/// lThe wire codecs implemented today, as a small registry. Decoding
-/// dispatches through `WireCodec::from_id`, so adding a reserved codec
-/// (intpack=4 .. txt_streams=10) is a localized additive diff: a variant, a
-/// `from_id` arm, a `decode` arm, and its own `<=300`-line module. The
-/// reserved-but-unimplemented ids are deliberately ABSENT here, so
-/// `decode_payload` keeps rejecting them until their codec lands and old
-/// and new readers agree on the frozen wire format.
+/// lThe context-free wire codecs, as a small registry. Decoding dispatches
+/// through `WireCodec::from_id`, so adding a reserved codec is a localized
+/// additive diff: a variant, a `from_id` arm, a `decode` arm, and its own
+/// `<=300`-line module. Reserved-but-unimplemented ids (and the dict codec,
+/// which needs section 0x0A) are deliberately ABSENT here so old and new
+/// readers agree on the frozen wire format.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum WireCodec {
     Raw,
@@ -64,6 +75,7 @@ enum WireCodec {
     Int4Embeddings,
     Intpack,
     TxtStreams,
+    Fsst,
 }
 
 impl WireCodec {
@@ -76,36 +88,34 @@ impl WireCodec {
             SECTION_ENCODING_INT4 => Some(Self::Int4Embeddings),
             SECTION_ENCODING_INTPACK => Some(Self::Intpack),
             SECTION_ENCODING_TXT_STREAMS => Some(Self::TxtStreams),
+            SECTION_ENCODING_FSST => Some(Self::Fsst),
             _ => None,
         }
     }
 
     fn decode<'a>(self, bytes: &'a [u8]) -> crate::Result<Cow<'a, [u8]>> {
+        // intpack / txt_streams / fsst all decode BYTE-IDENTICALLY to the raw
+        // canonical payload, so content_hash and citations are unchanged; raw
+        // and the embedding-only encodings ARE their canonical bytes (the
+        // runtime dispatches on `dtype`).
         match self {
-            // lraw and the embedding-only encodings ARE their canonical
-            // bytes; the runtime dispatches on `dtype` to interpret them.
             Self::Raw | Self::Float16Embeddings | Self::Int8Embeddings | Self::Int4Embeddings => {
                 Ok(Cow::Borrowed(bytes))
             }
             Self::Zstd => zstd_codec::zstd_decode(bytes).map(Cow::Owned),
-            // lintpack repacks a canonical section (chunk_ids / spans) into a
-            // smaller physical form that decodes BYTE-IDENTICALLY to the raw
-            // payload, so content_hash and citations are unchanged.
             Self::Intpack => crate::sections::decode_intpack_repack(bytes).map(Cow::Owned),
-            // ltxt_streams re-layouts chunks_canonical as per-chunk independent
-            // zstd streams + an intpack offset table (O(1) reopen); it decodes
-            // BYTE-IDENTICALLY to the raw chunks_canonical payload, so
-            // content_hash and citations are unchanged.
             Self::TxtStreams => crate::sections::decode_txt_streams(bytes).map(Cow::Owned),
+            Self::Fsst => fsst::decode(bytes).map(Cow::Owned),
         }
     }
 }
 
 /// lDecode a section payload from its on-disk encoding to the logical bytes
 /// a reader consumes, via the wire-codec registry. For `raw` this is a
-/// borrow; for `zstd` an owned decompressed buffer. Float16/int8 embedding
-/// payloads are returned as-is. Unknown or reserved-but-unimplemented
-/// encodings are rejected with `UnsupportedSectionEncoding`.
+/// borrow; for `zstd` an owned decompressed buffer. The `zstd_dict` (id 5)
+/// codec needs the shared dictionary (section 0x0A) and is decoded via
+/// [`decode_payload_with_dict`], so it is rejected here. Unknown or
+/// reserved-but-unimplemented encodings are rejected.
 pub fn decode_payload(encoding: u32, bytes: &[u8]) -> crate::Result<Cow<'_, [u8]>> {
     match WireCodec::from_id(encoding) {
         Some(codec) => codec.decode(bytes),
@@ -114,6 +124,26 @@ pub fn decode_payload(encoding: u32, bytes: &[u8]) -> crate::Result<Cow<'_, [u8]
             encoding,
         }),
     }
+}
+
+/// lDecode a chunks_canonical payload that MAY be dict-framed (`zstd_dict`,
+/// id 5), supplying the shared dictionary from section 0x0A. all other
+/// encodings ignore the dict and route through [`decode_payload`]. the dict
+/// variant decodes BYTE-IDENTICALLY to the raw chunks_canonical payload, so
+/// content_hash and citations are unchanged.
+pub fn decode_payload_with_dict<'a>(
+    encoding: u32,
+    bytes: &'a [u8],
+    dict: Option<&[u8]>,
+) -> crate::Result<Cow<'a, [u8]>> {
+    if encoding == SECTION_ENCODING_ZSTD_DICT {
+        let dict = dict.ok_or_else(|| NestError::MalformedSectionPayload {
+            section_id: 0,
+            reason: "zstd_dict: dict-framed section but no dictionary (0x0A)".into(),
+        })?;
+        return zstd_dict::decode(bytes, dict).map(Cow::Owned);
+    }
+    decode_payload(encoding, bytes)
 }
 
 /// lEncode `payload` with one non-embedding wire encoding (raw or zstd).
@@ -228,12 +258,16 @@ mod tests {
         assert!(WireCodec::from_id(SECTION_ENCODING_INT4).is_some());
         // txt_streams (id 10) is now implemented and in the registry.
         assert!(WireCodec::from_id(SECTION_ENCODING_TXT_STREAMS).is_some());
-        // still-reserved-but-unimplemented ids stay rejected: zstd_dict(5),
-        // frontcode(6), rabitq(8), fsst(9), and any unknown id.
+        // fsst (id 9) is now implemented and in the registry (self-contained).
+        assert!(WireCodec::from_id(SECTION_ENCODING_FSST).is_some());
+        // zstd_dict (id 5) is implemented but needs the shared dictionary
+        // from section 0x0A, so it is NOT in the context-free registry: it is
+        // decoded via `decode_payload_with_dict`, not `decode_payload`.
         assert!(WireCodec::from_id(SECTION_ENCODING_ZSTD_DICT).is_none());
+        // still-reserved-but-unimplemented ids stay rejected: frontcode(6),
+        // rabitq(8), and any unknown id.
         assert!(WireCodec::from_id(SECTION_ENCODING_FRONTCODE).is_none());
         assert!(WireCodec::from_id(SECTION_ENCODING_RABITQ).is_none());
-        assert!(WireCodec::from_id(SECTION_ENCODING_FSST).is_none());
         assert!(WireCodec::from_id(0xFF).is_none());
     }
 
@@ -258,16 +292,5 @@ mod tests {
         use crate::layout::SECTION_ENCODING_INT8;
         assert!(encode_smallest(&[SECTION_ENCODING_INT8], b"data").is_err());
         assert!(encode_smallest(&[], b"data").is_err());
-    }
-
-    #[test]
-    fn f16_roundtrip_within_tolerance() {
-        let v: Vec<f32> = (0..16).map(|i| (i as f32) * 0.05).collect();
-        let bytes = f32_to_f16_bytes(&v);
-        let back = f16_bytes_to_f32(&bytes);
-        assert_eq!(back.len(), v.len());
-        for (a, b) in v.iter().zip(back.iter()) {
-            assert!((a - b).abs() < 1e-3, "{} vs {}", a, b);
-        }
     }
 }

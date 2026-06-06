@@ -19,14 +19,15 @@
 //! unchanged. every read is bounds-checked and returns a typed
 //! `NestError`, never a panic on a truncated or hostile payload.
 //!
-//! container layout (mirrors the intpack/spans-repack discipline):
+//! container layout (mirrors the intpack/spans-repack discipline; shared by
+//! the V1 plain-zstd, V2 dict-framed, and V3 fsst-framed variants):
 //!
 //! ```text
-//! [0]        u8  kind/version  (TXT_STREAMS_V1)
+//! [0]        u8  kind/version  (V1 plain / V2 dict / V3 fsst)
 //! [1..9]     u64 chunk count   (LE)
 //! [9..9+T]   intpack offset table of N+1 byte offsets into the streams
 //!            region (pack_u64s, encoding-id-4 primitive, reused)
-//! [9+T..]    N zstd streams, stream i = bytes [off[i] .. off[i+1])
+//! [9+T..]    N per-stream frames, stream i = bytes [off[i] .. off[i+1])
 //! ```
 
 use super::intpack::{IntpackReader, pack_u64s};
@@ -36,18 +37,50 @@ use crate::layout::{
     SECTION_CHUNKS_CANONICAL, SECTION_PAYLOAD_PREFIX_SIZE, SECTION_PAYLOAD_VERSION,
 };
 
-/// leading kind/version byte. v1 is the only shape; a future variant (a
-/// shared-dict or fsst stream framing) claims the next value here without a
-/// new encoding id, exactly like the intpack repack-kind discipline.
+/// leading kind/version byte. v1 = plain per-stream zstd. the dict (V2) and
+/// fsst (V3) variants live in `zstd_dict.rs` / `fsst.rs` and claim the next
+/// values here, reusing this container without a new encoding id beyond
+/// their section-entry codec id.
 pub const TXT_STREAMS_V1: u8 = 0;
 
-const HEADER: usize = 9; // u8 kind + u64 count
+/// container header: u8 kind + u64 count. shared by all variants.
+pub(super) const HEADER: usize = 9;
 
-fn malformed(reason: impl Into<String>) -> NestError {
+pub(super) fn malformed(reason: impl Into<String>) -> NestError {
     NestError::MalformedSectionPayload {
         section_id: SECTION_CHUNKS_CANONICAL,
         reason: reason.into(),
     }
+}
+
+/// assemble the shared container: kind byte + count + intpack offset table +
+/// the concatenated per-stream frames. a pure function of the inputs, so two
+/// builds are byte-identical. shared by the V1/V2/V3 encoders.
+pub(super) fn write_container(kind: u8, count: usize, table: &[u8], streams: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(HEADER + table.len() + streams.len());
+    out.push(kind);
+    out.extend_from_slice(&(count as u64).to_le_bytes());
+    out.extend_from_slice(table);
+    out.extend_from_slice(streams);
+    out
+}
+
+/// rebuild the canonical (raw-encoding) `chunks_canonical` payload from the
+/// already-decompressed per-chunk bodies (utf-8 validated by the caller).
+/// byte-identical to `sections::encode_chunks_canonical`. shared by all
+/// variants so `content_hash` rebuilds the same way regardless of codec.
+pub(super) fn build_canonical(count: usize, bodies: &[Vec<u8>]) -> crate::Result<Vec<u8>> {
+    let total: usize = bodies.iter().map(|b| b.len()).sum();
+    let mut out = Vec::with_capacity(SECTION_PAYLOAD_PREFIX_SIZE + count * 4 + total);
+    out.extend_from_slice(&SECTION_PAYLOAD_VERSION.to_le_bytes());
+    out.extend_from_slice(&(count as u64).to_le_bytes());
+    for raw in bodies {
+        let len = u32::try_from(raw.len())
+            .map_err(|_| malformed("txt_streams: stream longer than u32"))?;
+        out.extend_from_slice(&len.to_le_bytes());
+        out.extend_from_slice(raw);
+    }
+    Ok(out)
 }
 
 /// encode `texts` (the canonical strings, in chunk order) as per-chunk
@@ -64,12 +97,12 @@ pub fn encode_txt_streams(texts: &[String]) -> crate::Result<Vec<u8>> {
         offsets.push(streams.len() as u64);
     }
     let table = pack_u64s(&offsets);
-    let mut out = Vec::with_capacity(HEADER + table.len() + streams.len());
-    out.push(TXT_STREAMS_V1);
-    out.extend_from_slice(&(texts.len() as u64).to_le_bytes());
-    out.extend_from_slice(&table);
-    out.extend_from_slice(&streams);
-    Ok(out)
+    Ok(write_container(
+        TXT_STREAMS_V1,
+        texts.len(),
+        &table,
+        &streams,
+    ))
 }
 
 /// a parsed `txt_streams` payload. `parse` validates the header and offset
@@ -181,12 +214,7 @@ impl<'a> TxtStreams<'a> {
 /// `content_hash` is preserved. dispatched by `encoding::decode_payload`.
 pub fn decode(bytes: &[u8]) -> crate::Result<Vec<u8>> {
     let parsed = TxtStreams::parse(bytes)?;
-    // canonical payload prefix: u32 version + u64 count, then per chunk a
-    // u32 len + the utf-8 bytes (see sections::codec::write_prefix /
-    // write_lp_str). rebuild it exactly.
-    let mut out = Vec::with_capacity(SECTION_PAYLOAD_PREFIX_SIZE);
-    out.extend_from_slice(&SECTION_PAYLOAD_VERSION.to_le_bytes());
-    out.extend_from_slice(&(parsed.count as u64).to_le_bytes());
+    let mut bodies: Vec<Vec<u8>> = Vec::with_capacity(parsed.count);
     for i in 0..parsed.count {
         let raw = zstd_decode(parsed.stream(i)?).map_err(|e| match e {
             NestError::MalformedSectionPayload { reason, .. } => malformed(reason),
@@ -196,12 +224,9 @@ pub fn decode(bytes: &[u8]) -> crate::Result<Vec<u8>> {
         // a tampered stream must be rejected, not silently passed through).
         std::str::from_utf8(&raw)
             .map_err(|e| malformed(format!("txt_streams: invalid utf-8: {}", e)))?;
-        let len = u32::try_from(raw.len())
-            .map_err(|_| malformed("txt_streams: stream longer than u32"))?;
-        out.extend_from_slice(&len.to_le_bytes());
-        out.extend_from_slice(&raw);
+        bodies.push(raw);
     }
-    Ok(out)
+    build_canonical(parsed.count, &bodies)
 }
 
 #[cfg(test)]

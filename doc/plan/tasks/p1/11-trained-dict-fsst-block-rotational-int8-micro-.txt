@@ -159,6 +159,71 @@ facebook/zstd, ggml-org/ggml, weaviate/recipes, QwenLM/Qwen3-Embedding
     TxtStreams reader's O(1) text(i) accessor is the on-disk handle).
   all green: build+fmt+clippy+test pass, measure shows recall held.
 
+--- WO TXT-dict-fsst-dedup RESULT (2026-06-06, branch research/nest-genome-v2) ---
+  the THREE SAFE text-section ratio levers of step 1 of this task shipped as a
+  standalone WO, all additive within frozen v1, all decoding chunks_canonical
+  (0x02) BYTE-IDENTICALLY (content_hash + nest:// citations unchanged), all
+  chosen per-build by the existing try-smaller chooser so they never regress.
+
+  (1) trained zstd dict, encoding id SECTION_ENCODING_ZSTD_DICT=5: a
+      TXT_STREAMS_V2 variant re-framing each per-chunk canonical stream against
+      ONE shared dictionary via zstd 0.13 EncoderDictionary/DecoderDictionary
+      (workspace zstd features bumped to experimental+zdict_builder, no new
+      dep). the dict is trained deterministically over SORTED unique canonical
+      texts via zstd::dict::from_continuous (pure function of sorted samples,
+      pinned zstd version, cap proportionate to corpus up to ~112 KiB) and
+      stored in the new optional SECTION_DICTIONARY=0x0A (excluded from
+      CANONICAL_SECTIONS so content_hash is untouched). reuses the txt_streams
+      intpack offset table + O(1) reopen. decode threads the dict via
+      decode_payload_with_dict from reader/decode.rs.
+  (2) fsst, encoding id SECTION_ENCODING_FSST=9: a TXT_STREAMS_V3 clean-room
+      255-entry static symbol table (1-8 byte substrings to 1-byte codes, 0xFF
+      escape), built deterministically from a greedy frequency pass and
+      embedded in the payload (self-contained, no external section). keeps O(1)
+      single-string decode; competes in the chooser, best for short streams.
+  (3) dedup-before-zstd, new optional SECTION_DEDUP_MAP=0x0B
+      (content_hash-excluded): a build-time first-seen pass on the DECOMPRESSED
+      canonical texts (the nix/ipfs order rule) storing each unique text once +
+      a u32 back-reference array (intpack); zstd/dict/fsst applied AFTER dedup.
+      decode re-expands through the back-refs to identical logical bytes before
+      content_hash sees them.
+
+  the writer's new text-codec chooser (writer/text_codec.rs) picks the SMALLEST
+  of single-frame zstd, txt_streams cold, txt_streams+dict, txt_streams+fsst,
+  and dedup+zstd (single-frame zstd always in the race => never regresses);
+  compressed preset only, raw presets and the golden (1366 B) stay
+  byte-identical. embeddings NEVER touched; int4/rabitq/rotational-int8/
+  matryoshka OUT of scope (the micro preset was NOT shipped: see HONEST below).
+
+  HONEST MEASUREMENT (text section on dat/corpus_next.v1.nest, n=30725, all
+  unique, dim=384 MiniLM; measured via the real codecs on the corpus text):
+      raw canonical        65,025,729 B
+      single-frame zstd-19 15,730,724 B   <- WINNER (the existing form)
+      txt_streams cold     29,247,724 B   (+85.9%)
+      txt_streams + dict   21,183,074 B   (+34.7%, dict blob 114,688 B)
+      txt_streams + fsst   48,467,351 B   (+208%)
+    => on this contiguous, all-unique pt-br prose the single zstd-19 window
+       already captures the cross-chunk redundancy a per-chunk dict/fsst frame
+       fragments, so single-frame zstd wins and the chooser keeps it. the
+       trained dict recovers most of the per-chunk-frame loss (it cuts the
+       txt_streams +85.9% to +34.7% by sharing a prior) but cannot beat one big
+       zstd-19 blob here; fsst loses badly on long-ish prose chunks (its win is
+       short structured strings). dedup is proven (codec + file-level tests) to
+       win ONLY on far-apart repeats beyond a single zstd window; the shipped
+       corpus is all-unique so it does not engage. this is the modest,
+       non-redundant-prose result the WO predicted: the LEVERS + the never-
+       regress chooser ship; the ratio win waits for the regime that needs them
+       (redundant/boilerplate corpora, beyond-window duplicates, O(1) reopen).
+    file/preset effect: chooser keeps single-frame zstd, tiny preset stays
+       BYTE-IDENTICAL to baseline (0.256 size_ratio, recall@10 0.9900 held vs
+       dat/measure/baseline.json, NEST_QUERIES=30). no new preset shipped, so
+       compare_measure.py is unchanged (gate only when a new preset ships).
+  determinism verified: two compressed builds with the levers engaged are
+  byte-identical (the dict trainer, fsst table, dedup pass, and chooser are all
+  pure functions). all green: cargo build --release --workspace, fmt --check,
+  clippy -D warnings, test --release --workspace all pass; measure holds.
+  (the rotational-int8 + micro-preset steps of #11 remain todo, out of scope.)
+
 --- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
 update only what THIS task actually changed; check each:
 [ ] doc/arc/arc.md     architecture inventory + contract (boundaries/sections/data-flow/runtime)
