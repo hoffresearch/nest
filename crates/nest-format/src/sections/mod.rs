@@ -39,6 +39,15 @@ pub use spans::{
     encode_chunks_original_spans, encode_chunks_original_spans_intpack,
 };
 
+/// decode a `txt_streams` payload (the full wire bytes, including the
+/// leading kind/version byte) back to the canonical `chunks_canonical`
+/// section payload. byte-identical to [`encode_chunks_canonical`], so
+/// `content_hash` is unchanged. dispatched by `encoding::decode_payload`
+/// for encoding id 10 (parallel to [`decode_intpack_repack`]).
+pub fn decode_txt_streams(bytes: &[u8]) -> crate::Result<Vec<u8>> {
+    crate::encoding::decode_txt_streams_payload(bytes)
+}
+
 /// decode an `intpack` repack payload (the full wire bytes, including the
 /// leading kind byte) back to the canonical section payload it was packed
 /// from. dispatched by `encoding::decode_payload` for encoding id 4.

@@ -717,3 +717,91 @@ fn reader_rejects_misaligned_section() {
         res.err()
     );
 }
+
+#[test]
+fn compressed_preset_chunks_canonical_decodes_identical_and_same_content_hash() {
+    use nest_format::writer::SectionEncoding;
+
+    // a multi-chunk corpus, built two ways: f32 raw-text vs f32 zstd-text.
+    // under the compressed preset the chunks_canonical section takes the
+    // SMALLER of single-frame zstd vs the per-chunk txt-streams encoding
+    // (id 10). either way it decodes BYTE-IDENTICAL to the raw build, so
+    // content_hash and citations are unchanged across the encodings.
+    let dim = 4u32;
+    let bodies = [
+        "primeiro parágrafo com coração e informação",
+        "segundo parágrafo, açaí é ótimo à tarde",
+        "terceiro: São Paulo, ñ, ü, ç repetido repetido",
+        "quarto trecho com conteúdo distinto e mais longo para variar o tamanho",
+    ];
+    let n = bodies.len() as u64;
+    let mk = || {
+        bodies.iter().enumerate().map(|(i, b)| {
+            let mut emb = vec![0.0f32; dim as usize];
+            emb[i % dim as usize] = 1.0;
+            chunk(b, "doc.txt", (i * 50) as u64, (i * 50 + 40) as u64, emb)
+        })
+    };
+
+    let raw_bytes = NestFileBuilder::new(manifest(dim, n))
+        .reproducible(true)
+        .add_chunks(mk())
+        .build_bytes()
+        .unwrap();
+    let zst_bytes = NestFileBuilder::new(manifest(dim, n))
+        .reproducible(true)
+        .text_encoding(SectionEncoding::Zstd)
+        .add_chunks(mk())
+        .build_bytes()
+        .unwrap();
+
+    let vraw = NestView::from_bytes(&raw_bytes).unwrap();
+    let vzst = NestView::from_bytes(&zst_bytes).unwrap();
+
+    // the compressed build's chunks_canonical encoding is whichever won the
+    // try-smaller: single-frame zstd (1) or per-chunk txt-streams (10).
+    let enc = vzst
+        .section_table
+        .iter()
+        .find(|e| e.section_id == SECTION_CHUNKS_CANONICAL)
+        .unwrap()
+        .encoding;
+    assert!(
+        enc == SECTION_ENCODING_ZSTD || enc == SECTION_ENCODING_TXT_STREAMS,
+        "unexpected chunks_canonical encoding {enc}"
+    );
+
+    // chunks_canonical decodes byte-identically across the two builds.
+    let traw = vraw.decoded_section(SECTION_CHUNKS_CANONICAL).unwrap();
+    let tzst = vzst.decoded_section(SECTION_CHUNKS_CANONICAL).unwrap();
+    assert_eq!(
+        traw.as_ref(),
+        tzst.as_ref(),
+        "decoded canonical text differs"
+    );
+    // and the decoded canonical text parses back to the original bodies.
+    let texts = decode_chunks_canonical(&tzst, n as usize).unwrap();
+    assert_eq!(
+        texts,
+        bodies.iter().map(|s| s.to_string()).collect::<Vec<_>>()
+    );
+
+    // SAME content_hash across raw and compressed encodings: the whole point.
+    assert_eq!(
+        vraw.content_hash_hex().unwrap(),
+        vzst.content_hash_hex().unwrap(),
+        "content_hash must be stable across text encodings"
+    );
+
+    // determinism: a second compressed build is byte-identical.
+    let zst_again = NestFileBuilder::new(manifest(dim, n))
+        .reproducible(true)
+        .text_encoding(SectionEncoding::Zstd)
+        .add_chunks(mk())
+        .build_bytes()
+        .unwrap();
+    assert_eq!(
+        zst_bytes, zst_again,
+        "compressed build is not deterministic"
+    );
+}

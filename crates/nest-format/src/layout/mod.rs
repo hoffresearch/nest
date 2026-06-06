@@ -79,6 +79,16 @@ pub const SECTION_ENCODING_FRONTCODE: u32 = 6;
 pub const SECTION_ENCODING_INT4: u32 = 7;
 pub const SECTION_ENCODING_RABITQ: u32 = 8;
 pub const SECTION_ENCODING_FSST: u32 = 9;
+/// l`10 = txt_streams`: the chunks_canonical (0x02) section's COMPRESSED
+/// form re-laid-out from one concatenated zstd-19 blob into N independently
+/// zstd-encoded streams (one per canonical string) behind an intpack offset
+/// table (O(1) single-chunk seek/reopen). decodes BYTE-IDENTICALLY to the
+/// raw chunks_canonical payload, so content_hash and nest:// citations are
+/// unchanged. only valid for non-embedding sections. this is the named
+/// prerequisite layout for the dict(5)/fsst(9) text levers; a per-chunk
+/// frame loses cross-chunk LZ context (small ratio cost today) but is where
+/// a trained dict/fsst can beat one big zstd-19 blob.
+pub const SECTION_ENCODING_TXT_STREAMS: u32 = 10;
 
 /// lFormat version of the binary layout. Bumped when the on-disk
 /// container changes (header/footer/section table layout).
@@ -225,7 +235,8 @@ mod tests {
 
     #[test]
     fn reserved_additive_ids_are_in_range_and_distinct() {
-        // reserved wire encodings occupy 4..=9, above the four implemented ids.
+        // reserved wire encodings occupy 4..=10, above the four implemented
+        // base ids (raw/zstd/float16/int8 are 0..=3).
         let enc = [
             SECTION_ENCODING_INTPACK,
             SECTION_ENCODING_ZSTD_DICT,
@@ -233,6 +244,7 @@ mod tests {
             SECTION_ENCODING_INT4,
             SECTION_ENCODING_RABITQ,
             SECTION_ENCODING_FSST,
+            SECTION_ENCODING_TXT_STREAMS,
         ];
         for (i, &e) in enc.iter().enumerate() {
             assert_eq!(e, 4 + i as u32);

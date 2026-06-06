@@ -119,6 +119,46 @@ facebook/zstd, ggml-org/ggml, weaviate/recipes, QwenLM/Qwen3-Embedding
   build+fmt+clippy+test pass, measure shows recall held.
   (the dict/fsst/rotational-int8 steps of #11 remain todo, out of this WO's scope.)
 
+--- WO TXT-streams RESULT (2026-06-06, branch research/nest-genome-v2) ---
+  the NOTE prerequisite at the top of this task (canonical text split into
+  per-chunk independent streams = the O(1) single-chunk reopen layout)
+  shipped as a standalone WO. new wire encoding id 10 = txt_streams: the
+  chunks_canonical (0x02) COMPRESSED form is re-laid-out from one
+  concatenated zstd-19 blob into N independently zstd-encoded streams (one
+  per canonical string) behind an intpack (id 4, reused) offset table of
+  n+1 byte offsets giving O(1) seek to any chunk. decode() rebuilds the
+  EXACT canonical payload (12-byte prefix + per chunk u32 len + utf-8)
+  BYTE-IDENTICALLY to sections::encode_chunks_canonical, so content_hash and
+  nest:// citations are unchanged (validated against the intpack-repack
+  precedent). additive within frozen v1: NO NEST_FORMAT_VERSION bump; ids
+  5(zstd_dict) and 9(fsst) kept free for the codecs this unlocks.
+
+  wired into the builder under a compressed (text_encoding=Zstd) preset
+  ONLY: chunks_canonical takes the SMALLER of single-frame maybe_zstd vs the
+  per-chunk txt-streams form (same try-smaller as spans intpack-vs-zstd), so
+  the build never regresses. raw-text presets and the golden fixture
+  (golden_v1_minimal.nest, 1366 bytes) stay byte-identical (golden uses raw
+  text, untouched). reader/validate.rs extends the non-embedding allow-list
+  to raw/zstd/intpack/txt_streams.
+
+  HONEST MEASUREMENT (dat/corpus_next.v1.nest, n=30725, dim=384 MiniLM):
+    chunks_canonical text section, single-frame zstd-19 vs per-chunk
+    txt_streams (measured via the real codec on the corpus text):
+      single-frame zstd-19 = 15,730,724 B   (the existing form)
+      per-chunk txt_streams = 29,247,724 B   (+85.9%, +13.5MB)
+    => the chooser keeps single-frame zstd; the compressed/tiny/nano files
+       are BYTE-IDENTICAL before/after (chunks_canonical encoding stays
+       zstd=1, size 15,730,724 B confirmed in the built corpora). overall
+       size_ratio UNCHANGED (tiny 0.256, recall@10 0.9900 held vs baseline).
+    the +85.9% is the expected, disclosed cross-chunk-context loss: a per-
+    chunk frame is where a trained dict/fsst can later beat one big zstd-19
+    blob (and the O(1) reopen layout), so this WO ships the LAYOUT that
+    unlocks the ratio win, not the ratio win itself. the runtime O(1)
+    single-chunk consumer (cite/materialize through a per-chunk accessor)
+    is the follow-on, kept OUT of scope to keep the diff additive (the
+    TxtStreams reader's O(1) text(i) accessor is the on-disk handle).
+  all green: build+fmt+clippy+test pass, measure shows recall held.
+
 --- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
 update only what THIS task actually changed; check each:
 [ ] doc/arc/arc.md     architecture inventory + contract (boundaries/sections/data-flow/runtime)
