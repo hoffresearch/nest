@@ -9,8 +9,10 @@ pub mod writer;
 
 pub use chunk::{ChunkInput, chunk_id};
 pub use encoding::{
-    DEFAULT_ZSTD_LEVEL, Int8EmbeddingsView, decode_payload, encode_int8_embeddings,
-    expected_embeddings_size, f16_bytes_to_f32, f32_to_f16_bytes, quantize_f32_to_i8, zstd_encode,
+    DEFAULT_ZSTD_LEVEL, INT4_BLOCK, Int4EmbeddingsView, Int8EmbeddingsView, decode_payload,
+    encode_int4_embeddings, encode_int8_embeddings, expected_embeddings_size, f16_bytes_to_f32,
+    f32_to_f16_bytes, int4_blocks_per_row, nibble_to_i4, pack_nibbles, quantize_f32_to_i4,
+    quantize_f32_to_i8, zstd_encode,
 };
 pub use error::{NestError, Result};
 pub use layout::*;

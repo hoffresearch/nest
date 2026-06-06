@@ -54,6 +54,13 @@ pub fn align_up(n: u64, a: u64) -> u64 {
 /// - `3 = int8`: payload is the int8 quantized embeddings section (per-vector
 ///   f32 scales followed by i8 vectors); requires `dtype = "int8"`. Only
 ///   valid for the embeddings section.
+/// - `7 = int4`: payload is the int4 block-64 quantized embeddings section
+///   (per-64-dim-group f16 absmax scales followed by packed 4-bit signed
+///   codes, two nibbles per byte, codes in `[-7, 7]`); requires `dtype =
+///   "int4"` and `embedding_dim` divisible by 64. Only valid for the
+///   embeddings section. STORED-PRECISION cosine, scored straight off mmap
+///   by the fused dequant+dot kernel (never zstd/shuffle), the first real
+///   sub-int8 size lever (~2x over int8).
 ///
 /// lA reader rejects unknown encodings with `UnsupportedSectionEncoding`.
 pub const SECTION_ENCODING_RAW: u32 = 0;

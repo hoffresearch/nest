@@ -65,6 +65,25 @@
       "size_ratio": 0.2829
     },
     {
+      "build_s": 55.58,
+      "content_hash": "sha256:60c74d8f7cb845a64113e367b19c0c2235d70d0131b08923daf51b1c0a3edee4",
+      "drift_max": 0.013045,
+      "drift_mean": 0.00395,
+      "dtype": "int4",
+      "file_hash": "sha256:1afb8e8e80ceb254119bebc176a9b621e40fc4fa9bee24abbc0d9723b684f363",
+      "has_ann": true,
+      "has_bm25": false,
+      "is_baseline": false,
+      "p50_ms": 2.105,
+      "p95_ms": 2.7242,
+      "p99_ms": 2.7959,
+      "preset": "nano",
+      "recall_at_k": 0.913,
+      "search_mode": "ann",
+      "size_mb": 25.0362,
+      "size_ratio": 0.2087
+    },
+    {
       "build_s": 124.22,
       "content_hash": "sha256:b8c77d7aadb1bb73ec12d621559e30f4eaf83334e0b14ac72afc186659708bab",
       "drift_max": 0.0,

@@ -42,6 +42,8 @@ pub fn encoding_name(e: u32) -> &'static str {
         nest_format::layout::SECTION_ENCODING_ZSTD => "zstd",
         nest_format::layout::SECTION_ENCODING_FLOAT16 => "float16",
         nest_format::layout::SECTION_ENCODING_INT8 => "int8",
+        nest_format::layout::SECTION_ENCODING_INT4 => "int4",
+        nest_format::layout::SECTION_ENCODING_INTPACK => "intpack",
         _ => "unknown",
     }
 }

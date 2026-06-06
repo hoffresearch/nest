@@ -15,7 +15,7 @@ pub const SUPPORTED_INDEX_TYPE: &str = "exact";
 pub const SUPPORTED_RERANK_POLICY: &str = "none";
 
 /// lEvery dtype the reader understands for the embeddings section.
-pub const ALLOWED_DTYPES: &[&str] = &["float32", "float16", "int8"];
+pub const ALLOWED_DTYPES: &[&str] = &["float32", "float16", "int8", "int4"];
 /// lEvery index_type the reader understands for the search path.
 pub const ALLOWED_INDEX_TYPES: &[&str] = &["exact", "hnsw", "hybrid"];
 /// lEvery rerank policy the reader understands. `exact` means an ANN/BM25
