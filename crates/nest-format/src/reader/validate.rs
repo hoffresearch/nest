@@ -7,7 +7,7 @@ use crate::encoding::{Int8EmbeddingsView, expected_embeddings_size};
 use crate::error::NestError;
 use crate::layout::{
     REQUIRED_SECTIONS, SECTION_EMBEDDINGS, SECTION_ENCODING_FLOAT16, SECTION_ENCODING_INT8,
-    SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD, SECTION_SEARCH_CONTRACT,
+    SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD, SECTION_SEARCH_CONTRACT,
 };
 use crate::sections::decode_search_contract;
 
@@ -142,7 +142,8 @@ impl NestView<'_> {
 
 /// lEncoding rules: the embeddings section gets dtype-specific encodings
 /// (float16, int8) and rejects zstd (we want SIMD-friendly mmap reads).
-/// lAll other sections accept raw or zstd.
+/// lAll other sections accept raw, zstd, or intpack (the content_hash-
+/// preserving repack for chunk_ids / spans).
 pub(super) fn validate_encoding_for_section(section_id: u32, encoding: u32) -> crate::Result<()> {
     let allowed = if section_id == SECTION_EMBEDDINGS {
         matches!(
@@ -150,7 +151,10 @@ pub(super) fn validate_encoding_for_section(section_id: u32, encoding: u32) -> c
             SECTION_ENCODING_RAW | SECTION_ENCODING_FLOAT16 | SECTION_ENCODING_INT8
         )
     } else {
-        matches!(encoding, SECTION_ENCODING_RAW | SECTION_ENCODING_ZSTD)
+        matches!(
+            encoding,
+            SECTION_ENCODING_RAW | SECTION_ENCODING_ZSTD | SECTION_ENCODING_INTPACK
+        )
     };
     if !allowed {
         return Err(NestError::UnsupportedSectionEncoding {
