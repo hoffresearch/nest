@@ -9,6 +9,8 @@
 //! reconstructs the exact raw payload on decode, so `content_hash` is
 //! byte-identical and this canonical section is never version-bumped.
 
+use std::collections::HashMap;
+
 use super::REPACK_KIND_SPANS;
 use super::codec::{Cursor, read_prefix, write_lp_str, write_prefix};
 use crate::encoding::{pack_u64s, unpack_u64s};
@@ -72,17 +74,21 @@ fn read_blob<'a>(c: &mut Cursor<'a>) -> crate::Result<&'a [u8]> {
 /// wrapping difference so reconstruction is byte-exact for any input.
 pub fn encode_chunks_original_spans_intpack(spans: &[OriginalSpan]) -> Vec<u8> {
     let mut pool: Vec<&str> = Vec::new();
+    let mut pos_of: HashMap<&str, usize> = HashMap::new();
     let mut idx: Vec<u64> = Vec::with_capacity(spans.len());
     let mut starts: Vec<u64> = Vec::with_capacity(spans.len());
     let mut lens: Vec<u64> = Vec::with_capacity(spans.len());
     for s in spans {
-        let pos = pool
-            .iter()
-            .position(|u| *u == s.source_uri.as_str())
-            .unwrap_or_else(|| {
-                pool.push(&s.source_uri);
-                pool.len() - 1
-            });
+        let uri = s.source_uri.as_str();
+        // first-appearance index, O(1) via the map. the numbering is
+        // identical to a linear pool scan (`pool.len()` at first sight), so
+        // the serialized pool + indices stay BYTE-IDENTICAL; this only avoids
+        // the O(n*distinct) scan that turns quadratic on many-uri corpora.
+        let pos = *pos_of.entry(uri).or_insert_with(|| {
+            let p = pool.len();
+            pool.push(uri);
+            p
+        });
         idx.push(pos as u64);
         starts.push(s.byte_start);
         lens.push(s.byte_end.wrapping_sub(s.byte_start));
