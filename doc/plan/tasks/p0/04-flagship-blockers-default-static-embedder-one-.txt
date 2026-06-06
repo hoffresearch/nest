@@ -1,8 +1,8 @@
 ==============================================================================================
 TASK #04 :: flagship blockers: default static embedder + one concrete demo corpus
 phase: phase 0   layer: forge
-status:  [ ] todo    [x] doing    [ ] done   (both flagship blockers landed + gate green;
-         pending owner ok to merge)
+status:  [ ] todo    [ ] doing    [x] done   (offline FLOOR merged; real model2vec table is a separate required card)
+
 ==============================================================================================
 
 self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
