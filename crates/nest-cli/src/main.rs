@@ -77,6 +77,20 @@ enum Commands {
         #[arg(long, default_value = "100")]
         ef: usize,
     },
+    /// lGraph search: seed from the exact-cosine top-`ef`, expand a bounded
+    /// bfs over the chunk-to-chunk graph, then exact-rerank the union. The
+    /// graph only generates candidates; the score is real cosine. Falls back
+    /// to exact if the file has no graph_adjacency section.
+    SearchGraph {
+        file: PathBuf,
+        query: String,
+        #[arg(short, long, default_value = "10")]
+        k: i32,
+        #[arg(long, default_value = "1")]
+        hops: usize,
+        #[arg(long, default_value = "100")]
+        ef: usize,
+    },
     /// lBenchmark exact flat search latency.
     Benchmark {
         file: PathBuf,
@@ -129,6 +143,13 @@ fn main() -> Result<()> {
             skip_model_hash_check,
         ),
         Commands::SearchAnn { file, query, k, ef } => cmd::search_ann::run(file, query, k, ef),
+        Commands::SearchGraph {
+            file,
+            query,
+            k,
+            hops,
+            ef,
+        } => cmd::search_graph::run(file, query, k, hops, ef),
         Commands::Benchmark {
             file,
             queries,

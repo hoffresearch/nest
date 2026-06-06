@@ -148,25 +148,27 @@ class BuildConfig:
     description: str | None = None
     license: str | None = None
     reproducible: bool = True
-    # encoding presets:
-    #   "exact"      - raw text, float32 embeddings, no ANN, no BM25
-    #   "compressed" - zstd text, float16 embeddings, no ANN, no BM25
-    #   "tiny"       - zstd text, int8 embeddings, HNSW, no BM25
-    #   "nano"       - zstd text, int4 block-64 embeddings, HNSW, no BM25
-    #                  (first sub-int8 size lever; embedding_dim must be
-    #                  divisible by 64; stored-precision cosine)
-    #   "hybrid"     - zstd text, float32 embeddings, HNSW, BM25
+    # encoding preset (see nest.build docstring for the full table): exact /
+    # compressed / tiny / nano (int4, dim %64==0, stored-prec) / hybrid.
     preset: str = "exact"
     # per-knob overrides (None = inherit from preset)
     text_encoding: str | None = None  # "raw" | "zstd"
     dtype: str | None = None  # "float32" | "float16" | "int8" | "int4"
     # matryoshka prefix dim (None = no truncation). When set, each vector is
     # sliced to the first mrl_dim components and re-L2-normalized at build time
-    # (before quantization); the file's embedding_dim becomes mrl_dim and the
-    # source dim is recorded as full_dim. int4 needs mrl_dim divisible by 64.
+    # (before quantization); embedding_dim becomes mrl_dim, source dim recorded
+    # as full_dim. int4 needs mrl_dim divisible by 64.
     mrl_dim: int | None = None
     with_hnsw: bool | None = None
     with_bm25: bool | None = None
+    # G1 chunk-to-chunk graph: emit the additive graph_adjacency (0x0C) csr
+    # (NEXT_CHUNK + top-graph_top_m SEMANTIC), excluded from content_hash.
+    with_graph: bool = False
+    graph_top_m: int = 8
+    # opt-in chunk_overlap drop (text reclaim): implies with_graph (read-side
+    # graph_context.neighbor_context rebuilds context). gate on a recall@10-vs-
+    # baseline check (graph_recall_gate.py) before shipping a dropped corpus.
+    drop_overlap: bool = False
     hnsw_m: int = 16
     hnsw_ef_construction: int = 400
     hnsw_seed: int = 42
@@ -255,6 +257,10 @@ class Pipeline:
             for s, emb in zip(self._specs, embeddings, strict=False)
         ]
 
+        # drop_overlap implies with_graph (read-side neighbor reconstruction
+        # needs the NEXT_CHUNK edges); the caller still owns the recall@10 gate.
+        want_graph = self.cfg.with_graph or self.cfg.drop_overlap
+
         if os.path.exists(self.cfg.output_path):
             os.unlink(self.cfg.output_path)
         nest.build(
@@ -276,6 +282,8 @@ class Pipeline:
             mrl_dim=self.cfg.mrl_dim,
             with_hnsw=self.cfg.with_hnsw,
             with_bm25=self.cfg.with_bm25,
+            with_graph=want_graph,
+            graph_top_m=self.cfg.graph_top_m,
             hnsw_m=self.cfg.hnsw_m,
             hnsw_ef_construction=self.cfg.hnsw_ef_construction,
             hnsw_seed=self.cfg.hnsw_seed,
