@@ -106,7 +106,7 @@ identify temporary scripts and possible dead-code files in incorrect folders. un
 
 - rust edition 2024, resolver 3, `thiserror` for errors (never panic in library code).
 - `repr(C)` structs for binary layout; all integers LE unsigned.
-- binary format v1 is frozen. v0.2 added encodings 1/2/3 (zstd, float16, int8) and optional sections 0x07 (HNSW) and 0x08 (BM25), all within v1. bump `NEST_FORMAT_VERSION` for breaking changes.
+- binary format v1 is frozen. v0.2 added encodings 1/2/3 (zstd, float16, int8) and optional sections 0x07 (HNSW) and 0x08 (BM25), all within v1. p1 implemented encoding 4 (intpack): a content_hash-preserving repack of the canonical chunk_ids/spans sections under compressed presets (decodes byte-identically, so content_hash and citations are unchanged; raw presets and the golden stay byte-identical), and bumped the optional hnsw/bm25 payloads to version 2 (intpack-bitpacked neighbour ids and delta-gapped postings; readers still accept v1, recall/scores unchanged). all additive within v1. bump `NEST_FORMAT_VERSION` for breaking changes.
 - hash format: always `sha256:<64 lowercase hex>`.
 - four hashes: `header_checksum`, per-section `checksum` (physical bytes), `file_hash` (whole file), `content_hash` (decoded canonical sections, stable across encodings).
 - `NestFileBuilder` is a consuming builder (`add_chunk(self) -> Self`). presets via `.text_encoding()` + `.embedding_dtype()`.
