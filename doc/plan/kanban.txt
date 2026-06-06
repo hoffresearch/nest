@@ -6,6 +6,28 @@ now / next / gate / later / research
 tagged by layer (forge/nest/lens/cross)
 
 ##############################################################################################
+# STATUS 2026-06-06  (honest reconciliation after the compression run)
+##############################################################################################
+# COMPRESSION FRONTIER: the smallest preset that HOLDS recall@10 >= 0.95 is `tiny`
+#   (0.256 ratio / 30.7 MB / recall 0.992). NO new preset beats it. every sub-tiny rung
+#   FAILS the recall bar: nano int4 0.913, mrl256-int8 0.81, mrl128-int4 0.627 (errs 1 in 3).
+#   cause: the baseline embedder (384-dim MiniLM) is NOT matryoshka-trained, so prefix
+#   truncation is ~a random dim subset (steep recall loss), and int4 stored-precision alone
+#   already drops below 0.95. the int4 (enc 7) / matryoshka / text-stream codecs LANDED and
+#   are tested, but they are INFRA ONLY. do NOT promote any sub-tiny preset as a default.
+# TEXT IS THE MATH CEILING: chunks_canonical is 51% of the file and already zstd-19 near
+#   entropy; the dict/fsst/dedup levers netted ~0 on this non-redundant corpus. crushing
+#   embeddings below tiny does not help while text dominates and the search breaks.
+# MRL EMBEDDER: REJECTED. nomic/qwen3-style matryoshka models are transformers that break
+#   offline-without-torch (the core thesis) and would not move the ratio anyway because text
+#   dominates. keep the potion static table.
+# THE REAL WIN of the run: the FLAGSHIP runs end-to-end. `nest ask` over a potion-built
+#   demo_corpus returns a cited answer + a real nest:// citation, SearchExplain reports
+#   `rerank_source: real cosine` (exact), and `nest cite` reopens the exact span (bytes
+#   0-512). that is the product that was missing; worth more than a sub-tiny ratio that
+#   does not work.
+#
+##############################################################################################
 # NOW  (9 cards)
 ##############################################################################################
 
@@ -170,6 +192,15 @@ tagged by layer (forge/nest/lens/cross)
       demo over demo_corpus (offline potion embed, deterministic). cite stays TIER-1 ONLY. the 9
       engine subcommands stay as-is under the hood. DEFERRED per WO: verb-collapse, nest dev,
       nest-profile, tier-2 original-byte reopen. left unchecked per WO (append-note policy).
+    PROVEN end-to-end 2026-06-06 (orchestrator-validated, not just agent-reported): built
+      /tmp demo.nest from demo_corpus with the potion table (8 chunks, dim 256, offline, no
+      torch, no socket); `nest ask demo.nest "does it work offline with no internet connection"
+      --disclose explain` printed route=exact, rerank_source="real cosine", recall=1, the cited
+      canonical text from 04-offline-sovereignty.md, and a nest:// citation; `nest cite` reopened
+      the exact span (source_uri 04-offline-sovereignty.md, byte_start 0, byte_end 512). honest
+      caveat: potion (dim 256, english) misses some paraphrases (recall@1 ~0.875 on the harness;
+      e.g. a "prove where a quoted answer came from" query mis-ranked to forge-ingestion) - the
+      PRODUCT works; retrieval quality is bounded by the small offline embedder.
 
 [ ] zero-copy PyBuffer query + maturin cp312-abi3 wheel   (MEDIUM/nest)
     PyBuffer<f32> borrow + Python::detach around the read-only mmap search; ship one wheel.
