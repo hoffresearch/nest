@@ -32,6 +32,8 @@ python tests/test_search_text_model_hash.py
 
 no pytest. tests are plain scripts with `if __name__ == "__main__"`. `pytest tests/` does not work.
 
+the forge default static embedder has its own self-test (stdlib only, no `.so` needed, not run by `release_check.sh`): `python python/forge/test_embed_default.py`. the embedder is offline and deterministic; it is the build-side default so a new user never needs a network round-trip, and it self-fingerprints to a `model_hash` recorded in provenance.
+
 # single-target commands
 
 - `cargo test -p nest-format`: format crate only
