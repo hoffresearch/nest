@@ -1,0 +1,257 @@
+---
+project: nest
+audience: maintainer plus the forge/nest/lens dev teams
+status: active. supersedes the optimism of the compression cards; folds in the owner's four corrections
+last-updated: "2026-06-06"
+domain: compression frontier, honest measurement, and orchestration plan
+---
+
+nest compression: the honest plan
+
+this is the durable record agreed on 2026-06-06 after a week of work and three rounds of
+correction. read it before touching any compression code. it is plain prose on purpose. it
+captures the goal, the error we will not repeat, where we really are, the four holes the owner
+found and how each is closed, the gate-zero prerequisite, the single proving cycle, the levers
+in honest priority order, the non-negotiable rules, and the loop-versus-workflow playbook.
+
+the unstoppable goal
+
+the nest is the most compact, sovereign, citable ai database in the world, in three layers:
+forge ingests anything and emits a deterministic canonical intermediate, nest compresses and
+serves it as one frozen-v1 mmap file that never opens a socket and always returns a real cosine
+score, and lens lets a human or agent search, cite, and see. the compression goal is to push
+the file ratio well below today's tiny (0.256) while holding recall@10 with margin above the
+gate, guaranteed by the exact rerank, on a real corpus, offline by construction (no torch, no
+socket, no network), deterministic (byte-identical builds), with verifiable nest:// citations
+that reopen the exact span. the product goal is the agent-native flagship working: ask,
+retrieve, cite, where the returned score is the exact rerank value. honesty is non-negotiable:
+never a fake win that compresses by breaking recall, never a bare-slab ratio, always net-of-fp,
+always measured recall. the recall target is not 0.95, it is 0.96 with proven margin, because a
+preset born 0.001 from the gate dies on the first different corpus. and, per correction one
+below, that margin only means something measured on a real-query ruler.
+
+the error we will not repeat: laziness
+
+we applied only the shallow methods (zstd-19 on text, int8, linear int4, intpack on integers)
+and concluded sub-0.10 was impossible. that was laziness, not a limit. the real methods were
+never tried. product quantization (pq), measured in pure numpy offline, already beats int4. the
+rule for ever: no one declares a method impossible before implementing and measuring the methods
+the research already names. the counterpart honesty, against blind optimism: pq at 96 bytes
+(16x, about 3 mb) measured recall 0.869 and fails; pq with an f32 rerank source reaches near
+perfect recall but must store the f32 vectors (47 mb) and ends up larger than tiny. that is the
+net-of-fp trap, now proven with numbers: pq as a candidate generator buys speed, not size.
+
+where we really are (2026-06-06)
+
+merged: all of phase 0 (guardrails, codec registry, manifest additivity, the rerank-honesty
+gate with the score_subset handle, the materialize ram-leak fix), forge-0a (.fci schema), p1#06
+(intpack on hnsw/bm25/spans/chunk_ids), and p1#10 (the real potion embedder, model2vec
+potion-base-8M, dim 256, offline, no torch, semantic). on branch research/nest-genome-v2, saved
+to the cloud at commit cada1585, an autonomous run committed: the int4 codec, matryoshka, the
+per-chunk text streams, dict/fsst/dedup, the measured ladder, the g1 graph (graph_adjacency
+0x0c with search-graph), and the flagship (ask, retrieve, tier-1 cite, SearchExplain). the truth
+of the numbers: the usable frontier is still tiny (0.256, recall 0.992); every sub-tiny linear
+preset fails (nano int4 0.913, all matryoshka rungs below 0.81, because the 384-dim minilm
+baseline is not matryoshka-trained so prefix truncation is near a random dim subset). the new
+measured finding is pq. the flagship works end-to-end, validated by hand: nest ask over a
+potion-built demo_corpus returns the right doc by meaning, with a real nest:// citation,
+SearchExplain saying rerank_source real cosine, and nest cite reopening the exact span (bytes 0
+to 512). honest caveat: potion (dim 256, english) misses about one paraphrase in eight; the
+product works, the retrieval quality is bounded by the small embedder.
+
+the four corrections (from most painful to least), and how each is closed
+
+correction one, the critical one: the recall ruler is suspect, and it contaminates every number.
+measure_presets builds queries by perturbing the corpus's own vectors. that tests find the
+neighbor of a near-identical point, which is far easier than find the right doc for a real
+question. so the measured 0.951 (pq-192) and 0.992 (tiny) are likely inflated, and pq is hit
+harder than int8 by this, because reconstruction error matters more when the query is far from
+any corpus vector than when it is a near-duplicate. chasing 0.96 with margin against this weak
+ruler is chasing margin on a weak metric, the self-illusion the plan swears to avoid. closure:
+the mteb-style real-query recall harness (already an open p0 card, never done) is not a later
+item, it is gate-zero, the prerequisite of cycle 1. no pq number is trusted until it is measured
+on real query-to-doc pairs.
+
+correction two: today no proven preset passes the 0.96 margin. the only measured number is
+pq-192 at 0.951, which fails the new goal, and 0.96 depends on the unmeasured bet that opq gets
+there. closure: cycle 1 carries a written honest failure criterion. if pq, then opq and
+residual, does not reach recall greater than or equal to 0.96 on the real ruler at a size below
+int8 (11.9 mb), the valid result is "pq does not beat tiny with margin, tiny stays the
+frontier", reported as measured truth, not as team failure. without this criterion the team
+tunes until it passes, which is laziness in another outfit.
+
+correction three: deterministic cross-cpu opq is technically hard, and the plan underestimated
+it. the opq rotation is an iterative svd/eigendecomposition; byte-identical on arm and x86
+(different blas, different bits) is non-trivial and probably forces an own implementation.
+closure: decouple it. cycle 1 is pure pq (k-means with a fixed seed, simpler). opq becomes cycle
+2. and a warning that extends the point: even pure-pq k-means has a cross-cpu determinism risk
+because the distance matrix goes through float/blas; so cycle 1 must solve determinism honestly,
+either a backend-independent reduction, or compute the codebooks once and store them in the file
+with the fingerprint in provenance (determinism by storage, documented, instead of by
+recompute). this determinism decision belongs to cycle 1, not cycle 2.
+
+correction four: the plan never said where the codebooks live in the frozen format. the pq codes
+are fixed-stride and live with the embeddings section. but the codebooks (256 by m by subdim, in
+f32, about 400 kb) are a separate structure and need a new reserved section, decided by the
+foundation team in cycle 1, not discovered mid-way. and the content_hash question has a mandatory
+answer: the same codes with different codebooks decode to different vectors, so the codebooks are
+part of the embeddings content identity; the embeddings-layer content_hash must cover codes plus
+codebooks together, or two files with the same content_hash would decode to different vectors and
+the citation would lie.
+
+gate-zero (the prerequisite, do this first)
+
+build the mteb-style real-query recall harness on a license-clean labeled retrieval set (real
+queries plus relevant docs). re-measure exact and tiny (int8) on it to establish the true recall
+ruler. only then does any "greater than or equal to 0.96" mean anything, and the prior pq-192
+0.951 must be re-measured here (it will likely drop). until this exists, the 0.96 margin is
+fantasy. the first concrete movement of the whole effort is this harness, not the codec.
+
+cycle 1 (one full proving cycle, before any parallel teams)
+
+a single workflow, migrate plus review pattern. pure pq only, no opq. k-means deterministic with
+a fixed seed and the determinism decision resolved (backend-independent reduction, or store and
+pin the codebooks with the fingerprint in provenance). codebooks in a new reserved section, with
+content_hash covering codes plus codebooks together, decided up front. prove the whole pipeline
+in the real .nest. green means, all together: cargo build release, cargo test release on the
+workspace (release so hnsw_recall does not time out), clippy with no warnings, fmt, a codec
+roundtrip test, a determinism test (two builds byte-identical), the golden raw fixture intact,
+and the recall measured on the gate-zero real-query harness, with the written failure criterion
+in force. the content_hash acceptance is not "pq equals f32" (it never will, by construction,
+just like int8 and int4 differ from f32); it is determinism (two pq builds produce identical
+content_hash), the golden raw fixture stays byte-identical, and citations resolve within the pq
+corpus. commit explicit paths on the branch, push to the cloud, no merge to main. only after this
+cycle is proven on the real file do we parallelize.
+
+cycle 2 and beyond: opq (with the hard cross-cpu determinism solved, or store-and-pin), residual
+quantization, and pushing the margin; then the rest of the levers below.
+
+the levers, in honest priority order
+
+embeddings, the proven lever. the pq codec: a new encoding id, codebooks stored in the file (256
+centroids per sub-block in f32) plus the n-by-m uint8 codes; train k-means offline and
+deterministic at build time; at runtime build the asymmetric distance table for candidate
+generation and reconstruct the vector for the exact rerank via score_subset, at stored precision
+with no fp source; measure recall@10 on the real ruler. then opq, the rotation computed at build
+backend-independently, aiming at recall greater than or equal to 0.96 with margin from the
+method, never from tuning the k-means to pass, and proven on a second corpus and with real
+queries before becoming a default. rabitq only later, only as a fast candidate generator gated on
+a real fp or pq rerank source, reporting net-of-fp, never sold as a size win. the hard rule: any
+sub-tiny scheme feeds the exact rerank, reports measured recall@10, reports net-of-fp where an fp
+source exists, never shuffles or compresses the embeddings section, and never defaults a preset
+without the recall margin.
+
+text, the mathematical ceiling (51 percent of the file). certain delivery: brotli q11 as an
+alternative text codec, pick-smaller per section, decoding byte-identical so content_hash is
+stable; the fse/tans sovereign entropy floor below zstd for the delta-coded sections; and
+dedup-before-zstd by content-hash of identical or near chunks, which only pays on redundant
+corpora, measured honestly. the per-chunk streams already landed and enable all of this plus o(1)
+reopen, with decoded bytes byte-identical. and the ambitious one, the only path to 0.10: neural
+context-mixing text compression (ts_zip style) with a tiny language model via ggml, no torch.
+this is the highest-risk lowest-certainty item; it does not become a work-order, it becomes a
+timeboxed spike outside the format, and the spike must measure three things before any promise:
+the net gain after subtracting the model's own size (the model is shipped offline and counts; a
+10 to 50 mb ggml model on a 30 mb file makes it larger, paying off only on large corpora where
+it amortizes), the decode latency in cite and ask (the product cannot stall seconds to reopen a
+span), and the corpus size at which it breaks even. until the spike proves it, 0.10 is a marked
+bet with the owner's name on it, not a goal. the guaranteed honest number is pq plus opq plus
+brotli.
+
+integers, the metadata. evaluate turbopfor, partitioned_elias_fano, and libvbyte against the
+current fastpfor (via intpack) on the hnsw, bm25, and graph integer sections; adopt only what
+measures smaller while staying o(1) and never-panic.
+
+the product, the flagship, already standing and to be firmed. wire hybrid (bm25 plus potion)
+into ask, to catch the paraphrases the small embedder misses but that share terms, offline and no
+torch, and measure ask semantic versus hybrid on the same queries. close forge-0b: deterministic
+nfc and whitespace normalize, the books profile, the python adapter driving the existing pipeline
+and calling builder.chunk_text (one chunker), the golden drift-lock test, honoring incremental
+and resumable ingestion and never deleting the source.
+
+the format and feature pillars, built in rust now with only the launch deferred (owner call
+three): catalog mode with blob_refs (0x14), the original-byte reopen, the 0x16 overlay, and the
+.nestpack sidecar; the forge-1 belt with heavy opt-in engines via a json subprocess, deps never
+in the rust tree; the g2/g3 entity graph; the forge-2 osint-lake vertical and the cosmos.gl
+viewer that never enters the rust core and opens no socket; the multimodal spaces with
+SPACE_TABLE (0x15) and per-space routing; the pattern-lover instrument with symbol and glyph
+understanding form and color; and the structured tape plus the sovereign tokenizer plus the v2
+blake3-merkle evaluation only on measured demand.
+
+the non-negotiable rules (the errors to avoid)
+
+never conclude impossible before implementing and measuring the methods the research names.
+never report a bare-slab ratio; sub-int8 or pq without an fp source is real cosine at stored
+precision, disclosed, with recall@10 measured on the real ruler; with an fp source report
+net-of-fp; never default a preset below the recall margin. frozen-v1 additive: never bump
+NEST_FORMAT_VERSION; never bump the payload version of a canonical content-hashed section (0x01
+to 0x06); use the reserved ids; the golden stays byte-identical on raw presets. never compress,
+dedup, or shuffle the embeddings section; only fixed-stride quant and pq codes there, which are
+also fixed-stride. offline by construction: no torch, no socket, no network at build or query;
+the default embedder is the vendored potion table; mrl transformer models are rejected (they
+break offline-without-torch and text dominates anyway). determinism: two builds byte-identical;
+any rotation, codebook, or quant computed at build backend-independently with a fixed seed, or
+stored-and-pinned. never panic in lib code, typed thiserror, every unsafe with a SAFETY comment
+naming the invariant. hygiene: at most 300 lines per rust source file in crates, 333 elsewhere;
+docs lowercase, no emoji, no em-dash. validate before commit: roundtrip plus content_hash plus
+determinism tests for codecs, cargo build release, cargo test release on the workspace, clippy
+warnings-as-errors, fmt, and the real-ruler measure, all before committing. commit on a branch
+with explicit staged paths, never git add all, binaries via git-lfs, and push the branch to the
+cloud; never merge to main, the maintainer merges. sandbox note: the release_check search-text
+step needs sentence-transformers (absent here), so only that step is env-blocked; the rust gates
+must pass; measure_presets runs without it.
+
+the loop-versus-workflow playbook
+
+loop repeats in time, workflow spreads in space. in our house: what builds is always a workflow
+(many agents in one pass, deterministic, with stages and verification); the loop never builds the
+roadmap, it watches, and has exactly two honest uses. one, a regression guard: periodically run
+measure_presets and compare_measure against the gates and shout if any shipped preset dropped
+below its recall floor, because corpus or build drift is what kills a margin-thin preset. two, a
+progress heartbeat: a loop that periodically polls the running workflow and briefs the maintainer
+so it never looks frozen. the generic loop examples (babysit-prs, the ten-minute no-interval
+default) are not our case; our loop is a recall watchdog and a heartbeat.
+
+the workflow patterns mapped to our work. research: sweep the 224 research chunks in parallel,
+read deep, synthesize with citations of what was used; this feeds the neural-text spike and the
+pq/opq/brotli/fse survey before any code. understand: parallel readers over the existing
+encoding, runtime, and simd code, returning a map of where to plug the codec. migrate: apply a
+codec across the layers (format, runtime, simd, python, measure), discover the touch-points,
+transform each, verify, with the caveat that shared frozen-format files are never transformed in
+parallel. review: the adversarial verification by dimensions (build and gates; content_hash and
+golden; recall and net-of-fp on the real ruler; determinism, offline, and panic; scope and
+validation), refute each finding before accepting. design: for a real fork (pq-192 versus
+opq-192 versus residual quant for the margin, or per-space sections versus a single pool for
+multimodal), generate n independent approaches, a judge panel, synthesize the best.
+
+how to split the teams in harmony. many work-orders edit the same frozen-format files (layout,
+the encoding registry, search, simd), so sequence what touches the same files and parallelize
+only disjoint OWNS lists. the hard rules of every workflow: sequential on the shared frozen files,
+one editor at a time, coordinated by the foundation team; heavy verification also sequential,
+never several agents running measure and cargo at once (they fight over the target dir and the
+measure files and corrupt the number); self-correct up to three rounds, verify, on refutation the
+fix agent gets the exact evidence and corrects, re-verify; no early stop unless a hard red blocks
+a dependent, in which case log and continue; validate before commit, always, with recall measured
+on the real ruler and net-of-fp. the teams: foundation runs migrate to plug the pq codec into
+format and runtime and owns the shared files; embeddings runs design to pick pq versus opq versus
+residual for the margin, then migrate to implement the winner; text runs research first for the
+neural spike (outside the format, timeboxed) and migrate for brotli and fse which are certain
+delivery; product runs the flagship in parallel because its OWNS is disjoint (hybrid in ask,
+forge-0b), without touching the format files. over all of it, a regression-guard loop runs the
+measure against the gates so any preset that slips below the margin shows up immediately, not
+three commits later.
+
+the honest number targets
+
+tiny today is 0.256 at recall 0.992 (on the weak ruler; re-measure on the real ruler in
+gate-zero). pq-192 plain was 0.206 at 0.951 (weak ruler, and tight); with opq seeking margin the
+target is recall greater than or equal to 0.96; if opq lifts pq-128 (3.9 mb) over 0.96 the file
+goes to about 0.19; with brotli and fse on text (15.7 mb toward about 13) it reaches about 0.16
+to 0.18. that, pq plus opq plus brotli with recall greater than or equal to 0.96 and margin on
+the real ruler, is the guaranteed honest number we pursue. 0.10 exists but only via neural text,
+and stays a marked bet dependent on the spike, never a promised goal.
+
+the first movement
+
+not the codec. gate-zero: the real-query recall harness, so we stop measuring on the easy ruler.
+then cycle 1 (pure pq, proven in the real .nest with the failure criterion). then the teams in
+parallel, each on its pattern, with the regression-guard loop watching.

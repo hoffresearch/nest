@@ -26,6 +26,10 @@ tagged by layer (forge/nest/lens/cross)
 #   `rerank_source: real cosine` (exact), and `nest cite` reopens the exact span (bytes
 #   0-512). that is the product that was missing; worth more than a sub-tiny ratio that
 #   does not work.
+# FORWARD PLAN (ruler-first): the honest plan with the owner's four corrections, gate-zero
+#   (the real-query mteb harness BEFORE any pq number is trusted), cycle-1 (pure pq proven in
+#   the real .nest with a written failure criterion), and the loop/workflow playbook is reserved
+#   in doc/plan/compression-honest-plan.txt. read it before touching any compression code.
 #
 ##############################################################################################
 # NOW  (9 cards)
