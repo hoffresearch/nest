@@ -7,15 +7,15 @@ use super::NestFileBuilder;
 use super::REPRODUCIBLE_CREATED;
 use super::SectionEncoding;
 use super::payload::{encode_embeddings_payload, maybe_zstd};
+use super::text_codec;
 use crate::chunk::{chunk_id, validate_chunk};
-use crate::encoding::encode_txt_streams;
 use crate::error::NestError;
 use crate::layout::{
     NEST_FOOTER_SIZE, NEST_HEADER_SIZE, NEST_SECTION_ENTRY_SIZE, NestFooter, NestHeader,
     REQUIRED_SECTIONS, SECTION_ALIGNMENT, SECTION_BM25_INDEX, SECTION_CHUNK_IDS,
     SECTION_CHUNKS_CANONICAL, SECTION_CHUNKS_ORIGINAL_SPANS, SECTION_EMBEDDINGS,
-    SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_ENCODING_TXT_STREAMS,
-    SECTION_HNSW_INDEX, SECTION_PROVENANCE, SECTION_SEARCH_CONTRACT, SectionEntry, align_up,
+    SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_HNSW_INDEX, SECTION_PROVENANCE,
+    SECTION_SEARCH_CONTRACT, SectionEntry, align_up,
 };
 use crate::sections::{
     OriginalSpan, SearchContract, encode_chunk_ids, encode_chunk_ids_intpack,
@@ -110,32 +110,26 @@ impl NestFileBuilder {
         };
         sections.push(chunk_ids_section);
 
-        // chunks_canonical: under a compressed (zstd-text) preset, take the
-        // SMALLER of the existing single-frame zstd vs the per-chunk
-        // txt-streams encoding (encoding 10: N independent zstd streams + an
-        // intpack offset table giving O(1) single-chunk reopen). a per-chunk
-        // frame loses cross-chunk LZ context so it usually LOSES on raw ratio
-        // today; the try-smaller keeps the build never-regressing while the
-        // layout is the named prerequisite for the dict/fsst text levers.
-        // both decode BYTE-IDENTICALLY to the raw payload, so content_hash is
-        // unchanged. raw-text presets (and the golden) stay raw, untouched.
-        let canonical_raw = encode_chunks_canonical(&canonical_texts)?;
-        let canonical_section = if compressed {
-            let zst = maybe_zstd(SECTION_CHUNKS_CANONICAL, text_enc, canonical_raw)?;
-            let streams = encode_txt_streams(&canonical_texts)?;
-            if streams.len() < zst.2.len() {
-                (
-                    SECTION_CHUNKS_CANONICAL,
-                    SECTION_ENCODING_TXT_STREAMS,
-                    streams,
-                )
-            } else {
-                zst
-            }
+        // chunks_canonical: under a compressed (zstd-text) preset, the text
+        // codec chooser takes the SMALLEST of single-frame zstd, txt_streams
+        // cold, txt_streams+trained-dict (0x0A), txt_streams+fsst, and
+        // dedup+zstd (0x0B), so the build never regresses (single-frame zstd
+        // is always in the race). every candidate decodes BYTE-IDENTICALLY to
+        // the raw payload, so content_hash is unchanged; the dict/dedup aux
+        // sections are excluded from content_hash. raw-text presets (and the
+        // golden) keep raw bytes and stay byte-identical.
+        if compressed {
+            let choice = text_codec::choose(&canonical_texts)?;
+            sections.push(choice.canonical);
+            sections.extend(choice.aux);
         } else {
-            maybe_zstd(SECTION_CHUNKS_CANONICAL, text_enc, canonical_raw)?
-        };
-        sections.push(canonical_section);
+            let canonical_raw = encode_chunks_canonical(&canonical_texts)?;
+            sections.push(maybe_zstd(
+                SECTION_CHUNKS_CANONICAL,
+                text_enc,
+                canonical_raw,
+            )?);
+        }
 
         let spans_raw = encode_chunks_original_spans(&original_spans)?;
         let spans_section = if compressed {

@@ -183,6 +183,22 @@ tagged by layer (forge/nest/lens/cross)
     also serves forge's heterogeneous text inputs unchanged.
     refs: crates/nest-format/src/encoding/zstd_dict.rs,
           crates/nest-format/src/encoding/fsst.rs, facebook/zstd
+    NOTE (WO TXT-dict-fsst-dedup, 2026-06-06, branch research/nest-genome-v2): the three SAFE
+    text levers SHIPPED, all additive within frozen v1, all decoding chunks_canonical
+    BYTE-IDENTICALLY (content_hash + citations unchanged) and all chosen per-build by the
+    existing try-smaller chooser so they never regress: zstd_dict(5) = TXT_STREAMS_V2 against a
+    trained shared dict (deterministic ZDICT from_continuous over SORTED unique texts, pinned
+    zstd, dict blob in new SECTION_DICTIONARY 0x0A, content_hash-excluded); fsst(9) =
+    TXT_STREAMS_V3 clean-room 255-entry static symbol table embedded in the payload; and
+    dedup-before-zstd (new SECTION_DEDUP_MAP 0x0B, content_hash-excluded) on DECOMPRESSED bytes
+    (nix/ipfs order rule) + u32 back-refs. honest text-section measurement on the shipped
+    all-unique pt-br corpus (n=30725): single-frame zstd-19 = 15.73MB still WINS (dict 21.18MB,
+    txt_streams 29.25MB, fsst 48.47MB), so the chooser keeps single-frame zstd, the tiny preset
+    stays byte-identical (0.256 ratio, recall@10 0.9900 held), and the file never regresses. the
+    dict recovers most of the txt_streams cross-chunk-context loss (+85.9% -> +34.7%) but cannot
+    beat one big zstd-19 frame on contiguous all-unique prose; dedup is proven to win only on
+    far-apart repeats beyond a single zstd window. STILL TODO on this card: the zstd level/ldm
+    knobs and the rotational-int8 micro preset (separate scope).
 
 [ ] block-scaled + rotational int8 (scale_kind=1, no new id, no version bump) (PRE-GATE, rebalanced)
     (HIGH/nest)
