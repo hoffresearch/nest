@@ -1,5 +1,5 @@
 project: nest
-last-updated: "2026-06-05"
+last-updated: "2026-06-06"
 domain: architecture
 summary: "single-file semantic knowledge stack: rust owns format, runtime, cli, and bindings; python owns ingestion, model fingerprinting, and support tooling."
 layers:
@@ -8,6 +8,7 @@ layers:
   - {name: nest-cli, role: "thin clap front-end over format and runtime APIs", entrypoints: ["crates/nest-cli/src/main.rs"], links: ["crates/nest-cli/src/cmd/mod.rs", "crates/nest-runtime/src/mmap_file.rs"]}
   - {name: nest-python, role: "PyO3 bridge that exposes build, chunk_id, and NestFile search APIs to python", entrypoints: ["crates/nest-python/src/lib.rs"], links: ["crates/nest-python/src/build_fn.rs", "crates/nest-python/src/nest_file.rs"]}
   - {name: python-tooling, role: "corpus build, query embedding, model fingerprinting, preset measurement, and regression tooling", entrypoints: ["python/nest.py", "python/builder.py", "python/embed_query.py", "python/tools/nest_build_corpus.py"], links: ["crates/nest-python/src/build_fn.rs", "scripts/release_check.sh"]}
+  - {name: forge-core, role: "ingestion layer in a SEPARATE cargo workspace at the repo root OUTSIDE crates/, so its deps never touch the sovereign core; FORGE-0a owns the frozen .fci canonical-intermediate schema, versioned independently of NEST_FORMAT_VERSION", entrypoints: ["forge-core/src/lib.rs"], links: ["forge-core/src/fci/mod.rs"]}
 flows:
   - {name: python-corpus-build, entry: "python/tools/nest_build_corpus.py", path: ["python/tools/_corpus_sources.py", "python/builder.py", "crates/nest-python/src/build_fn.rs", "crates/nest-format/src/writer/mod.rs"], summary: "load seven PT-BR datasets, dedupe, embed, cache, and emit a deterministic .nest file"}
   - {name: cli-search-text, entry: "crates/nest-cli/src/cmd/search_text.rs", path: ["python/embed_query.py", "python/model_fingerprint.py", "crates/nest-runtime/src/search.rs"], summary: "embed a query in python, validate name, dim, and model_hash, then route to exact, hnsw, or hybrid search"}
@@ -23,6 +24,7 @@ risks:
   - "doc/arc/arc.md, doc/arc/arc.yaml, and doc/arc/arc.mmd form one architecture trio and must be updated together on any change to boundaries, data flow, or runtime contract."
   - "bm25 tokenization is intentionally simple and documented as weak for CJK, thai, and lao."
   - "python/_nest.so must be rebuilt after Rust changes that touch nest-format, nest-runtime, or nest-python."
+  - "forge-core is a separate cargo workspace OUTSIDE crates/ and must stay that way: its (eventually heavy) ingestion deps must never enter the sovereign workspace, and it is not built by the sovereign release gate, so it carries its own cargo build/test/fmt/clippy."
 inventory:
   root:
     - {path: ".editorconfig", kind: config, purpose: "editor defaults plus binary-safe .nest handling", links: []}
@@ -190,3 +192,13 @@ inventory:
     - {path: "tests/test_builder.py", kind: python-test, purpose: "pipeline and cache regression coverage", links: ["python/builder.py"]}
     - {path: "tests/test_e2e.py", kind: python-test, purpose: "PyO3 end-to-end coverage", links: ["python/nest.py", "crates/nest-python/src/nest_file.rs"]}
     - {path: "tests/test_search_text_model_hash.py", kind: python-test, purpose: "model_hash gate coverage for search-text", links: ["crates/nest-cli/src/cmd/search_text.rs", "python/embed_query.py"]}
+  forge_core:
+    - {path: "forge-core/Cargo.toml", kind: rust-manifest, purpose: "standalone cargo workspace + package outside crates/, minimal deps (serde, serde_json, thiserror), edition 2024", links: []}
+    - {path: "forge-core/src/lib.rs", kind: rust-source, purpose: "forge-core surface + boundary doc: no chunker, no model runtime, determinism on canonical text + per-space fingerprint", links: ["forge-core/src/fci/mod.rs", "forge-core/src/error.rs"]}
+    - {path: "forge-core/src/error.rs", kind: rust-source, purpose: "typed ForgeError variants, never panic", links: []}
+    - {path: "forge-core/src/fci/mod.rs", kind: rust-source, purpose: "FciBundle container + FCI_SCHEMA_VERSION + cross-reference/version validate", links: ["forge-core/src/fci/serialize.rs"]}
+    - {path: "forge-core/src/fci/record.rs", kind: rust-source, purpose: "ChunkRecord mirroring builder.ChunkSpec exactly (1:1 adapter map, spans round-trip through nest cite)", links: ["python/builder.py"]}
+    - {path: "forge-core/src/fci/embedding_request.rs", kind: rust-source, purpose: "EmbeddingRequest + SpaceTag + PayloadRef, the multimodal carrier", links: []}
+    - {path: "forge-core/src/fci/entity.rs", kind: rust-source, purpose: "Entity, MentionSpan, typed weighted Edge for the graph pillar", links: []}
+    - {path: "forge-core/src/fci/blob_ref.rs", kind: rust-source, purpose: "BlobRef content-hash reference to an original artifact for catalog mode", links: []}
+    - {path: "forge-core/src/fci/serialize.rs", kind: rust-source, purpose: "deterministic canonical serialize/deserialize + roundtrip/determinism/validate tests", links: ["forge-core/src/fci/mod.rs"]}
