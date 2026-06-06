@@ -232,6 +232,13 @@ tagged by layer (forge/nest/lens/cross)
     fp ~ roughly 2x, never bare 32x).
     refs: crates/nest-format/src/encoding/int4.rs, crates/nest-format/src/encoding/rabitq.rs,
           NixOS/nix
+    note (EMB-int4): the int4(7) leg is DONE. block-64 per-group f16 absmax scales + packed
+          4-bit codes; fused dequant+dot kernel (avx2/neon/scalar, bit-for-bit); stored-precision
+          rerank like int8 (no fp source), disclosed via dtype; 'nano' preset (zstd/int4/hnsw).
+          measured: embeddings 11.92MB -> 6.27MB (1.9x over int8, 7.5x over f32), file
+          size_ratio 0.209, recall@10 0.913 vs the f32 exact baseline (100 queries, dim 384).
+          named 'nano' (not 'micro') to keep 'micro' reserved for the dict+fsst+int8 task.
+          still open on #14: rabitq(8), dedup-before-zstd(0x0B), chunk_scalars(0x0D).
 
 [ ] forge-1: belt subprocess contract + paddleocr/clip/fonttools/stanza + osint/fonts profiles
     (post-gate)   (MEDIUM/forge)

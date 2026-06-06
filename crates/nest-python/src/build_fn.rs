@@ -22,9 +22,13 @@ use pyo3::types::{PyDict, PyList};
 /// identical inputs produce byte-identical output.
 ///
 /// lPreset / encoding kwargs:
-///   - `preset`: one of "exact" (default), "compressed", "tiny", "hybrid"
+///   - `preset`: one of "exact" (default), "compressed", "tiny", "hybrid",
+///     "nano". "nano" is zstd text / int4 / hnsw (the first sub-int8 size
+///     lever, ~2x smaller embeddings than tiny at stored precision; requires
+///     `embedding_dim` divisible by 64).
 ///   - `text_encoding`: "raw" | "zstd" (overrides preset)
-///   - `dtype`: "float32" | "float16" | "int8" (overrides preset)
+///   - `dtype`: "float32" | "float16" | "int8" | "int4" (overrides preset;
+///     "int4" requires `embedding_dim` divisible by 64)
 ///   - `with_hnsw`: bool (overrides preset; default per preset)
 ///   - `with_bm25`: bool (overrides preset; default per preset)
 ///   - `hnsw_m`, `hnsw_ef_construction`, `hnsw_seed`: HNSW knobs
@@ -95,15 +99,19 @@ pub fn build(
         None => serde_json::json!({}),
     };
 
-    // lResolve preset defaults; explicit kwargs win.
+    // lResolve preset defaults; explicit kwargs win. "nano" sits below
+    // "tiny": int4 block-64 embeddings at stored precision (~2x over int8),
+    // zstd text, hnsw shortlist. exact/compressed/tiny/hybrid are byte-
+    // frozen and unchanged.
     let (default_text_enc, default_dtype, default_hnsw, default_bm25) = match preset {
         "exact" => (SectionEncoding::Raw, EmbeddingDType::Float32, false, false),
         "compressed" => (SectionEncoding::Zstd, EmbeddingDType::Float16, false, false),
         "tiny" => (SectionEncoding::Zstd, EmbeddingDType::Int8, true, false),
+        "nano" => (SectionEncoding::Zstd, EmbeddingDType::Int4, true, false),
         "hybrid" => (SectionEncoding::Zstd, EmbeddingDType::Float32, true, true),
         other => {
             return Err(PyValueError::new_err(format!(
-                "unknown preset: {} (expected exact|compressed|tiny|hybrid)",
+                "unknown preset: {} (expected exact|compressed|tiny|nano|hybrid)",
                 other
             )));
         }
@@ -123,14 +131,24 @@ pub fn build(
         Some("float32") => EmbeddingDType::Float32,
         Some("float16") => EmbeddingDType::Float16,
         Some("int8") => EmbeddingDType::Int8,
+        Some("int4") => EmbeddingDType::Int4,
         Some(other) => {
             return Err(PyValueError::new_err(format!(
-                "unknown dtype: {} (expected float32|float16|int8)",
+                "unknown dtype: {} (expected float32|float16|int8|int4)",
                 other
             )));
         }
         None => default_dtype,
     };
+    // lint4 requires the embedding_dim to be a multiple of the block size so
+    // every 64-dim group has its own absmax scale. Fail fast with a clear
+    // message rather than deep in the encoder.
+    if dt == EmbeddingDType::Int4 && (embedding_dim == 0 || embedding_dim % 64 != 0) {
+        return Err(PyValueError::new_err(format!(
+            "int4 requires embedding_dim divisible by 64, got {}",
+            embedding_dim
+        )));
+    }
     let want_hnsw = with_hnsw.unwrap_or(default_hnsw);
     let want_bm25 = with_bm25.unwrap_or(default_bm25);
 

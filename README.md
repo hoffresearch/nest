@@ -130,7 +130,7 @@ nest.build(
     model_hash,            # sha256(canonical_json(fingerprint)), see python/model_fingerprint.py
     chunks,                # [{canonical_text, source_uri, byte_start, byte_end, embedding}]
     reproducible=True,
-    preset="exact",        # "compressed" | "tiny" | "hybrid"
+    preset="exact",        # "compressed" | "tiny" | "nano" | "hybrid"
 )
 ```
 
@@ -143,9 +143,10 @@ or via `Pipeline` in `python/builder.py` with chunker, SQLite cache, and auto-va
 | `exact`      | raw           | float32    | no  | no   |     1.000  |   1.0000  |
 | `compressed` | zstd          | float16    | no  | no   |     0.350  |   1.0000  |
 | `tiny`       | zstd          | int8       | yes | no   |     0.283  |   0.9920  |
+| `nano`       | zstd          | int4       | yes | no   |     0.209  |   0.9130  |
 | `hybrid`     | zstd          | float32    | yes | yes  |     0.668  |   1.0000  |
 
-numbers measured on a 30,725-chunk PT-BR corpus, dim=384, NEON. `tiny` is the smallest distributable form, `hybrid` recovers lexical recall on rare terms, `exact` is the recall-1.0 ground truth.
+numbers measured on a 30,725-chunk PT-BR corpus, dim=384, NEON, k=10 vs the float32 exact baseline. `nano` is the smallest distributable form: int4 block-64 stored-precision embeddings (the embeddings section drops from int8's 11.92 MB to 6.27 MB, ~1.9x smaller, ~7.5x over float32). its `recall@10` and `score` are real cosine AT THE INT4 STORED PRECISION (no separate fp source, like int8); `dtype=int4` is surfaced in `nest stats` and on every result, so the precision is disclosed, never a bare-slab claim. `nano` requires `embedding_dim` divisible by 64. `hybrid` recovers lexical recall on rare terms, `exact` is the recall-1.0 ground truth.
 
 ## v0.2 highlights
 
@@ -158,7 +159,7 @@ added on top, all inside v1 (no format break):
 - SIMD dispatcher: AVX2 on x86_64, NEON on aarch64, scalar fallback. `NEST_FORCE_SCALAR=1` for A/B benchmarks. accumulators are always f32 regardless of dtype.
 - `nest search-text` with reproducible model fingerprint and `--model-path` for fully offline operation. supersedes the v1 "vector only" CLI restriction.
 - `madvise-cold` benchmark for first-hit-after-boot latency bound.
-- four presets that bundle the above into named tradeoffs.
+- five presets that bundle the above into named tradeoffs, incl `nano` (int4 block-64 embeddings, the first sub-int8 size lever).
 
 builds with `reproducible=True` are byte-identical for the same input.
 

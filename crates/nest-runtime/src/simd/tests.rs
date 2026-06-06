@@ -97,3 +97,53 @@ fn i8_simd_matches_scalar() {
         );
     }
 }
+
+#[test]
+fn i4_blocked_dispatched_matches_scalar_bit_for_bit() {
+    // lThe dispatched backend (neon/avx2/scalar) MUST equal the scalar
+    // reference bit-for-bit on random block-64 rows. dims cover one block
+    // (64), the corpus dim (384 -> 192 packed bytes -> 12 full 16B SIMD
+    // chunks), and 320 (160 packed bytes -> 10 full 16B chunks): every
+    // valid int4 dim is a multiple of 64 so dim/2 is a multiple of 16 and
+    // the SIMD nibble loop has no partial 16-byte chunk, but the wider
+    // sweep still exercises the chunk count beyond a single step.
+    let block = nest_format::INT4_BLOCK;
+    for dim in [64usize, 128, 320, 384] {
+        let q = random_normalized(0xF00D, dim);
+        let row = random_normalized(0xBEEF, dim);
+        let (scales, codes) = nest_format::quantize_f32_to_i4(&row, dim);
+        let packed = nest_format::pack_nibbles(&codes);
+        let scales_f32: Vec<f32> = scales.iter().map(|s| s.to_f32()).collect();
+        let scalar = dot_f32_i4_blocked_scalar(&q, &packed, &scales_f32, dim, block);
+        let dispatched = dot_f32_i4_blocked(&q, &packed, &scales_f32, dim, block);
+        assert_eq!(
+            scalar.to_bits(),
+            dispatched.to_bits(),
+            "dim={dim}: scalar={scalar} dispatched={dispatched} not bit-identical",
+        );
+    }
+}
+
+#[test]
+fn i4_blocked_matches_reference_dequant_dot() {
+    // lThe fused kernel equals an explicit f32 dequant + dot within 1e-5.
+    let block = nest_format::INT4_BLOCK;
+    for dim in [64usize, 128, 320, 384] {
+        let q = random_normalized(0x1357, dim);
+        let row = random_normalized(0x2468, dim);
+        let (scales, codes) = nest_format::quantize_f32_to_i4(&row, dim);
+        let packed = nest_format::pack_nibbles(&codes);
+        let scales_f32: Vec<f32> = scales.iter().map(|s| s.to_f32()).collect();
+
+        // lreference: dequant each code to f32 then a plain dot.
+        let mut reference = 0.0f32;
+        for (j, &c) in codes.iter().enumerate() {
+            reference += q[j] * (c as f32 * scales_f32[j / block]);
+        }
+        let fused = dot_f32_i4_blocked(&q, &packed, &scales_f32, dim, block);
+        assert!(
+            (fused - reference).abs() < 1e-5,
+            "dim={dim}: fused={fused} reference={reference}",
+        );
+    }
+}

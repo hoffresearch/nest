@@ -4,6 +4,21 @@ all notable changes to `nest` are documented here.
 
 format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). versioning follows [semver](https://semver.org/spec/v2.0.0.html). the on-disk container format is frozen at v1; breaking changes bump `NEST_FORMAT_VERSION` (binary) or `NEST_SCHEMA_VERSION` (manifest fields).
 
+## [unreleased]
+
+### added
+
+int4 block-64 embeddings, the first real sub-int8 size lever (additive within v1, no format-version bump):
+
+- `encoding=7` int4 embeddings. layout: 8-byte prefix (`payload_version=1`, `scale_kind=1`), then per-64-dim-group f16 absmax scales (row-major), then packed 4-bit signed codes (`[-7, 7]`, two nibbles per byte, low nibble first). requires `dtype="int4"` and `embedding_dim` divisible by 64. each 64-dim block carries its own scale so one block's outlier cannot crush another. validated like int8: the 4-bit codes cannot encode NaN/Inf, only the f16 group scales are range-checked.
+- fused dequant+dot kernel in the runtime simd module (`dot_f32_i4_blocked`): avx2 and neon vectorize the nibble unpack 16 packed bytes at a time, then run the identical per-group scalar reduction, so all three backends agree bit-for-bit (a lane-parallel float reduction would diverge in the last ulp). the embeddings section is scored straight off mmap; like int8 it is never zstd/dedup/shuffled.
+- the mandatory exact rerank reads the stored int4 slab (no separate full-precision source, exactly like int8), so the returned `score` is real cosine AT THE INT4 STORED PRECISION. disclosed via `manifest.dtype` and the `dtype=int4` / `encoding=int4` lines in `nest stats`, never reported as a bare-slab ratio.
+- `nano` preset: zstd text, int4 embeddings, HNSW, no BM25. sits below `tiny`. on the project's PT-BR corpus (n=30,725, dim=384, NEON, 100 queries, k=10): embeddings section 11.92 MB (int8) -> 6.27 MB (int4), ~1.9x over int8 and ~7.5x over float32; file size_ratio 0.209; recall@10 0.913 vs the float32 exact baseline.
+- `dtype` extended to `"float32" | "float16" | "int8" | "int4"`. python `build(..., preset="nano")` or `dtype="int4"` rejects `embedding_dim` not divisible by 64 with a typed error.
+- `compare_measure.py` gains conditional `nano` regression gates (`size_ratio <= 0.25`, `recall_at_k >= 0.85`), active only when the run includes the nano preset.
+
+scope note: rabitq (encoding 8), dedup-before-zstd (0x0B), and chunk_scalars (0x0D) are the other legs of the same plan task and are not part of this change.
+
 ## [0.2.0] - 2026-04-28
 
 production-ready release. extends v1 with new section encodings, optional ANN and lexical sections, runtime SIMD dispatch, and offline model verification. existing v0.1 files load unchanged in v0.2 readers.

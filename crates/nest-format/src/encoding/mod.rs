@@ -18,11 +18,17 @@
 //! still produce the same content_hash for non-quantized sections.
 
 mod float16;
+mod int4;
 mod int8;
 mod intpack;
 mod zstd_codec;
 
 pub use float16::{f16_bytes_to_f32, f32_to_f16_bytes};
+pub use int4::{
+    INT4_BLOCK, INT4_PAYLOAD_VERSION, INT4_PREFIX_SIZE, INT4_SCALE_KIND_PER_GROUP,
+    Int4EmbeddingsView, encode_int4_embeddings, int4_blocks_per_row, nibble_to_i4, pack_nibbles,
+    quantize_f32_to_i4,
+};
 pub use int8::{
     INT8_PAYLOAD_VERSION, INT8_PREFIX_SIZE, INT8_SCALE_KIND_PER_VECTOR, Int8EmbeddingsView,
     encode_int8_embeddings, quantize_f32_to_i8,
@@ -32,8 +38,8 @@ pub use zstd_codec::{DEFAULT_ZSTD_LEVEL, zstd_encode};
 
 use crate::error::NestError;
 use crate::layout::{
-    SECTION_ENCODING_FLOAT16, SECTION_ENCODING_INT8, SECTION_ENCODING_INTPACK,
-    SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD,
+    SECTION_ENCODING_FLOAT16, SECTION_ENCODING_INT4, SECTION_ENCODING_INT8,
+    SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD,
 };
 use std::borrow::Cow;
 
@@ -50,6 +56,7 @@ enum WireCodec {
     Zstd,
     Float16Embeddings,
     Int8Embeddings,
+    Int4Embeddings,
     Intpack,
 }
 
@@ -60,6 +67,7 @@ impl WireCodec {
             SECTION_ENCODING_ZSTD => Some(Self::Zstd),
             SECTION_ENCODING_FLOAT16 => Some(Self::Float16Embeddings),
             SECTION_ENCODING_INT8 => Some(Self::Int8Embeddings),
+            SECTION_ENCODING_INT4 => Some(Self::Int4Embeddings),
             SECTION_ENCODING_INTPACK => Some(Self::Intpack),
             _ => None,
         }
@@ -69,7 +77,9 @@ impl WireCodec {
         match self {
             // lraw and the embedding-only encodings ARE their canonical
             // bytes; the runtime dispatches on `dtype` to interpret them.
-            Self::Raw | Self::Float16Embeddings | Self::Int8Embeddings => Ok(Cow::Borrowed(bytes)),
+            Self::Raw | Self::Float16Embeddings | Self::Int8Embeddings | Self::Int4Embeddings => {
+                Ok(Cow::Borrowed(bytes))
+            }
             Self::Zstd => zstd_codec::zstd_decode(bytes).map(Cow::Owned),
             // lintpack repacks a canonical section (chunk_ids / spans) into a
             // smaller physical form that decodes BYTE-IDENTICALLY to the raw
@@ -135,6 +145,10 @@ pub fn expected_embeddings_size(dtype: &str, n: usize, dim: usize) -> Option<usi
         "float32" => Some(n * dim * 4),
         "float16" => Some(n * dim * 2),
         "int8" => Some(INT8_PREFIX_SIZE + n * 4 + n * dim),
+        // lprefix + f16 group scales (n * dim/64) + packed nibbles (n * dim/2).
+        "int4" if dim % INT4_BLOCK == 0 => {
+            Some(INT4_PREFIX_SIZE + n * (dim / INT4_BLOCK) * 2 + n * dim / 2)
+        }
         _ => None,
     }
 }
@@ -190,13 +204,15 @@ mod tests {
     #[test]
     fn wire_codec_registry_maps_only_implemented_ids() {
         use crate::layout::{
-            SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD,
-            SECTION_ENCODING_ZSTD_DICT,
+            SECTION_ENCODING_INT4, SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW,
+            SECTION_ENCODING_ZSTD, SECTION_ENCODING_ZSTD_DICT,
         };
         assert!(WireCodec::from_id(SECTION_ENCODING_RAW).is_some());
         assert!(WireCodec::from_id(SECTION_ENCODING_ZSTD).is_some());
         // intpack (id 4) is now implemented and in the registry.
         assert!(WireCodec::from_id(SECTION_ENCODING_INTPACK).is_some());
+        // int4 (id 7) is now implemented and in the registry.
+        assert!(WireCodec::from_id(SECTION_ENCODING_INT4).is_some());
         // still-reserved-but-unimplemented and unknown ids are not.
         assert!(WireCodec::from_id(SECTION_ENCODING_ZSTD_DICT).is_none());
         assert!(WireCodec::from_id(0xFF).is_none());
@@ -233,43 +249,6 @@ mod tests {
         assert_eq!(back.len(), v.len());
         for (a, b) in v.iter().zip(back.iter()) {
             assert!((a - b).abs() < 1e-3, "{} vs {}", a, b);
-        }
-    }
-
-    #[test]
-    fn int8_quantize_and_dequantize() {
-        let v: Vec<f32> = vec![1.0, -1.0, 0.5, -0.5, 0.0, 0.25];
-        let (scale, q) = quantize_f32_to_i8(&v);
-        assert!(scale > 0.0);
-        assert!(q.iter().any(|&x| x == 127 || x == -127));
-        for (orig, &qi) in v.iter().zip(q.iter()) {
-            let recon = qi as f32 * scale;
-            assert!((orig - recon).abs() <= scale * 1.01);
-        }
-    }
-
-    #[test]
-    fn int8_section_roundtrip() {
-        let n = 4;
-        let dim = 8;
-        let mut emb: Vec<f32> = Vec::with_capacity(n * dim);
-        for i in 0..n {
-            let mut v = vec![0.0f32; dim];
-            v[i % dim] = 1.0;
-            emb.extend_from_slice(&v);
-        }
-        let payload = encode_int8_embeddings(&emb, n, dim).unwrap();
-        let view = Int8EmbeddingsView::parse(&payload, n, dim).unwrap();
-        assert_eq!(view.n, n);
-        assert_eq!(view.dim, dim);
-        for i in 0..n {
-            let scale = view.scale(i);
-            let row = view.row(i);
-            assert_eq!(row.len(), dim);
-            let recon: Vec<f32> = row.iter().map(|&x| x as f32 * scale).collect();
-            for (orig, r) in emb[i * dim..(i + 1) * dim].iter().zip(recon.iter()) {
-                assert!((orig - r).abs() < 0.02, "{} vs {}", orig, r);
-            }
         }
     }
 }

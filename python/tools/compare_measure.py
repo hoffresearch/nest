@@ -119,6 +119,27 @@ def main() -> int:
             post_p["hybrid"]["recall_at_k"] >= 0.99,
             post_p["hybrid"]["recall_at_k"],
         ),
+        # nano (int4, stored precision): the first sub-int8 size lever.
+        # gates only fire when the run includes nano. the recall floor sits
+        # below tiny's 0.95 because int4 is the coarser stored precision
+        # (real cosine AT THAT precision, disclosed via dtype); the headroom
+        # absorbs query-sample noise while still catching a real regression.
+        *(
+            [
+                (
+                    "nano.size_ratio        ≤ 0.25",
+                    post_p["nano"]["size_ratio"] <= 0.25,
+                    post_p["nano"]["size_ratio"],
+                ),
+                (
+                    "nano.recall_at_k       ≥ 0.85",
+                    post_p["nano"]["recall_at_k"] >= 0.85,
+                    post_p["nano"]["recall_at_k"],
+                ),
+            ]
+            if "nano" in post_p
+            else []
+        ),
         (
             (
                 f"exact.p95_ms           ≤ {p95_limit:.3f} ms "

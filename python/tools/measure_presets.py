@@ -142,7 +142,7 @@ def main():
     ap.add_argument("--n-queries", type=int, default=50)
     ap.add_argument("--k", type=int, default=10)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--variants", default="compressed,tiny,hybrid")
+    ap.add_argument("--variants", default="compressed,tiny,nano,hybrid")
     ap.add_argument(
         "--json",
         action="store_true",
@@ -207,7 +207,7 @@ def main():
 
         if db_v.has_ann and db_v.has_bm25 and preset == "hybrid":
             mode = "hybrid"
-        elif db_v.has_ann and preset == "tiny":
+        elif db_v.has_ann and preset in ("tiny", "nano"):
             mode = "ann"
         else:
             mode = "exact"

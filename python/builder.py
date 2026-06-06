@@ -149,14 +149,17 @@ class BuildConfig:
     license: str | None = None
     reproducible: bool = True
     # encoding presets:
-    #   "exact"      — raw text, float32 embeddings, no ANN, no BM25
-    #   "compressed" — zstd text, float16 embeddings, no ANN, no BM25
-    #   "tiny"       — zstd text, int8 embeddings, HNSW, no BM25
-    #   "hybrid"     — zstd text, float32 embeddings, HNSW, BM25
+    #   "exact"      - raw text, float32 embeddings, no ANN, no BM25
+    #   "compressed" - zstd text, float16 embeddings, no ANN, no BM25
+    #   "tiny"       - zstd text, int8 embeddings, HNSW, no BM25
+    #   "nano"       - zstd text, int4 block-64 embeddings, HNSW, no BM25
+    #                  (first sub-int8 size lever; embedding_dim must be
+    #                  divisible by 64; stored-precision cosine)
+    #   "hybrid"     - zstd text, float32 embeddings, HNSW, BM25
     preset: str = "exact"
     # per-knob overrides (None = inherit from preset)
     text_encoding: str | None = None  # "raw" | "zstd"
-    dtype: str | None = None  # "float32" | "float16" | "int8"
+    dtype: str | None = None  # "float32" | "float16" | "int8" | "int4"
     with_hnsw: bool | None = None
     with_bm25: bool | None = None
     hnsw_m: int = 16

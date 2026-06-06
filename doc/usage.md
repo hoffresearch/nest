@@ -105,11 +105,12 @@ nest search-ann my_corpus.nest "[0.1, 0.2, ...]" -k 10 --ef 200
 | `exact`      | raw           | float32    | no  | no   |      1.000 |    1.0000 |
 | `compressed` | zstd          | float16    | no  | no   |      0.350 |    1.0000 |
 | `tiny`       | zstd          | int8       | yes | no   |      0.283 |    0.9920 |
+| `nano`       | zstd          | int4       | yes | no   |      0.209 |    0.9130 |
 | `hybrid`     | zstd          | float32    | yes | yes |      0.668 |    1.0000 |
 
-numbers measured on the project's PT-BR fake-news corpus (n=30,725, dim=384). latency ranges (NEON, hot cache): exact p50 ~3.0 ms, tiny p50 ~1.3 ms, hybrid p50 ~4.5 ms.
+numbers measured on the project's PT-BR fake-news corpus (n=30,725, dim=384), k=10 vs the float32 exact baseline. latency ranges (NEON, hot cache): exact p50 ~3.0 ms, tiny p50 ~1.3 ms, nano p50 ~2.1 ms, hybrid p50 ~4.5 ms.
 
-pick `tiny` for the smallest distributable file (~30% of `exact`), `compressed` when you need lossless cosine + 3x compression, `hybrid` when queries include rare terms, proper nouns, or siglas that pure embeddings underweight, and `exact` when storage isn't the bottleneck and you want the recall=1.0 ground truth.
+pick `nano` for the smallest distributable file: int4 block-64 embeddings (per-64-dim-group f16 absmax scales + packed 4-bit codes) take the embeddings section from int8's 11.92 MB down to 6.27 MB (~1.9x over int8, ~7.5x over float32). `nano` requires `embedding_dim` divisible by 64. its `score` and `recall@10` are real cosine AT THE INT4 STORED PRECISION (no separate full-precision rerank source, exactly like `tiny`/int8); `dtype=int4` shows in `nest stats` and on every result, so the precision is disclosed and never reported as a bare-slab ratio. pick `tiny` when you want a smaller file than `compressed` with recall still above 0.99, `compressed` when you need lossless cosine + 3x compression, `hybrid` when queries include rare terms, proper nouns, or siglas that pure embeddings underweight, and `exact` when storage isn't the bottleneck and you want the recall=1.0 ground truth.
 
 ## 7. model_hash and offline operation (`--model-path`)
 
