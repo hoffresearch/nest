@@ -223,6 +223,18 @@ tagged by layer (forge/nest/lens/cross)
     important artifact missing from the draft.
     refs: doc/plan/master-plan/gate.txt, embeddings-benchmark/mteb,
           jvm-repo-rebuild/reproducible-central
+    NOTE (WO PUB-ladder, 2026-06-06, branch research/nest-genome-v2): condition (1) the
+    published honest ratio + recall@10 is SATISFIED; condition (3)/(2) external users is
+    DEFERRED TO LAUNCH (owner call), so the gate stays OPEN (card not flipped). created
+    doc/plan/master-plan/gate.txt (which #10 owns but had not created). published ladder ran at
+    100 queries, k=10, on the LFS baseline dat/corpus_next.v1.nest (n=30725, dim=384), recall vs
+    the f32 exact top-k, in dat/measure/ladder.json + refreshed dat/measure/baseline.json named
+    rows: compressed 0.339/1.000, tiny 0.256/0.992, micro 0.223/0.810 (mrl256-int8 alias), nano
+    0.209/0.913 (int4), hybrid 0.609/1.000. honest net-of-fp: the 0x09 embeddings_fp writer is
+    NOT wired, so every shipped sub-int8 preset is stored-precision (net-of-fp == stored ratio,
+    real cosine at int4/int8 precision, disclosed via dtype + mrl_dim/full_dim, machine-
+    checkable, never bare-slab); rabitq 1-bit stays out of scope. reconciled the published docs
+    to the build (tiny 0.283 -> 0.256, compressed 0.350 -> 0.339, hybrid 0.668 -> 0.609).
 
 
 ##############################################################################################

@@ -19,6 +19,15 @@ int4 block-64 embeddings, the first real sub-int8 size lever (additive within v1
 
 scope note: rabitq (encoding 8), dedup-before-zstd (0x0B), and chunk_scalars (0x0D) are the other legs of the same plan task and are not part of this change.
 
+published preset ladder + honest net-of-fp reconciliation (measurement and docs only, no format/runtime change):
+
+- `measure_presets.py` names two explicit sub-int8 ladder rungs: `nano` (int4 full-dim) and `micro` (the matryoshka lever, an alias for `mrl256-int8`: `mrl_dim=256` + int8). the default `--variants` now emit the full ladder `compressed,tiny,micro,nano,hybrid` plus the mrl curve `mrl256/192/128-int8`, `mrl96-int8`, `mrl256/192/128-int4`.
+- the full ladder ran at 100 queries, k=10, on the LFS baseline `dat/corpus_next.v1.nest` (n=30,725, dim=384, NEON). published to the new `dat/measure/ladder.json` (the curve, not a cherry-pick) and `dat/measure/baseline.json`'s named rows refreshed to the freshly-measured numbers.
+- honest reconciliation: the intpack chunk_ids/spans repack and the bitpacked hnsw/bm25 payloads shrank the indexed presets below the v0.2 published figures. the committed numbers now match the build: `tiny` 0.283 -> 0.256, `compressed` 0.350 -> 0.339, `hybrid` 0.668 -> 0.609. recall@10 unchanged (`tiny` 0.992, `compressed`/`hybrid` 1.000).
+- net-of-fp framing: the 0x09 `embeddings_fp` writer is not wired, so every shipped sub-int8 preset (`nano`/int4, `micro`/mrl-int8, the mrl-int4 curve) is STORED-PRECISION: net-of-fp ratio == stored ratio, disclosed as real cosine at the stored int4/int8 precision. each published sub-int8 row carries `dtype`, `stored_precision`, `has_fp_source=false`, `net_of_fp_ratio`, and (for matryoshka rows) `mrl_dim`/`full_dim`, so the disclosure is machine-checkable. rabitq 1-bit (which would need a counted f16 fp source) stays out of scope.
+- `compare_measure.py` gains a conditional `micro` gate (`size_ratio <= 0.25`, `recall_at_k >= 0.78`), mirroring the existing `nano` and `mrl256-int8` gates; it fires only when the run includes `micro`.
+- published numbers (100 queries, k=10, vs the float32 exact baseline): `compressed` 0.339 / 1.000, `tiny` 0.256 / 0.992, `micro` 0.223 / 0.810, `nano` 0.209 / 0.913, `hybrid` 0.609 / 1.000.
+
 ## [0.2.0] - 2026-04-28
 
 production-ready release. extends v1 with new section encodings, optional ANN and lexical sections, runtime SIMD dispatch, and offline model verification. existing v0.1 files load unchanged in v0.2 readers.
