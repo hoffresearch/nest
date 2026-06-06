@@ -7,6 +7,8 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
+use crate::build_inputs::{parse_chunks, truncate_renormalize};
+
 /// lBuild a .nest file from already-embedded chunks.
 ///
 /// `chunks` is a list of dicts with keys:
@@ -28,7 +30,15 @@ use pyo3::types::{PyDict, PyList};
 ///     `embedding_dim` divisible by 64).
 ///   - `text_encoding`: "raw" | "zstd" (overrides preset)
 ///   - `dtype`: "float32" | "float16" | "int8" | "int4" (overrides preset;
-///     "int4" requires `embedding_dim` divisible by 64)
+///     "int4" requires the EFFECTIVE dim divisible by 64)
+///   - `mrl_dim`: optional matryoshka prefix dim. When set, each L2-normalized
+///     f32 vector is sliced to the first `mrl_dim` components and re-L2-
+///     normalized on the prefix (Qwen3/ST/BGE "truncate-then-renormalize"),
+///     BEFORE quantization and HNSW build, so int8/int4 calibrate on the
+///     shorter renormalized row. The file's header/manifest `embedding_dim`
+///     becomes `mrl_dim`; the full source dim is recorded in `full_dim`.
+///     Must satisfy `0 < mrl_dim <= embedding_dim`. A pure deterministic
+///     slice + renorm, so byte-identical builds hold.
 ///   - `with_hnsw`: bool (overrides preset; default per preset)
 ///   - `with_bm25`: bool (overrides preset; default per preset)
 ///   - `hnsw_m`, `hnsw_ef_construction`, `hnsw_seed`: HNSW knobs
@@ -52,6 +62,7 @@ use pyo3::types::{PyDict, PyList};
     preset="exact",
     text_encoding=None,
     dtype=None,
+    mrl_dim=None,
     with_hnsw=None,
     with_bm25=None,
     hnsw_m=16,
@@ -78,6 +89,7 @@ pub fn build(
     preset: &str,
     text_encoding: Option<&str>,
     dtype: Option<&str>,
+    mrl_dim: Option<u32>,
     with_hnsw: Option<bool>,
     with_bm25: Option<bool>,
     hnsw_m: usize,
@@ -88,7 +100,31 @@ pub fn build(
     use nest_format::writer::{EmbeddingDType, NestFileBuilder, SectionEncoding};
 
     let n_chunks = chunks.len() as u64;
-    let chunk_inputs = parse_chunks(chunks)?;
+    let full_dim = embedding_dim;
+    let mut chunk_inputs = parse_chunks(chunks)?;
+
+    // lMatryoshka prefix truncation (Qwen3/ST/BGE truncate-then-renormalize).
+    // Slice each row to the first mrl_dim components and re-L2-normalize on
+    // the prefix BEFORE quantization/HNSW so int8/int4 calibrate and the
+    // graph builds on the shorter renormalized row. Pure deterministic op.
+    // `embedding_dim` becomes the effective (truncated) dim from here on; the
+    // source dim is preserved in `full_dim` for the disclosure metadata.
+    let effective_dim = match mrl_dim {
+        Some(d) => {
+            if d == 0 || d > full_dim {
+                return Err(PyValueError::new_err(format!(
+                    "mrl_dim must satisfy 0 < mrl_dim <= embedding_dim ({}), got {}",
+                    full_dim, d
+                )));
+            }
+            if d < full_dim {
+                truncate_renormalize(&mut chunk_inputs, full_dim as usize, d as usize);
+            }
+            d
+        }
+        None => full_dim,
+    };
+    let embedding_dim = effective_dim;
 
     let provenance_value = match provenance {
         Some(p) => {
@@ -140,17 +176,28 @@ pub fn build(
         }
         None => default_dtype,
     };
-    // lint4 requires the embedding_dim to be a multiple of the block size so
-    // every 64-dim group has its own absmax scale. Fail fast with a clear
-    // message rather than deep in the encoder.
+    // lint4 requires the EFFECTIVE (post-truncation) embedding_dim to be a
+    // multiple of the block size so every 64-dim group has its own absmax
+    // scale. With matryoshka this means mrl_dim%64==0 (e.g. 256/192/128 are
+    // valid, 96 is not). Fail fast with a clear message.
     if dt == EmbeddingDType::Int4 && (embedding_dim == 0 || embedding_dim % 64 != 0) {
         return Err(PyValueError::new_err(format!(
-            "int4 requires embedding_dim divisible by 64, got {}",
+            "int4 requires (effective) embedding_dim divisible by 64, got {}",
             embedding_dim
         )));
     }
     let want_hnsw = with_hnsw.unwrap_or(default_hnsw);
     let want_bm25 = with_bm25.unwrap_or(default_bm25);
+
+    // lDisclosure metadata: when matryoshka truncation is active, record the
+    // effective prefix dim plus the full source dim as additive optional
+    // fields so the size/recall tradeoff is visible and citations are
+    // honestly tied to a given mrl_dim. Unset for non-truncated files so
+    // they stay byte-identical with a v1 manifest.
+    let (manifest_mrl_dim, manifest_full_dim) = match mrl_dim {
+        Some(_) => (Some(effective_dim), Some(full_dim)),
+        None => (None, None),
+    };
 
     let manifest = Manifest {
         embedding_model: embedding_model.to_string(),
@@ -164,6 +211,8 @@ pub fn build(
         description,
         authors,
         license,
+        mrl_dim: manifest_mrl_dim,
+        full_dim: manifest_full_dim,
         ..Default::default()
     };
 
@@ -215,44 +264,4 @@ pub fn build(
     std::fs::write(output_path, &bytes)
         .map_err(|e| PyValueError::new_err(format!("write {}: {}", output_path, e)))?;
     Ok(output_path.to_string())
-}
-
-fn parse_chunks(chunks: &Bound<PyList>) -> PyResult<Vec<nest_format::ChunkInput>> {
-    use nest_format::ChunkInput;
-    let mut out: Vec<ChunkInput> = Vec::with_capacity(chunks.len());
-    for (i, item) in chunks.iter().enumerate() {
-        let d: Bound<PyDict> = item
-            .cast::<PyDict>()
-            .map_err(|_| PyValueError::new_err(format!("chunks[{}] is not a dict", i)))?
-            .clone();
-        let d = &d;
-        let canonical_text: String = d
-            .get_item("canonical_text")?
-            .ok_or_else(|| PyValueError::new_err(format!("chunks[{}] missing canonical_text", i)))?
-            .extract()?;
-        let source_uri: String = d
-            .get_item("source_uri")?
-            .ok_or_else(|| PyValueError::new_err(format!("chunks[{}] missing source_uri", i)))?
-            .extract()?;
-        let byte_start: u64 = d
-            .get_item("byte_start")?
-            .ok_or_else(|| PyValueError::new_err(format!("chunks[{}] missing byte_start", i)))?
-            .extract()?;
-        let byte_end: u64 = d
-            .get_item("byte_end")?
-            .ok_or_else(|| PyValueError::new_err(format!("chunks[{}] missing byte_end", i)))?
-            .extract()?;
-        let embedding: Vec<f32> = d
-            .get_item("embedding")?
-            .ok_or_else(|| PyValueError::new_err(format!("chunks[{}] missing embedding", i)))?
-            .extract()?;
-        out.push(ChunkInput {
-            canonical_text,
-            source_uri,
-            byte_start,
-            byte_end,
-            embedding,
-        });
-    }
-    Ok(out)
 }

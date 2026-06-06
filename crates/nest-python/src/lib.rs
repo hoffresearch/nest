@@ -5,6 +5,7 @@
 use pyo3::prelude::*;
 
 mod build_fn;
+mod build_inputs;
 mod chunk_id_fn;
 mod nest_file;
 

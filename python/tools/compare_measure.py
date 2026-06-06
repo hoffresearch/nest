@@ -140,6 +140,31 @@ def main() -> int:
             if "nano" in post_p
             else []
         ),
+        # micro-mrl (matryoshka prefix x quant): gates only fire when the run
+        # includes the named mrl ladder point. the recall floor is BELOW
+        # nano's 0.85 because the shipped baseline is plain MiniLM, which is
+        # NOT matryoshka-trained, so prefix truncation costs real recall
+        # (front-loading is not guaranteed): mrl256-int8 measures ~0.81
+        # recall@10 at ~0.223 size_ratio over 100 queries. the floor catches
+        # a real regression (e.g. a broken renorm or stride) while absorbing
+        # query-sample noise; it is honestly disclosed as the cost of the
+        # dimension lever on a non-MRL model, not a cherry-pick.
+        *(
+            [
+                (
+                    "mrl256-int8.size_ratio ≤ 0.25",
+                    post_p["mrl256-int8"]["size_ratio"] <= 0.25,
+                    post_p["mrl256-int8"]["size_ratio"],
+                ),
+                (
+                    "mrl256-int8.recall@k   ≥ 0.78",
+                    post_p["mrl256-int8"]["recall_at_k"] >= 0.78,
+                    post_p["mrl256-int8"]["recall_at_k"],
+                ),
+            ]
+            if "mrl256-int8" in post_p
+            else []
+        ),
         (
             (
                 f"exact.p95_ms           ≤ {p95_limit:.3f} ms "

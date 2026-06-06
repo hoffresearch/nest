@@ -207,7 +207,7 @@ def main():
 
         if db_v.has_ann and db_v.has_bm25 and preset == "hybrid":
             mode = "hybrid"
-        elif db_v.has_ann and preset in ("tiny", "nano"):
+        elif db_v.has_ann and (preset in ("tiny", "nano") or preset.startswith("mrl")):
             mode = "ann"
         else:
             mode = "exact"
@@ -217,7 +217,20 @@ def main():
             f"search_mode={mode}  build={build_time:.1f}s",
             file=log,
         )
-        t_v, hits_v = run_bench(db_v, queries, args.k, mode=mode)
+        # lmatryoshka: the stored vectors are truncated to mrl_dim, so the
+        # query must be sliced to the same prefix and re-L2-normalized to
+        # match the build-time truncate-then-renormalize. Recall is still
+        # measured against the FULL-dim baseline top-k, so the curve is the
+        # honest cost of truncation (MiniLM is not matryoshka-trained).
+        v_queries = queries
+        if db_v.embedding_dim != meta["embedding_dim"]:
+            mrl = db_v.embedding_dim
+            v_queries = []
+            for qvec, qtext in queries:
+                prefix = list(qvec[:mrl])
+                norm = sum(x * x for x in prefix) ** 0.5 or 1.0
+                v_queries.append(([x / norm for x in prefix], qtext))
+        t_v, hits_v = run_bench(db_v, v_queries, args.k, mode=mode)
 
         recalls, drifts = [], []
         for h_exact, h_v, base_score in zip(hits_exact, hits_v, base_top_score, strict=False):

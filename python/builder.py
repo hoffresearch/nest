@@ -160,6 +160,11 @@ class BuildConfig:
     # per-knob overrides (None = inherit from preset)
     text_encoding: str | None = None  # "raw" | "zstd"
     dtype: str | None = None  # "float32" | "float16" | "int8" | "int4"
+    # matryoshka prefix dim (None = no truncation). When set, each vector is
+    # sliced to the first mrl_dim components and re-L2-normalized at build time
+    # (before quantization); the file's embedding_dim becomes mrl_dim and the
+    # source dim is recorded as full_dim. int4 needs mrl_dim divisible by 64.
+    mrl_dim: int | None = None
     with_hnsw: bool | None = None
     with_bm25: bool | None = None
     hnsw_m: int = 16
@@ -268,6 +273,7 @@ class Pipeline:
             preset=self.cfg.preset,
             text_encoding=self.cfg.text_encoding,
             dtype=self.cfg.dtype,
+            mrl_dim=self.cfg.mrl_dim,
             with_hnsw=self.cfg.with_hnsw,
             with_bm25=self.cfg.with_bm25,
             hnsw_m=self.cfg.hnsw_m,

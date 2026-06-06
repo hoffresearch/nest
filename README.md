@@ -131,6 +131,7 @@ nest.build(
     chunks,                # [{canonical_text, source_uri, byte_start, byte_end, embedding}]
     reproducible=True,
     preset="exact",        # "compressed" | "tiny" | "nano" | "hybrid"
+    # mrl_dim=256,         # optional matryoshka prefix dim (truncate + renorm)
 )
 ```
 
@@ -147,6 +148,24 @@ or via `Pipeline` in `python/builder.py` with chunker, SQLite cache, and auto-va
 | `hybrid`     | zstd          | float32    | yes | yes  |     0.668  |   1.0000  |
 
 numbers measured on a 30,725-chunk PT-BR corpus, dim=384, NEON, k=10 vs the float32 exact baseline. `nano` is the smallest distributable form: int4 block-64 stored-precision embeddings (the embeddings section drops from int8's 11.92 MB to 6.27 MB, ~1.9x smaller, ~7.5x over float32). its `recall@10` and `score` are real cosine AT THE INT4 STORED PRECISION (no separate fp source, like int8); `dtype=int4` is surfaced in `nest stats` and on every result, so the precision is disclosed, never a bare-slab claim. `nano` requires `embedding_dim` divisible by 64. `hybrid` recovers lexical recall on rare terms, `exact` is the recall-1.0 ground truth.
+
+### matryoshka prefix truncation (`mrl_dim`)
+
+`nest.build(mrl_dim=K)` is a build-time dimension lever orthogonal to and multiplicative with the dtype levers (Qwen3/ST/BGE truncate-then-renormalize). each l2-normalized vector is sliced to its first `K` components and re-l2-normalized on the prefix BEFORE quantization, so int8/int4 calibrate on the shorter renormalized row and the stored `embedding_dim` becomes `K` (the source dim is recorded as `full_dim`, both shown in `nest stats`). exact rerank stays real cosine because the prefix is renormalized; the truncation is a pure deterministic slice so builds stay byte-identical. `content_hash` is over the truncated embeddings, so a citation is tied to its `mrl_dim` (not stable across dims).
+
+the lever earns its keep on a matryoshka-trained model (where information front-loads). the shipped MiniLM baseline is NOT mrl-trained, so on it truncation costs real recall@10, reported honestly as a curve (100 queries, k=10):
+
+| ladder        | size ratio | recall@10 |
+|---------------|-----------:|----------:|
+| `mrl256-int8` |     0.223  |   0.810   |
+| `mrl192-int8` |     0.207  |   0.733   |
+| `mrl128-int8` |     0.190  |   0.659   |
+| `mrl96-int8`  |     0.182  |   0.574   |
+| `mrl256-int4` |     0.191  |   0.777   |
+| `mrl192-int4` |     0.183  |   0.713   |
+| `mrl128-int4` |     0.174  |   0.627   |
+
+int4 needs the effective dim divisible by 64, so the int4 ladder is valid only at `mrl_dim` in {256, 192, 128} (96 is blocked). on this non-mrl baseline no ladder point holds `nano`'s 0.913 recall, so `nano` (full-dim int4) still wins on recall while every mrl point is smaller; `mrl256-int8` (0.223 ratio, 0.810 recall) is the smallest point within tolerance, the micro lever to reach for when size beats the last ~10 recall points or once a real mrl-trained model lands.
 
 ## v0.2 highlights
 
