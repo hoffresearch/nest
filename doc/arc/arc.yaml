@@ -181,6 +181,10 @@ inventory:
     - {path: "python/convert_legacy.py", kind: python-source, purpose: "legacy sqlite to v1 binary converter", links: ["python/model_fingerprint.py", "python/nest.py"]}
     - {path: "python/embed_query.py", kind: python-source, purpose: "query embedder for cli search-text", links: ["python/model_fingerprint.py", "crates/nest-cli/src/cmd/search_text.rs"]}
     - {path: "python/model_fingerprint.py", kind: python-source, purpose: "reproducible model fingerprint and model_hash", links: ["python/embed_query.py", "python/tools/nest_build_corpus.py"]}
+    - {path: "python/forge/__init__.py", kind: python-source, purpose: "forge python package surface; re-exports the default static embedder", links: ["python/forge/embed_default.py"]}
+    - {path: "python/forge/embed_default.py", kind: python-source, purpose: "default OFFLINE static embedder (model2vec-style, stdlib-only, deterministic, no network); self-fingerprints to a sha256 model_hash; the build-side answer to offline-by-construction", links: ["python/builder.py"]}
+    - {path: "python/forge/demo_corpus", kind: data, purpose: "license-clean cc0 demo doc folder for the flagship one-gif demo", links: ["python/forge/embed_default.py"]}
+    - {path: "python/forge/test_embed_default.py", kind: python-test, purpose: "self-test: determinism, f32-stability, normalization, lexical signal, fingerprint stability, demo corpus presence", links: ["python/forge/embed_default.py"]}
     - {path: "python/nest.py", kind: python-source, purpose: "dynamic loader and stable python API", links: ["crates/nest-python/src/lib.rs", "python/_nest.so"]}
     - {path: "python/tools/_baseline_decoder.py", kind: python-source, purpose: "decode baseline corpora without re-embedding", links: ["python/tools/measure_presets.py"]}
     - {path: "python/tools/_bench_runner.py", kind: python-source, purpose: "timing and build helpers for preset measurement", links: ["python/tools/measure_presets.py"]}
