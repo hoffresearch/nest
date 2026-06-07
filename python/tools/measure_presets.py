@@ -20,6 +20,12 @@ Output: a markdown table to stdout. With `--json`, the table goes to
 stderr and a structured dump goes to stdout (used by
 `python/tools/compare_measure.py` for regression gates).
 
+WEAK RULER: queries are corpus vectors plus tiny noise (self-perturbation),
+so recall@10 here measures rank-stability under quantization, NOT real-query
+retrieval. the JSON dump carries a `ruler` provenance block saying so. the
+real-query (mteb-style) ruler is gate-zero; see
+doc/plan/compression-honest-plan.txt.
+
 Helpers live in private siblings:
   `_baseline_decoder.py`  — section-table parser
   `_bench_runner.py`      — percentile / build_variant / run_bench
@@ -42,11 +48,41 @@ import nest  # noqa: E402
 from _baseline_decoder import DEFAULT_BASELINE, OUT_DIR, decode_baseline  # noqa: E402
 from _bench_runner import build_variant, percentile, run_bench  # noqa: E402
 
+# RULER PROVENANCE (machine-readable, emitted into the JSON dump). every recall
+# number this harness reports comes from the self-perturbation ruler below: the
+# query is a corpus vector plus tiny deterministic noise, so the figure measures
+# rank-stability under quantization, NOT real-query retrieval. the real-query
+# (mteb-style) ruler is gate-zero; until it exists these numbers are likely
+# inflated. see doc/plan/compression-honest-plan.txt.
+_RULER_PROVENANCE = {
+    "kind": "self-perturbation",
+    "query": (
+        "each query is a corpus chunk's own embedding plus deterministic per-dim "
+        "noise (up to 8e-5 per dim), re-l2-normalized; it is a near-duplicate of an "
+        "corpus point"
+    ),
+    "ground_truth": "the same float32 baseline's own top-k on that perturbed query",
+    "measures": "rank-stability of a preset under quantization, NOT real-query retrieval quality",
+    "caveat": (
+        "this is NOT a real-query (mteb-style) labeled query-to-doc ruler; "
+        "recall@10 here is easier than real retrieval and is likely inflated"
+    ),
+    "real_ruler": (
+        "pending gate-zero (real-query labeled harness); see "
+        "doc/plan/compression-honest-plan.txt"
+    ),
+}
+
 
 def _sample_queries(chunks, n_queries: int, seed: int):
     """Pick `n_queries` corpus chunks at random; perturb each chunk's
     own embedding by tiny deterministic noise; return `(qvec, qtext)`
-    pairs ready for run_bench."""
+    pairs ready for run_bench.
+
+    WEAK RULER: the query is a corpus vector plus ~1e-4 noise, i.e. a
+    near-duplicate of an existing point, so recall@10 here measures
+    rank-stability under quantization, NOT real-query retrieval quality.
+    See _RULER_PROVENANCE and the gate-zero real-query harness."""
     n = len(chunks)
     dim = len(chunks[0]["embedding"])
     rng = random.Random(seed)
@@ -316,6 +352,7 @@ def main():
             "baseline_file_hash": db_exact.file_hash,
             "baseline_content_hash": db_exact.content_hash,
             "simd_backend": db_exact.simd_backend,
+            "ruler": _RULER_PROVENANCE,
             "presets": measurements,
         }
         json.dump(doc, sys.stdout, indent=2, sort_keys=True)
