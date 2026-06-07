@@ -79,7 +79,7 @@ def _sample_queries(chunks, n_queries: int, seed: int):
     own embedding by tiny deterministic noise; return `(qvec, qtext)`
     pairs ready for run_bench.
 
-    WEAK RULER: the query is a corpus vector plus ~1e-4 noise, i.e. a
+    WEAK RULER: the query is a corpus vector plus <=8e-5 per-dim noise, i.e. a
     near-duplicate of an existing point, so recall@10 here measures
     rank-stability under quantization, NOT real-query retrieval quality.
     See _RULER_PROVENANCE and the gate-zero real-query harness."""

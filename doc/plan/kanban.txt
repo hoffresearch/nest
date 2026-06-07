@@ -9,7 +9,7 @@ tagged by layer (forge/nest/lens/cross)
 # STATUS 2026-06-06  (honest reconciliation after the compression run)
 ##############################################################################################
 # COMPRESSION FRONTIER: the smallest preset that HOLDS recall@10 >= 0.95 is `tiny`
-#   (0.256 ratio / 30.7 MB / recall 0.992). NO new preset beats it. every sub-tiny rung
+#   (0.256 ratio / 30.7 MB / recall 0.992 on the WEAK self-perturbation ruler; see plan errata). NO new preset beats it. every sub-tiny rung
 #   FAILS the recall bar: nano int4 0.913, mrl256-int8 0.81, mrl128-int4 0.627 (errs 1 in 3).
 #   cause: the baseline embedder (384-dim MiniLM) is NOT matryoshka-trained, so prefix
 #   truncation is ~a random dim subset (steep recall loss), and int4 stored-precision alone
