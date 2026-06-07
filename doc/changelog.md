@@ -6,6 +6,10 @@ format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). version
 
 ## [unreleased]
 
+### note (2026-06-07): recall ruler provenance
+
+every `recall@10` figure in this changelog is measured on a SELF-PERTURBATION ruler (each query is a corpus vector plus tiny noise, a near-duplicate of an existing point), so it reports rank-stability under quantization, NOT real-query retrieval, and is likely inflated. `dat/measure/ladder.json` and `dat/measure/baseline.json` now carry a `ruler` provenance field saying so. the real-query (mteb-style) ruler is gate-zero (pending); see `doc/plan/compression-honest-plan.txt`.
+
 ### added
 
 int4 block-64 embeddings, the first real sub-int8 size lever (additive within v1, no format-version bump):

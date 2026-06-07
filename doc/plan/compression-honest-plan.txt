@@ -1,8 +1,8 @@
 ---
 project: nest
 audience: maintainer plus the forge/nest/lens dev teams
-status: active. supersedes the optimism of the compression cards; folds in the owner's four corrections
-last-updated: "2026-06-06"
+status: active. supersedes the optimism of the compression cards; folds in the owner's four corrections; 2026-06-07 errata reconciles it with the repo audit (pq numbers unmeasured, "merged" is branch-local, recall is self-perturbation)
+last-updated: "2026-06-07"
 domain: compression frontier, honest measurement, and orchestration plan
 ---
 
@@ -13,6 +13,28 @@ correction. read it before touching any compression code. it is plain prose on p
 captures the goal, the error we will not repeat, where we really are, the four holes the owner
 found and how each is closed, the gate-zero prerequisite, the single proving cycle, the levers
 in honest priority order, the non-negotiable rules, and the loop-versus-workflow playbook.
+
+errata 2026-06-07 (audit reconciliation; where this block conflicts with the body below, this
+block wins, the body is kept for its reasoning)
+
+a full repo audit on 2026-06-07 checked this record against the actual code, git, and the
+dat/measure artifacts, and corrected three claims that were not true as written.
+
+one, the pq numbers are not measured. "pq-192 0.951", "pq-96 0.869", and "pq plain 0.206 at
+0.951" exist only in this prose (and the 0.206 size was borrowed from the measured int8 mrl192 row in ladder.json, not a pq build). there is no pq codec, no k-means or codebook script, and no pq
+row in any dat/measure json or any .nest in the repo. treat every pq number here as an unmeasured
+hypothesis from an uncommitted, unreproducible numpy probe, not as a result. no pq number is real
+until a committed codec is measured on the gate-zero real-query ruler.
+
+two, "merged" means landed on the branch research/nest-genome-v2, not on main. as of this errata
+main is at 77ae6625 and predates every phase-0 and p1 commit, so nothing in "where we really are"
+is on main. read "merged" as "on the working branch, awaiting the maintainer's merge".
+
+three, every recall number in this record and in dat/measure (tiny 0.992, the whole mrl curve,
+all of it) comes from the weak self-perturbation ruler that correction one describes: the query
+is a corpus vector plus tiny noise, so the figure measures rank-stability under quantization, not
+real-query retrieval. ladder.json and baseline.json now carry a ruler-provenance field that says
+so, and gate-zero replaces this ruler before any "greater than or equal to 0.96" is trusted.
 
 the unstoppable goal
 
@@ -34,16 +56,18 @@ the error we will not repeat: laziness
 
 we applied only the shallow methods (zstd-19 on text, int8, linear int4, intpack on integers)
 and concluded sub-0.10 was impossible. that was laziness, not a limit. the real methods were
-never tried. product quantization (pq), measured in pure numpy offline, already beats int4. the
+never tried. product quantization (pq) was probed in uncommitted numpy and claimed to beat int4,
+but no codec, script, or artifact survives in the repo, so it is an unverified hypothesis (errata). the
 rule for ever: no one declares a method impossible before implementing and measuring the methods
 the research already names. the counterpart honesty, against blind optimism: pq at 96 bytes
-(16x, about 3 mb) measured recall 0.869 and fails; pq with an f32 rerank source reaches near
-perfect recall but must store the f32 vectors (47 mb) and ends up larger than tiny. that is the
-net-of-fp trap, now proven with numbers: pq as a candidate generator buys speed, not size.
+(16x, about 3 mb) was claimed at recall 0.869 (unmeasured, errata) and fails; pq with an f32 rerank
+source reaches near perfect recall but must store the f32 vectors (47 mb) and ends up larger than
+tiny. that is the net-of-fp trap (a hypothesis, not a committed measurement, errata): pq as a
+candidate generator buys speed, not size.
 
 where we really are (2026-06-06)
 
-merged: all of phase 0 (guardrails, codec registry, manifest additivity, the rerank-honesty
+merged onto the working branch (research/nest-genome-v2, not main, errata): all of phase 0 (guardrails, codec registry, manifest additivity, the rerank-honesty
 gate with the score_subset handle, the materialize ram-leak fix), forge-0a (.fci schema), p1#06
 (intpack on hnsw/bm25/spans/chunk_ids), and p1#10 (the real potion embedder, model2vec
 potion-base-8M, dim 256, offline, no torch, semantic). on branch research/nest-genome-v2, saved
@@ -53,7 +77,7 @@ per-chunk text streams, dict/fsst/dedup, the measured ladder, the g1 graph (grap
 of the numbers: the usable frontier is still tiny (0.256, recall 0.992); every sub-tiny linear
 preset fails (nano int4 0.913, all matryoshka rungs below 0.81, because the 384-dim minilm
 baseline is not matryoshka-trained so prefix truncation is near a random dim subset). the new
-measured finding is pq. the flagship works end-to-end, validated by hand: nest ask over a
+hypothesis (not yet measured, errata) is pq. the flagship works end-to-end, validated by hand: nest ask over a
 potion-built demo_corpus returns the right doc by meaning, with a real nest:// citation,
 SearchExplain saying rerank_source real cosine, and nest cite reopening the exact span (bytes 0
 to 512). honest caveat: potion (dim 256, english) misses about one paraphrase in eight; the
@@ -64,7 +88,7 @@ the four corrections (from most painful to least), and how each is closed
 correction one, the critical one: the recall ruler is suspect, and it contaminates every number.
 measure_presets builds queries by perturbing the corpus's own vectors. that tests find the
 neighbor of a near-identical point, which is far easier than find the right doc for a real
-question. so the measured 0.951 (pq-192) and 0.992 (tiny) are likely inflated, and pq is hit
+question. so the 0.951 (pq-192, an unmeasured hypothesis) and the measured 0.992 (tiny, on this weak ruler) are likely inflated, and pq is hit
 harder than int8 by this, because reconstruction error matters more when the query is far from
 any corpus vector than when it is a near-duplicate. chasing 0.96 with margin against this weak
 ruler is chasing margin on a weak metric, the self-illusion the plan swears to avoid. closure:
@@ -72,8 +96,8 @@ the mteb-style real-query recall harness (already an open p0 card, never done) i
 item, it is gate-zero, the prerequisite of cycle 1. no pq number is trusted until it is measured
 on real query-to-doc pairs.
 
-correction two: today no proven preset passes the 0.96 margin. the only measured number is
-pq-192 at 0.951, which fails the new goal, and 0.96 depends on the unmeasured bet that opq gets
+correction two: today no proven preset passes the 0.96 margin. the only number on the table is
+pq-192 at 0.951, an unmeasured hypothesis (errata) that even if real fails the new goal, and 0.96 depends on the unmeasured bet that opq gets
 there. closure: cycle 1 carries a written honest failure criterion. if pq, then opq and
 residual, does not reach recall greater than or equal to 0.96 on the real ruler at a size below
 int8 (11.9 mb), the valid result is "pq does not beat tiny with margin, tiny stays the
@@ -103,8 +127,8 @@ gate-zero (the prerequisite, do this first)
 
 build the mteb-style real-query recall harness on a license-clean labeled retrieval set (real
 queries plus relevant docs). re-measure exact and tiny (int8) on it to establish the true recall
-ruler. only then does any "greater than or equal to 0.96" mean anything, and the prior pq-192
-0.951 must be re-measured here (it will likely drop). until this exists, the 0.96 margin is
+ruler. only then does any "greater than or equal to 0.96" mean anything, and the pq-192
+0.951 hypothesis must be measured here for the first time (it will likely come in lower). until this exists, the 0.96 margin is
 fantasy. the first concrete movement of the whole effort is this harness, not the codec.
 
 cycle 1 (one full proving cycle, before any parallel teams)
@@ -243,7 +267,7 @@ three commits later.
 the honest number targets
 
 tiny today is 0.256 at recall 0.992 (on the weak ruler; re-measure on the real ruler in
-gate-zero). pq-192 plain was 0.206 at 0.951 (weak ruler, and tight); with opq seeking margin the
+gate-zero). pq-192 plain is a hypothesis at 0.206 / 0.951 (unmeasured, errata; no committed codec or run backs it); with opq seeking margin the
 target is recall greater than or equal to 0.96; if opq lifts pq-128 (3.9 mb) over 0.96 the file
 goes to about 0.19; with brotli and fse on text (15.7 mb toward about 13) it reaches about 0.16
 to 0.18. that, pq plus opq plus brotli with recall greater than or equal to 0.96 and margin on
