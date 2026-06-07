@@ -96,7 +96,7 @@ the mteb-style real-query recall harness (already an open p0 card, never done) i
 item, it is gate-zero, the prerequisite of cycle 1. no pq number is trusted until it is measured
 on real query-to-doc pairs.
 
-correction two: today no proven preset passes the 0.96 margin. the only number on the table is
+correction two: today no proven preset passes the 0.96 margin. the only sub-tiny candidate on the table is
 pq-192 at 0.951, an unmeasured hypothesis (errata) that even if real fails the new goal, and 0.96 depends on the unmeasured bet that opq gets
 there. closure: cycle 1 carries a written honest failure criterion. if pq, then opq and
 residual, does not reach recall greater than or equal to 0.96 on the real ruler at a size below
