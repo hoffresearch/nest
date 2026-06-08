@@ -1,0 +1,57 @@
+================================================================================================
+onnx/onnx
+category: model-runtime   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        ONNX is a protobuf-defined interchange format for ML graphs whose TensorProto/external-data
+             subsystem is a battle-tested spec for serializing quantized tensors
+             (int4/int8/float8/MX microscaling) as raw, page-aligned, mmap-friendly byte blobs
+             referenced by location/offset/length.
+innovation:  The MX microscaling block-quant scheme: shared 8-bit power-of-two block exponent (FLOAT8E8M0)
+             over sub-byte (int4/fp4) packed elements, decoupling a cheap shared scale from
+             per-element mantissa for near-int8 quality at int4 size; standardized on disk as
+             raw_data nibble-packing plus page-aligned mmap-able external byte ranges.
+techniques:
+  - MX microscaling: 32-element blocks share one FLOAT8E8M0 power-of-two scale, per-element
+    int4/fp4 mantissa, 2-stage dequant
+  - int4/uint4 packed 2 nibbles/byte two's-complement; bf16/fp8 bit-cast to unsigned before
+    serialize
+  - raw_data little-endian native blob as single bulk serialization path bypassing protobuf
+    overhead
+  - External data: (location, offset, length, SHA1 checksum) referencing a flat weight sidecar
+    by byte range
+  - Page-aligned offsets (4KB / 64KB Windows) via round-up formula to enable zero-copy mmap of
+    initializers
+  - size_threshold gate: only tensors >= threshold spill to raw/external, small ones inline
+  - Opset/version gating: new dtype force-upgrades consumer opset so readers know required
+    capability
+  - Named float8 variant zoo (E4M3FN, E5M2, FNUZ) as explicit encodings, not one lossy float8
+nest steals: Two additive grafts in nest-format/src/encoding/ (use a reserved encoding id 4-255, no v2 bump).
+             (1) New block-scaled sub-byte embedding codec generalizing int8.rs: replace its
+             per-vector f32 scale with int4 nibbles packed 2/byte plus a shared power-of-two u8
+             (E8M0-style) scale per 32-dim block; ~halves embeddings vs int8 while block scales
+             recover int4-flat recall, pushing the 'tiny' preset below 0.283. Keep raw (never
+             zstd embeddings) and fuse block dequant (single exponent add/shift) into the SIMD
+             dot kernel in nest-runtime/src/simd before f32 accumulate, under AVX2/NEON. (2)
+             Don't copy ONNX external-data (nest's single-file 64-byte-aligned section table in
+             reader/parse.rs already beats the sidecar model); instead steal the size_threshold
+             gate idea into writer/encoding_choice.rs so tiny sections skip block-quant
+             overhead, and keep the per-section SHA-256 checksum discipline that mirrors ONNX's
+             per-tensor checksum.
+compression: Directly central. MX block-scaling + int4 packing is the single highest-leverage path to push
+             the embeddings section (the dominant byte cost in a vector DB) below int8 without
+             the recall collapse of flat int4. It targets the exact 'compress more than
+             everyone' north star and the 'tiny' preset, is implementable as an additive
+             encoding id within frozen v1, and keeps embeddings raw/SIMD-scored from mmap. The
+             float8 variant taxonomy (E4M3 vs E5M2 vs E8M0-scale) is the proven design space to
+             copy rather than reinvent.
+perf:        raw_data + page-aligned external offsets exist specifically for zero-copy mmap of large weights
+             (nest already does this with 64-byte SECTION_ALIGNMENT, single-file). E8M0
+             block-scale dequant is one exponent add/shift per block (32 elems), cheap to fuse
+             into an AVX2/NEON dot-product kernel before f32 accumulation. int4 packing halves
+             embedding bytes vs int8; block scaling restores the recall flat-int4 loses. No
+             native NumPy dtype for int4/fp8 (uses ml_dtypes), so the packing/unpacking is
+             hand-rolled bit ops -- nest would implement the same in Rust.
+license:     Apache-2.0

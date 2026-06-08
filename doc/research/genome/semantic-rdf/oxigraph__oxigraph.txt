@@ -1,0 +1,79 @@
+================================================================================================
+oxigraph/oxigraph
+category: semantic-rdf   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Rust embedded RDF triple/quad store and SPARQL engine that encodes every term as a 17-byte
+             fixed-width (type-byte + 16-byte value) record, inlining small strings and all XSD
+             numeric/date literals as native bytes while hashing only large strings via
+             SipHash-2-4-128 into an id2str side table, so the six SPOG-permuted RocksDB indexes
+             never store raw strings.
+innovation:  Hash-or-inline content-addressed typed-value encoding: a 1-byte kind tag plus a <=16-byte value
+             that inlines small strings and native numerics/dates and replaces only large
+             strings with their content hash, eliminating the forward string->id dictionary
+             index and making identical values produce identical deterministic ids.
+techniques:
+  - Type-byte + <=16-byte value fixed-width term encoding (17 bytes total, big-endian for range
+    scans)
+  - Inline-small-string rule: UTF-8 strings <16 bytes stored verbatim, no dictionary entry
+  - Native typed-literal encoding: i64 integers, i128 fixed-point decimals (x10^18), dateTime as
+    decimal timestamp + i16 offset, 1-byte booleans, raw f32/f64 bits
+  - SipHash-2-4 128-bit content hashing for large strings -> id2str side table, no forward
+    string->id index
+  - Six SPOG permutations (SPOG/POSG/OSPG/GSPO/GPOS/GOSP) so any triple pattern maps to a prefix
+    range scan
+  - Big-endian key layout so lexicographic key order = numeric/range order for range queries
+  - MVCC memory backend: single quad hashset + per-quad 'last inserted matching S/P/O/G'
+    pointers + selectivity counters for greedy join ordering
+  - Volcano iterator evaluation with greedy join reordering by triple-pattern selectivity
+    (sparopt: filter pushdown, join reorder)
+nest steals: Steal the hash-or-inline typed-value encoding for nest-format as a new optional section codec on
+             chunk metadata / provenance / structured-payload sections (NOT embeddings, which
+             stay raw f32 on the mmap hot path). Concretely: in crates/nest-format/src/encoding
+             add a 'typed-dict' encoding (claim a reserved encoding id 4-255) where each
+             metadata field value is emitted as a 1-byte kind tag + <=16-byte value;
+             integers/timestamps/booleans/decimals go native (i64/i128-fixed-point/i16-offset)
+             instead of as JSON text, small UTF-8 strings inline, and any string >=16 bytes is
+             replaced by its SHA-256-prefix id (nest already computes SHA-256 everywhere, so
+             reuse content_hash machinery instead of SipHash to stay within nest's
+             four-integrity-surface story) pointing into a per-file id2str dictionary section.
+             This is directly content-addressed and deterministic -- identical metadata yields
+             byte-identical encoding, preserving nest's reproducible-build guarantee. It unlocks
+             (a) large compression wins on repetitive structured metadata (datasets, parquet
+             schemas, json/yaml provenance) where the same IRIs/keys/timestamps repeat across
+             millions of chunks, deduped to one dictionary entry; (b) a future graph-search
+             section (the mission's 'graph search' north-star) -- adopt the six-permutation SPOG
+             index layout in nest-runtime/src as a new section (reserved 0x09+) so relationship
+             triples over chunks become prefix-range scans on the mmap with no separate forward
+             index; (c) native typed columns for the 'compress whole databases/repos' goal. The
+             i128 fixed-point decimal trick (value x 10^18) and dateTime-as-decimal+offset give
+             nest exact, range-scannable numeric columns without floats.
+compression: High and direct. The encoding is a compression scheme in disguise: it turns variable-length text
+             literals into fixed 17-byte content-addressed ids and inlines anything under 16
+             bytes so it never costs a dictionary slot, then dedupes everything larger into a
+             single id2str table. For nest's repetitive structured payloads (per-chunk
+             provenance, dataset schemas, json/yaml/parquet keys, timestamps), encoding values
+             natively instead of as text plus deduping long strings to a content hash can beat
+             zstd on highly repetitive structured metadata because dedup happens at the
+             semantic-value level before the byte entropy coder ever runs -- and it stacks with
+             zstd (nest can zstd the resulting dictionary section since it is non-embedding).
+             The native i64/i128/i16 numeric encoding also removes JSON text bloat for
+             numbers/dates entirely. This squarely serves 'compress data more than everyone' for
+             the structured/dataset/database payload classes nest wants to swallow.
+perf:        Fixed 17-byte records mean term comparison and index scans are branch-light and cache-friendly;
+             big-endian keys make range queries pure prefix scans (no comparator). Inlining
+             sub-16-byte strings and native numerics removes a pointer-chase to id2str on the
+             common path -- only large strings pay a lookup. SipHash-2-4-128 is fast and
+             collision-free on a full 2019 Wikidata dump per their docs (nest would substitute
+             its existing SHA-256 to keep one hash family; SHA-256 is slower but nest already
+             pays it at build time, not on the search hot path, so no runtime cost). RocksDB LSM
+             gives write throughput but nest does not want RocksDB -- nest must reimplement the
+             layout as flat mmap'd sorted sections, which is actually simpler and faster to read
+             than an LSM and matches nest's zero-server, mmap-and-scan model. Six permutations
+             cost ~6x index storage; nest should make graph/triple indexing an OPTIONAL section
+             so default builds stay tiny.
+license:     Dual-licensed Apache-2.0 OR MIT (permissive; safe to read and reimplement the encoding scheme;
+             do not vendor RocksDB which is GPLv2/Apache-2.0 and brings a C++ LSM dependency
+             that violates nest's small single-file offline core).

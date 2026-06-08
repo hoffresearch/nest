@@ -1,0 +1,57 @@
+================================================================================================
+Gabriel-Lino-Garcia/FakeRecogna
+category: factcheck-datasets   |   steal priority: LOW
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A balanced PT-BR fake-news corpus of 11,902 labeled samples (5,951 fake / 5,951 real) shipped as
+             a single XLSX with an 8-column metadata schema (Title, Sub-title, News, Category,
+             Author, Date, URL, Class), crawled and aggregated from 6 fact-check agencies and 4
+             reputable news portals.
+innovation:  The transferable idea is a per-record structured-provenance schema for fact-checking data: every
+             sample carries not just text + a binary truth label (Class 0/1) but the full origin
+             chain (source agency/portal, original URL, publication Date, Category), with
+             engineered class balance and source diversity to avoid the leakage bias where fake
+             and real come from disjoint stylistic distributions. Fakes are aggregated across 6
+             independent fact-checkers, making the corpus a multi-source consensus rather than a
+             single-feed scrape.
+techniques:
+  - 8-column flat metadata schema per record (title, subtitle, body, category, author, date,
+    url, class) in a single XLSX container
+  - Binary truth label encoding Class in {0=fake, 1=real} as a first-class column
+  - Multi-agency aggregation: 6 fact-check sources merged into one fake-news pool with source
+    attribution preserved
+  - Class balancing by downsampling 100k+ real samples to 5,951 to match the fake count
+  - Fixed 6-category partition (Health, Politics, Entertainment, Brazil, Science, World) from
+    journal sections
+  - Source-decoupling anti-bias design: fake and real drawn from unrelated outlets so they are
+    not topic-paired
+  - Classical baseline: TF-IDF/bag-of-words features feeding Naive Bayes, SVM, Optimum-Path
+    Forest, plus a CNN
+nest steals: nest steals the data model, not an algorithm. (1) nest-python build path: ingest the XLSX demo
+             corpus, mapping News body to chunks_canonical(text) and (Title, Category, Author,
+             Date, URL, Class, source-agency) into the provenance section as per-chunk
+             structured metadata, giving the existing PT-BR demo corpus a real truth-label
+             field. (2) nest-format provenance: adopt the origin-chain shape (source + url +
+             date + category + truth-class) as the canonical fact-check provenance record, kept
+             additive on existing provenance bytes (reserve a new section id 0x09+ only if a
+             typed truth field is wanted; never bump NEST_FORMAT_VERSION). The original URL maps
+             onto nest's citation model so nest://content_hash/chunk_id resolves back to the
+             upstream article. (3) nest-cli search-text: Category and Class become filterable
+             demo facets; the low-cardinality enums compress to near-zero under existing zstd.
+compression: Low/indirect. The repo ships no codec, quantizer, or index -- it is raw XLSX text. Relevance is
+             twofold: (a) the low-cardinality enum columns (Class 2 values, Category 6 values,
+             ~10 source agencies) are highly compressible by nest's existing
+             zstd-on-non-embedding-sections path and serve as a clean fixture to validate
+             metadata compression; (b) the 11,902-sample PT-BR body text is a realistic
+             real-world corpus to benchmark the tiny preset (zstd/int8/hnsw, 0.283 size ratio,
+             recall@10 0.992) on the exact misinformation domain nest demos, rather than
+             synthetic data. No new compression technique is transferable from here.
+perf:        No runtime, SIMD, or throughput characteristics -- it is a static ~11.9k-row XLSX (single file,
+             a few MB). The only perf-adjacent note is that its 8-column metadata is tiny and
+             enum-heavy, so it adds negligible bytes to a .nest provenance section and
+             negligible cost to mmap/scan.
+license:     Not clearly stated in the README; the dataset accompanies an academic paper (Garcia, Afonso,
+             Papa; BRACIS/PROPOR 2022, LNCS/LNAI 13208). Treat as research-use; verify upstream
+             license before redistributing inside a .nest demo container.

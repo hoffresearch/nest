@@ -1,0 +1,69 @@
+================================================================================================
+weaviate/weaviate-go-client
+category: bindings-cli   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A native Go client for Weaviate that layers a fluent builder-pattern API over dual GraphQL
+             (precise field selection) and gRPC/protobuf transports, with the gRPC path packing
+             dense vectors as raw little-endian float32 byte blobs rather than repeated proto
+             float fields.
+innovation:  On the gRPC wire path, vectors are not sent as `repeated float` (which costs ~5 bytes/element
+             with protobuf varint+tag framing and forces per-element decode); they are packed
+             into a single opaque `bytes` field carrying contiguous little-endian float32 (the
+             `_Packing{bytes_, type_}` wrapper), with an enum tag discriminating 1D vectors, 2D
+             multi-vectors, and quantized forms. This is exactly nest's hot-path principle: a
+             vector section is one contiguous mmap-able byte run scored directly, never a
+             decode-per-element structure.
+techniques:
+  - gRPC vector byte-packing: dense embeddings serialized as one contiguous little-endian
+    float32 `bytes` blob + a type enum (1D / 2D multivector / quantized), instead of `repeated
+    float` proto fields
+  - relativeScoreFusion: per-result-set min-max normalization (max->1, min->0, linear in
+    between) of vector-distance and BM25 scores, then weighted sum -- an alternative to pure
+    reciprocal-rank fusion
+  - BM25 OR/AND operator with `minimumOrTokensMatch` (minimum_should_match): a tunable knob
+    requiring N of the query tokens to be present before a doc is eligible
+  - Builder-pattern argument unification: every search argument (NearVector, NearObject, Hybrid,
+    BM25, filters) is one typed builder with `WithCertainty/WithLimit/WithTargetVectors/...`,
+    replacing v2's stringly-typed GraphQL/filter construction
+  - Named/target vectors: `WithTargetVectors` selects which of multiple per-object vector spaces
+    to score against in a single request
+  - Transport abstraction with graceful fallback: gRPC enabled when `GrpcConfig` present, else
+    REST/HTTP; cloud auto-derives the gRPC endpoint from the REST URL
+  - API-group partitioning of the surface (Batch/Data/GraphQL/Schema/Backup/...) so each
+    subcommand is a small single-responsibility unit
+nest steals: Two concrete steals. (1) Codec/format insight, nest-format encoding + nest-runtime/search.rs:
+             weaviate's `bytes`-not-`repeated-float` packing validates nest's mmap-contiguous
+             embedding layout and points at a cheap win -- when nest exposes vectors over any
+             future bridge (nest-python pyo3 or a thin export), hand back the raw contiguous
+             f32/f16/int8 slice + a 1-byte encoding-id discriminator (mirror of weaviate's type
+             enum) so the consumer slices the mmap directly with zero per-element decode,
+             matching nest's existing encoding ids (raw/zstd/float16/int8) without touching the
+             frozen layout (additive: it is a read-side view, no new section). (2) Search
+             semantics, nest-runtime/bm25 + search.rs: adopt `minimum_should_match`/OR-operator
+             as a deterministic BM25 knob (alphabetical term order preserved, fully
+             reproducible) and evaluate relativeScoreFusion (min-max normalized weighted sum) as
+             a typed alternative to nest's current reciprocal-rank fusion in the hybrid preset
+             -- both feed the SAME mandatory exact-cosine rerank, so ground-truth scoring is
+             unchanged. Surface both as flags on nest-cli `search-text`/hybrid, mirroring
+             weaviate's builder ergonomics with clap.
+compression: Indirect but real: the gRPC `bytes`-packing trick is the wire-format twin of nest's core
+             compression decision to keep embeddings as a raw contiguous mmap run scored
+             directly (never zstd, never per-element proto framing). It confirms that for
+             vectors the win is layout + quantization (int8/f16), not entropy coding, and that
+             the read surface should expose the packed bytes + a small encoding tag so
+             downstream tools never re-inflate. No new entropy coder, quantizer, or graph layout
+             is offered here -- this is a bindings/ergonomics repo, so its compression
+             contribution is validation of an existing nest choice plus a clean
+             discriminator-tag pattern.
+perf:        gRPC path is HTTP/2 + protobuf; the byte-packed vector blob avoids protobuf's per-element
+             varint/tag overhead (~5 bytes/float for repeated) and per-element allocation,
+             giving a measurably smaller, faster-to-decode payload than GraphQL JSON -- the
+             stated motivation for the experimental gRPC Search being a drop-in replacement for
+             GraphQL Get. Java v6 client switched embeddings to `float[]` (vs boxed) for
+             GC-friendliness, a parallel lesson: keep vectors as flat primitive arrays. Go's
+             net/http provides default connection pooling; client connection timeout defaults to
+             60s.
+license:     BSD-3-Clause

@@ -1,0 +1,64 @@
+================================================================================================
+openai/tiktoken
+category: tokenizers   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A fast Rust-core byte-level BPE (byte pair encoding) tokenizer whose vocabulary is a flat
+             HashMap<Vec<u8>, Rank> mapping byte sequences to compact integer merge-priority
+             ranks, driving a regex pre-split plus greedy lowest-rank merge loop that is
+             reversible, lossless, language-agnostic, and deterministic.
+innovation:  BPE as a deterministic, reversible, lossless byte-to-integer compression code: pre-split text
+             with a fixed unicode-property regex, then greedily merge adjacent byte-pairs in
+             strict ascending "rank" order (rank = global merge priority loaded from a tiny
+             on-disk vocab), so the same input always yields the same shorter integer-ID stream
+             and decode is a pure HashMap<Rank, Vec<u8>> concat. Tokenization is itself
+             compression (fewer, denser symbols than raw UTF-8 bytes), it is byte-level so it
+             never fails on arbitrary/CJK/Thai/binary input, and it is bit-exact reproducible
+             from a frozen vocab file.
+techniques:
+  - byte-level BPE: vocab is HashMap<Vec<u8>, Rank> (rank = merge priority, lower merged first);
+    decode is HashMap<Rank, Vec<u8>>
+  - greedy lowest-rank merge on parts: Vec<(start, rank)>; O(mn) linear-scan-for-min for pieces
+    <100 bytes, BinaryHeap<Merge> O(m log n) for large pieces (_byte_pair_merge_large)
+  - Rank::MAX sentinel marks unmergeable pairs; get_rank closure looks up
+    piece[parts[i].0..parts[i+3].0] slices in the encoder map
+  - fixed unicode-property regex pre-tokenization (fancy_regex), e.g. cl100k splits on \p{L}++
+    runs, \p{N}{1,3}+ digit groups, contraction suffixes, whitespace runs; bounds merges and
+    guarantees determinism
+  - compact .tiktoken vocab format: one line = base64(token_bytes) + ' ' + ascii(rank) +
+    newline; loaded into the map and SHA-256 verified against expected_hash
+  - special tokens in a separate special_tokens_encoder map plus separate regex so merges never
+    cross sentinel boundaries
+  - FxHashMap over std HashMap (5-10% win); thread-local cloned regexes indexed by thread-id to
+    avoid lock contention; no SIMD, GIL released for parallelism
+  - the token set itself acts as the cache (no separate memoization); hot subwords are already
+    vocab entries
+nest steals: Add a byte-level BPE tokenizer in nest-runtime::bm25 to replace the word-segmented tokenizer
+             (the documented CJK/Thai gap): BPE pre-split plus merge yields language-agnostic
+             subword terms while keeping bm25's required alphabetical/deterministic term order.
+             Ship the frozen vocab as a new optional additive section (reserve a v1 id in 0x09+,
+             e.g. bpe_vocab) encoded exactly as tiktoken's base64(bytes)+rank lines, then
+             zstd-compressed via nest's existing non-embedding codec path; stays single-file,
+             offline, per-section SHA-256 checksummed. The merge loop is pure-safe Rust (parts
+             Vec + sentinel, no panics, thiserror on missing vocab), ~150-200 loc so it fits the
+             300-line rule, and seedless-deterministic so it preserves reproducible builds.
+             Strategically, also expose a nest-cli/nest-format codec that stores
+             chunks_canonical as BPE token-ID streams (a denser integer code than raw UTF-8)
+             feeding a future entropy-coded text section; content_hash stays stable because it
+             hashes decoded canonical bytes, not the encoding.
+compression: High and on-mission. BPE is compression by construction: it turns multi-byte UTF-8 runs into
+             single small integers, and a BPE token stream is a strictly denser,
+             dictionary-coded representation that downstream zstd/entropy coding compresses
+             further. It is the natural front-end for an extreme text-compression pipeline (BPE
+             IDs to rANS/range coder), and being byte-level plus deterministic it respects
+             nest's lossless, reproducible, language-agnostic guarantees. Directly closes the
+             known CJK/Thai bm25 tokenizer gap.
+perf:        3-6x faster than HuggingFace tokenizers on 1GB GPT-2 text. Pure scalar Rust, no SIMD. Two merge
+             paths: linear O(mn) for short pieces (<100 bytes, common after regex split),
+             BinaryHeap O(m log n) for rare long pieces. FxHashMap and thread-local regex clones
+             are the main micro-opts; parallelism comes from releasing the Python GIL, not
+             rayon. Memory is dominated by the vocab map (cl100k ~100k entries, o200k ~200k
+             entries); the .tiktoken file is a few MB of base64 lines, very zstd-friendly.
+license:     MIT License

@@ -1,0 +1,71 @@
+================================================================================================
+infiniflow/ragflow (+ sibling engine infiniflow/infinity, Apache-2.0)
+category: rag-orchestration   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        RAGFlow is a layout-aware RAG engine (DeepDoc parser + template chunking) backed by the Infinity
+             AI-native database, which serves a four-way hybrid search (dense vector via
+             HNSW+LVQ, sparse vector, BM25 full-text, and ColBERT tensor/late-interaction) fused
+             by RRF / weighted-sum / tensor reranking.
+innovation:  Two-stage Local Vector Quantization (LVQ) for HNSW: instead of plain per-vector affine int8,
+             first subtract the corpus mean and quantize the mean-centered residual (stage 1,
+             used for graph construction and traversal), then quantize the second-order residual
+             of that difference (stage 2, used only in the final similarity refinement). Because
+             every vector is offset by the same global mean and scaled per-vector, the
+             nearest-neighbor ordering is preserved, so the HNSW graph can be built and
+             traversed entirely on the compressed stage-1 codes -- no full-precision vectors
+             kept in RAM -- cutting memory bandwidth and footprint while recall stays intact.
+             Complementary idea: ColBERT multi-vector reranking with binary quantization, where
+             each float becomes one bit (1/32 size) and MaxSim is computed with Hamming
+             distance, also ranking-preserving.
+techniques:
+  - LVQ: subtract global corpus mean, then per-vector scalar-quantize the residual;
+    build/traverse HNSW on stage-1 codes only
+  - Two-stage residual quantization: stage-1 codes for traversal, stage-2 residual codes for
+    final-score refinement
+  - ColBERT late-interaction: per-token multi-vector (tensor) doc representation, MaxSim = sum
+    over query tokens of max token-to-token similarity
+  - Binary quantization of tensors: 1 bit/float (1/32 size), MaxSim via Hamming distance,
+    ranking-preserving
+  - Tensor-array chunking for >128-token docs: split, one tensor per chunk, aggregate MaxSim
+    across chunks
+  - Three fusion modes: RRF (rank-based, k=60), Weighted Sum (score-normalized), and
+    tensor/ColBERT rerank as finer verification
+  - EMVB tensor index (ColBERTv2 improvement): centroid pre-filtering + SIMD-accelerated MaxSim
+    used as a retriever not just a reranker
+nest steals: Three concrete steals. (1) LVQ in nest-format/src/encoding/int8.rs + nest-runtime/src/ann +
+             simd: today int8.rs does plain per-vector affine quant (scale=max_abs/127, no mean)
+             and ann/mod.rs keeps a full f32 `vectors: Vec<f32>` snapshot in RAM for HNSW. Add a
+             new additive embeddings encoding id (e.g. 4, RESERVED-safe within v1) int8_lvq:
+             store one global f32 mean[dim] in the payload prefix, then per-vector scale + i8
+             residual codes, plus an optional stage-2 residual blob. Then ann/build.rs and
+             ann/search.rs traverse on the i8 codes (reuse the existing dot_f32_i8 SIMD kernel)
+             instead of the f32 snapshot, deleting the `vectors: Vec<f32>` RAM cost and
+             shrinking the tiny preset below 0.283 while keeping recall via the exact-cosine
+             rerank that already runs. (2) Weighted-sum fusion: bm25/fusion.rs only has
+             rrf_union; add weighted_sum_union(a_scores, b_scores, alpha) with min-max score
+             normalization as a second hybrid mode behind a search_contract flag (~30
+             deterministic lines, no new section). (3) ColBERT tensor rerank as a new optional
+             section id 0x09 (tensor_index) + a nest-runtime rerank stage: store per-chunk
+             multi-vectors binary-quantized (1 bit/float), compute MaxSim with Hamming-popcount
+             as an optional final reranker after the mandatory exact-cosine pass, unlocking
+             offline token-level semantic reranking with no GPU.
+compression: Directly central. LVQ is a strictly better embedding codec than nest's current int8:
+             mean-centering + per-vector residual scale preserves NN order so the HNSW graph
+             runs on compressed codes, eliminating the full-f32 in-RAM snapshot and pushing the
+             tiny preset's 0.283 size ratio lower at equal recall@10 (0.992). Binary tensor
+             quant is a 32x compressor for a new modality (multi-vector reranking) that is
+             itself ranking-preserving via Hamming MaxSim. Both fit nest's
+             compress-more-than-everyone-while-staying-offline/deterministic/single-file north
+             star.
+perf:        Infinity benchmarks: HNSW+LVQ ~0.1ms query latency, 15K+ QPS on million-scale vectors; BM25 ~1ms
+             / 12K+ QPS over 33M docs. LVQ win is reduced memory bandwidth (smaller codes
+             streamed during graph walk) plus random-access friendliness suited to graph search.
+             ColBERT rerank gives ~100x throughput of cross-encoder rerankers at comparable
+             nDCG; binary-quantized MaxSim via Hamming/popcount maps to popcnt (x86_64) / vcnt
+             (NEON), both already in nest's simd dispatcher. EMVB adds centroid pre-filter +
+             SIMD MaxSim. Practical reranking range is top-100; top-1000 gives no nDCG gain at
+             big latency cost.
+license:     Apache-2.0 (both ragflow and infinity) -- permissive, safe to vendor/learn from for nest.

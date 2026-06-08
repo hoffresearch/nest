@@ -1,0 +1,74 @@
+================================================================================================
+langchain-ai/langgraph
+category: rag-orchestration   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Pregel/BSP graph-execution runtime for stateful LLM agents whose durable-execution layer
+             persists state as immutable, append-only checkpoints with content-deduplicated
+             channel blobs keyed by per-channel version numbers.
+innovation:  Version-keyed blob deduplication for append-only state history: each checkpoint stores only a
+             tiny channel_versions int-map plus references; the actual serialized channel values
+             live in a separate blobs table keyed by (channel_name, version). A new checkpoint
+             that touches one channel bumps only that channel's version and writes one new blob;
+             all unchanged channels keep pointing at existing blob bytes. This stores a full
+             mutation/edit history with near-zero duplication of unchanged state, instead of
+             rewriting the whole snapshot per step.
+techniques:
+  - Pregel/BSP super-step loop: Plan (select actors whose subscribed channels changed) ->
+    Execute (run nodes in parallel, writes invisible until step end) -> Update (apply reducers)
+    -> Checkpoint; transactional/atomic per super-step
+  - Channel abstraction with typed update functions: LastValue (single value/step),
+    BinaryOperatorAggregate (associative reducer applied eagerly at write time), Topic (pubsub
+    accumulate/dedup), DeltaChannel (reducer applied lazily on reconstruction from persisted
+    writes)
+  - Immutable append-only checkpoint store: INSERT per super-step keyed by composite (thread_id,
+    checkpoint_id); never UPDATE in place; enables time-travel and resume
+  - channel_versions monotonic version map + get_next_version() (default integer sequence from
+    1, overridable) used as the dedup key for blobs
+  - Separate blobs table mapping (channel, version) -> serialized bytes so unchanged channels
+    are referenced, not copied, across checkpoints
+  - Pending/task-level writes: outputs of completed nodes in a failed super-step are persisted
+    as task writes so resume skips already-done work (fault-tolerant partial progress)
+  - JsonPlusSerializer: ormsgpack primary binary encoding with extended-JSON fallback for
+    complex types (pydantic, datetime, enums); pluggable SerializerProtocol, optional
+    EncryptedSerializer (AES)
+  - Security lesson: CWE-502 RCE via constructor-style deserialization in the JSON fallback
+    path; fixed with a strict module/class allow-list (LANGGRAPH_STRICT_MSGPACK)
+nest steals: Adapt the (channel,version)->blob dedup model into nest-format to unlock nest's "real-time edit"
+             north-star without breaking the FROZEN v1 single-file/deterministic guarantees.
+             Concretely: add an OPTIONAL additive section (reserved id 0x09+) that is an
+             append-only edit log, where each logical chunk/embedding is content-addressed by
+             its existing per-section SHA-256 (nest already has section checksum +
+             content_hash). A new edit appends only new/changed chunk and embedding blobs;
+             unchanged chunks are referenced by their existing content hash rather than
+             recopied. The current chunk_ids/chunks_canonical/embeddings sections become the
+             version-0 base, and a small version map (analogous to channel_versions, repr(C)
+             LE-u64 ids) records which blob hash is live per chunk. This gives nest
+             incremental/versioned containers and cheap snapshots while keeping deterministic
+             byte-identical rebuilds, and it compounds compression: dedup-before-encode means
+             zstd/int8/f16 only ever encode the delta. nest-runtime's reader resolves the live
+             version map at mmap time so SIMD dot products still run straight off the latest
+             blobs with no copy. Borrow the get_next_version() integer-sequence determinism
+             (seeded/monotonic) to keep the additive log reproducible, and adopt the allow-list
+             deserialization lesson: nest must never deserialize arbitrary types from a
+             container (typed thiserror, fixed section decoders only), avoiding LangGraph's
+             CWE-502 class of bug by construction.
+compression: High. Version-keyed content-addressed blob dedup is a compression primitive: storing
+             edit/version history of a corpus by referencing unchanged content-hashed chunks
+             instead of recopying them is exactly the structural (cross-snapshot) dedup nest
+             needs to "compress more than everyone" once it supports real-time edit and
+             whole-repo/database ingestion, where most of a new version is unchanged. It
+             composes with nest's existing zstd/int8/f16 codecs (dedup first, then encode the
+             delta) and reuses nest's existing SHA-256 content_hash as the dedup key.
+perf:        Checkpoint store is INSERT-only (append-only), trading write amplification of metadata for
+             immutability and time-travel; channel blobs are written once per version and
+             shared, so steady-state writes are O(changed channels) not O(state size).
+             Serialization uses ormsgpack (C, fast) with orjson fast paths. No SIMD/quantization
+             in LangGraph itself (it is a Python orchestration layer, not a vector engine); the
+             transferable value is purely the on-disk dedup/versioning data model, not any
+             kernel. Known operational pain point in their Postgres saver is checkpoint bloat
+             from append-only writes, which nest avoids by keeping the log inside one
+             mmap-friendly additive section rather than per-row DB inserts.
+license:     MIT

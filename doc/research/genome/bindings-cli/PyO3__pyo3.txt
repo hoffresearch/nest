@@ -1,0 +1,71 @@
+================================================================================================
+PyO3/pyo3
+category: bindings-cli   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        PyO3 is a macro-driven Rust<->CPython FFI binding layer that compiles a single cdylib extension
+             module against Python's stable ABI (abi3 / Py_LIMITED_API) and enforces
+             GIL-correct, refcount-correct interop at compile time via lifetime-tagged smart
+             pointers (Python<'py>, Bound<'py,T>, Py<T>).
+innovation:  The "stable ABI as a build feature, not a source macro" model: opting into abi3-pyXY via a Cargo
+             feature makes the linker emit only Py_LIMITED_API symbols, so ONE compiled .so/.pyd
+             is loadable by every CPython >= XY without recompilation -- decoupling the binary
+             artifact from the interpreter patch version. Paired with this is the zero-copy
+             borrow discipline: Bound<'py,T> is morally (Py<T>, Python<'py>) and the buffer
+             protocol / PyBuffer<T> let Rust read a Python array's backing memory in place
+             rather than marshalling element-by-element.
+techniques:
+  - abi3 / Py_LIMITED_API: compile against the limited C-API subset so symbols resolve on any
+    future CPython >= floor (lowest abi3-pyXY feature wins); single wheel per OS/arch
+  - abi3t (PEP 803): opaque-PyObject stable-ABI variant loadable on BOTH GIL and free-threaded
+    builds, forward-compatible to all future 3.X
+  - Bound<'py,T> smart pointer = Py<T> handle + Python<'py> GIL-proof token; drops the Python
+    refcount immediately on Drop (no GILPool surprise)
+  - Py<T> as a Send+Sync, GIL-independent Arc-like handle for storing Python objects in Rust
+    structs without a lifetime param
+  - buffer protocol via PyBuffer<f32> / rust-numpy PyReadonlyArray1: borrow a contiguous
+    numpy/array backing store as &[f32] with zero copy
+  - macro codegen: #[pymodule]/#[pyclass]/#[pymethods]/#[pyfunction] generate the limited-API
+    wrapper shims, hiding Py_LIMITED_API entirely
+  - FromPyObject / IntoPyObject trait-based bidirectional marshalling at the FFI boundary
+  - Python::detach (formerly allow_threads): release the GIL around a long Rust compute so other
+    threads run; requires unbinding to Py<T>
+nest steals: nest-python already does the right baseline (PyO3 0.28, crate-type=cdylib,
+             features=[\"abi3-py312\"], Bound API in nest_file.rs/lib.rs), so the steal is two
+             concrete upgrades, not adoption. (1) ZERO-COPY QUERY INGESTION on the hot path:
+             nest_file.rs:21-24/34-37/47-56 currently do query.extract::<Vec<f32>>(), a full
+             heap copy of every query embedding (which arrives from the model as a numpy float32
+             array) before the SIMD dot-product runs. Replace with PyBuffer<f32> (pure-pyo3, no
+             numpy dep, abi3 buffer API is available since py3.11 so py312 floor is fine) or an
+             optional rust-numpy PyReadonlyArray1 feature, borrowing the array's backing memory
+             as &[f32] passed straight to nest-runtime's simd dispatcher -- eliminates one
+             alloc+memcpy per search, complementing the already zero-copy mmap read of stored
+             embeddings. (2) DISTRIBUTION: wire maturin + pyproject.toml (PyPI/maturin is a
+             listed known gap) producing ONE cp312-abi3 manylinux/macos/windows wheel that runs
+             on 3.12/3.13/3.14+, and add the abi3t feature path so the single wheel also loads
+             on free-threaded builds -- this is the entire \"portable, single-file,
+             install-anywhere\" leg of the north star for the python-builds half. Both respect
+             hard constraints: no socket, no panic (keep PyValueError mapping of typed thiserror
+             errors), determinism untouched, and nest-format/nest-runtime stay pure Rust with
+             PyO3 confined to nest-python.
+compression: Indirect. abi3/abi3t and the macro layer do not compress bytes; their relevance is to the
+             \"portable, cheap, light, install-anywhere\" axis of the north star -- one tiny
+             wheel serving every Python on every OS keeps the distribution surface minimal. The
+             directly load-bearing compression-adjacent idea is the zero-copy buffer-protocol
+             borrow: it keeps the search hot path allocation-free end-to-end (mmap'd
+             compressed/quantized embeddings in, borrowed query in), so the int8/f16/zstd
+             compression wins in nest-format are not paid back as marshalling overhead at the
+             python boundary.
+perf:        Query path today incurs one Vec<f32> alloc + element marshalling copy per search call
+             (nest_file.rs:21-24); PyBuffer/PyReadonlyArray borrow removes it, leaving only the
+             mmap SIMD kernel cost. abi3 has a small, documented runtime cost vs
+             version-specific builds (cannot inline against a known struct layout) -- acceptable
+             for nest since the hot loop is in pure-Rust nest-runtime, not across the FFI
+             boundary. GIL note: nest searches are read-only against an mmap, so wrapping the
+             nest-runtime compute in Python::detach would let concurrent Python threads issue
+             parallel searches against one open NestFile; deterministic because the file is
+             immutable post-build. PyO3 0.28 requires Rust >= 1.83 (nest is edition 2024 so
+             already on a newer toolchain).
+license:     Apache-2.0 OR MIT (dual-licensed; permissive, compatible with vendoring/linking)

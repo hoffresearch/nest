@@ -1,0 +1,84 @@
+================================================================================================
+jvm-repo-rebuild/reproducible-central
+category: content-addressed   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A crowd-sourced verification corpus that rebuilds Maven Central artifacts inside pinned
+             Docker/JDK environments and proves byte-for-byte reproducibility by comparing
+             SHA-512 fingerprints of every output file against the published artifact, recording
+             the verdict in declarative .buildspec/.buildcompare/.buildinfo text files.
+innovation:  A two-layer reproducibility proof split into (1) a tiny declarative recipe (.buildspec:
+             groupId/artifactId/version + gitTag + jdk-major + newline-mode + exact build
+             command) that is the minimal pinned input needed to regenerate bytes, and (2) a
+             per-output-file SHA-512 manifest (.buildinfo: outputs.N.filename / outputs.N.length
+             / outputs.N.checksums.sha512 lowercase) that is content-addressing of the build
+             result; equality of the manifest is the reproducibility certificate, and diffoscope
+             is invoked only on mismatch to localize the divergence. Reproducibility is
+             engineered, not hoped for: ~92% of Maven non-determinism came from embedded archive
+             timestamps, killed by zeroing ZIP/JAR mtimes (SOURCE_DATE_EPOCH /
+             project.build.outputTimestamp) plus enforcing a deterministic sorted entry order
+             inside the archive.
+techniques:
+  - Declarative minimal build recipe (.buildspec): groupId/artifactId/version + gitRepo/gitTag +
+    jdk MAJOR version only + newline mode (lf/crlf) + exact build command -- the smallest
+    deterministic input set
+  - Per-output-file content manifest (.buildinfo): indexed records outputs.N.filename /
+    outputs.N.length / outputs.N.checksums.sha512 in lowercase; manifest equality ==
+    reproducibility proof
+  - SHA-512 (not SHA-256) lowercase hex as the canonical artifact fingerprint, with length
+    recorded alongside as a cheap fast-reject pre-check
+  - Verdict file (.buildcompare) decoupled from hashes: ok/ko/ignored counts plus
+    space-separated okFiles/koFiles/ignoredFiles name lists +
+    reference_java_version/reference_os_name provenance
+  - Archive normalization for determinism: zero/pin all ZIP/JAR entry timestamps
+    (SOURCE_DATE_EPOCH, project.build.outputTimestamp, java.properties.date) which removed ~92%
+    of failures, plus enforced sorted/canonical entry order
+  - Environment pinning at coarse granularity: only JDK MAJOR version pinned (minor/vendor
+    proven irrelevant to bytecode), minimizing the recipe while preserving reproducibility
+  - diffoscope as mismatch explainer only: recursively unpacks JAR -> class -> bytecode to
+    localize diverging bytes, run in a pinned container, never on the happy path
+  - Containerized rebuild (pinned Docker image per JDK) as environment-as-data substrate for
+    independent re-verification
+nest steals: nest-format already has content_hash (decoded canonical sections, stable across encodings) and
+             file_hash (physical pre-footer body). Steal the .buildspec/.buildinfo split to make
+             REPRODUCIBILITY a first-class, externally verifiable artifact. (1) In
+             nest-format/manifest, emit a deterministic build recipe alongside provenance: model
+             fingerprint, chunker version, encoding preset, section ordering -- the minimal
+             pinned inputs guaranteeing 'same chunks + same model fingerprint => byte-identical
+             file'. This is the .buildspec analogue and turns nest's determinism claim into
+             something a third party can re-derive offline. (2) Adopt the per-section SHA
+             manifest in nest-format/hashing: nest already has per-section physical checksums;
+             expose them as a flat, sorted, lowercase-hex manifest (section_id, decoded_length,
+             content_checksum) so two independently-built .nest files compare by manifest
+             equality without byte-diffing 100MB embeddings, with decoded_length as a free
+             fast-reject before hashing. (3) Add a nest-cli 'verify-reproducible' subcommand
+             (sibling to validate) that takes a recipe + corpus and asserts manifest equality,
+             emitting an ok/ko/ignored verdict like .buildcompare -- cheap, offline,
+             deterministic, additive. (4) The archive-normalization lesson maps to extreme
+             compression: canonicalize entry order and strip incidental timestamps/non-canonical
+             ordering BEFORE hashing/encoding, because canonical ordering both guarantees
+             reproducibility AND maximizes zstd ratio on non-embedding sections (sorted bm25
+             terms + sorted chunk_ids already do this; extend the discipline to every section).
+             Cross-file relevance: content-addressed manifests enable dedup -- identical
+             chunks/embeddings across many .nest files share one content_hash, so a future
+             distributed/pack format stores each unique decoded section once and references it
+             (Maven's 'same coordinates => same bytes' applied to vector data).
+compression: Indirect but real. The direct payload (SHA-512 manifests, .buildspec recipes) is verification
+             infrastructure, not a codec, so it does not shrink bytes itself. Two transferable
+             ideas serve compress-more-than-everyone: (1) canonical/sorted entry ordering before
+             encoding is simultaneously the reproducibility guarantee AND a zstd ratio win on
+             non-embedding sections; (2) content-addressed per-section manifests are the
+             prerequisite for cross-file dedup -- store each unique decoded section once across
+             a corpus of .nest files and reference by content_hash, which is how Maven's 'same
+             coordinates => same bytes' becomes 'same chunk => stored once'.
+perf:        No SIMD/throughput angle -- offline batch verification (docker rebuild + hash). Two transferable
+             perf ideas: record decoded length next to each hash so file comparison fast-rejects
+             on length mismatch before computing the expensive hash; and compare-by-manifest
+             (hash-list equality) instead of byte-diffing large payloads, so verifying two
+             multi-GB artifacts is O(number of sections) over precomputed hashes, not O(bytes).
+             diffoscope-style deep diff is reserved strictly for the mismatch path so the common
+             case stays cheap.
+license:     Apache-2.0 (project content); per-artifact recipes follow upstream project licenses. Safe to
+             learn from; no code vendored.

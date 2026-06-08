@@ -1,0 +1,63 @@
+================================================================================================
+langgenius/dify
+category: rag-orchestration   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Dify is a Python LLM-app orchestration platform whose RAG subsystem (api/core/rag) is a modular
+             multi-strategy retrieval pipeline: pluggable vector stores, an "economical"
+             jieba+TF-IDF inverted keyword index, and a hybrid retriever that fuses semantic and
+             keyword results via either a neural reranker or a transparent weighted-score
+             formula.
+innovation:  The "weight_rerank" fusion: instead of always needing a neural cross-encoder, Dify computes
+             final = w_vec*cosine(query_emb, chunk_emb) + w_kw*tfidf_cosine(query_tokens,
+             chunk_tokens), where the keyword side is a self-contained TF-IDF-cosine (IDF =
+             log((1+N)/(1+df)) + 1, TF*IDF vectors, cosine between query and chunk term vectors)
+             and the vector side is raw cosine. It is a deterministic, dependency-free, two-knob
+             alternative to a black-box reranker that still yields one comparable score per
+             chunk.
+techniques:
+  - weighted-score hybrid fusion: final = w_vec*cosine + w_kw*tfidf_cosine, two tunable weights
+  - TF-IDF-cosine keyword reranker: smoothed IDF log((1+N)/(1+df))+1, TF*IDF vectors,
+    query/chunk cosine, fully deterministic and neural-free
+  - economical inverted keyword index: keyword->set(chunk_ids) table built by jieba TF-IDF top-k
+    extraction + subtoken expansion + stopword filtering
+  - two-tier quality modes: 'economical' (inverted keyword index, no embeddings) vs
+    'high-quality' (embeddings+ANN), a build-time size/cost switch
+  - RerankRunner factory: RERANKING_MODEL vs WEIGHTED_SCORE behind one interface; community RRF
+    1/(k+rank) as a scale-free rank fusion
+  - pluggable vector-store abstraction: uniform retrieval interface across 16+ backends
+    decoupling index format from query path
+  - TopK dynamically bounded by the consumer context budget instead of a fixed constant
+  - jieba (CJK-aware) tokenization for the keyword side
+nest steals: Adapt weighted-score fusion into nest-runtime's search path as a third hybrid mode beside RRF.
+             nest today fuses bm25::Bm25Index and ann::HnswIndex via reciprocal-rank fusion then
+             mandatory exact-cosine rerank; add a `weighted` fusion in
+             crates/nest-runtime/src/search computing final = w_vec*exact_cosine +
+             w_kw*normalized_bm25 with two deterministic config weights, giving an interpretable
+             blended score. The exact-cosine rerank invariant still holds because cosine is one
+             term, and it stays offline/deterministic (no neural reranker, no socket).
+             Separately, mirror Dify's economical/high-quality split as a nest-cli + nest-format
+             preset: an "economical" build shipping ONLY chunks + bm25_index(0x08) (no
+             embeddings, no HNSW), zstd on non-embedding sections, for keyword-amenable corpora.
+             The keyword->chunk_ids inverted-table layout is also a reference for making
+             bm25_index(0x08) self-describing. All additive: existing section ids, frozen v1
+             layout untouched.
+compression: Indirect but real. Biggest lever is the "economical" build: an embeddings-free keyword-only
+             .nest (chunks + bm25_index(0x08), zstd) would beat the tiny preset's 0.283 ratio
+             for keyword-amenable corpora because int8 embeddings dominate file size, while the
+             TF-IDF/BM25 inverted table is tiny and zstd-friendly. The weighted-score fusion
+             adds no bytes but keeps that lighter index recall-competitive. RRF (1/(k+rank)) is
+             also a config-only, storage-free fusion improvement.
+perf:        Fusion is a handful of float ops per candidate, run after ANN/BM25 gather, so negligible added
+             latency on nest's hot path; the vector term IS exact cosine, so it reuses nest's
+             SIMD dot-product kernels (AVX2/NEON/scalar). Dify's jieba keyword tokenizer is
+             CJK-aware, directly relevant to nest's known gap (word-segmented BM25 tokenizer
+             degrades on CJK/Thai); nest could adopt a jieba-style or unicode-segmentation
+             tokenizer, but must pick an offline, small-footprint, deterministic segmenter to
+             preserve reproducibility (jieba's dictionary is large).
+license:     Modified Apache License 2.0 (Dify Open Source License: Apache 2.0 plus conditions on
+             multi-tenant/SaaS commercial use and logo/branding). The math (TF-IDF cosine,
+             weighted fusion, RRF) is not protectable, so a clean-room Rust reimplementation is
+             fine.

@@ -1,0 +1,58 @@
+================================================================================================
+asg017/sqlite-vss
+category: vector-db   |   steal priority: REFERENCE
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A SQLite extension (vss0 virtual table + vector0 codec module) that bolts Facebook Faiss onto
+             SQLite by serializing an entire Faiss index into a single BLOB inside an fts5-style
+             shadow table, with index type chosen declaratively via Faiss factory strings.
+innovation:  The clean separation of a storage-agnostic vector codec layer (vector0: a 1-byte-type-header +
+             float32-LE compact BLOB encoding plus a JSON ingest path, exposed as
+             vector_to_blob/vector_from_blob) from the index/search layer (vss0), where the
+             index type is selected declaratively through a Faiss "factory string" DSL
+             (Flat,IDMap2 vs IVF4096,Flat,IDMap2). The codec and the index are independent
+             contracts.
+techniques:
+  - vector0 compact BLOB codec: leading type byte + raw float32 little-endian payload, dual
+    ingest from JSON text or raw bytes
+  - fts5-style virtual-table design with two shadow tables: xyz_data (rowid bookkeeping, no-op
+    column) + xyz_index (one row holding the whole serialized Faiss index BLOB)
+  - Faiss factory-string DSL to declaratively compose index pipelines (Flat exhaustive vs
+    IVF4096 inverted-file with k-means centroids requiring an explicit operation='training'
+    pass)
+  - delegating only math kernels to Faiss via knn_L2sqr_by_idx / range_search_L2sqr while
+    keeping storage outside Faiss (proposed non-Faiss 'incremental' storage format)
+  - per-table selectable distance metrics (L2, inner product, L1, Linf, Canberra, BrayCurtis,
+    JensenShannon) via metric_type
+  - vss_search_params() to pass nprobe-style runtime ANN knobs into the KNN call
+nest steals: Two adaptations. (1) Codec/index separation validates nest-format's existing split: keep the
+             embeddings section (float32-LE payload, analogous to vector0) and the optional
+             hnsw_index(0x07) section (analogous to the Faiss index) as fully independent
+             section contracts so an index can be rebuilt or dropped without touching
+             embeddings. (2) Generalize the Faiss factory-string DSL into nest: turn nest-cli
+             presets (exact/compressed/tiny/hybrid) plus the search_contract section into a
+             small declarative index-spec string (e.g. 'hnsw(m=16,ef=200)+bm25(rrf)') persisted
+             in nest-format so a .nest file self-describes deterministically how to search it.
+             CRITICAL NEGATIVE LESSON for nest-format/nest-runtime: sqlite-vss's single-BLOB
+             whole-index serialization forces a hard ~1GB ceiling, full-index rewrite
+             write-amplification on every commit, and forbids mmap (must fit in RAM). nest's
+             mmap-off-disk SIMD scoring and per-section physical layout already defeat all
+             three; encode this as a guardrail that hnsw_index(0x07) must stay an
+             independently-paged, mmap-scannable section, never one monolithic compressed blob.
+compression: Low-to-negative for extreme compression. sqlite-vss does NO vector compression in its default
+             path: vector0 stores raw float32-LE; the only size reduction is from optionally
+             choosing a Faiss PQ/IVF factory string (product quantization), which then cannot
+             mmap and pays full-rewrite cost. The transferable compression insight is purely
+             cautionary: a monolithic serialized-index BLOB is the wrong on-disk shape. nest's
+             per-section encodings (zstd on non-embedding sections, f16/int8 on embeddings, hnsw
+             as a paged section) are strictly superior for both compactness and serve-from-mmap.
+             Use as a counter-example, not a source.
+perf:        CPU-only (no GPU). Indices must fit entirely in RAM - no mmap support. Every INSERT/DELETE +
+             COMMIT rewrites the ENTIRE Faiss index BLOB (O(N) write amplification: inserting 1
+             vector into a 1M-vector index rewrites 1,000,001 vectors). Hard ~1GB index ceiling
+             from SQLite's single-row BLOB limit. IVF training data read fully into memory. No
+             UPDATE support (INSERT/DELETE only). SIMD comes only indirectly from Faiss internal
+             kernels, not from sqlite-vss code.
+license:     MIT (depends on Faiss, MIT)

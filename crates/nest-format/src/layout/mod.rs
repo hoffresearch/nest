@@ -61,6 +61,18 @@ pub const SECTION_ENCODING_ZSTD: u32 = 1;
 pub const SECTION_ENCODING_FLOAT16: u32 = 2;
 pub const SECTION_ENCODING_INT8: u32 = 3;
 
+// reserved additive wire encodings. ids 4-255 are reserved within frozen
+// format v1 (see doc/research/master-plan.txt). claimed here as named
+// constants so each future codec ships as a small additive diff. NOT yet
+// implemented: decode_payload rejects them with UnsupportedSectionEncoding
+// until their codec module lands, so old and new readers agree.
+pub const SECTION_ENCODING_INTPACK: u32 = 4;
+pub const SECTION_ENCODING_ZSTD_DICT: u32 = 5;
+pub const SECTION_ENCODING_FRONTCODE: u32 = 6;
+pub const SECTION_ENCODING_INT4: u32 = 7;
+pub const SECTION_ENCODING_RABITQ: u32 = 8;
+pub const SECTION_ENCODING_FSST: u32 = 9;
+
 /// lFormat version of the binary layout. Bumped when the on-disk
 /// container changes (header/footer/section table layout).
 pub const NEST_FORMAT_VERSION: u32 = 1;
@@ -80,6 +92,21 @@ pub const SECTION_PROVENANCE: u32 = 0x05;
 pub const SECTION_SEARCH_CONTRACT: u32 = 0x06;
 pub const SECTION_HNSW_INDEX: u32 = 0x07;
 pub const SECTION_BM25_INDEX: u32 = 0x08;
+
+// reserved additive optional sections. ids 0x09+ are reserved within frozen
+// format v1 (see doc/research/master-plan.txt). all are EXCLUDED from
+// content_hash (which covers the canonical six only), so adding any of them
+// never invalidates a nest:// citation. claimed as named constants; NOT yet
+// emitted or read until each feature ships its section codec and a manifest
+// capability, at which point it joins OPTIONAL_SECTIONS.
+pub const SECTION_EMBEDDINGS_FP: u32 = 0x09;
+pub const SECTION_DICTIONARY: u32 = 0x0A;
+pub const SECTION_DEDUP_MAP: u32 = 0x0B;
+pub const SECTION_GRAPH_ADJACENCY: u32 = 0x0C;
+pub const SECTION_CHUNK_SCALARS: u32 = 0x0D;
+pub const SECTION_TOKENIZER_MODEL: u32 = 0x0E;
+pub const SECTION_EDIT_JOURNAL: u32 = 0x0F;
+pub const SECTION_REPRO_MANIFEST: u32 = 0x10;
 
 /// lCanonical order for content_hash. Sorted alphabetically by name; this
 /// order is fixed by spec so adding new section IDs cannot reshuffle the
@@ -160,5 +187,42 @@ mod tests {
         assert_eq!(section_name(SECTION_CHUNK_IDS), Some("chunk_ids"));
         assert_eq!(section_name(SECTION_EMBEDDINGS), Some("embeddings"));
         assert_eq!(section_name(0xFFFF), None);
+    }
+
+    #[test]
+    fn reserved_additive_ids_are_in_range_and_distinct() {
+        // reserved wire encodings occupy 4..=9, above the four implemented ids.
+        let enc = [
+            SECTION_ENCODING_INTPACK,
+            SECTION_ENCODING_ZSTD_DICT,
+            SECTION_ENCODING_FRONTCODE,
+            SECTION_ENCODING_INT4,
+            SECTION_ENCODING_RABITQ,
+            SECTION_ENCODING_FSST,
+        ];
+        for (i, &e) in enc.iter().enumerate() {
+            assert_eq!(e, 4 + i as u32);
+            assert!(e > SECTION_ENCODING_INT8);
+        }
+        // reserved optional sections occupy 0x09..=0x10, above the implemented eight.
+        let sec = [
+            SECTION_EMBEDDINGS_FP,
+            SECTION_DICTIONARY,
+            SECTION_DEDUP_MAP,
+            SECTION_GRAPH_ADJACENCY,
+            SECTION_CHUNK_SCALARS,
+            SECTION_TOKENIZER_MODEL,
+            SECTION_EDIT_JOURNAL,
+            SECTION_REPRO_MANIFEST,
+        ];
+        for (i, &s) in sec.iter().enumerate() {
+            assert_eq!(s, 0x09 + i as u32);
+            assert!(s > SECTION_BM25_INDEX);
+        }
+        // reserved sections are not yet advertised as active optional sections,
+        // so section_name does not resolve them until their feature ships.
+        for &s in &sec {
+            assert!(section_name(s).is_none());
+        }
     }
 }

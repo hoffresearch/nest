@@ -1,0 +1,50 @@
+================================================================================================
+genome :: vector-quantization (index)
+vector quantization and bit-compression of embeddings (the compression key for vectors)
+================================================================================================
+
+one file per project in this folder. open the one you need.
+
+[MUST     ] gaoj0017__RaBitQ.txt               A randomized 1-bit-per-dimension quantizer
+                                               (SIGMOD 2024) that maps a normalized D-dim
+                                               vector, after a random orthogonal rotation, to
+                                               its sign-bit string on the {+-1/sqrt(D)}^D
+                                               hypercube codebook, yielding an unbiased
+                                               inner-product estimator with a sharp O(1/sqrt(D))
+                                               error bound, computed via bitwise-AND + popcount.
+[MUST     ] VectorDB-NTU__RaBitQ-Library.txt   RaBitQ is a randomized 1-bit-per-dimension vector
+                                               quantizer (D-dim -> D bits + 2 float correction
+                                               factors) using a random hypercube rotation to
+                                               yield an unbiased distance estimator with
+                                               provable O(1/sqrt(D)) error, evaluated via
+                                               AND+popcount or FastScan.
+[MUST     ] Stardust-SJF__cuvs_rabitq.txt      A GPU-native (NVIDIA cuVS) fork implementing
+                                               IVF-RaBitQ: it fuses inverted-file clustering
+                                               with RaBitQ quantization, which compresses each
+                                               D-dim float32 vector to ~1 bit/dim plus two
+                                               scalar factors and estimates distances with a
+                                               provably unbiased, asymptotically-optimal-error
+                                               estimator via random rotation, so no raw-vector
+                                               reranking is needed.
+[MUST     ] bitsandbytes-foundation__bitsandbytes.txt A CUDA/C++/PyTorch library for k-bit
+                                               weight quantization whose transferable core is
+                                               NF4 (a fixed 16-entry quantile codebook
+                                               information-theoretically optimal for normally
+                                               distributed data), blockwise absmax scaling,
+                                               double/nested quantization of the scales, and a
+                                               dynamic-tree 8-bit data type with per-value
+                                               exponent/fraction allocation.
+[HIGH     ] intel__neural-compressor.txt       A multi-backend (PyTorch/ONNX/TF) post-training
+                                               quantization toolkit whose LLM core implements
+                                               weight-only quantization (RTN, GPTQ, AWQ,
+                                               AutoRound/SignRound) and microscaling block-float
+                                               formats (MXFP4/NVFP4, NF4/FP4) at 1-8 bits with
+                                               group-wise scales and zero-points.
+[HIGH     ] vllm-project__llm-compressor.txt   A post-training quantization toolkit that
+                                               compresses LLM weights to int4/int8/fp8 and
+                                               microscale fp4 using calibration-driven,
+                                               Hessian-aware algorithms (GPTQ, AWQ,
+                                               SmoothQuant), serializing the result in
+                                               `compressed-tensors`, a safetensors extension
+                                               that bit-packs sub-byte values with per-group
+                                               scales/zero-points.

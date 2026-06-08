@@ -1,0 +1,70 @@
+================================================================================================
+simdjson/simdjson
+category: serialization-parsing   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A branch-free two-stage SIMD JSON parser that classifies 64-byte chunks into
+             structural-character bitmasks (stage 1) and materializes a flat 64-bit "tape" or
+             lazily walks values via an On-Demand iterator (stage 2), with runtime CPU feature
+             dispatch across AVX2/AVX-512/NEON/RISC-V.
+innovation:  Separate "find the structure" from "interpret the values": a vectorized branch-free stage-1 pass
+             builds a compact reusable structural index (offsets of all JSON tokens) at GB/s
+             while validating UTF-8, so the semantic parse is either deferred per-accessed-field
+             (On-Demand) or runs as a tight, well-predicted tape build. The structural skeleton
+             is cheap, cacheable, and mmap-friendly.
+techniques:
+  - Two-stage parse: stage 1 = SIMD structural indexing + UTF-8 validation, stage 2 = tape build
+    or lazy On-Demand value walk
+  - Prefix-XOR quote masking via PCLMULQDQ carry-less multiply by -1: turns a quote-position
+    bitmask into an inside-string region mask in one shot; escaped quotes self-cancel by parity,
+    cross-chunk state carried in prev_iter_inside_quote
+  - Branch-free byte classification: AVX2 PCMPEQB / NEON VCEQ over 64-byte chunks producing
+    structural(S)/whitespace(W)/quote(Q)/string-range(R) bitmasks, then S&=~R, W&=~R to drop
+    in-string chars; pseudo-structural starts via P=(S|W)<<1 & ~W & ~R
+  - Flat 64-bit tape in document order: type tag in high byte ('c'<<56)+payload, bidirectional
+    array/object links (open stores closing index + 24-bit child count, close stores opening
+    index) for O(1) container skip
+  - Separate string buffer: each string is a 32-bit LE length header + UTF-8 bytes, main tape
+    holds only an offset, keeping the tape fixed-stride and scannable
+  - On-Demand API: defer number/string/atom validation until a field is accessed via get<T>(),
+    giving 2-4x speedups when reading a subset of a large document
+  - Runtime CPU dispatch: pick fastest compiled kernel (AVX-512/AVX2/SSE4.2/NEON/RISC-V) at load
+    via cpuid, single binary, scalar fallback
+  - Mandatory input padding (SIMDJSON_PADDING) so 64-byte SIMD loads never read past the buffer
+    end
+nest steals: Three concrete steals, all additive within nest-format v1. (1) STRUCTURAL-INDEX SECTION for
+             JSON/YAML/Parquet-text ingestion: add a stage-1-style SIMD structural indexer in
+             nest-format/src/encoding (new module e.g. structure.rs) that, when nest ingests a
+             JSON/YAML doc into chunks_canonical, also emits a compact little-endian u32 offset
+             index of structural-character positions as an OPTIONAL section (reserved id 0x09+).
+             This reusable mmap-friendly skeleton lets the rust runtime re-walk or sub-cite into
+             nested spans (nest://content_hash/chunk_id#json_pointer) without re-parsing, and
+             the offset index compresses far better than raw text under zstd. (2) TAPE-STYLE
+             OFFSET LAYOUT for chunks_original_spans and future nested-document sections: adopt
+             simdjson's separate-buffer pattern (fixed-stride u64 tape of {type-tag, offset} +
+             side blob with 32-bit LE length headers). Fixed-stride offset tables are
+             mmap-scannable with zero allocation and zstd extremely well because offset deltas
+             are low-entropy. (3) RUNTIME DISPATCH PATTERN: nest-runtime/src/simd already does
+             AVX2/NEON/scalar dot products; lift simdjson's per-kernel-compiled + cpuid-select
+             structure as the template if nest adds a SIMD UTF-8 validator or structural
+             scanner, keeping one scalar fallback. Implement in pure rust (no PCLMULQDQ
+             dependency required; use a portable carry-less/parity scan to stay deterministic
+             and within never-panic/typed-error constraints).
+compression: Directly central to the "compress AND serve json/yaml/parquet/datasets" north star. The
+             structural-index/tape split lets nest store a parsed-document skeleton ONCE
+             (low-entropy offset arrays that zstd crushes) while keeping canonical text
+             byte-exact for content_hash stability, and serve sub-document citations and search
+             WITHOUT re-parsing on the hot path. Fixed-stride offset tapes + separate
+             length-prefixed payload buffers are textbook low-entropy, high-zstd-ratio layouts.
+             On-Demand also maps to nest's lazy mmap philosophy: decode only the document
+             subtree a query touches.
+perf:        Stage 1 ~2-6 GB/s; minification ~6 GB/s; NDJSON ~3.5 GB/s multithreaded; ~75% fewer instructions
+             than RapidJSON. PCLMULQDQ has latency ~6 but reciprocal throughput 1 on Skylake, so
+             schedule independent work to hide latency; a portable rust parity scan trades
+             throughput for full determinism. SIMD loads need buffer padding (read-past-end
+             safety) which nest must replicate for true 64-byte scans off mmap (pad section or
+             bounds-guard the tail chunk). Parser-buffer reuse is the biggest practical win for
+             many small documents.
+license:     Apache-2.0 (parts also MIT/Boost); permissive, safe to vendor or reimplement the algorithms.

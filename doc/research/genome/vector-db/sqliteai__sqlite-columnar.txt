@@ -1,0 +1,66 @@
+================================================================================================
+sqliteai/sqlite-columnar
+category: vector-db   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A self-contained SQLite loadable extension that adds column-oriented virtual tables backed by
+             shadow tables, fixed 65,536-row chunks, and per-chunk min/max zone maps so
+             analytical scans/aggregations skip non-matching rowid ranges and aggregate natively
+             in C, hitting up to 130,000x speedups without patching SQLite's pager/btree/VDBE.
+innovation:  Zone-map chunk-skipping: partition a column into fixed-size chunks (65,536 rows), store a tiny
+             precomputed min/max summary per chunk, and at query time prune entire chunks whose
+             [min,max] cannot satisfy the predicate before touching any data; paired with an
+             incremental dirty-chunk invalidation model where writes only mark their chunk dirty
+             and re-analyze rebuilds just those chunks (no-op analyze ~2ms vs ~66s cold build).
+techniques:
+  - Fixed 65,536-row chunk partitioning per column (power-of-two, alignment-friendly)
+  - Per-chunk zone maps (min/max) for range-filter pruning before any scan (3 of 153 chunks
+    selected in their range query)
+  - Shadow-table layout: separate tables for rowids, column values, global stats, chunk zone
+    maps, dirty-chunk set, table metadata
+  - Incremental dirty-chunk invalidation: writes mark chunks dirty, analyze rebuilds only dirty
+    chunks, valid+no-dirty short-circuits
+  - Native C hash aggregation over only the required column shadow tables (skips row-store VDBE
+    overhead)
+  - Result-hash equivalence harness: every columnar helper auto-verified against the equivalent
+    plain-SQLite query
+  - Variance bench methodology: deterministic datasets, warm-once, repeat, report median and p95
+nest steals: Steal the zone-map/chunk-skipping idea into nest-runtime/src/search.rs and the embeddings
+             section of nest-format. (1) nest-format: add an OPTIONAL additive per-block summary
+             sidecar to the embeddings section (RESERVED section id 0x09+, or a metadata block),
+             storing per fixed-size block of N vectors (e.g. 1024) a coarse summary: a per-block
+             centroid plus a max-norm/radius bound giving a cheap IVF/triangle-inequality upper
+             bound on achievable cosine. Additive within v1, deterministic if centroids are
+             computed in fixed order. (2) nest-runtime search.rs: today the exact path is an
+             unconditional linear SIMD dot-product scan over all n_embeddings; before that loop,
+             compute the per-block upper-bound cosine vs the query and skip whole blocks that
+             cannot beat the current top-k threshold. This turns the exact path into
+             pruned-exact that still returns TRUE cosine, preserving the search-contract
+             guarantee (scores are real cosine, never an ann proxy), and also accelerates the
+             MANDATORY exact rerank after HNSW/BM25. (3) nest-cli stats: report blocks-scanned
+             vs blocks-pruned, mirroring their zone-map effectiveness output. The dirty-chunk
+             model is the blueprint for the north-star real-time-edit feature: a re-embedded
+             chunk only recomputes its own block centroid/bound.
+compression: Indirect but real. Do NOT copy their on-disk layout for compression: their columnar store is
+             ~1.2x LARGER than row store (7.0 GB vs 5.9 GB on 10M rows) because the value is
+             scan-pruning, not byte reduction. Transferable compression-adjacent angle: zone-map
+             block summaries are tiny overhead (one centroid + scalar bound per ~1024 vectors)
+             that unlocks skipping work, letting nest push more aggressive lossy quantization
+             (int8/float16) on bulk vectors while keeping a small exact summary to bound error
+             and prune. Pairs with the tiny preset to hold recall at smaller size, and the
+             per-block centroid can double as a residual-quantization anchor (vector = centroid
+             + small residual) for a future codec that compresses embeddings structurally rather
+             than just float16/int8.
+perf:        Up to 130,582.95x on simple precomputed aggregates (sum/avg/count read straight from global
+             stats, not scanning), 6-14x on grouped hash aggregation, 248-273x on
+             zone-map-pruned clustered range queries. The durable generalizable win for nest is
+             the 248-273x range-pruning class, not the headline aggregate numbers. Chunk size
+             65,536; range query touched only 3 of 153 chunks. No SIMD or entropy coding on
+             their side; aggregation is plain C hash aggregation. Incremental analyze: cold
+             66,763ms, no-op 2.114ms.
+license:     Elastic License 2.0 (source-available, NOT OSI-open; commercial license required for
+             managed-service/production use from SQLite Cloud, Inc). Do NOT vendor or copy their
+             code into nest. Re-implement the algorithmic idea (zone maps / chunk-skipping is
+             decades-old DB prior art, unencumbered) from scratch; never lift EL2.0 source.

@@ -98,6 +98,18 @@ mod tests {
     }
 
     #[test]
+    fn reserved_encoding_not_yet_implemented() {
+        // intpack (id 4) is a reserved additive lane with no codec yet, so
+        // decode_payload must still reject it. when intpack ships, replace
+        // this with a roundtrip + content_hash-equality test.
+        let res = decode_payload(crate::layout::SECTION_ENCODING_INTPACK, &[]);
+        assert!(matches!(
+            res,
+            Err(NestError::UnsupportedSectionEncoding { .. })
+        ));
+    }
+
+    #[test]
     fn f16_roundtrip_within_tolerance() {
         let v: Vec<f32> = (0..16).map(|i| (i as f32) * 0.05).collect();
         let bytes = f32_to_f16_bytes(&v);

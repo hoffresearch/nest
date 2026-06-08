@@ -1,0 +1,464 @@
+==============================================================================================
+nest pillar :: verticals + sequencing :: agent-native knowledge file as flagship, osint lake then pattern instrument
+layer: cross
+==============================================================================================
+
+a design doc. the executable steps are in ../tasks/.
+
+thesis
+----------------------------------------------------------------------------------------------
+pick the agent-native knowledge file as the flagship and ship the other two wedges off the
+SAME engine in order: (1) agent-native, (2) sovereign osint lake, (3) pattern-lover
+instrument. the rule is one engine, three packagings: nest-core (forge canonical extract +
+nest container + lens search/cite) ships once; each wedge is a thin forge PROFILE + a lens
+VERB + a demo corpus, never a fork of the core.
+
+why agent-native first, for a solo author with minimal budget and ai agents as the build team:
+it is the wedge whose value is provable with what already exists in the tree (mmap +
+exact-cosine rerank + content_hash + nest://content_hash/chunk_id citations) PLUS the four
+phase-0 guardrails already on the board, and nothing more. the buyer is the same person
+building nest (ai-agent developers), so distribution is a python pip-installable retrieve()
+that returns CITED spans an llm can trust, versus the markdown-trash status quo where agents
+retrieve uncited, unverifiable, recall-unknown context. it needs zero new format sections
+beyond what phase 0-1 already lands: the citation IS the product. it demos in one gif (build a
+.nest from a doc folder, ask a question, get an answer with a clickable nest:// span that
+reopens the exact bytes). it is the cheapest possible proof that 'compress harder + stay
+sovereign + cite exactly' is a real product, and every later wedge inherits that proof.
+
+why osint lake SECOND: it is the same retrieve()+cite() engine pointed at the catalog mode
+(the .nest references original blobs by content-hash, optional sidecar blob store) + the csr
+graph that phase 4 already plans. the wedge is 'giant bizarre monolith (pii.zip, notes.zip,
+200gb json/sql dump) -> one compact searchable graph .nest that stays on your machine, no
+query-engine spin-up, no socket'. it is a duckdb/parquet/elastic killer ONLY because nest is
+mmap+index with a mandatory honest rerank and no server. it reuses 100% of the agent-native
+engine; the only NEW surface is catalog mode (blob refs by content-hash) and the graph viewer
+wedge from lens. it has the highest revenue ceiling (white/red team, dfir, journalists) but
+the longest trust-and-polish runway, so it goes second, not first.
+
+why pattern-lover instrument THIRD (last, but the soul): it needs the MOST new forge machinery
+(multiple named embedding spaces: text + image-via-clip + glyph/typography + symbol, each with
+its own model fingerprint) and the MOST niche audience, so it is the worst first bet for
+runway but the best long-term moat and the founder's actual obsession. it lands once
+multimodal embedding spaces exist, which is the one genuinely new format capability across all
+three wedges. it is also where the graph-first accessible ux (gifted/autistic/adhd thinkers
+who reason in images and graphs) becomes a headline feature rather than decoration, because
+typography/etymology/symbol/voynich/gematria work IS graph-and-image work.
+
+the engine seam that makes this work and keeps the critic happy: the core stays small and
+sovereign; a wedge is declared as a forge profile (a toml/json recipe naming extractor +
+modalities + model fingerprints), surfaced as a lens verb (retrieve / lake / atlas), and
+proven by a demo corpus. adding a wedge adds a profile file, a thin cli alias, and a demo, NOT
+a new crate and NOT a format version bump. all three share the agent-native retrieve()+cite()
+core, so shipping the flagship ships 70% of the other two.
+
+ethics stance, light-touch, dual-use accepted: sovereignty IS the privacy feature - because a
+.nest never opens a socket and runs entirely off local mmap, the data physically cannot leak
+to a vendor; that is the whole privacy story and it needs no policy engine. open-source
+dual-use is accepted as the cost of a sovereign tool (the osint lake helps both red and blue
+teams; that is fine and explicit). nest ships redaction, provenance, and access as OPTIONAL
+features (a redaction profile that drops or hashes spans at build time, a provenance verdict
+facet that runs strictly after the exact rerank, an optional at-rest encryption wrapper around
+the file) - never as gates, never as user-policing, never as telemetry. the project does not
+surveil, score, or restrict its users; it gives them tools and gets out of the way.
+
+format impact
+----------------------------------------------------------------------------------------------
+all additive within frozen v1, no NEST_FORMAT_VERSION bump:
+
+1. multimodal named embedding spaces (the one genuinely new format capability): reserve a
+single tagged-vector-pool layout rather than N separate section ids. add a
+SECTION_EMBEDDING_SPACES manifest (in the reserved 0x09-0x10 band, alongside the
+already-reserved tokenizer_model/chunk_scalars) listing {space_name, model_fingerprint, dim,
+dtype, modality_tag, byte_offset, count}. embeddings stay one contiguous repr(C) LE pool
+scored straight off mmap (preserves the simd hot path and 64-byte alignment); the spaces table
+just slices the pool by offset/count per modality. this is higher-performance than N sections
+(one mmap region, one alignment guarantee, one quantization ladder applies to all spaces) and
+the search router selects a space by name before the existing exact-cosine rerank. each space
+carries its own model_fingerprint so 'find similar image' / 'find this typeface' / 'find this
+symbol' coexist with text search, all reranked honestly per-space.
+
+2. catalog mode (blob references): reuse the chunks_original_spans + provenance machinery. a
+catalog .nest stores embeddings + index + graph + canonical TEXT inline, but a chunk's source
+bytes are referenced by content-hash into an OPTIONAL sidecar blob store (a directory of
+content-addressed objects, kubo raw-leaves style) instead of inlined. add a manifest flag
+catalog_mode:bool + per-span blob_content_hash. citations stay exact:
+nest://content_hash/chunk_id resolves the canonical text from inside the .nest (always
+present) and OPTIONALLY rehydrates the original blob from the sidecar by content-hash if
+present. integrity is preserved because the blob content-hash is recorded and verified on
+rehydrate. no new required section; an additive optional manifest field + a blob_refs optional
+section (0x09+ band).
+
+3. redaction + provenance + encryption (ethics, optional): redaction is a build-time forge
+profile that drops or hashes spans before they enter chunks_canonical, so it is invisible to
+the format (the redacted text simply is the canonical text; content_hash is over the redacted
+bytes). provenance verdict facets ride the existing schema-free provenance(0x05) json blob per
+the factcheck synthesis (no new section). at-rest encryption is an OPTIONAL outer wrapper
+around the whole .nest file applied/removed by a lens verb, never inside the frozen container
+(so mmap+simd and content_hash are untouched on the decrypted bytes).
+
+nothing here changes the meaning of an existing field, so it is all additive within v1. the
+embedding-spaces table and blob_refs use already-reserved section-id space; the per-space
+quantization reuses the phase-2/phase-3 codecs unchanged.
+
+architecture changes
+----------------------------------------------------------------------------------------------
+no new crate. the wedges are added as a forge-profile seam + thin lens verbs over the existing
+four crates.
+
+- nest-forge (NEW, lives OUTSIDE the sovereign rust core, can be heavy, python-first under
+python/forge/): the ingestion layer. a profiles/ dir of recipe files (toml) declaring
+extractor + modalities + model fingerprints + redaction + catalog flags. one profile per
+wedge: profiles/agent.toml, profiles/osint.toml, profiles/pattern.toml. forge produces the
+canonical extract + embeddings the existing nest-python build_fn consumes. this is where
+ocr-engine choice, extraction depth, and layer separation live as options. determinism anchor
+is the canonical extracted text, not the raw input.
+
+- crates/nest-format: add a SECTION_EMBEDDING_SPACES table (reserved id in 0x09-0x10 band) and
+an optional blob_refs section + catalog_mode manifest flag. embeddings stay one contiguous
+tagged pool. add per-span blob_content_hash to spans (additive, only present in catalog mode).
+all <=300-line modules: spaces.rs (the spaces table reader), blob_refs.rs (the reference
+table).
+
+- crates/nest-runtime: add a search router (search/route.rs, <=300 loc) that selects an
+embedding space by name/modality before the existing score_subset exact rerank - the rerank is
+UNCHANGED, it just runs against the selected space's vectors (or that space's embeddings_fp).
+graph traversal already planned in phase 4 (graph/ module) feeds the same rerank. no new
+scoring math; pure routing.
+
+- crates/nest-cli: three thin verbs - retrieve.rs (agent-native, fuses search-ann+cite into
+agent-json), lake.rs (catalog-mode build/search over the runtime), atlas.rs (per-modality
+query + emits graph for the lens viewer). each is a clap subcommand under cmd/, each <=300
+loc, no business logic (delegates to runtime/format).
+
+- crates/nest-python: retrieve() returns cited spans zero-copy (builds on the phase-0 PyBuffer
+query work #15); a thin catalog_mode kwarg on build(); per-space embeddings passed as a dict
+{space_name: (vectors, model_fingerprint)}.
+
+- lens viewer (NEW, lives OUTSIDE rust core under lens/web/): a static cosmos.gl/webgl page
+that reads a .nest's csr graph + chunk_scalars locally and draws it. never in nest-runtime.
+cli now, gui later.
+
+the critic's discipline is enforced structurally: adding a wedge = adding a profile file + one
+cli verb + a demo corpus. it can NEVER add a crate, a required section, or a format-version
+bump. the core stays small; forge and lens are the pluggable surfaces.
+
+ux
+----------------------------------------------------------------------------------------------
+cli stays a thin clap surface (currently 8 subcommands:
+search/search-ann/search-text/cite/inspect/stats/validate/benchmark). the verticals do NOT
+each add a crate; they add at most one verb alias each and lean on profiles + progressive
+disclosure.
+
+- wedge 1 verb: `nest retrieve <file.nest> "<query>" [--k N] [--space text]` - the
+agent-native flagship. returns cited spans (text + nest://content_hash/chunk_id + real cosine
+score) in a clean json an llm/agent can consume. this is search-ann + cite fused into one
+agent-shaped call. also exposed as the python `retrieve()` that returns the same structure
+zero-copy. progressive disclosure: bare `nest retrieve` gives top-k cited spans; `--explain`
+adds the candidate-generator provenance (hnsw/bm25/graph) so a power user sees why a span was
+returned without changing the honest score.
+
+- wedge 2 verb: `nest lake build --profile osint <dump-dir> -o lake.nest [--catalog --blobs
+./store]` builds a catalog-mode .nest over a giant monolith; `nest lake search` / `nest
+search-graph` query it off mmap with no engine spin-up. the headline ux is 'point it at
+pii.zip / a 200gb json dump, get a compact searchable graph file that stays on your machine'.
+graph traversal feeds the same exact rerank.
+
+- wedge 3 verb: `nest atlas <file.nest> --image query.png` / `--glyph font.ttf:A` / `--symbol
+<unicode>` routes per modality through the named embedding spaces. the lens graph viewer
+(cosmos.gl/webgl, NEVER in the rust core) consumes the csr graph + chunk_scalars over a local
+read of the .nest. accessibility is a first-class design driver, not decoration: the atlas
+verb emits a graph the viewer renders for image-and-graph thinkers (gifted/autistic/adhd),
+with high-contrast deterministic layout seeds so the same .nest always draws the same map.
+
+- profiles are the 'hundreds of options' surface: a forge profile is a recipe file (ocr engine
+paddleocr-vs-native, extraction depth, which modalities, layer separation, redaction on/off,
+model fingerprints per space). `nest forge --profile <name>` selects one. defaults are sane
+and minimal; depth lives behind --profile so the common path stays one flag.
+
+- determinism in the ux: every wedge build is reproducible (same input + profile + model
+fingerprints => byte-identical .nest), so `nest verify-reproducible` works across all three.
+accessibility + determinism compound: a graph that draws identically every time is itself an
+accessibility feature.
+
+phase placement
+----------------------------------------------------------------------------------------------
+this pillar is a CROSS-CUTTING go-to-market lane that rides on top of the consolidated
+compression phases 0-3 (and phase 4 graph/edit). it does not reorder any compression task; it
+sequences three product packagings against them. concretely:
+
+- wedge 1 (agent-native, FLAGSHIP) ships the moment phase 0 (the four guardrails:
+embeddings_fp rerank source #06, materialize ram-leak fix #07, codec registry #08,
+roundtrip+recall harness #09) plus the phase-1 free wins (#10-#12) are green. it needs no
+codec beyond those. PRIORITY: ship right after phase 0, in parallel with phase 1. it is the
+first thing a stranger can pip-install and trust.
+- wedge 2 (osint lake) ships after phase 2 text wins (#13 dictionary/fsst) land (giant dumps
+are text-heavy) and depends on the new CATALOG MODE task below + the phase-4 csr graph (#20).
+PRIORITY: second product, gated on catalog mode + graph search, not on sub-byte embeddings.
+- wedge 3 (pattern instrument) ships after the new MULTIMODAL named-embedding-spaces
+capability lands (its own task below) and rides phase-3 sub-byte embeddings (#16/#17) for the
+large multimodal vector volume. PRIORITY: last, the long-game moat.
+
+the tasks in this pillar are: a profile/wedge registry (forge seam), the catalog-mode
+reference store (nest seam), the multimodal named-embedding-spaces format reservation + router
+(nest+lens seam), the three lens verbs (retrieve/lake/atlas), the three demo corpora, and the
+optional redaction/encryption ethics features. they slot as a 'verticals' lane parallel to the
+existing now/next/later columns, each gated on the compression tasks named in its depends-on.
+
+draws from
+----------------------------------------------------------------------------------------------
+langchain-ai/langchain, run-llama/llama_index, run-llama/semtools, supermemoryai/supermemory,
+KaiDMML/FakeNewsNet, jghm-f/FACTCK.BR, sfu-discourse-lab/MisInfoText, NixOS/nix, ipfs/kubo,
+jvm-repo-rebuild/reproducible-central, duckdb/duckdb, neo4j/neo4j-graphrag-python,
+vesoft-inc/nebula, FalkorDB/FalkorDB, weaviate/recipes, QwenLM/Qwen3-Embedding,
+tidwall/buntdb, activeloopai/deeplake
+
+proposed tasks
+----------------------------------------------------------------------------------------------
+* v01 :: forge profile registry + wedge seam (the discipline guardrail)
+    goal:   establish the one seam that keeps nest from becoming 10 products: a wedge is a forge PROFILE
+            recipe + a thin lens verb + a demo corpus, never a crate or a format bump. ship
+            the registry and the three profile files (agent/osint/pattern) so every later
+            wedge task slots into a declared, deterministic recipe.
+    owns:   python/forge/__init__.py, python/forge/profiles/agent.toml, python/forge/profiles/osint.toml,
+            python/forge/profiles/pattern.toml, python/forge/profile.py,
+            doc/plan/master-plan/05-verticals.txt
+      - write doc/plan/master-plan/05-verticals.txt: the three wedges, audiences (agent devs /
+        red+blue team+dfir+journalists / linguists+pattern lovers), the flagship choice, the
+        ship order, and the light-touch ethics stance (sovereignty=privacy;
+        redaction/provenance/encryption optional, never gates). lowercase, no emoji, no
+        em-dash.
+      - define a forge profile schema in python/forge/profile.py: {name, extractor,
+        modalities[list of space names], model_fingerprints{space->hash}, ocr_engine,
+        extraction_depth, redaction{mode}, catalog{enabled,blob_store_path}}. pure data + a
+        loader that validates and is deterministic (sorted keys).
+      - write the three profile.toml files. agent.toml: text-only, native extraction,
+        redaction off, catalog off. osint.toml: text + entity extraction, catalog on,
+        redaction optional. pattern.toml: text+image+glyph+symbol spaces, each with its own
+        model_fingerprint placeholder.
+      - wire python/forge/__init__.py so forge.load_profile(name) returns a validated recipe
+        the existing python/builder.py + crates/nest-python build_fn can consume; do NOT
+        change the frozen build path, only feed it.
+      - assert the seam in a test: building the SAME corpus under a profile twice yields
+        byte-identical .nest (reproducibility holds across the profile layer).
+      - update doc/plan/kanban.txt with a new VERTICALS column listing the wedge tasks and
+        their depends-on.
+    risk:   scope creep is the whole danger here. if a profile starts carrying RUNTIME behavior (not just
+            build-time recipe) the core stops being small. enforce: a profile only configures
+            forge ingestion; it never adds a code path to nest-runtime or a section to
+            nest-format. gate with a test that the profile layer produces byte-identical files
+            and never reaches into the frozen container.
+
+* v02 :: agent-native retrieve() verb + cited-span contract (the FLAGSHIP)
+    goal:   ship the flagship: one agent-shaped call that returns cited spans an llm can trust - text +
+            nest://content_hash/chunk_id + REAL cosine score - fusing search-ann and cite.
+            this is the cheapest possible proof of 'compress harder + sovereign + cite
+            exactly' and the product a stranger pip-installs first. needs no codec beyond
+            phase 0.
+    owns:   crates/nest-cli/src/cmd/retrieve.rs, python/forge/retrieve.py,
+            doc/plan/tasks/verticals/v02-agent-native-retrieve-cited-span-contract.txt
+      - add cmd/retrieve.rs: a clap subcommand nest retrieve <file> "<query>" [--k N] [--space
+        text] [--explain] that runs the existing hybrid search (search-ann path), takes the
+        post-exact-rerank hits, and for each emits {chunk_id, content_hash, citation_uri
+        (nest://content_hash/chunk_id), text_span, cosine_score, source_uri}. delegate to
+        runtime/format; <=300 loc, no new scoring.
+      - register the verb in cmd/mod.rs as the 9th subcommand; keep the clap surface thin.
+      - emit a stable agent-shaped json (sorted keys, deterministic) so an llm/agent consumes
+        it directly; --explain adds candidate-generator provenance (hnsw/bm25) WITHOUT
+        changing the returned score (score stays real cosine from score_subset).
+      - expose python/forge/retrieve.py returning the same structure (lean on the phase-0
+        zero-copy PyBuffer query from task #15 if merged; otherwise plain extract).
+      - add the cited-span contract to the work-order: the returned score MUST be the
+        exact-cosine rerank value, the citation MUST reopen the exact byte span, recall@10
+        MUST be recorded vs exact f32 baseline.
+      - write a one-gif demo script: build a .nest from a doc folder, retrieve a question,
+        show the clickable nest:// span reopening exact bytes.
+    risk:   the flagship's whole value is that the citation is honest. if retrieve.rs ever returns a
+            candidate-generator score (hnsw/bm25 proxy) instead of the mandatory exact-cosine
+            rerank value, the product is a lie. assert: retrieve's score equals score_subset's
+            exact-cosine output byte-for-byte, and cite resolves the same span the score was
+            computed over. cover with a test on the demo corpus.
+
+* v03 :: catalog mode (blob refs by content-hash) for the osint lake
+    goal:   make the osint lake possible: a .nest holds embeddings+index+graph+canonical text inline but
+            REFERENCES original blobs by content-hash into an optional sidecar store, so a
+            200gb monolith becomes a compact searchable file that stays on the machine -
+            mmap+index, no query-engine spin-up. integrity and citations preserved.
+    owns:   crates/nest-format/src/sections/blob_refs.rs, crates/nest-cli/src/cmd/lake.rs,
+            python/forge/catalog.py, doc/plan/tasks/verticals/v03-catalog-mode-blob-refs.txt
+      - reserve an optional SECTION_BLOB_REFS in the already-reserved 0x09-0x10 band
+        (additive, excluded from content_hash) and a manifest catalog_mode flag; blob_refs
+        maps span -> blob_content_hash (kubo raw-leaves style content addressing).
+      - build blob_refs.rs as a <=300-loc repr(C) LE reader, typed thiserror, never panic on
+        truncated mmap; the sidecar blob store is a directory of content-addressed objects
+        (NOT inside the .nest, NOT a socket).
+      - in python/forge/catalog.py: at build time, for a catalog profile, write each source
+        blob to the sidecar by content-hash, keep the canonical TEXT inline (so search always
+        works offline), record blob_content_hash per span.
+      - add cmd/lake.rs: nest lake build --profile osint <dump-dir> -o lake.nest [--catalog
+        --blobs ./store] and nest lake search delegating to the existing runtime search; <=300
+        loc, thin.
+      - make cite resolve correctly in catalog mode: nest://content_hash/chunk_id always
+        returns canonical text from inside the file, and OPTIONALLY rehydrates+verifies the
+        original blob from the sidecar by content-hash when present.
+      - test: a catalog .nest is searchable fully offline with no sidecar present (text
+        inline), and rehydrate verifies blob content-hash when the sidecar is present.
+    risk:   catalog mode must not let the integrity story rot. if a blob is rehydrated without verifying
+            its content-hash, the sovereign-integrity claim breaks. enforce: rehydrate ALWAYS
+            checks blob_content_hash and fails closed (typed error) on mismatch or missing
+            blob. and never let catalog mode make text unsearchable offline - canonical text
+            stays inline so search needs zero sidecar.
+
+* v04 :: multimodal named embedding spaces (tagged pool) + per-modality search router
+    goal:   land the one genuinely new format capability that all three wedges (and the pattern instrument
+            especially) need: ONE .nest holding multiple named embedding spaces (text,
+            image-via-clip, glyph/typography, symbol) each with its own model fingerprint,
+            scored from a single contiguous tagged pool, routed per modality before the
+            UNCHANGED exact rerank.
+    owns:   crates/nest-format/src/sections/embedding_spaces.rs, crates/nest-runtime/src/search/route.rs,
+            crates/nest-cli/src/cmd/atlas.rs, python/forge/spaces.py,
+            doc/plan/tasks/verticals/v04-multimodal-named-embedding-spaces.txt
+      - reserve SECTION_EMBEDDING_SPACES in the 0x09-0x10 band: a table of {space_name,
+        model_fingerprint, dim, dtype, modality_tag, byte_offset, count} over ONE contiguous
+        repr(C) LE embeddings pool (higher-performance than N sections: one mmap region, one
+        64-byte alignment guarantee, one quantization ladder applies to every space).
+      - build embedding_spaces.rs as a <=300-loc reader slicing the pool by offset/count per
+        space; never panic on truncated mmap; keep the existing single-space layout as the
+        default (one unnamed space) so old files stay valid.
+      - add runtime search/route.rs: select a space by name/modality, then run the EXISTING
+        score_subset exact rerank against that space's vectors (or that space's
+        embeddings_fp). pure routing, zero new scoring math, <=300 loc.
+      - each space carries its own model_fingerprint so query embedding is validated per space
+        (a text query never scores against the image space); reuse the existing
+        dim/fingerprint validation.
+      - add cmd/atlas.rs: nest atlas <file> --image q.png | --glyph font.ttf:A | --symbol
+        <unicode> routes per modality through route.rs; emits the csr graph + chunk_scalars
+        for the lens viewer (viewer itself lives outside the rust core).
+      - python/forge/spaces.py: accept per-space embeddings as a dict {space_name: (vectors,
+        model_fingerprint, modality_tag)} at build time; pack into the contiguous pool
+        deterministically (sorted by space_name).
+      - test: a two-space .nest (text+image) routes a text query only against text vectors and
+        an image query only against image vectors, each reranked honestly; building twice is
+        byte-identical.
+    risk:   the tagged single-pool layout is the performance bet over N sections, but it must not break
+            the simd hot path or alignment. if a space's vectors are not 64-byte aligned
+            within the pool, aligned avx2/neon loads break. enforce: pad each space's region
+            to the alignment the simd dispatcher requires and verify alignment at reader open
+            (per the phase-0 alignment-verify work). also: never let routing change the
+            returned score - it only selects which vectors the unchanged exact rerank reads.
+
+* v05 :: three demo corpora + go-to-market sequencing proof
+    goal:   prove each wedge with a real demo corpus and lock the ship order: agent-native first
+            (flagship), osint lake second, pattern instrument third. each demo is a
+            reproducible build + a measured recall@10 + a one-line value claim, so the
+            sequencing is evidence-backed not aspirational.
+    owns:   python/tools/demo_agent.py, python/tools/demo_lake.py, python/tools/demo_pattern.py,
+            doc/plan/tasks/verticals/v05-demo-corpora-go-to-market.txt,
+            doc/plan/master-plan/06-sequencing.txt
+      - demo_agent.py: build a .nest from a small doc/markdown folder under the agent profile,
+        run retrieve() on a handful of questions, assert every returned span has a resolving
+        nest:// citation and a real-cosine score, record size ratio + recall@10 vs exact f32.
+        this is the flagship gif.
+      - demo_lake.py: build a catalog-mode .nest over a synthetic 'monolith' (a large
+        json/sql-ish dump) under the osint profile, search it off mmap with no engine spin-up,
+        show graph traversal feeding the exact rerank, record size vs the raw monolith.
+        license-vet any real corpus per the factcheck synthesis (vendor schema/loaders, not
+        raw academic-only data).
+      - demo_pattern.py: build a small multi-space .nest (text + one image space + one glyph
+        space) under the pattern profile, route a 'find this typeface' and a 'find this
+        symbol' query, record per-space recall. this is the soul demo and proves multimodal
+        routing.
+      - write doc/plan/master-plan/06-sequencing.txt: the explicit order (1 agent, 2 osint, 3
+        pattern) with the depends-on chain (1 needs phase 0+1; 2 needs catalog mode v03 +
+        graph #20 + phase 2 text; 3 needs spaces v04 + phase 3 embeddings) and the audience +
+        one-line value claim per wedge. lowercase, no emoji, no em-dash.
+      - each demo records RESULT (size ratio + recall@10) in the established work-order
+        fill-in format so the sequencing is evidence-backed.
+    risk:   demos that use non-redistributable corpora become ship-blockers (the factcheck synthesis flags
+            fever/upfd/fakenewsnet as academic-only / no clear oss license). use synthetic or
+            permissively-licensed data for every shipped demo, and vendor loader PATTERNS not
+            raw corpora. a demo that cannot be redistributed cannot be the public proof of a
+            wedge.
+
+* v06 :: optional redaction + provenance facet + at-rest encryption (light-touch ethics, never
+  gates)
+    goal:   ship the ethics stance as OPTIONAL features, not policing: a build-time redaction profile, a
+            post-rerank provenance verdict facet, and an at-rest encryption wrapper - so a
+            user CAN redact/provenance/encrypt their own data, while the project never
+            surveils, scores, or restricts anyone. sovereignty stays the core privacy feature.
+    owns:   python/forge/redaction.py, crates/nest-cli/src/cmd/seal.rs,
+            doc/plan/tasks/verticals/v06-optional-ethics-features.txt
+      - python/forge/redaction.py: a build-time pass that drops or hashes spans before they
+        enter chunks_canonical, driven by a profile redaction{mode} field. because it runs at
+        build time, content_hash is simply over the redacted bytes - the format never knows;
+        no new section, no gate.
+      - provenance facet: document and wire an OPTIONAL post-rerank verdict/provenance filter
+        that reads the schema-free provenance(0x05) json blob and filters/labels hits STRICTLY
+        AFTER the exact rerank (the returned score stays real cosine). reuse the
+        factcheck-synthesis convention; no new section id.
+      - cmd/seal.rs: an OPTIONAL outer at-rest encryption wrapper - nest seal <file> --key ...
+        / nest unseal - that encrypts/decrypts the WHOLE .nest file as an opaque blob OUTSIDE
+        the frozen container, so mmap+simd+content_hash operate on the decrypted bytes
+        unchanged. never inside the format. offline, no socket, no key escrow.
+      - write the ethics doc in the work-order + 05-verticals.txt: dual-use is accepted;
+        sovereignty/offline IS the privacy feature (a .nest physically cannot phone home);
+        redaction/provenance/encryption are user tools, never gates, never telemetry, never
+        user-policing.
+      - test: redaction is deterministic (same input+profile => byte-identical redacted
+        .nest); the provenance facet never alters the returned cosine score; seal/unseal
+        round-trips to byte-identical bytes.
+    risk:   the trap is building policy machinery that polices users (content scanning, refusal gates,
+            telemetry) - that betrays the sovereignty thesis and adds attack surface. enforce
+            the inverse: every feature here is opt-in and acts only on the user's OWN data at
+            their command; nothing inspects, scores, restricts, or reports the user.
+            encryption stays OUTSIDE the container so it never compromises
+            mmap/simd/determinism/content_hash.
+
+risks
+----------------------------------------------------------------------------------------------
+  - the discipline risk (the critic's core fear): three wedges tempt three forks. mitigation
+    is structural - a wedge is a profile file + one cli verb + a demo, enforced by v01's test
+    that the profile layer produces byte-identical files and never reaches into the frozen
+    container. if a wedge ever needs a new crate or a format-version bump, it is wrong by
+    construction.
+  - flagship-choice risk: betting on agent-native assumes ai-agent devs are a reachable
+    solo-author market. mitigation: it is the lowest-cost bet (needs only phase 0-1, ships as
+    a pip-installable retrieve()), and the buyer is the same population building nest, so
+    distribution is near-free. if it does not land, the engine still powers the other two.
+  - multimodal performance risk: the single tagged-vector-pool is a bet that one contiguous
+    region beats N sections. if per-space alignment or dtype mixing breaks the simd hot path,
+    the bet fails. mitigation: pad per-space regions to simd alignment, verify at reader open,
+    keep the single-space layout as the default so existing files are untouched.
+  - osint reputation risk: a 'sovereign osint lake' marketed wrong reads as a surveillance
+    tool. mitigation: the light-touch ethics stance is explicit and shipped
+    (sovereignty=privacy, optional redaction/provenance/encryption, no policing, no
+    telemetry); the wedge serves blue team and journalists as much as red team, stated up
+    front.
+  - corpus licensing risk: the most compelling demos (factcheck, osint) sit on academic-only /
+    no-clear-license data. mitigation: ship only synthetic or permissively-licensed demo
+    corpora and vendor loader patterns, never raw academic-only data (the factcheck synthesis
+    flags this explicitly).
+  - sequencing-slip risk: the pattern instrument is the founder's obsession and could pull
+    effort forward before the engine is proven. mitigation: lock the order in
+    06-sequencing.txt with explicit depends-on gates (pattern needs spaces v04 + phase 3), so
+    the soul wedge ships on a proven engine instead of distracting from the flagship.
+
+open questions
+----------------------------------------------------------------------------------------------
+  - agent-native distribution: is the fastest path to market a standalone pip package
+    (nest-retrieve), an mcp server shape, or a langchain/llamaindex retriever adapter? all
+    three reuse the same retrieve() core; which one reaches ai-agent devs fastest for a solo
+    author?
+  - catalog-mode sidecar shape: single content-addressed directory (kubo raw-leaves) vs a
+    packed .nestpack blob file vs an optional second .nest? the directory is simplest and most
+    sovereign; is a packed form needed for portability across machines?
+  - multimodal model fingerprints: which sovereign/offline image+glyph+symbol embedders are
+    small enough to keep the toolchain tiny (clip variants, font-glyph encoders, a
+    unicode/symbol embedder)? the determinism + tiny-footprint mission constrains the model
+    choice as hard as quality does.
+  - pattern instrument scope: do voynich/gematria/unicode symbol search need a bespoke
+    'symbol' embedding model, or can they be served by treating glyphs/codepoints as images
+    through the clip space? the answer decides whether wedge 3 needs one new model or several.
+  - does the osint lake want a fourth, structured-query verb (the tabfact-style symbolic dsl
+    from the factcheck synthesis) for giant tabular dumps, or is graph + semantic + lexical
+    search enough for v1? the dsl is a large subsystem and likely roadmap-only, but giant
+    parquet/sql dumps may demand it sooner than expected.
