@@ -1,7 +1,7 @@
 ==============================================================================================
 TASK #02 :: codec registry + reconciled id reservation (one pass)
 phase: phase 0   layer: nest
-status:  [ ] todo    [x] doing    [ ] done   (impl + gate green; pending owner ok to commit/merge)
+status:  [ ] todo    [ ] doing    [x] done   (merged into research/nest-genome-v2; gate green, format byte-identical)
 ==============================================================================================
 
 self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE

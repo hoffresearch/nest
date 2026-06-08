@@ -1,7 +1,7 @@
 ==============================================================================================
 TASK #05 :: forge-0: .fci freeze + books profile (parallel, touches zero core files, ONE chunker)
 phase: phase 0   layer: forge
-status:  [ ] todo    [x] doing    [ ] done   (FORGE-0a: forge-core workspace + .fci freeze done +
+status:  [ ] todo    [ ] doing    [x] done   (FORGE-0a (forge-core workspace + .fci freeze) merged; normalize/pdf/adapter are forge-0b (#09))
          gate green; normalize/pdf/adapter/cli are forge-0b/#09, deferred per the owner)
 ==============================================================================================
 

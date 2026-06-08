@@ -18,6 +18,7 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - nest-python is the PyO3 bridge. python/nest.py loads the compiled extension, python/builder.py orchestrates chunking and caching, and python/embed_query.py preserves model parity for search-text.
 - scripts/release_check.sh is the release gate. it rebuilds the extension, runs rust and python suites, checks lint and format, measures presets, and compares against the committed baseline.
 - forge-core is the ingestion layer, a SEPARATE cargo workspace at the repo root OUTSIDE crates/, so its (eventually heavy, possibly non-deterministic) deps never enter nest-format or nest-runtime. this phase ships FORGE-0a: the frozen .fci canonical-intermediate schema only. forge never duplicates the one authoritative chunker (builder.chunk_text), and .fci is versioned independently of the .nest format. the sovereign release gate does not build it; it has its own cargo workspace.
+- python/forge is the forge python surface. its build-side default is an OFFLINE static embedder (python/forge/embed_default.py): stdlib-only, deterministic, no model download and no network round-trip on first use, so a brand-new user gets offline-by-construction. it self-fingerprints to a sha256 model_hash recorded in provenance, so builds are byte-identical and a query embedder that disagrees fails the manifest model_hash gate; a power user can bring a stronger sentence-transformers model instead. a cc0 demo corpus (python/forge/demo_corpus) ships beside it for the one-gif demo.
 
 ## format and runtime contract
 
@@ -202,6 +203,10 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - python/builder.py | python source | reusable ingestion pipeline that chunks text, caches embeddings in sqlite, emits .nest files, and validates output.
 - python/convert_legacy.py | python source | migrates the legacy sqlite truw corpus into the new deterministic v1 binary format.
 - python/embed_query.py | python source | search-text helper that embeds one query, normalizes it, fingerprints the local model snapshot, and prints structured json.
+- python/forge/__init__.py | python source | forge python package surface; re-exports the default static embedder.
+- python/forge/embed_default.py | python source | the DEFAULT offline static embedder (model2vec-style, stdlib-only, deterministic, no network): tokenize, fixed pseudo-random token vectors, l2-normalized mean, f32-stable; self-fingerprints to a sha256 model_hash recorded in provenance. the build-side answer to offline-by-construction; power users bring a stronger model.
+- python/forge/demo_corpus/ | data | license-clean (cc0, original) demo doc folder for the flagship one-gif demo; builds a byte-identical .nest offline with the static embedder.
+- python/forge/test_embed_default.py | python test | self-test: determinism, f32-stability, normalization, lexical signal, fingerprint stability, demo corpus presence.
 - python/model_fingerprint.py | python source | computes a reproducible model fingerprint and compact model_hash from inference-relevant files only.
 - python/nest.py | python source | dynamic loader and stable public python API over the _nest extension.
 - python/tools/_baseline_decoder.py | python source | decodes a baseline .nest directly so preset measurement can rebuild variants without re-embedding.
