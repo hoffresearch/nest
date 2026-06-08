@@ -9,8 +9,8 @@ tagged by layer (forge/nest/lens/cross)
 # NOW  (9 cards)
 ##############################################################################################
 
-[ ] land SECTION_EMBEDDINGS_FP=0x09 + refactor score_subset to a rerank-source handle
-    (CRITICAL/nest)
+[x] land SECTION_EMBEDDINGS_FP=0x09 + refactor score_subset to a rerank-source handle
+    (CRITICAL/nest)  [p0 #01: impl + gate green; 0x09 writer deferred to p3 #14]
     the gate for ALL sub-int8 AND all per-space sub-int8 work. score_subset today
     hard-dispatches on a single self.dtype and the single 0x04 section (search.rs:84-121);
     refactor it to take an explicit rerank-source handle (fp slab when present) AND be ready
@@ -19,7 +19,8 @@ tagged by layer (forge/nest/lens/cross)
     refs: crates/nest-runtime/src/search.rs, crates/nest-format/src/sections/contract.rs,
           gaoj0017/RaBitQ
 
-[ ] ONE parameterized rerank-honesty contract test (gates the release check)   (CRITICAL/nest)
+[x] ONE parameterized rerank-honesty contract test (gates the release check)   (CRITICAL/nest)
+    [p0 #01: tests/rerank_contract.rs; covers ann+hybrid, new verbs must join the list]
     single test over every search entry point (ann/hybrid/graph/space/cross) asserting
     returned_score == score_subset(union) byte-for-byte and recall is NaN for every non-exact
     path. a new search verb without this test is a release-check FAILURE. the cheapest
@@ -27,7 +28,8 @@ tagged by layer (forge/nest/lens/cross)
     refs: crates/nest-runtime/src/search.rs, crates/nest-cli/src/cmd/benchmark.rs,
           gaoj0017/RaBitQ
 
-[ ] fix materialize-to-f32 ram leak in the ann distance path   (CRITICAL/nest)
+[x] fix materialize-to-f32 ram leak in the ann distance path   (CRITICAL/nest)
+    [p0 #01: materialize.rs -> PackedVectors, packed int8/f16 rows decoded per-row]
     materialize_f32_vectors expands every dtype to n*dim*4 f32 when hnsw is attached. teach
     the ann path to score packed int8 blocks. pure runtime fix; carried per-space when
     multimodal lands.
