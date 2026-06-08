@@ -54,12 +54,41 @@ pub fn align_up(n: u64, a: u64) -> u64 {
 /// - `3 = int8`: payload is the int8 quantized embeddings section (per-vector
 ///   f32 scales followed by i8 vectors); requires `dtype = "int8"`. Only
 ///   valid for the embeddings section.
+/// - `7 = int4`: payload is the int4 block-64 quantized embeddings section
+///   (per-64-dim-group f16 absmax scales followed by packed 4-bit signed
+///   codes, two nibbles per byte, codes in `[-7, 7]`); requires `dtype =
+///   "int4"` and `embedding_dim` divisible by 64. Only valid for the
+///   embeddings section. STORED-PRECISION cosine, scored straight off mmap
+///   by the fused dequant+dot kernel (never zstd/shuffle), the first real
+///   sub-int8 size lever (~2x over int8).
 ///
 /// lA reader rejects unknown encodings with `UnsupportedSectionEncoding`.
 pub const SECTION_ENCODING_RAW: u32 = 0;
 pub const SECTION_ENCODING_ZSTD: u32 = 1;
 pub const SECTION_ENCODING_FLOAT16: u32 = 2;
 pub const SECTION_ENCODING_INT8: u32 = 3;
+
+// reserved additive wire encodings. ids 4-255 are reserved within frozen
+// format v1 (see doc/research/master-plan.txt). claimed here as named
+// constants so each future codec ships as a small additive diff. NOT yet
+// implemented: decode_payload rejects them with UnsupportedSectionEncoding
+// until their codec module lands, so old and new readers agree.
+pub const SECTION_ENCODING_INTPACK: u32 = 4;
+pub const SECTION_ENCODING_ZSTD_DICT: u32 = 5;
+pub const SECTION_ENCODING_FRONTCODE: u32 = 6;
+pub const SECTION_ENCODING_INT4: u32 = 7;
+pub const SECTION_ENCODING_RABITQ: u32 = 8;
+pub const SECTION_ENCODING_FSST: u32 = 9;
+/// l`10 = txt_streams`: the chunks_canonical (0x02) section's COMPRESSED
+/// form re-laid-out from one concatenated zstd-19 blob into N independently
+/// zstd-encoded streams (one per canonical string) behind an intpack offset
+/// table (O(1) single-chunk seek/reopen). decodes BYTE-IDENTICALLY to the
+/// raw chunks_canonical payload, so content_hash and nest:// citations are
+/// unchanged. only valid for non-embedding sections. this is the named
+/// prerequisite layout for the dict(5)/fsst(9) text levers; a per-chunk
+/// frame loses cross-chunk LZ context (small ratio cost today) but is where
+/// a trained dict/fsst can beat one big zstd-19 blob.
+pub const SECTION_ENCODING_TXT_STREAMS: u32 = 10;
 
 /// lFormat version of the binary layout. Bumped when the on-disk
 /// container changes (header/footer/section table layout).
@@ -80,6 +109,48 @@ pub const SECTION_PROVENANCE: u32 = 0x05;
 pub const SECTION_SEARCH_CONTRACT: u32 = 0x06;
 pub const SECTION_HNSW_INDEX: u32 = 0x07;
 pub const SECTION_BM25_INDEX: u32 = 0x08;
+
+// reserved additive optional sections. ids 0x09+ are reserved within frozen
+// format v1 (see doc/research/master-plan.txt). all are EXCLUDED from
+// content_hash (which covers the canonical six only), so adding any of them
+// never invalidates a nest:// citation. claimed as named constants; NOT yet
+// emitted or read until each feature ships its section codec and a manifest
+// capability, at which point it joins OPTIONAL_SECTIONS.
+pub const SECTION_EMBEDDINGS_FP: u32 = 0x09;
+pub const SECTION_DICTIONARY: u32 = 0x0A;
+pub const SECTION_DEDUP_MAP: u32 = 0x0B;
+pub const SECTION_GRAPH_ADJACENCY: u32 = 0x0C;
+pub const SECTION_CHUNK_SCALARS: u32 = 0x0D;
+pub const SECTION_TOKENIZER_MODEL: u32 = 0x0E;
+pub const SECTION_EDIT_JOURNAL: u32 = 0x0F;
+pub const SECTION_REPRO_MANIFEST: u32 = 0x10;
+
+// reconciled additive optional sections past 0x10 (see doc/plan/master-plan
+// 02-format.txt). the four redesign pillars each independently proposed
+// 0x11; this is the single disjoint map that resolves that collision in one
+// pass, BEFORE any feature edits this file. ALL are EXCLUDED from
+// content_hash, so adding any of them never invalidates a nest:// citation.
+// claimed as named constants; NOT yet emitted or read until each feature
+// ships its section codec and a manifest capability.
+pub const SECTION_GRAPH_NODES: u32 = 0x11;
+pub const SECTION_GRAPH_EDGE_PROPS: u32 = 0x12;
+pub const SECTION_GRAPH_ENTITY_MAP: u32 = 0x13;
+pub const SECTION_BLOB_REFS: u32 = 0x14;
+pub const SECTION_SPACE_TABLE: u32 = 0x15;
+// blob-relative span overlay: REPLACES the illegal chunks_original_spans
+// v1->2 bump (spans is canonical + content-hashed + required). an excluded
+// optional section keyed by chunk ordinal, so self_contained and catalog
+// twins keep the SAME content_hash and old readers still open the file.
+pub const SECTION_BLOB_SPAN_OVERLAY: u32 = 0x16;
+
+// per-space vector bands. each non-text embedding space gets one fixed-
+// stride 64-byte-aligned slab in 0x20-0x2F (NEVER zstd, scored by the
+// existing simd kernels) and an optional matching fp rerank source in
+// 0x30-0x3F. base + SPACE_BAND_LEN define each band; both excluded from
+// content_hash. space[0]=text stays the canonical embeddings(0x04).
+pub const SECTION_SPACE_EMBEDDINGS_BASE: u32 = 0x20;
+pub const SECTION_SPACE_EMBEDDINGS_FP_BASE: u32 = 0x30;
+pub const SPACE_BAND_LEN: u32 = 0x10;
 
 /// lCanonical order for content_hash. Sorted alphabetically by name; this
 /// order is fixed by spec so adding new section IDs cannot reshuffle the
@@ -104,6 +175,9 @@ pub const REQUIRED_SECTIONS: &[(u32, &str)] = CANONICAL_SECTIONS;
 pub const OPTIONAL_SECTIONS: &[(u32, &str)] = &[
     (SECTION_HNSW_INDEX, "hnsw_index"),
     (SECTION_BM25_INDEX, "bm25_index"),
+    // graph_adjacency (0x0C, G1): additive chunk-to-chunk csr. resolves via
+    // section_name but stays OUT of CANONICAL_SECTIONS (content_hash-excluded).
+    (SECTION_GRAPH_ADJACENCY, "graph_adjacency"),
 ];
 
 pub fn section_name(id: u32) -> Option<&'static str> {
@@ -160,5 +234,67 @@ mod tests {
         assert_eq!(section_name(SECTION_CHUNK_IDS), Some("chunk_ids"));
         assert_eq!(section_name(SECTION_EMBEDDINGS), Some("embeddings"));
         assert_eq!(section_name(0xFFFF), None);
+    }
+
+    #[test]
+    fn reserved_additive_ids_are_in_range_and_distinct() {
+        // reserved wire encodings occupy 4..=10, above the four implemented
+        // base ids (raw/zstd/float16/int8 are 0..=3).
+        let enc = [
+            SECTION_ENCODING_INTPACK,
+            SECTION_ENCODING_ZSTD_DICT,
+            SECTION_ENCODING_FRONTCODE,
+            SECTION_ENCODING_INT4,
+            SECTION_ENCODING_RABITQ,
+            SECTION_ENCODING_FSST,
+            SECTION_ENCODING_TXT_STREAMS,
+        ];
+        for (i, &e) in enc.iter().enumerate() {
+            assert_eq!(e, 4 + i as u32);
+            assert!(e > SECTION_ENCODING_INT8);
+        }
+        // reserved optional sections occupy 0x09..=0x10, above the implemented eight.
+        let sec = [
+            SECTION_EMBEDDINGS_FP,
+            SECTION_DICTIONARY,
+            SECTION_DEDUP_MAP,
+            SECTION_GRAPH_ADJACENCY,
+            SECTION_CHUNK_SCALARS,
+            SECTION_TOKENIZER_MODEL,
+            SECTION_EDIT_JOURNAL,
+            SECTION_REPRO_MANIFEST,
+        ];
+        for (i, &s) in sec.iter().enumerate() {
+            assert_eq!(s, 0x09 + i as u32);
+            assert!(s > SECTION_BM25_INDEX);
+        }
+        // reconciled additive ids past 0x10 are contiguous 0x11..=0x16; the
+        // per-space bands start at 0x20 and 0x30 with 16 ids each. the
+        // exhaustive disjointness + content_hash-exclusion check lives in
+        // tests/reserved_ids.rs.
+        let recon = [
+            SECTION_GRAPH_NODES,
+            SECTION_GRAPH_EDGE_PROPS,
+            SECTION_GRAPH_ENTITY_MAP,
+            SECTION_BLOB_REFS,
+            SECTION_SPACE_TABLE,
+            SECTION_BLOB_SPAN_OVERLAY,
+        ];
+        for (i, &s) in recon.iter().enumerate() {
+            assert_eq!(s, 0x11 + i as u32);
+        }
+        assert_eq!(SECTION_SPACE_EMBEDDINGS_BASE, 0x20);
+        assert_eq!(SECTION_SPACE_EMBEDDINGS_FP_BASE, 0x30);
+        assert_eq!(SPACE_BAND_LEN, 0x10);
+        // reserved sections stay section_name-unresolved until their feature
+        // ships. EXCEPTION: graph_adjacency (0x0C, G1) resolves yet stays
+        // content_hash-excluded (see reserved_ids.rs).
+        for &s in sec.iter().chain(recon.iter()) {
+            if s == SECTION_GRAPH_ADJACENCY {
+                assert_eq!(section_name(s), Some("graph_adjacency"));
+            } else {
+                assert!(section_name(s).is_none());
+            }
+        }
     }
 }

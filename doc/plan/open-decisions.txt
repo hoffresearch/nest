@@ -1,0 +1,108 @@
+==============================================================================================
+nest plan :: open decisions
+the forks only the owner can settle. each has a recommendation.
+==============================================================================================
+
+read this and tell claude your call on each.
+
+##############################################################################################
+# OWNER'S CALLS  (recorded; interim, refine as we POC)
+##############################################################################################
+
+1. multimodal carrier  -> POC BOTH in an agentic workflow (named per-space sections AND the
+   single tagged pool). likely keep BOTH as selectable options. decide by measured perf.
+
+2. catalog sidecar     -> POC BOTH (flat content-addressed dir AND packed .nestpack). likely
+   keep both.
+
+3. agent-native distribution -> build in RUST (crate). DEFER the pip/mcp/langchain shape to the
+   very last step (launch is the final milestone); keep testing all the way; the three shapes
+   come after everything else is done.
+
+4. redaction / user data -> HARD RULE: never delete the user's source data. redaction must not
+   destroy it (keep the original; redact into a NEW derived corpus, never in place). NEW hard
+   requirement added here: INCREMENTAL, DISK-AWARE ingestion - for 50-100 GB zips (ml engineers,
+   osint), ingest gradually, emit the new .nest while keeping the source usable, never blow the
+   nvme. streaming / bounded-memory / resumable, not load-it-all.
+
+5. symbol/glyph embedder -> research the most efficient current model in a workflow (must cluster
+   groups, find old/aged images), BUT build ABSURD robustness for typography, glyphs,
+   hieroglyphs, sigils, sanskrit, multilingual, etymology, papyri (the compulsive-cataloger +
+   librarianship audience + unicode). must understand the object in FORM and COLOR; a smart
+   algorithm that OPTIONALLY optimizes the match (e.g. compensate faded/aged colors and worn
+   strokes on old documents). lean bespoke + form/color, optional in search.
+
+6. forge-core public vs internal -> not overridden; stays INTERNAL FIRST, stabilize the trait
+   after the flagship ships.
+
+general directives (recorded):
+  - no public api for now (maybe later).
+  - use the mixed reference repos (the original ~185 list) to test everything.
+  - constant briefing + checkpoints with the agents.
+  - write code strictly per nest principles.
+  - ethos (from the 3ch / bio references): optimize compressed information, reduce cognitive
+    load. these are REFERENCES, .
+
+below: the full forks with claude's recommendations, kept for context.
+
+1. multimodal carrier (post-gate): multiple additive named embedding sub-sections (one
+   fingerprint each, clean per-space routing) or a single tagged vector pool with a (space_id,
+   fingerprint) sidecar (better cache locality, one section)?
+   - named per-space sections (0x20-0x2F slabs)
+   - single tagged pool + space table
+   - start with per-space sections, keep the pool as a measured alternative
+   => rec:  ship per-space sections first (each is a fixed-stride 64-byte-aligned slab the existing simd
+            kernels score unchanged, and the access pattern is always
+            route-to-one-space-then-rerank). the .fci supports both, so revisit the pool only
+            if many tiny symbol spaces make per-section overhead measurable. this is post-gate
+            so the decision is not blocking.
+
+2. catalog sidecar shape (post-gate): a flat content-addressed directory (ipfs-style,
+   simplest) or a single packed .nestpack blob file (closer to the one-file ethos, portable)?
+   - flat cas directory
+   - packed .nestpack file
+   - --blobstore packed file as default, cache dir as later opt-in
+   => rec:  ship the packed .nestpack file (magic NPAK, sorted digest directory, mmap binary search) as
+            the default because it preserves more of the single-file ethos and is portable,
+            and defer the local cache-dir resolver to a later opt-in. post-gate, non-blocking.
+
+3. agent-native distribution shape (flagship): a standalone pip package (nest-retrieve), an
+   mcp server, or a langchain/llamaindex retriever adapter?
+   - standalone pip package
+   - mcp server
+   - langchain/llamaindex adapter
+   => rec:  standalone pip package first (smallest, most defensible, zero framework lock-in, and the
+            python retrieve() already exists with the vendored static embedder), then a thin
+            mcp/langchain adapter over the same retrieve() core once the package has users;
+            all three reuse the same engine so this is a packaging choice, not an architecture
+            fork.
+
+4. redaction integrity (post-gate ethics): should --redact physically remove spans from
+   canonical text (changing content_hash) or only mark them?
+   - physical removal (content_hash over redacted bytes)
+   - mark-only (content_hash unchanged, redaction map in provenance)
+   - physical removal at build time, documented as a distinct redacted corpus
+   => rec:  physical removal at build time, treated as producing a distinct redacted corpus: the redacted
+            canonical text simply IS the canonical text and content_hash is over the redacted
+            bytes, so the format never knows and citations stay honest. mark-only leaves
+            sensitive bytes in the file, defeating the privacy purpose.
+
+5. symbol/glyph embedding (post-gate, phase 4): does the pattern instrument need a bespoke
+   symbol embedder or can it ride the clip space treating glyphs/codepoints as images?
+   - bespoke symbol embedder (its own model + fingerprint)
+   - ride clip, treat codepoints/glyphs as images
+   - prototype both on the .fci, decide on measured per-space recall
+   => rec:  prototype both on the .fci and decide on measured per-space recall; defaulting to
+            clip-as-images keeps it to one extra model, and a bespoke embedder is only worth
+            it if clip recall on symbols is poor. this decides one new model vs several and is
+            the only genuinely open modeling question, but it is post-gate so it does not
+            block the flagship.
+
+6. is forge-core a public reusable rust crate (others write extractors) or an internal tool?
+   - public crate with a stable Extractor trait
+   - internal tool only
+   - internal first, stabilize the trait after the flagship ships
+   => rec:  internal first. the agent-native flagship does not need third-party extractors, and committing
+            to a stable Extractor trait too early over-constrains the .fci while it is still
+            settling; revisit publicness once the books/osint/datasets profiles have
+            stabilized the trait in practice.

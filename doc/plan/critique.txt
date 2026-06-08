@@ -1,0 +1,208 @@
+==============================================================================================
+nest plan :: adversarial critique
+what the critic flagged and how it was folded in
+==============================================================================================
+
+verdict
+----------------------------------------------------------------------------------------------
+CONDITIONAL GO on the COMPRESSION CORE (phases 0-3) only. The three-layer Forge/Nest/Lens
+framing and the discipline seam (a vertical = toml profile + verb alias + demo corpus, never a
+crate/required-section/version bump) are genuinely good and correctly protect sovereignty. But
+the redesign quintuples the surface area (multimodal spaces + first-class graph + catalog mode
++ 3 verticals + Lens webgl viewer) for a solo author who has not yet shipped phase 0. The plan
+is internally consistent and the hard constraints are mostly respected on paper, but it is NOT
+a solo-author-sized plan: it is a 4-person-year roadmap wearing a discipline badge. Cut hard
+to the flagship before any of pillars 3-7 get a line of code. Concretely: ship phase 0+1 and
+the agent-native retrieve() flagship, prove the headline ratio number on ONE real corpus, then
+re-evaluate. Defer graph (G2/G3 entity), multimodal spaces, catalog .nestpack, and the
+cosmos.gl viewer until that single wedge has users. Several specific contract/determinism
+violations below must be fixed in the plan text before they reach a work-order.
+
+scope discipline
+----------------------------------------------------------------------------------------------
+The discipline FRAMEWORK is sound and is the best part of this redesign: the three-layer split
+keeps heavy/non-deterministic work (paddleocr, clip, fonttools) in a separate forge-core cargo
+workspace so its deps never enter the sovereign crates; the determinism anchor correctly moves
+to 'canonical text + model fingerprint'; the cosmos.gl viewer is correctly fenced out of the
+cargo workspace with no socket; and 'a vertical = toml profile + verb alias + demo corpus,
+never a crate/required-section/version-bump' is exactly the right structural guard. BUT the
+discipline is asserted at the framework level and then quietly violated at the scheduling
+level: the roadmap still front-loads three net-new product-grade subsystems (entity graph +
+graphrag traversal + export api, named multimodal embedding spaces, catalog blob store +
+sidecar) plus a webgl viewer into phases 1-4, none of which the single flagship needs. The
+'one flagship first' rule is stated but not ENFORCED by a gate, so the plan reads as 'build
+everything, additively' rather than 'build the wedge, prove it, then earn the rest.' Two
+concrete discipline breaches slipped through the additive-v1 guard itself: the spans v1->2
+bump (a breaking change to a canonical, content-hashed, required section sold as additive) and
+new non-Option manifest capability fields (a file_hash + deserialization break sold as
+byte-identical). Both must be fixed in the plan text. Net: keep the architecture, keep phases
+0-1 + the flagship, and put a hard FLAGSHIP-PROVEN gate in front of pillars 3-7 so the
+discipline is structural, not aspirational.
+
+violations caught
+----------------------------------------------------------------------------------------------
+* DETERMINISM/INTEGRITY GAP: the plan repeatedly claims citations 'reopen exact byte spans'
+  and catalog mode 'reopens the exact original span... verifying the blob digest', but the
+  actual cite command (crates/nest-cli/src/cmd/cite.rs) returns the canonical TEXT stored
+  inside the .nest (texts[idx]), it never opens source_uri or reads original bytes. So 'reopen
+  original bytes' is a NET-NEW feature, not an extension. Catalog mode then layers blob-digest
+  verification on top of a reopen path that does not exist yet. The scope is undercounted and
+  the determinism story ('content_hash over decoded canonical bytes, citations reopen exact
+  byte spans') conflates two different guarantees: (a) canonical-text reproduction (works
+  today) vs (b) original-byte reopen (does not exist).
+    where:  three_layer_model + pillar 'catalog mode' + risks; vs crates/nest-cli/src/cmd/cite.rs:43-62
+    fix:    split the citation guarantee in the plan into two named tiers: tier-1 canonical-span reopen
+            (exists, the flagship needs ONLY this), tier-2 original-byte reopen + blob-digest
+            verify (net-new, belongs with catalog mode, explicitly out of the flagship). do
+            not let the flagship work-order claim original-byte reopen. add a card under
+            catalog for the original-byte reopen path itself before any blob_refs work.
+
+* ADDITIVE-V1 VIOLATION (hard constraint break): the catalog plan does 'CHUNKS_ORIGINAL_SPANS
+  v1->2 ... old readers reject v2 and fail closed'. spans (0x03) is a REQUIRED canonical
+  section IN content_hash (layout/mod.rs CANONICAL_SECTIONS). The section payload prefix
+  carries a version (codec.rs read_prefix), and read_prefix returns UnsupportedSectionVersion
+  on any version != SECTION_PAYLOAD_VERSION=1. So a v2 spans payload makes EVERY existing
+  reader reject the file AND, because spans is in content_hash, a v2 spans layout changes the
+  decoded bytes and thus changes content_hash for the same logical corpus, breaking the
+  citation-stability invariant the plan elsewhere insists on. 'old readers fail closed' is
+  being sold as additive; it is a breaking change to a canonical section, i.e. exactly the
+  NEST_FORMAT_VERSION-bump trigger ('an existing field changes meaning').
+    where:  format_evolution LANE C + pillar 'catalog mode'; vs
+            crates/nest-format/src/sections/codec.rs:90-105 and layout/mod.rs:114-121
+    fix:    do NOT version-bump a canonical section. carry catalog/blob-relative span info in a SEPARATE
+            optional section (e.g. a new blob_span_overlay id in the 0x11+ band, excluded from
+            content_hash) keyed by chunk ordinal, leaving chunks_original_spans v1
+            byte-identical. then self_contained and catalog twins keep the SAME content_hash
+            automatically and old readers still open the file. if blob-relative spans
+            genuinely must change span semantics, that is the honest trigger for v2 and must
+            be labeled as such, not smuggled in as additive.
+
+* MANIFEST IS NOT IN content_hash, which silently breaks the catalog cross-mode-equality
+  claim's premise. content_hash_hex (reader/decode.rs:53-66) hashes ONLY the 6 canonical
+  section payloads, never the manifest. The plan adds storage_mode + many capability flags to
+  the manifest 'so existing files are byte-identical'. That is true for content_hash but the
+  manifest IS covered by file_hash and is JCS-canonical with serde flatten/BTreeMap. Adding
+  new non-optional capability fields (Capabilities is a struct of plain bools with a
+  hand-written Default, manifest/mod.rs:21-40) is a DESERIALIZATION break: an old file lacking
+  the new bool fails to deserialize into the new struct, and a new file with extra bools
+  changes the manifest JSON and thus file_hash for everyone. The 'byte-identical existing
+  files' claim only holds if every new manifest field is Option and
+  skip_serializing_if=is_none.
+    where:  format_evolution 'manifest gains additive optional fields only' + quick_wins 'storage_mode
+            default self_contained so existing files stay byte-identical'; vs
+            crates/nest-format/src/manifest/mod.rs:21-40 and reader/decode.rs:53-66
+    fix:    state explicitly in the format work-order that ALL new manifest fields (spaces, storage_mode,
+            every new capability) MUST be Option<T> with skip_serializing_if=is_none AND
+            defaulted on read, and that supports_multimodal/graph_present/etc go into the
+            flattened extra map or a new Option<Capabilities2>, never as new required bool
+            fields on Capabilities. add a v01_compat test that an old manifest still
+            deserializes and a new default-valued manifest serializes byte-identically to the
+            old one.
+
+* SCOPE CREEP / 'ten products' risk concentrated in pillar 4 (graph as first-class pillar).
+  The plan itself flags 'this is where graph scope creep is most dangerous' then proceeds to
+  schedule graph_nodes+graph_edge_props+graph_entity_map (3 new sections, columnar typed-edge
+  props, iso scalar columns, presence bitmaps, mention csr, entity-aware bounded traversal, an
+  export api, AND a standalone cosmos.gl/webgl viewer with a11y) as phase-1-and-3 first-class
+  work. For a solo author who has shipped zero compression phases, a property graph + graphrag
+  traversal + webgl viewer is a second product, not a section. The chunk-csr (G1) earns its
+  place (reuses intpack, reclaims chunk_overlap); the ENTITY graph (G2/G3) does not yet.
+    where:  pillars[3] 'graph: first-class in-.nest knowledge graph' + roadmap phase 3 G2/G3 + phase 3
+            forge-2 cosmos viewer
+    fix:    split graph hard: keep G1 (chunk-to-chunk csr, 0x0C only, search-graph) in phase 1 as a
+            compression+retrieval win. move ALL of G2/G3 (entity table, edge props, mention
+            map, graphrag traversal, export api) and the cosmos.gl viewer behind an explicit
+            gate: 'only after the flagship has external users and the headline ratio number is
+            proven on a real corpus.' the client's graph obsession is real but it cannot be
+            the thing that prevents the flagship from shipping.
+
+* MANDATORY-EXACT-RERANK CONTRACT under-tested for the NEW paths. The contract holds today
+  (search.rs: search_ann/search_hybrid both end in score_subset, recall=NaN, score is real
+  cosine). The redesign adds search_graph, search_space, search_cross, and per-space sub-int8
+  with per-space fp sources. The plan asserts each must end in score_subset but score_subset
+  (search.rs:84-121) currently hard-dispatches on a SINGLE self.dtype and a single embeddings
+  section; it has no notion of a per-space fp rerank source or of routing to a non-0x04 slab.
+  The honesty contract is only as strong as the test that enforces it, and no contract test is
+  specified that asserts every NEW path's returned score byte-equals the exact rerank on the
+  union.
+    where:  risks 'the candidate-generator contract can leak' + pillar multimodal/graph; vs
+            crates/nest-runtime/src/search.rs:84-121
+    fix:    add to the phase-0 harness card a SINGLE contract test, parameterized over every search entry
+            point (ann/hybrid/graph/space/cross), asserting returned_score ==
+            score_subset(union) byte-for-byte and recall is NaN for every non-exact path. make
+            'a new search verb without this test' a release-check failure. specify that
+            score_subset must be refactored to take an explicit rerank-source handle (fp slab
+            when present) BEFORE any per-space or sub-int8 path lands, so the gate exists
+            before the feature.
+
+* UX BLOAT vs the simple-surface promise is internally contradictory. Lens 'collapses 8
+  subcommands into 5 intent verbs' (good) but the SAME plan then adds: a hidden nest dev
+  namespace (5 more), retrieve, search-graph (9th), spaces, atlas, blobs/lake, graph-export,
+  cosmos, seal/unseal, plus 4 --disclose levels and a whole nest-profile crate with
+  agent/osint/pattern-lover profiles. Net verb count goes UP, not down, and a new pure-rust
+  nest-profile crate is a 5th workspace crate justified by 'hundreds of true knobs' that do
+  not exist yet for a tool with no users.
+    where:  pillar 'lens: one verb, deep profiles' + roadmap LENS-B nest-profile crate
+    fix:    for the flagship, ship exactly two user-facing verbs: ask and cite. Keep the existing 8
+            subcommands as-is under the hood (renaming is churn with zero user value
+            pre-users). DEFER the nest-profile crate entirely until there is a second vertical
+            that actually needs a second profile; a profile is a toml file the cli reads, it
+            does not need its own crate until proven. the --disclose explain honesty line is
+            worth keeping as a flag on ask, not a 4-level mode.
+
+was missing
+----------------------------------------------------------------------------------------------
+  - NO SHIPPED HEADLINE NUMBER GATE. The plan repeats the target 'push tiny 0.283 toward
+    sub-0.1' across modalities and catalog scale, but never makes 'prove <0.1 on ONE real
+    corpus with recall@10 held' a hard gate that BLOCKS starting pillars 3-7. For a
+    budget-constrained solo author the single most important missing artifact is: one measured
+    before/after number on one real corpus, published, before any multimodal/graph/catalog
+    code. Add an explicit milestone: 'FLAGSHIP-PROVEN' gate between phase 1 and everything
+    else.
+  - NO REAL DEMO CORPUS NAMED. Every vertical demo is 'a synthetic monolith' / 'a typography
+    corpus' with the licensing risk noted but no actual permissively-licensed corpus chosen.
+    The flagship's one-gif demo needs a concrete, vendored, license-clean doc folder picked
+    NOW (it gates the whole go-to-market). This is cheap and currently absent.
+  - DEFAULT EMBEDDER DECISION IS STILL OPEN but blocks the flagship. open_decisions lists
+    'vendor model2vec/potion vs bring sentence-transformers' as undecided, yet the flagship is
+    'pip-installable retrieve()' and search-text today shells out to python/embed_query.py
+    needing the sentence-transformers cache (main.rs:54-60, requires network on first use). A
+    pip-install flagship that needs a network round-trip to get a model on first use VIOLATES
+    offline-by-construction for the new user. This decision must be made (recommendation to
+    vendor a static table is correct) and is a flagship blocker, not a research item.
+  - NO FORGE<->builder DRIFT TEST IS ACTUALLY SCHEDULED AS A BLOCKER. The plan names the
+    golden 'forge-built == builder.Pipeline-built byte-identical' test as a risk mitigation,
+    but forge-core is a SEPARATE cargo workspace and the chunker is duplicated (open_decisions
+    even asks where chunking 'truly lives'). Two chunkers WILL drift. The plan should make ONE
+    chunker authoritative now (keep builder.chunk_text, have forge call it) rather than
+    duplicate-then-test; the duplicate-and-reconcile path is the more expensive choice for a
+    solo author.
+  - NO EXPLICIT 'embeddings_fp doubles file size' COST ACCOUNTING. The honesty gate requires a
+    per-space fp rerank source for every sub-int8 space. For rabitq 1-bit (~32x) the mandatory
+    f16 fp source is ~16x the quantized data, so the headline '32x' on embeddings collapses to
+    roughly 2x once the fp source is counted. The plan never states the net ratio WITH the
+    mandatory fp source included, which is the only honest number. Add the net-of-fp ratio to
+    every sub-int8 RESULT fill-in.
+
+reprioritized
+----------------------------------------------------------------------------------------------
+  - MOVE the entity property graph (G2/G3), multimodal spaces (phase 4), catalog .nestpack
+    sidecar, and the cosmos.gl viewer to AFTER a 'flagship has external users + headline
+    number proven' gate. As written they sit in phases 1-4 of a linear roadmap; for a solo
+    author they must be strictly behind the wedge that funds the time. The redesign's own
+    discipline section supports this but the roadmap sequencing does not enforce it.
+  - PULL the default-embedder decision (vendor static model2vec table) OUT of
+    open_decisions/research and INTO phase 0 as a flagship blocker. Offline-by-construction
+    for a brand-new pip user is broken until this is resolved; it is not optional polish.
+  - DEMOTE the nest-profile crate and verb-renaming (LENS-A/B) below the actual retrieve() +
+    cite contract work. The user-visible value is retrieve() returning a cited span; renaming
+    8 verbs to 5 and adding a profile crate is churn that should wait until a second vertical
+    proves the need.
+  - ELEVATE the single parameterized rerank-honesty contract test (covering all future search
+    verbs) to a phase-0 deliverable that gates the release check, BEFORE any
+    per-space/sub-int8/graph search path is written. Right now it is implied across many risk
+    bullets but owned by none; it is the cheapest possible insurance for the project's core
+    honesty claim.
+  - KEEP G1 (chunk-csr) in phase 1 as planned (it pays for itself via chunk_overlap removal
+    and reuses intpack) but explicitly DECOUPLE it in the plan text from the entity graph so a
+    reader cannot treat 'graph landed' as license to start G2/G3.

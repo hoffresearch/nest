@@ -100,8 +100,108 @@ def test_cache_skips_re_embedding_on_second_run():
         )
 
 
+def _toy_embed_dim(specs, dim):
+    """Deterministic `dim`-length vector from a chunk's text hash."""
+    out = []
+    for spec in specs:
+        h = hash(spec.canonical_text)
+        v = [(((h >> (i % 60)) & 0xFF) + i) % 251 / 251.0 for i in range(dim)]
+        n = math.sqrt(sum(x * x for x in v)) or 1.0
+        out.append([x / n for x in v])
+    return out
+
+
+def test_mrl_truncation_sets_embedding_dim_and_query_stride():
+    """build with mrl_dim=128 over a 384-dim corpus: the opened file reports
+    embedding_dim==128, a length-128 query works, and a length-384 (full-dim)
+    query is rejected with a dimension mismatch."""
+    full_dim = 384
+    mrl_dim = 128
+    with tempfile.TemporaryDirectory() as d:
+        out = os.path.join(d, "mrl.nest")
+        specs = []
+        for source, text in [
+            ("a.txt", "uma frase em portugues com acentuacao para o teste matryoshka"),
+            ("b.txt", "outra frase completamente diferente da primeira para variar"),
+            ("c.txt", "terceira frase distinta com outras palavras e tokens"),
+        ]:
+            specs.extend(chunk_text(text, source, max_chars=20))
+        embs = _toy_embed_dim(specs, full_dim)
+        chunks = [
+            dict(
+                canonical_text=s.canonical_text,
+                source_uri=s.source_uri,
+                byte_start=s.byte_start,
+                byte_end=s.byte_end,
+                embedding=e,
+            )
+            for s, e in zip(specs, embs)
+        ]
+        nest.build(
+            output_path=out,
+            embedding_model="toy",
+            embedding_dim=full_dim,
+            chunker_version="char/512",
+            model_hash="sha256:" + "0" * 64,
+            chunks=chunks,
+            reproducible=True,
+            mrl_dim=mrl_dim,
+        )
+
+        db = nest.open(out)
+        db.validate()
+        assert db.embedding_dim == mrl_dim, db.embedding_dim
+
+        # a query at the prefix dim works.
+        hits = db.search([1.0] + [0.0] * (mrl_dim - 1), 1)
+        assert len(hits) == 1
+
+        # a query at the full source dim is rejected (runtime strides by the
+        # stored prefix dim, not the source dim).
+        raised = False
+        try:
+            db.search([1.0] + [0.0] * (full_dim - 1), 1)
+        except ValueError as e:
+            raised = True
+            assert "dimension mismatch" in str(e).lower(), str(e)
+        assert raised, "full-dim query must raise a dimension mismatch"
+
+
+def test_mrl_dim_validation_rejects_oversized_and_zero():
+    """mrl_dim must satisfy 0 < mrl_dim <= embedding_dim."""
+    with tempfile.TemporaryDirectory() as d:
+        out = os.path.join(d, "bad.nest")
+        chunks = [
+            dict(
+                canonical_text="x",
+                source_uri="a.txt",
+                byte_start=0,
+                byte_end=1,
+                embedding=[1.0, 0.0, 0.0, 0.0],
+            )
+        ]
+        for bad in (0, 8):  # 0 and > embedding_dim(4)
+            raised = False
+            try:
+                nest.build(
+                    output_path=out,
+                    embedding_model="toy",
+                    embedding_dim=4,
+                    chunker_version="char/512",
+                    model_hash="sha256:" + "0" * 64,
+                    chunks=chunks,
+                    reproducible=True,
+                    mrl_dim=bad,
+                )
+            except ValueError:
+                raised = True
+            assert raised, f"mrl_dim={bad} must be rejected"
+
+
 if __name__ == "__main__":
     test_chunk_text_byte_spans_round_trip()
     test_pipeline_emits_validated_nest_file()
     test_cache_skips_re_embedding_on_second_run()
+    test_mrl_truncation_sets_embedding_dim_and_query_stride()
+    test_mrl_dim_validation_rejects_oversized_and_zero()
     print("builder tests OK")

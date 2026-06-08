@@ -2,15 +2,23 @@
 //! with the real cosine score (ANN/hybrid rerank candidates with the exact
 //! dot product before returning).
 
-use nest_format::Int8EmbeddingsView;
-
 use crate::bm25;
 use crate::error::RuntimeError;
-use crate::mmap_file::{DType, MmapNestFile};
-use crate::simd;
-use crate::{SearchHit, SearchResult};
+use crate::mmap_file::MmapNestFile;
+use crate::rerank::RerankSource;
+use crate::{RerankSourceKind, SearchExplain, SearchHit, SearchResult};
 
 impl MmapNestFile {
+    /// lthe honesty marker: the precision the rerank reads from, from the
+    /// `embeddings_fp` (0x09) slab dtype when present, else the stored dtype.
+    fn rerank_source_kind(&self) -> RerankSourceKind {
+        let dtype = self
+            .embeddings_fp_slab()
+            .map(|(_, d)| d)
+            .unwrap_or(self.dtype);
+        RerankSourceKind::from_dtype(dtype)
+    }
+
     /// lValidate query, L2-normalize, return the normalized vector.
     fn validate_query(&self, query: &[f32], k: i32) -> Result<Vec<f32>, RuntimeError> {
         if k <= 0 {
@@ -41,81 +49,43 @@ impl MmapNestFile {
         Ok(qnorm)
     }
 
-    /// lScore every chunk against `qnorm` using the dtype-specific dot
-    /// product. Returns `(idx, score)` pairs in the natural index order.
+    /// lThe single rerank source the exact-cosine recompute reads from:
+    /// the full-precision `embeddings_fp` (0x09) slab when present, else
+    /// the stored dtype slab. Both `score_all` and `score_subset` route
+    /// through this so every path's returned score is the SAME real
+    /// cosine, and a future per-space path just hands a different slab.
+    fn rerank_source(&self) -> Result<RerankSource<'_>, RuntimeError> {
+        let (dtype, bytes) = match self.embeddings_fp_slab() {
+            Some((bytes, dtype)) => (dtype, bytes),
+            None => (self.dtype, self.embeddings_bytes()),
+        };
+        RerankSource::new(dtype, bytes, self.n_embeddings, self.embedding_dim)
+    }
+
+    /// lScore every chunk against `qnorm` via the rerank source. Returns
+    /// `(idx, score)` pairs in the natural index order.
     fn score_all(&self, qnorm: &[f32]) -> Result<Vec<(usize, f32)>, RuntimeError> {
         let n = self.n_embeddings;
-        let dim = self.embedding_dim;
-        let bytes = self.embeddings_bytes();
+        let src = self.rerank_source()?;
         let mut scores: Vec<(usize, f32)> = Vec::with_capacity(n);
-        match self.dtype {
-            DType::Float32 => {
-                let row_size = dim * 4;
-                for i in 0..n {
-                    let off = i * row_size;
-                    let s = simd::dot_f32_bytes(qnorm, &bytes[off..off + row_size]);
-                    scores.push((i, s));
-                }
-            }
-            DType::Float16 => {
-                let row_size = dim * 2;
-                for i in 0..n {
-                    let off = i * row_size;
-                    let s = simd::dot_f32_f16_bytes(qnorm, &bytes[off..off + row_size]);
-                    scores.push((i, s));
-                }
-            }
-            DType::Int8 => {
-                let view =
-                    Int8EmbeddingsView::parse(bytes, n, dim).map_err(RuntimeError::Format)?;
-                for i in 0..n {
-                    let scale = view.scale(i);
-                    let row = view.row(i);
-                    let s = simd::dot_f32_i8(qnorm, row, scale);
-                    scores.push((i, s));
-                }
-            }
+        for i in 0..n {
+            scores.push((i, src.score(qnorm, i)));
         }
         Ok(scores)
     }
 
     /// lScore a sliced subset of indices (used by ANN/BM25 rerank). The
-    /// returned vector mirrors `idxs.len()` in order.
+    /// returned vector mirrors `idxs.len()` in order. This IS the exact
+    /// rerank every candidate-generating path must end in.
     fn score_subset(
         &self,
         qnorm: &[f32],
         idxs: &[usize],
     ) -> Result<Vec<(usize, f32)>, RuntimeError> {
-        let dim = self.embedding_dim;
-        let bytes = self.embeddings_bytes();
+        let src = self.rerank_source()?;
         let mut out: Vec<(usize, f32)> = Vec::with_capacity(idxs.len());
-        match self.dtype {
-            DType::Float32 => {
-                let row_size = dim * 4;
-                for &i in idxs {
-                    let off = i * row_size;
-                    out.push((i, simd::dot_f32_bytes(qnorm, &bytes[off..off + row_size])));
-                }
-            }
-            DType::Float16 => {
-                let row_size = dim * 2;
-                for &i in idxs {
-                    let off = i * row_size;
-                    out.push((
-                        i,
-                        simd::dot_f32_f16_bytes(qnorm, &bytes[off..off + row_size]),
-                    ));
-                }
-            }
-            DType::Int8 => {
-                let view = Int8EmbeddingsView::parse(bytes, self.n_embeddings, dim)
-                    .map_err(RuntimeError::Format)?;
-                for &i in idxs {
-                    let scale = view.scale(i);
-                    let row = view.row(i);
-                    out.push((i, simd::dot_f32_i8(qnorm, row, scale)));
-                }
-            }
+        for &i in idxs {
+            out.push((i, src.score(qnorm, i)));
         }
         Ok(out)
     }
@@ -138,6 +108,7 @@ impl MmapNestFile {
             truncated,
             k_requested: k,
             k_returned: hits.len(),
+            explain: SearchExplain::exact(self.n_embeddings, self.rerank_source_kind()),
         })
     }
 
@@ -156,6 +127,7 @@ impl MmapNestFile {
         };
         let qnorm = self.validate_query(query, k)?;
         let candidates = idx.search(&qnorm, ef_search.max(k as usize));
+        let ann_candidates = candidates.len();
         let mut reranked = self.score_subset(&qnorm, &candidates)?;
         sort_scores_desc(&mut reranked);
         let k_usize = k as usize;
@@ -172,6 +144,59 @@ impl MmapNestFile {
             truncated,
             k_requested: k,
             k_returned: hits.len(),
+            explain: SearchExplain::hnsw(ann_candidates, self.rerank_source_kind()),
+        })
+    }
+
+    /// lGraph search: seed from the exact-cosine top-`ef`, expand a bounded
+    /// bfs over the chunk-to-chunk csr, union seed + frontier, then run the
+    /// SAME mandatory exact rerank on the union. the graph ONLY generates
+    /// candidates; the returned score is real cosine, identical contract to
+    /// `search_ann`. falls back to `search()` when no graph section is
+    /// present. recall stays `f32::NAN` (we never lie).
+    pub fn search_graph(
+        &self,
+        query: &[f32],
+        k: i32,
+        hops: usize,
+        ef: usize,
+    ) -> Result<SearchResult, RuntimeError> {
+        let t0 = std::time::Instant::now();
+        let Some(graph) = self.graph_index.as_ref() else {
+            return self.search(query, k);
+        };
+        let qnorm = self.validate_query(query, k)?;
+
+        // exact-cosine top-ef seed (reuse score_all + sort), like the exact
+        // path but truncated to the seed budget.
+        let mut seed_scores = self.score_all(&qnorm)?;
+        sort_scores_desc(&mut seed_scores);
+        let seed_budget = ef.max(k as usize).min(seed_scores.len());
+        let seeds: Vec<usize> = seed_scores[..seed_budget].iter().map(|p| p.0).collect();
+
+        // bounded bfs expands the frontier over the csr; the union of seeds +
+        // frontier is the candidate set. cap the frontier so a dense graph
+        // cannot blow up the rerank cost.
+        let max_frontier = (seed_budget.saturating_mul(8)).max(seed_budget);
+        let mut traversal = crate::graph::Traversal::new(graph.n_nodes());
+        let union = traversal.bounded_bfs(graph, &seeds, hops, max_frontier);
+        let graph_candidates = union.len();
+
+        let mut reranked = self.score_subset(&qnorm, &union)?;
+        sort_scores_desc(&mut reranked);
+        let k_usize = k as usize;
+        let truncated = k_usize < self.n_embeddings;
+        let top = &reranked[..k_usize.min(reranked.len())];
+        let hits = self.materialize_hits(top, "graph", true);
+        Ok(SearchResult {
+            hits: hits.clone(),
+            query_time_ms: t0.elapsed().as_secs_f64() * 1000.0,
+            index_type: "graph",
+            recall: f32::NAN,
+            truncated,
+            k_requested: k,
+            k_returned: hits.len(),
+            explain: SearchExplain::graph(seed_budget, graph_candidates, self.rerank_source_kind()),
         })
     }
 
@@ -187,8 +212,10 @@ impl MmapNestFile {
     ) -> Result<SearchResult, RuntimeError> {
         let t0 = std::time::Instant::now();
         let qnorm = self.validate_query(query_vec, k)?;
+        let src = self.rerank_source_kind();
 
         // lVector path: ANN if available, otherwise top-`candidates`.
+        let has_ann = self.ann_index.is_some();
         let vec_candidates: Vec<usize> = if let Some(idx) = self.ann_index.as_ref() {
             idx.search(&qnorm, candidates_per_path.max(k as usize))
         } else {
@@ -207,6 +234,12 @@ impl MmapNestFile {
             Vec::new()
         };
 
+        // lattribute the vector count to the generator that ran (ann vs
+        // exact-flat shortlist) so the explain line is honest.
+        let nvec = vec_candidates.len();
+        let (ann_candidates, exact_candidates) = if has_ann { (nvec, 0) } else { (0, nvec) };
+        let bm25_candidates = lex_candidates.len();
+
         // lReciprocal-rank fusion to pick a union, then exact rerank.
         let union = bm25::rrf_union(&vec_candidates, &lex_candidates);
         let mut reranked = self.score_subset(&qnorm, &union)?;
@@ -223,6 +256,7 @@ impl MmapNestFile {
             truncated,
             k_requested: k,
             k_returned: hits.len(),
+            explain: SearchExplain::hybrid(ann_candidates, exact_candidates, bm25_candidates, src),
         })
     }
 

@@ -8,7 +8,8 @@ use nest_format::Int8EmbeddingsView;
 
 use super::search::{greedy_search, layer_search};
 use super::select_neighbors::select_neighbors_heuristic;
-use super::{Candidate, HnswIndex, Node, cosine_dist};
+use super::{Candidate, HnswIndex, Node, dist_rr};
+use crate::materialize::PackedVectors;
 
 impl HnswIndex {
     /// lBuild an HNSW index from f32 vectors. Deterministic given the
@@ -22,6 +23,11 @@ impl HnswIndex {
         seed: u64,
     ) -> Self {
         assert_eq!(vectors.len(), n * dim);
+        // lBuild distances run over the f32 build store; `row()` borrows
+        // each row directly so the graph is byte-identical to the old
+        // `&[f32]` path, while the same `PackedVectors` type lets the
+        // runtime search path stay packed (no f32 snapshot).
+        let store = PackedVectors::F32(vectors);
         let m_max0 = m * 2;
         let mut rng = LcgRng::new(seed);
 
@@ -49,11 +55,15 @@ impl HnswIndex {
 
             // 1. Greedy walk from entry_point down to layer (level+1) to
             //    find the closest entry on the layer above this node.
-            let q_off = i * dim;
-            let q = &vectors[q_off..q_off + dim];
+            //    `store` is the f32 build store, so `q` borrows it directly
+            //    and `q_scratch` stays empty (zero overhead at build time).
+            let mut q_scratch = store.scratch(dim);
+            let mut sa = store.scratch(dim);
+            let mut sb = store.scratch(dim);
+            let q = store.row(i, dim, &mut q_scratch);
             let mut curr = entry_point;
             for layer in (level + 1..=max_level).rev() {
-                curr = greedy_search(curr, q, layer, &nodes, &vectors, dim);
+                curr = greedy_search(curr, q, layer, &nodes, &store, dim);
             }
 
             // 2. From `curr`, do an `ef_construction`-sized search on
@@ -68,7 +78,7 @@ impl HnswIndex {
                     layer,
                     ef_construction,
                     &nodes,
-                    &vectors,
+                    &store,
                     dim,
                     i as u32,
                 );
@@ -78,7 +88,8 @@ impl HnswIndex {
                 // neighbor's list overflows `cap_layer`, we re-select with
                 // the heuristic to bring it back down to `cap_layer`.
                 let cap_layer = if layer == 0 { m_max0 } else { m };
-                let neighbor_ids = select_neighbors_heuristic(&candidates, m, &vectors, dim, true);
+                let neighbor_ids =
+                    select_neighbors_heuristic(&candidates, m, &store, dim, &mut sa, &mut sb, true);
                 nodes[i].neighbors[layer as usize] = neighbor_ids.clone();
 
                 // lBacklinks. Insert i into each neighbor's list and prune
@@ -91,25 +102,19 @@ impl HnswIndex {
                     }
                     if nodes[nbr_idx].neighbors[layer_idx].len() >= cap_layer {
                         // lPrune: keep the cap_layer best of (existing + i).
-                        let mut all: Vec<Candidate> = nodes[nbr_idx].neighbors[layer_idx]
-                            .iter()
-                            .map(|&id| Candidate {
-                                id,
-                                dist: cosine_dist(
-                                    &vectors[(nbr as usize) * dim..(nbr as usize + 1) * dim],
-                                    &vectors[(id as usize) * dim..(id as usize + 1) * dim],
-                                ),
-                            })
-                            .collect();
-                        all.push(Candidate {
-                            id: i as u32,
-                            dist: cosine_dist(
-                                &vectors[nbr_idx * dim..(nbr_idx + 1) * dim],
-                                &vectors[i * dim..(i + 1) * dim],
-                            ),
-                        });
-                        nodes[nbr_idx].neighbors[layer_idx] =
-                            select_neighbors_heuristic(&all, cap_layer, &vectors, dim, true);
+                        // lClone the ids first so the per-row decode borrows
+                        // do not collide with the later reassignment.
+                        let existing = nodes[nbr_idx].neighbors[layer_idx].clone();
+                        let mut all: Vec<Candidate> = Vec::with_capacity(existing.len() + 1);
+                        for id in existing {
+                            let dist = dist_rr(&store, nbr_idx, id as usize, dim, &mut sa, &mut sb);
+                            all.push(Candidate { id, dist });
+                        }
+                        let dist = dist_rr(&store, nbr_idx, i, dim, &mut sa, &mut sb);
+                        all.push(Candidate { id: i as u32, dist });
+                        nodes[nbr_idx].neighbors[layer_idx] = select_neighbors_heuristic(
+                            &all, cap_layer, &store, dim, &mut sa, &mut sb, true,
+                        );
                     } else if !nodes[nbr_idx].neighbors[layer_idx].contains(&(i as u32)) {
                         nodes[nbr_idx].neighbors[layer_idx].push(i as u32);
                     }
@@ -138,7 +143,7 @@ impl HnswIndex {
             entry_point,
             max_level,
             nodes,
-            vectors,
+            store,
             dim,
             n,
             ef_search: ef_construction,

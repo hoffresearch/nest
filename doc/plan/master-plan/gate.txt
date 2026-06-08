@@ -1,0 +1,89 @@
+==============================================================================================
+nest master plan v2 :: the flagship-proven gate
+build the wedge, prove it, then earn the rest
+==============================================================================================
+
+this file is the single source of truth for the flagship-proven gate. it is owned by gate task
+#10 (doc/plan/tasks/gate/10-gate-criteria-release-check-enforced.txt) and mirrored by the GATE
+card in doc/plan/kanban.txt. nothing in later/research gets code until this gate clears.
+
+----------------------------------------------------------------------------------------------
+the gate
+----------------------------------------------------------------------------------------------
+
+nothing past this point gets code until BOTH conditions hold:
+
+  (1) the headline number is PROVEN AND PUBLISHED: the honest ratio + recall@10 on ONE real,
+      named, license-clean corpus, recall@10 held by the exact rerank, every sub-int8 figure
+      reported NET OF the mandatory fp source (never a bare-slab ratio).
+
+  (2) the agent-native flagship has EXTERNAL USERS (the pip package is in real hands).
+
+the gate is structural, not aspirational: it converts the discipline from "build everything
+additively" into "build the wedge, prove it, then earn the rest." if the gate is skipped, the
+solo author rebuilds the ten-mediocre-products trap the discipline section exists to prevent.
+
+----------------------------------------------------------------------------------------------
+condition (1): published honest ratio + recall  -  SATISFIED (2026-06-06, WO PUB-ladder)
+----------------------------------------------------------------------------------------------
+
+the published preset ladder ran at 100 queries, k=10, on the LFS baseline
+dat/corpus_next.v1.nest (n=30725, dim=384 MiniLM, NEON), recall@10 measured vs the f32 exact
+top-k. published to dat/measure/ladder.json (the whole curve, not a cherry-pick) and the named
+rows refreshed in dat/measure/baseline.json:
+
+  preset       size_ratio  recall@10   precision / disclosure
+  exact          1.000       1.0000    float32 (the recall=1.0 ground truth)
+  compressed     0.339       1.0000    float16 (lossless cosine)
+  tiny           0.256       0.9920    int8, stored precision
+  micro          0.223       0.8100    mrl256-int8, stored precision, mrl_dim=256/full_dim=384
+  nano           0.209       0.9130    int4 block-64, stored precision
+  hybrid         0.609       1.0000    float32 + bm25
+
+  mrl curve (the dimension axis, honest cost on a NON-mrl-trained model):
+    mrl256-int8 0.223 0.810 | mrl192 0.207 0.733 | mrl128 0.190 0.659 | mrl96 0.182 0.574
+    mrl256-int4 0.191 0.777 | mrl192 0.183 0.713 | mrl128 0.174 0.627
+
+HONEST NET-OF-FP framing: the 0x09 embeddings_fp writer is NOT wired (no SECTION_EMBEDDINGS_FP
+/ FpSlab emission in writer/ or nest-python), so every shipped sub-int8 preset (nano/int4,
+micro/mrl-int8, the mrl-int4 curve) is STORED-PRECISION: net-of-fp ratio == stored ratio, and
+recall@10/score are real cosine AT THE STORED PRECISION (int4/int8), disclosed via dtype (and
+mrl_dim/full_dim for the matryoshka rungs). every published sub-int8 row carries the
+machine-checkable disclosure (dtype, stored_precision, has_fp_source=false, net_of_fp_ratio,
+plus mrl_dim/full_dim where matryoshka). rabitq 1-bit (the only lever that would need a counted
+f16 fp source) is NOT shipped and stays out of scope.
+
+reconciliation: the text-codec repack (intpack chunk_ids/spans, bitpacked hnsw/bm25 payloads)
+shrank the indexed presets below the v0.2 published figures, so the committed numbers were
+republished to match the build (tiny 0.283 -> 0.256, compressed 0.350 -> 0.339, hybrid 0.668 ->
+0.609). this is the honesty deliverable: the published ladder matches the bytes on disk.
+
+sub-0.1 net-of-fp is the POST-GATE stretch (int4/rabitq with a counted fp source on an
+embedding-dominated corpus); it is explicitly NOT what condition (1) requires. condition (1) is
+"the honest current ratio + recall@10, published, no bare-slab", and it is met.
+
+----------------------------------------------------------------------------------------------
+condition (2): external users  -  DEFERRED TO LAUNCH (per owner call, 2026-06-06)
+----------------------------------------------------------------------------------------------
+
+the agent-native pip package is not yet shipped, so there is no external-user signal to confirm.
+per the owner call, condition (2) is DEFERRED to launch: the gate does not block on it until the
+flagship pip package is published. when the package ships, confirm external-user signal here,
+then both conditions hold and the gate clears.
+
+this defer is scoped: it does not unblock later/research work. it records that the published-
+ratio half of the gate (condition 1) is done while the external-users half (condition 2) waits
+for launch, so the gate's status is unambiguous and honest.
+
+----------------------------------------------------------------------------------------------
+what the gate unblocks (only after BOTH conditions hold)
+----------------------------------------------------------------------------------------------
+
+  - catalog mode + original-byte reopen path + blob_refs(0x14) + 0x16 overlay + .nestpack
+  - int4/rabitq 1-bit sub-byte embeddings with the counted fp source (sub-0.1 net-of-fp)
+  - the entity property graph G2/G3 (graph_nodes/edge_props/entity_map)
+  - multimodal spaces (SPACE_TABLE 0x15 + per-space quant gated by per-space fp source)
+  - the cosmos.gl / webgl viewer and the osint-lake vertical
+
+draws from: embeddings-benchmark/mteb (recall harness discipline),
+jvm-repo-rebuild/reproducible-central (byte-identical build discipline).
