@@ -113,6 +113,23 @@ relevance is one definition of the task, and n is 40 queries / 186 pairs. this c
 do not quote 0.19 as the problem ceiling; quote the human ruler (rank-1 relevant 80 percent loose,
 48 percent strict) and treat e5-versus-potion on these labels as the open question.
 
+six, on that human ruler a bigger / transformer embedder does NOT beat the tiny static potion. the
+same 186 labels re-scored three embedders, all seeing the WHOLE note (potion = mean of every word
+vector; the two cached transformers windowed into 512-token chunks and mean-pooled, so truncation is
+not the handicap): potion auc 0.735 loose / 0.646 strict; labse (768d) 0.693 / 0.580;
+paraphrase-multilingual-minilm (384d) 0.612 / 0.474 (strict below chance). both transformers LOSE to
+potion, minilm badly. the likely reason: minilm and labse are sentence / bitext models trained on
+short text, and mean-pooling them over a long clinical note leaves their training distribution,
+whereas potion's mean-of-words is naturally length-robust and captures the topical overlap that
+"same theme / same patient" relevance rewards. so on this task the embedder is NOT the lever: the
+0.13 ms/query static model is the best of the three tested. the one model not yet tested is
+multilingual-e5-large, which UNLIKE minilm/labse is retrieval-tuned (query:/passage: prefixes) and
+is the prior session's 0.19-group-recall model; it needs a ~2 gb download and runs at ~84 ms/query
+(635x potion). given two transformers already lost, the prior that e5 earns that cost is weak, but
+it is the one clean remaining embedder test. the honest direction the evidence points: stop investing
+in the embedder; the wins on this corpus came from the metadata filter (point three) and from
+recognizing the ruler artifact (points four and five), not from a heavier model.
+
 the unstoppable goal
 
 the nest is the most compact, sovereign, citable ai database in the world, in three layers:
