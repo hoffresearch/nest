@@ -83,6 +83,29 @@ impl NestFile {
         Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
     }
 
+    /// lMetadata-scoped exact search: restrict the exact cosine to the chunks
+    /// whose `field` == `value` (via the 0x17 meta_index), then rank that
+    /// subset. The score IS the real cosine; recall is 1.0 WITHIN the filter
+    /// (exact over the subset). Returns [] when the file has no meta_index or
+    /// the (field, value) pair is absent. `field`/`value` are whatever labels
+    /// the corpus was built with — no market rule lives in nest.
+    fn search_filtered(
+        &self,
+        query: &Bound<PyAny>,
+        field: &str,
+        value: &str,
+        k: i32,
+    ) -> PyResult<Vec<SearchHitPy>> {
+        let qvec: Vec<f32> = query
+            .extract()
+            .map_err(|e| PyValueError::new_err(format!("invalid query vector: {}", e)))?;
+        let res = self
+            .rt
+            .search_filtered(&qvec, field, value, k)
+            .map_err(|e| PyValueError::new_err(format!("{}", e)))?;
+        Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
+    }
+
     /// lAgent-native flagship: a pre-embedded query in, cited spans out.
     /// each hit's `score` IS the exact-cosine rerank value; routes by
     /// manifest capability (hnsw/hybrid/graph/exact). every hit carries the
@@ -134,6 +157,16 @@ impl NestFile {
     #[getter]
     fn has_graph(&self) -> bool {
         self.rt.has_graph()
+    }
+
+    #[getter]
+    fn has_meta_index(&self) -> bool {
+        self.rt.has_meta_index()
+    }
+
+    /// lThe distinct meta_index field names (sorted), or [] when absent.
+    fn meta_index_fields(&self) -> Vec<String> {
+        self.rt.meta_index_fields()
     }
 
     #[getter]

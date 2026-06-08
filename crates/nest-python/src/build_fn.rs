@@ -7,7 +7,9 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
-use crate::build_inputs::{build_graph_payload, parse_chunks, truncate_renormalize};
+use crate::build_inputs::{
+    build_graph_payload, build_meta_payload, parse_chunks, truncate_renormalize,
+};
 
 /// lBuild a .nest file from already-embedded chunks.
 ///
@@ -31,14 +33,8 @@ use crate::build_inputs::{build_graph_payload, parse_chunks, truncate_renormaliz
 ///   - `text_encoding`: "raw" | "zstd" (overrides preset)
 ///   - `dtype`: "float32" | "float16" | "int8" | "int4" (overrides preset;
 ///     "int4" requires the EFFECTIVE dim divisible by 64)
-///   - `mrl_dim`: optional matryoshka prefix dim. When set, each L2-normalized
-///     f32 vector is sliced to the first `mrl_dim` components and re-L2-
-///     normalized on the prefix (Qwen3/ST/BGE "truncate-then-renormalize"),
-///     BEFORE quantization and HNSW build, so int8/int4 calibrate on the
-///     shorter renormalized row. The file's header/manifest `embedding_dim`
-///     becomes `mrl_dim`; the full source dim is recorded in `full_dim`.
-///     Must satisfy `0 < mrl_dim <= embedding_dim`. A pure deterministic
-///     slice + renorm, so byte-identical builds hold.
+///   - `mrl_dim`: optional matryoshka prefix dim (truncate+renorm; build_inputs).
+///   - `meta_index`: {field: [value|None; n_chunks]} columns -> 0x17 index.
 ///   - `with_hnsw`: bool (overrides preset; default per preset)
 ///   - `with_bm25`: bool (overrides preset; default per preset)
 ///   - `with_graph`: bool (default off). Emits the additive chunk-to-chunk
@@ -72,6 +68,7 @@ use crate::build_inputs::{build_graph_payload, parse_chunks, truncate_renormaliz
     mrl_dim=None,
     with_hnsw=None,
     with_bm25=None,
+    meta_index=None,
     with_graph=false,
     graph_top_m=8,
     hnsw_m=16,
@@ -101,6 +98,7 @@ pub fn build(
     mrl_dim: Option<u32>,
     with_hnsw: Option<bool>,
     with_bm25: Option<bool>,
+    meta_index: Option<&Bound<PyDict>>,
     with_graph: bool,
     graph_top_m: usize,
     hnsw_m: usize,
@@ -284,6 +282,11 @@ pub fn build(
             nest_runtime::bm25::DEFAULT_B,
         );
         builder = builder.bm25_index(bm.to_bytes());
+    }
+
+    // lOptional metadata inverted index (0x17): additive, content_hash-excluded.
+    if let Some(payload) = build_meta_payload(meta_index, n)? {
+        builder = builder.meta_index(payload);
     }
 
     builder = builder.add_chunks(chunk_inputs);

@@ -36,6 +36,41 @@ is a corpus vector plus tiny noise, so the figure measures rank-stability under 
 real-query retrieval. ladder.json and baseline.json now carry a ruler-provenance field that says
 so, and gate-zero replaces this ruler before any "greater than or equal to 0.96" is trusted.
 
+addendum 2026-06-07 (measured on the clinical corpus, post-compression-run; extends the errata,
+does not replace it)
+
+three things were measured after the errata and are recorded here so the plan stops chasing a
+number that does not exist.
+
+one, the group ruler has no statistical power below tiny. at about 3000 queries the standard
+error on a group-recall rate near 0.05 is about 0.005, and the sub-tiny presets sit within one or
+two of those of each other (nano 0.050, mrl128-int8 0.054, mrl128-int4 0.046). that spread is
+noise. the group ruler cannot rank nano versus mrl128; any "this preset wins by 0.004" claim below
+tiny is unsupported. report sub-tiny presets as a tie on this ruler, not as an ordering.
+
+two, the 0.96-with-margin target was calibrated on the weak self-perturbation ruler and does not
+exist in the real problem. on the real group ruler the best embedder tested (multilingual-e5-large,
+a 1024-dim transformer) tops out at recall 0.19, and the offline potion baselines sit at 0.06 to
+0.12. so the ceiling of the whole retrieval problem on this corpus, with the best available model,
+is about 0.19, not 0.96. chasing 0.96 is chasing a ruler artifact. the honest, defensible
+compression result is narrower and true: int8 tracks exact within about two points on every ruler
+measured (self-perturbation, title-body, group). that is the whole claim compression earns,
+"compression does not degrade what the model already knows", nothing more. whether 0.19 is the
+ruler ceiling or the embedder ceiling is unknown without a small human-judged labeled set on this
+corpus (the real gate-zero), which is the next measurement.
+
+three, a generic metadata filter beats the embedder ceiling for the scoped query, with no new model
+or codec. a new optional section (meta_index, 0x17: a generic (field, value) to chunk-ordinals
+inverted index, excluded from content_hash exactly like bm25 and hnsw, opened by section presence)
+plus a runtime search_filtered now scope the exact cosine to one (field, value) subset. measured on
+the clinical corpus (2915 notes, 7595 chunks, default potion): scoping by patient_file_id moves
+group-recall@10 from 0.092 (whole corpus, 7595 candidates) to 0.999 (patient scope, about 48
+candidates), at 0.015 ms per query versus 0.568. the content_hash is byte-identical with and without
+the section, so a nest:// citation is unaffected. honest framing: this does not find the right
+patient (a different query), it makes within-a-known-group retrieval exact and complete because the
+candidate set IS the group. the field name is just a string the caller chose; no market rule lives
+in nest.
+
 the unstoppable goal
 
 the nest is the most compact, sovereign, citable ai database in the world, in three layers:
