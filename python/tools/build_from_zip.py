@@ -18,6 +18,7 @@ exceeds memory.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -58,6 +59,15 @@ def main() -> None:
     ap.add_argument("--mrl-dim", type=int, default=None, help="matryoshka prefix dim (truncate+renorm)")
     ap.add_argument("--with-hnsw", action="store_true", help="force the ann index on")
     ap.add_argument("--model-dir", default=None, help="potion/model2vec table dir (default: vendored potion-base-8M)")
+    ap.add_argument(
+        "--dedup",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="drop exact-duplicate chunks (same normalized text) and empty chunks "
+        "before indexing. on by default: identical vectors are pure retrieval noise "
+        "(measured ~7.7%% of chunks on the clinical cohort, one block repeated 240x). "
+        "use --no-dedup to keep every chunk.",
+    )
     args = ap.parse_args()
 
     text_fields = [f.strip() for f in args.text_fields.split(",") if f.strip()]
@@ -75,6 +85,8 @@ def main() -> None:
     pending_texts: list[str] = []
     pending_idx: list[int] = []
     n_docs = n_truncated = 0
+    seen_chunks: set[bytes] = set()  # normalized-text hashes, for --dedup
+    n_dup_dropped = n_empty_dropped = 0
     t0 = time.time()
 
     def flush() -> None:
@@ -105,7 +117,20 @@ def main() -> None:
                 text = text[: args.max_doc_chars]
                 n_truncated += 1
             specs = chunk_text(text, doc.source_uri, max_chars=args.max_chars)
+            kept = 0
             for s in specs:
+                if args.dedup:
+                    if not s.canonical_text.strip():
+                        n_empty_dropped += 1
+                        continue
+                    key = hashlib.blake2b(
+                        " ".join(s.canonical_text.split()).encode("utf-8"),
+                        digest_size=16,
+                    ).digest()
+                    if key in seen_chunks:
+                        n_dup_dropped += 1
+                        continue
+                    seen_chunks.add(key)
                 chunks.append(
                     {
                         "canonical_text": s.canonical_text,
@@ -117,16 +142,20 @@ def main() -> None:
                 )
                 pending_texts.append(s.canonical_text)
                 pending_idx.append(len(chunks) - 1)
+                kept += 1
                 if len(pending_texts) >= args.batch:
                     flush()
+            # one meta value per KEPT chunk, so meta_cols stays aligned with the
+            # (possibly deduped) chunk list. a globally-duplicate chunk is indexed
+            # once, under the FIRST doc that produced it.
             for f in index_fields:
                 v = doc.meta.get(f)
-                meta_cols[f].extend([None if v is None else str(v)] * len(specs))
+                meta_cols[f].extend([None if v is None else str(v)] * kept)
             sc.write(
                 json.dumps(
                     {
                         "source_uri": doc.source_uri,
-                        "n_chunks": len(specs),
+                        "n_chunks": kept,
                         "query_text": text[: args.query_chars],
                         "meta": doc.meta,
                     },
@@ -142,6 +171,15 @@ def main() -> None:
                 )
         flush()
 
+    if args.dedup:
+        dropped = n_dup_dropped + n_empty_dropped
+        denom = len(chunks) + dropped
+        pct = (100.0 * dropped / denom) if denom else 0.0
+        print(
+            f"dedup: dropped {n_dup_dropped} duplicate + {n_empty_dropped} empty "
+            f"chunks ({pct:.1f}% of {denom}); {len(chunks)} unique chunks indexed.",
+            file=sys.stderr,
+        )
     print(
         f"streamed {n_docs} docs ({n_truncated} truncated) -> {len(chunks)} chunks "
         f"in {time.time() - t0:.0f}s; building .nest preset={args.preset}...",

@@ -136,6 +136,21 @@ points: stop investing in the embedder; the wins on this corpus came from the me
 (point three) and from recognizing the ruler artifact (points four and five), not from a heavier
 model. embedder question: CLOSED.
 
+seven, the high-confidence duplicate noise the owner flagged is REAL, and exact chunk dedup removes
+it. my point-four claim "boilerplate is essentially zero" was measured at the LINE level (repeated
+lines inside long notes) and is right for that, but i wrongly extrapolated it to "nothing to
+suppress". at the CHUNK level — what is actually indexed — the cohort has 585 exact-duplicate chunks
+(7.7 percent of 7595) in 189 groups, with one 512-char block repeated 240 times. those are identical
+vectors: using that block as a query returns 30 near-perfect (cosine >= 0.9999) hits in the top 30,
+pure redundancy crowding out every diverse result. build_from_zip.py now drops exact-duplicate (and
+empty) chunks before indexing, ON BY DEFAULT (--no-dedup to keep them): the cohort falls to 7010
+unique chunks and the same query returns 1 near-perfect hit then diverse content. it is deterministic,
+hash-based (normalized text), zero false positives; a globally-duplicate chunk is indexed once, under
+the first doc that produced it, and meta_index columns stay aligned to the kept chunks. note-level
+the same corpus has 80 byte-identical notes (3.2 percent) and 163 (6.6 percent) with a >= 0.999
+near-twin. the residual near-duplicates (>= 0.999 cosine but not byte-identical) would need an
+embedding-time pass and are left as an optional follow-up — exact dedup is the simple, safe win.
+
 the unstoppable goal
 
 the nest is the most compact, sovereign, citable ai database in the world, in three layers:
