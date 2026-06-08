@@ -151,6 +151,24 @@ the same corpus has 80 byte-identical notes (3.2 percent) and 163 (6.6 percent) 
 near-twin. the residual near-duplicates (>= 0.999 cosine but not byte-identical) would need an
 embedding-time pass and are left as an optional follow-up — exact dedup is the simple, safe win.
 
+eight, the 0x17 feature (point three) passed an INDEPENDENT pre-merge review (19 agents, four
+dimensions, each finding adversarially skeptic-verified). it confirmed all five invariants
+empirically (content_hash exclusion on two real files, no-panic on stale/truncated input,
+honest-empty filtered result, recall-1.0-within-filter, byte-identical builds) and found one blocker
++ one major, both at the DECODE trust boundary, both now fixed with regression tests. blocker:
+from_bytes reserved Vec capacity from attacker-controlled u32 length prefixes BEFORE reading, a
+multi-GB reservation that aborts (uncatchable, worse than a panic) on strict-overcommit hosts; now
+bounded by the remaining bytes, the same discipline the intpack codec already used. major: from_bytes
+did not re-validate posting monotonicity, so a corrupt/hostile 0x17 could decode to duplicate or
+non-ascending ordinals (duplicate citations + inflated subset in search_filtered); now rejected with
+a typed error at decode. plus three minors (non-wrapping bounds check for 32-bit safety; recall = NaN
+on an empty candidate set instead of a vacuous 1.0; fail-loud on a >4 GiB length instead of silent
+u32 truncation) and the integration coverage the review flagged as missing (end-to-end content_hash
+exclusion built on two real files; a search_filtered runtime test for subset restriction + membership,
+honest-empty on absent value/field/no-index, and no panic when k >> subset). three findings were
+refuted by the verifiers as latent-coupling notes enforced elsewhere. the branch
+research/0x17-metafilter is green (clippy clean, 300-line guard, all tests) and merge-ready.
+
 the unstoppable goal
 
 the nest is the most compact, sovereign, citable ai database in the world, in three layers:
