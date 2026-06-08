@@ -1,0 +1,70 @@
+================================================================================================
+chroma-core/chroma
+category: vector-db   |   steal priority: MUST
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Chroma is a log-structured, Rust-core embedded/distributed vector DB whose index crate has
+             converged on rotation-based binary/low-bit quantization (RaBitQ 1-bit/4-bit and
+             TurboQuant 3-bit) over a SPANN inverted index, with an Arrow-RecordBatch blockfile
+             storage layer and HNSW centroid routing.
+innovation:  RaBitQ-family quantization: a random orthogonal rotation decorrelates coordinates so each
+             dimension can be stored in 1 bit (sign of the rotated, centroid-residual,
+             normalized vector), and distance is recovered via a provably UNBIASED inner-product
+             estimator (error O(1/sqrt(D))) computed as bitwise AND + popcount plus two
+             precomputed corrective scalars (centroid distance, and inner product between the
+             quantized and normalized vector). This gives ~28x compression over f32 (vs nest's
+             current 8x int8) with no codebook training, no iterative optimization, and a
+             binary-only hot loop; an exact rerank then fixes residual error. TurboQuant extends
+             this to a tunable 3-bit point (PolarQuant Lloyd-Max 2-bit per coordinate + QJL
+             1-bit sign-of-residual correction scaled by Sigma|e[i]|/dim) for a higher-recall
+             operating point.
+techniques:
+  - RaBitQ 1-bit quantization: random rotation + store sign per dim -> nearest hypercube vertex
+    (144B/1024-dim, 28.4x vs f32)
+  - Unbiased inner-product/distance estimator from binary codes with two corrective scalars per
+    vector (centroid dist + <quantized,normalized> dot)
+  - Bitwise asymmetric distance kernel: AND + popcount (~111ns/code) instead of float dot
+    products on the hot path
+  - Random orthogonal rotation as decorrelation preprocessing so per-coordinate scalar
+    quantization becomes near-MSE-optimal
+  - TurboQuant 3-bit = PolarQuant (Lloyd-Max MSE-optimal 2-bit scalar quantizer per coord) + QJL
+    (1-bit sign of PolarQuant residual, scaled by Sigma|e[i]|/dim)
+  - 24-byte per-code header of precomputed factors (norm, radial, correction, qjl_scale) for
+    fast decode/estimate
+  - SPANN inverted index: in-memory HNSW over centroids routes to on-disk posting lists
+    (nprobe), residuals quantized -> tiny disk footprint
+  - Two-stage search: cheap quantized estimate for candidate generation, then exact
+    full-precision rerank for true scores
+nest steals: Add a new embeddings codec in nest-format/src/encoding/ (rabitq.rs) as a v1-additive encoding id
+             (reserved 4-255 range; next free after int8=3), mirroring int8.rs layout: a payload
+             header (rotation seed + dim), per-vector corrective scalars (f32 norm/centroid +
+             estimator constant), then 1 bit/dim packed sign codes. Determinism is preserved by
+             SEEDING the random rotation and storing the seed in the header so build stays
+             byte-identical/reproducible (same chunks + model fingerprint => same file),
+             satisfying nest's hard constraint. nest-runtime/src/simd dispatches a new
+             AND+popcount kernel (trivial AVX2/NEON/scalar, popcnt is one instruction) to
+             produce the unbiased estimate straight off mmap, feeding candidates into the
+             EXISTING mandatory exact-cosine rerank in nest-runtime search; that is the perfect
+             home because nest already guarantees the returned score is real cosine, so the
+             quantizer only needs to be a good RANKER not a good scorer. Unlocks a new 'nano'
+             preset (zstd non-embedding sections + rabitq embeddings + hnsw) targeting a size
+             ratio well below the current 0.283 'tiny' preset while keeping recall@10 high via
+             rerank. nest-python builder unchanged except for exposing the preset.
+compression: Directly central to 'compress more than everyone': embeddings are the largest binary section
+             nest cannot zstd (scored from mmap on the hot path), so they are the single biggest
+             lever. RaBitQ takes embeddings from 8x (current int8) to ~28x compression while
+             nest's mandatory exact rerank absorbs the accuracy loss; highest-leverage
+             compression win available, attacking the one section currently uncompressable.
+perf:        Binary kernel ~111ns/code (AND+popcount) vs ~3.94us scalar path -> ~35x faster candidate
+             scoring; popcount is a single CPU instruction so AVX2/NEON/scalar dispatch is
+             trivial for nest's existing simd module. RaBitQ needs NO training/codebook
+             (rotation + sign only), so build stays deterministic and cheap (~1us/vector encode
+             at 1-bit). 1-bit codes keep far more vectors resident in page-cache, improving mmap
+             locality. TurboQuant 3-bit is the higher-recall knob (cosine P95 error 0.96% vs
+             RaBitQ 1-bit 3.56%) at 10x compression for presets needing better pre-rerank
+             recall, but encode is ~12x slower (13.7us vs 1.1us).
+license:     Apache-2.0 (chroma-core/chroma). RaBitQ (SIGMOD 2024) and TurboQuant (ICLR 2026) are published
+             algorithms; reimplement from the papers rather than copying Chroma's Apache code to
+             keep nest's licensing clean and the rust core small.

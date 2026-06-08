@@ -1,0 +1,70 @@
+================================================================================================
+rust-cv/hnsw
+category: ann-index   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A from-scratch, no_std-capable Rust HNSW (Malkov-Yashunin) index that is fully generic over the
+             distance metric via the `space::Metric` trait, with const-generic fixed-width
+             neighbor arrays and a first-class binary/Hamming path using XOR+popcnt over
+             `Bits128..Bits4096` SIMD types and an amortized-O(1) `hamming-heap`.
+innovation:  Decouple the ANN traversal metric from the stored representation: the graph navigates on a
+             cheap, quantization-friendly integer distance (Hamming over 1-bit-packed vectors,
+             computed as `(a ^ b).count_ones()` with hardware popcnt/SIMD), while the metric
+             stays a swappable `Metric` trait whose `Unit` is "the smallest unsigned integer
+             that represents your space" so ordering is branch-free integer compares. This is
+             exactly the shape nest needs to push ANN below int8: navigate on binary codes,
+             rerank exact cosine on top (which nest already mandates).
+techniques:
+  - space::Metric trait with associated `Unit: Ord + Zero + Copy` = smallest unsigned int for
+    the space (integer distances => branch-free, deterministic ordering)
+  - Hamming distance via XOR + count_ones (popcnt), used to TRAVERSE the graph instead of float
+    math
+  - Bits128..Bits4096 newtype tuple structs wrapping fixed byte arrays to unlock
+    autovectorized/SIMD popcnt over binary codes
+  - hamming-heap: amortized constant-time min/max heap bucketed into 256 Hamming-distance bins,
+    replacing O(log n) binary-heap pops on candidate/nearest sets
+  - const-generic fixed-width neighbor storage: Node { neighbors: NeighborNodes<M> { [usize; M]
+    } } + zero layer Vec<NeighborNodes<M0>>, empty slot = !0 sentinel, no per-node Vec allocs
+  - deterministic seeded level assignment: level = (-ln(unif) * (1/ln M)) as usize via R:
+    RngCore + SeedableRng (libm::log for no_std)
+  - Searcher object pooling: candidates/nearest reused across queries to avoid per-query
+    allocation
+  - separate M (non-zero layers) and M0=2*M (dense zero layer) out-degrees, fixed at the type
+    level
+nest steals: Steals into crates/nest-runtime/src/ann/ and a new codec in crates/nest-format/src/encoding/.
+             (1) BINARY-QUANTIZED ANN METRIC: add a 1-bit codec (sign of each
+             centered/L2-normalized dim, packed 64 dims per u64) as a new RESERVED embedding
+             encoding id (4-255 free in v1, additive-only). Build and traverse the existing HNSW
+             (ann/build.rs, ann/search.rs) on Hamming = XOR+popcnt over the packed codes instead
+             of cosine_dist() in ann/mod.rs; nest's MANDATORY exact-cosine rerank already
+             guarantees the returned score is real cosine, so binary codes only steer traversal
+             and recall is recovered by rerank. ~32x smaller than f32 / ~4x smaller than int8
+             for navigation vectors, and popcnt drops into the SIMD dispatcher (AVX2 VPOPCNTQ /
+             NEON CNT / scalar count_ones fallback) beside the existing dot kernel. (2)
+             FIXED-WIDTH NEIGHBOR ENCODING: nest's Node stores `neighbors: Vec<Vec<u32>>` and
+             codec.rs writes a per-layer u32 count + variable ids; adopt const-generic `[u32;
+             M]`/`[u32; M0]` with a !0 sentinel so the 0x07 hnsw_index section becomes
+             fixed-stride (m known from header), smaller and zero-copy mmap-readable, still
+             deterministic. (3) Optionally port hamming-heap's bucketed heap into ann/search.rs
+             Candidate handling when distances are integer Hamming, dropping the f32 partial_cmp
+             sorts.
+compression: Directly on the north star. Binary (1-bit) quantization of the ANN navigation vectors is the
+             single biggest lever below nest's current int8 floor: 768-dim f32 = 3072 B/vec,
+             int8 = 768 B, binary = 96 B/vec (32x vs f32, 8x vs int8). Because nest ALWAYS
+             reranks with exact cosine, lossy binary codes never touch the returned score; they
+             only cut index/navigation footprint, exactly what the `tiny` preset (0.283 ratio,
+             recall@10 0.992) optimizes. A `nano` preset (zstd + binary-quantized ANN nav + f16
+             rerank embeddings) could plausibly beat 0.283. Fixed-width neighbor arrays further
+             shrink the 0x07 section vs the current length-prefixed encoding.
+perf:        Hamming via popcnt is ~single-cycle throughput per 64 bits on modern x86 (POPCNT/AVX-512
+             VPOPCNTQ) and ARM (NEON CNT + addv); a 768-dim binary code is 12 u64 popcounts vs
+             768 f32 FMAs for cosine, ~order of magnitude cheaper for traversal, leaving rerank
+             as the only float work. The Bits* newtypes exist so the array is statically sized
+             and autovectorizes. const-generic `[u32; M]` neighbor arrays remove pointer-chasing
+             and per-node heap allocs (better cache locality during walks) and make the on-disk
+             section a flat mmap-able stride. hamming-heap turns candidate maintenance from
+             O(log n) into amortized O(1) via 256 distance buckets.
+license:     MIT (hnsw, space, hamming-heap all MIT or dual MIT/Apache-2.0) - clean for vendoring/porting
+             into nest's small Rust core.

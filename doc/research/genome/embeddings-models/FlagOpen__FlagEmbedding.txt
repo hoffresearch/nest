@@ -1,0 +1,67 @@
+================================================================================================
+FlagOpen/FlagEmbedding (BGE / BGE-M3 / BGE-reranker)
+category: embeddings-models   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A retrieval toolkit (MIT) whose flagship BGE-M3 model emits, from one shared XLM-RoBERTa
+             encoder, three aligned representations per text -- a 1024-d dense vector, a learned
+             sparse lexical-weight dict (ReLU over a linear head per token id, max-pooled on
+             repeats), and ColBERT-style per-token multi-vectors -- combined at query time by a
+             weighted hybrid score.
+innovation:  Learned sparse lexical weights as a {token_id: float} dictionary that is a drop-in upgrade over
+             BM25 term frequencies: w_t = ReLU(W_lex . H[i]) per contextual token, scored as
+             s_lex(q,d) = sum over shared tokens of w_q,t * w_d,t. It is a sparse vector keyed
+             by tokenizer vocab id (~250k dims, almost all zero) that is cheaper, more
+             compressible, and more semantic than a raw text index, and it fuses with dense
+             cosine via a fixed weighted sum -- exactly the hybrid contract nest already runs.
+techniques:
+  - Learned sparse lexical weights: w_t = ReLU(W_lex . H[i]) per token, max-pool weight on
+    repeated token ids, drop special tokens (CLS/SEP)
+  - Sparse score s_lex = sum_{t in q intersect d} w_q,t * w_d,t over two token-id->weight dicts
+    (set-intersection sparse dot product / merge-join)
+  - Storage as parallel ascending-sorted (token_id:u32, weight:f32) arrays per doc -- trivially
+    int8/f16 quantizable and zstd-friendly via delta+varint over ascending ids
+  - ColBERT late interaction: s_mul = (1/N) sum_i max_j (E_q[i] . E_d[j]^T), per-query-token
+    MaxSim over row-normalized doc-token vectors
+  - Weighted hybrid fusion: score = w1*dense + w2*sparse + w3*colbert (e.g. [0.4,0.2,0.4])
+    alongside/instead of reciprocal-rank fusion
+  - Self-knowledge distillation: combined hybrid score used as teacher to train each single mode
+    (training-side; explains why fixed fusion weights are stable)
+  - Matryoshka dimensionality + quantization knobs on the dense head for size-vs-recall
+    tradeoffs
+  - MCLS (multiple CLS tokens) to embed up to 8192-token long inputs without long-text
+    fine-tuning
+nest steals: nest-format: add an OPTIONAL learned-sparse section in the reserved id space (0x09+, additive
+             within v1) storing per-chunk ascending (token_id:u32, weight) pairs; quantize
+             weights to int8/f16 and zstd the section (it is scored by integer merge-join, not a
+             SIMD dot off mmap, so zstd is safe here unlike embeddings). nest-runtime/src/bm25:
+             generalize the existing Bm25Index into a SparseIndex whose postings hold learned
+             weights instead of tf-idf; the merge-join s_lex = sum w_q*w_d replaces BM25 term
+             scoring while reusing the deterministic ordering and the existing reciprocal-rank
+             fusion in bm25/fusion.rs. nest-format/src/sections/contract.rs (search_contract)
+             plus the manifest gain a fusion descriptor (mode = rrf | weighted_sum and
+             deterministic w1/w2/w3) so the hybrid path is self-describing and cross-checked at
+             open. The mandatory exact-cosine rerank stays ground truth -- sparse only changes
+             candidate generation, preserving nest's 'returned score is real cosine' guarantee.
+             nest-python build_fn computes BGE-M3 lexical_weights at build time; rust does only
+             the integer merge-join at serve time, so the runtime stays offline and model-free.
+compression: High and direct. Learned sparse weights compress the lexical index far below storing original
+             text or a classic inverted index: each doc is a short list of (u32 token_id,
+             quantized weight) pairs, weights int8/f16-quantize cleanly and ascending token-id
+             streams zstd well (delta + varint). This replaces nest's word-segmented BM25
+             tokenizer -- a known gap that degrades on CJK/Thai -- with language-agnostic
+             subword ids, so it both shrinks the index AND fixes a correctness gap. It lets nest
+             carry semantic keyword search in a fraction of the bytes of raw text, advancing the
+             'compress more than everyone while still serving' north star.
+perf:        Sparse scoring is a sorted merge-join over two integer-keyed posting lists -- branchy, not SIMD,
+             but cheap (a few hundred shared tokens) and runs off mmap with no float kernel;
+             int8 weights keep the intersection in cache. ColBERT MaxSim is O(N_q*N_d*dim) per
+             pair and is the costly mode -- nest should use colbert as an optional rerank-only
+             signal, never a candidate generator, to stay light; the cheap (dense +
+             learned-sparse) pair is the practical hybrid. Sparse vocab is ~250k but stored
+             sparsely, so per-doc cost scales with unique tokens/doc, not vocab.
+license:     MIT (toolkit + BGE-M3 weights). Only the on-disk format and scoring ideas are adapted, not the
+             weights; ColBERT late-interaction concept originates from Stanford ColBERT
+             (separate, but the idea is unencumbered).

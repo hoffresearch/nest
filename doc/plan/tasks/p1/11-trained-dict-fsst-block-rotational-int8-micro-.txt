@@ -1,0 +1,99 @@
+==============================================================================================
+TASK #11 :: trained dict + fsst + block/rotational int8 + micro preset
+phase: phase 1 (PRE-GATE, pulled forward in the compression rebalance)   layer: nest
+status:  [ ] todo    [ ] doing    [ ] done
+==============================================================================================
+
+self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
+files listed before coding. do not summarize, do not skip. add a [ ] if something
+is missing. never skip silently.
+
+--- goal ---
+land the two SAFE headline ratio levers PRE-GATE so the flagship is born compressing: trained
+zstd dict + fsst on text, and block/rotational int8 at ~4x near-lossless. ship a micro preset
+below tiny 0.283 with measured recall - this is the number the gate publishes. the risky
+sub-byte step (int4/rabitq) stays post-gate.
+
+--- depends on ---
+  phase-0 codec registry (#02) + honest-rerank handle (#01) + roundtrip/recall harness (#03),
+  all merged. PRE-GATE: this IS part of the flagship proof, not gated behind it.
+
+--- READ THESE COMPLETE FILES FIRST ---
+[ ] doc/plan/master-plan/01-compression.txt
+[ ] doc/research/genome/compression-general/facebook__zstd.txt
+[ ] doc/research/synthesis/vector-quantization.txt
+[ ] doc/plan/master-plan/02-format.txt
+[ ] doc/plan/master-plan/03-roadmap.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and the current code you will change:)
+[ ] crates/nest-format/src/encoding/zstd_dict.rs
+[ ] crates/nest-format/src/encoding/fsst.rs
+[ ] crates/nest-format/src/encoding/int8.rs
+[ ] crates/nest-format/src/encoding/fwht.rs
+
+--- OWNS THESE CODE FILES (no parallel task edits them) ---
+  crates/nest-format/src/encoding/zstd_dict.rs
+  crates/nest-format/src/encoding/fsst.rs
+  crates/nest-format/src/encoding/int8.rs
+  crates/nest-format/src/encoding/fwht.rs
+
+--- STEPS (check each) ---
+[ ] trained shared zstd dictionary(0x0A) + fsst(9) + zstd level/ldm knobs (sorted samples,
+    pinned zstd version for reproducibility)
+[ ] int8 scale_kind=1 block-scaled + seeded-FWHT rotational int8 (~0.99 recall at 4x, no new
+    id), rotation computed backend-independently at build time for cross-cpu determinism
+[ ] matryoshka prefix truncation + micro preset below tiny 0.283 with measured recall, ratio
+    reported net of fp where sub-int8
+
+--- draws from ---
+facebook/zstd, ggml-org/ggml, weaviate/recipes, QwenLM/Qwen3-Embedding
+
+--- watch out ---
+  ZDICT must be fed sorted samples and pinned to a zstd version or reproducible builds break;
+  fwht rotation determinism hinges on identical float ops - compute backend-independently at
+  build time.
+
+--- NEST RULES (check each) ---
+[ ] edition 2024; never panic in lib (typed thiserror). FORGE heavy/non-deterministic work
+    stays OUT of the sovereign crates/ workspace.
+[ ] format v1 FROZEN + ADDITIVE: no NEST_FORMAT_VERSION bump. use reserved encoding ids 4-9 /
+    section ids 0x09+.
+[ ] content_hash over DECODED bytes: codecs decode byte-identically so nest:// citations stay
+    stable.
+[ ] never zstd/dedup/shuffle the embeddings section (mmap SIMD hot path); only fixed-stride
+    quantization there.
+[ ] deterministic: the .nest build anchor is canonical extracted text + model fingerprint,
+    verify byte-identical across two builds.
+[ ] <=300 lines per rust src file; docs lowercase, no emoji, no em-dash. feature branch off
+    main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace ; cargo test --workspace (+ roundtrip+content_hash test
+    for new codecs)
+[ ] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if format/runtime/python changed ; ./scripts/release_check.sh
+    passes
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ____  after: ____
+  recall@10   before: ____  after: ____
+
+--- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
+update only what THIS task actually changed; check each:
+[ ] doc/arc/arc.md     architecture inventory + contract (boundaries/sections/data-flow/runtime)
+[ ] doc/arc/arc.yaml   machine architecture map (MUST move with arc.md, same commit)
+[ ] doc/arc/arc.mmd    mermaid build/query flow (if the flow changed)
+[ ] README.md          overview / cli / presets / highlights (if a user-visible surface changed)
+[ ] doc/usage.md       the how-to (if a command, flag, preset, or workflow changed)
+[ ] AGENTS.md          build/test cmds, conventions, gotchas, known gaps (if any changed)
+[ ] Cargo.toml         workspace version / deps / new crate (if crates or deps changed)
+[ ] pyproject.toml     python tooling / deps / targets (if the python surface changed)
+[ ] rustfmt.toml       only if a formatting rule must change (rare)
+the arc trio (arc.md + arc.yaml + arc.mmd) moves TOGETHER in the same commit when
+architecture / boundaries / data-flow / contracts / storage / runtime change.
+
+--- MERGE ---
+[ ] commit on branch feat/p1-11-trained-dict-fsst-block-rotational-int8-micro-
+[ ] gate green -> merge, mark done in plan/kanban.txt

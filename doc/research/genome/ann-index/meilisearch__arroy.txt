@@ -1,0 +1,64 @@
+================================================================================================
+meilisearch/arroy
+category: ann-index   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Rust ANN library that ports Spotify's Annoy (forest of random-projection / random-hyperplane
+             trees) onto LMDB memory-mapped key-value storage, adding incremental insert/delete,
+             RoaringBitmap-filtered search, and optional 1-bit binary quantization of stored
+             vectors.
+innovation:  Binary quantization of stored vectors to exactly 1 bit per dimension (sign bit: x>0 -> 1, x<=0
+             -> 0) for 32x raw vector shrink, while keeping the split hyperplanes in float32 so
+             ANN partition quality is preserved -- the "lossy storage, faithful structure" split
+             is the transferable idea for extreme compression of embedding sections.
+techniques:
+  - Forest of random-projection trees: each internal node stores a random hyperplane (from 2
+    sampled points' equidistant plane) splitting space into two subspaces; n_trees forest,
+    search_k controls recall/latency tradeoff
+  - Two node types on disk: split/internal nodes (float hyperplane normal + offset) and
+    descendant/leaf nodes (item ids); deletion collapses a last-descendant node into a direct
+    item link to cut node count and lookups
+  - 1-bit binary quantization: pack sign bits, reconstruct -1/+1 on the fly via bitmask + select
+    (NEON vbslq_f32) so distance math runs on faked floats; default cosine over [0,1] vectors
+  - Incremental indexing: insert/delete rewrites only the affected tree path (a few nodes)
+    instead of rebuilding the whole forest, made cheap by LMDB copy-on-write Btree
+  - LMDB-backed storage via heed: multi-reader concurrency while writing, u16 multi-index
+    namespacing, mmap straight off disk
+  - RoaringBitmap filtered search (Filtered-DiskANN style): restrict traversal to a candidate id
+    subset to skip whole subtrees
+  - Bachrach et al. 2014 transform: maps inner-product space to cosine space so dot-product
+    search reuses cosine tree machinery
+  - SIMD distance kernels borrowed from Qdrant for the float path
+nest steals: Two distinct steals. (1) Compression: add a binary/sign-bit encoding to nest-format encoding ids
+             (reserved 4-255) as a new embedding codec -- 1 bit/dim is 32x smaller than f32 and
+             4x smaller than nest's current int8 tiny preset, pushing the size ratio well below
+             0.283. nest's mandatory exact-cosine rerank already covers the precision loss: the
+             1-bit vectors serve as a coarse ANN/prefilter (Hamming via XOR+popcount, a cheap
+             new SIMD kernel in nest-runtime's dispatcher alongside AVX2/NEON dot), then the
+             real f32/f16 vectors produce the true cosine score, so the search_contract
+             ground-truth guarantee is untouched. Highest-value adaptation. (2) Index codec:
+             arroy's random-projection-tree node format (float split node + id descendant node,
+             deterministic under a seeded RNG) is a smaller, simpler alternative to nest's
+             hnsw_index(0x07) and fits nest's <=300 LOC/file and deterministic constraints
+             better than HNSW -- a candidate reserved section (0x09+) 'rptree_index'. Its
+             collapse-on-delete trick informs future real-time edit support. Do NOT copy LMDB:
+             it violates nest's single-file/offline/frozen-format constraints; nest must keep
+             nodes as repr(C) little-endian structs inside its own section.
+compression: Directly central. 1-bit sign quantization is the single biggest lever arroy offers for "compress
+             more than everyone": 32x over f32, 4x over nest's current int8 tiny preset. The key
+             insight that makes it safe for nest is that nest already mandates exact-cosine
+             rerank, so an aggressive 1-bit lossy code can be a pure prefilter without
+             corrupting returned scores -- arroy itself had to keep hyperplanes in float
+             precisely because it has no rerank stage. A new 'binary'/'sign1' embedding codec
+             plus a tiny-binary preset is a concrete path to a sub-0.1 size ratio.
+perf:        Binary distance is XOR + popcount (Hamming), extremely CPU-friendly and SIMD-trivial vs float
+             dot products; arroy reports ~7x faster indexing and ~6.5x disk reduction at 3072
+             dims (26 GiB -> 4 GiB), but note real-world space savings were diluted (~15% in one
+             case) because tree/internal nodes are NOT quantized, only user vectors. Lesson for
+             nest: quantize only the embeddings section (already the hot mmap path), leave
+             index/structure full precision. arroy's search is acknowledged slower than
+             Annoy/HNSW due to log(n) Btree lookups and non-aligned LMDB vectors -- nest avoids
+             both via aligned repr(C) structs in one mmap'd file rather than LMDB.
+license:     MIT

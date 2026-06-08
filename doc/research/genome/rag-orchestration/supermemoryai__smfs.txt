@@ -1,0 +1,67 @@
+================================================================================================
+supermemoryai/smfs
+category: rag-orchestration   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Rust daemon that exposes a remote Supermemory container as a real mountable POSIX directory
+             (FUSE on Linux, a pure-Rust loopback NFSv3 server on macOS) backed by a SQLite
+             write-back cache, a Semaphore(8) bidirectional sync engine, and a transparent grep
+             shim that turns flagless `grep` inside the mount into a hybrid semantic-search
+             call.
+innovation:  "Retrieval-as-a-filesystem": present an opaque memory/vector store as a navigable directory tree
+             so standard Unix tools (ls, cat, tree, grep) become the query interface. The
+             signature trick is that flagless `grep` inside the mount is transparently rerouted
+             to semantic/vector search while any flag (or `grep -F`) falls back to literal
+             substring matching; mount context is detected via a hidden `.smfs` marker file so
+             the shim is a no-op everywhere else. This makes a vector DB consumable by any
+             agent/tool that can read a file, with zero bespoke SDK.
+techniques:
+  - Pure-Rust NFSv3 loopback server bound to 127.0.0.1:<auto>, mounted via /sbin/mount_nfs, no
+    kernel extension (macOS path)
+  - Zero-setup FUSE mount via the `fuser` crate (Linux path)
+  - SQLite as a persistent write-back cache that survives daemon restarts and serves offline
+    reads (replaced an in-memory store)
+  - Bidirectional sync engine: pull on cache-miss/TTL-expiry, push dirty writes with
+    exponential-backoff retry, parallelized by a Semaphore(8) fan-out with independent pull/push
+    sides
+  - Transparent grep interception keyed on a hidden `.smfs` marker: flagless grep => semantic
+    search, any flag / `grep -F` => literal grep
+  - Scoped indexing via path globs (trailing slash = recursive folder, no slash = exact file)
+    decide which writes get embedded vs stored as inert bytes
+  - Virtual synthesized file `profile.md` at mount root: never stored, regenerated on read from
+    all memories via an API endpoint (computed-on-read pseudo-file)
+  - VFS hot-path optimization (v0.0.4) that short-circuits local-only reads/writes to skip
+    sync/IPC overhead
+nest steals: Two adaptable patterns that keep nest's offline/single-file/no-socket guarantees. (1) A NEW
+             optional crate nest-fuse, deliberately kept OUT of nest-runtime so the socketless
+             core is untouched: mmap a .nest file and expose chunks_canonical as virtual
+             read-only files (e.g. /chunks/<chunk_id>.txt) plus a synthesized
+             /search/<query>.txt computed-on-read pseudo-file that runs the existing
+             exact-cosine search path and emits ranked `nest://content_hash/chunk_id` citations
+             -- SMFS's profile.md-on-read pattern applied to nest's deterministic search, so any
+             agent can grep/cat a .nest with no SDK. FUSE opens no network socket, preserving
+             'offline by construction'; the loopback-NFSv3 variant must be REJECTED because it
+             binds a socket. (2) The flagless-vs-flagged grep split maps onto a thin nest-cli
+             addition: `nest grep <pattern>` where a bare pattern => semantic (embed query +
+             mandatory exact-cosine rerank over nest-runtime's search) and `-F`/regex => literal
+             scan of chunks_canonical, giving the same dual-mode UX inside the existing clap
+             surface. The SQLite write-back cache is a REFERENCE only for nest's future
+             real-time-edit roadmap (stage dirty chunk edits in a sidecar, flush via a
+             deterministic rebuild) since the FROZEN additive container forbids in-place
+             mutation.
+compression: n/a -- SMFS discloses no compression, entropy coding, quantization, or on-disk vector format; it
+             is a filesystem/sync facade that delegates all retrieval to a remote hybrid-search
+             API. It offers nothing for the 'compress more than everyone' north star. Its value
+             to nest is purely ergonomic (retrieval-as-filesystem) and architectural
+             (computed-on-read virtual files, dual-mode grep), not byte size.
+perf:        Sync concurrency capped at Semaphore(8); default 30s pull interval; 30s unmount drain-timeout;
+             exponential-backoff push retry. macOS pays NFSv3-over-loopback marshalling cost;
+             Linux FUSE pays a kernel<->userspace context switch per syscall. v0.0.4 added a VFS
+             hot path to skip sync overhead on local-only ops. No SIMD, no vector-scan kernels,
+             no mmap'd embedded index -- all retrieval is remote, so there are no on-device
+             throughput numbers to steal.
+license:     Not confirmed from README; supermemory-ecosystem repos are typically MIT or Apache-2.0 but treat
+             as unverified. Only design patterns (FUSE mount, grep shim, on-read virtual file)
+             would be reimplemented from scratch, not vendored, so license exposure is minimal.

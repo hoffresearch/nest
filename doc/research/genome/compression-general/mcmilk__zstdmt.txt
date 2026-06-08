@@ -1,0 +1,71 @@
+================================================================================================
+mcmilk/zstdmt
+category: compression-general   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A C library (BSD/GPL, ~96% C, posix-threads) that adds multithreaded streaming
+             compression/decompression on top of seven codecs (Zstandard, LZ4, LZ5, Lizard,
+             Brotli, Snappy-c, LZFSE) by chunking input and wrapping each
+             independently-compressed chunk in a self-describing skippable-frame header.
+innovation:  A codec-agnostic, backward-compatible "skippable frame" chunk container: each
+             parallel-compressed chunk is prefixed with a 12-byte header built on zstd's
+             reserved skippable-frame magic 0x184D2A50 (a magic-range whose high nibble flags
+             "skip me" to any compliant decompressor), so a multithreaded/chunked stream is
+             still decodable by a stock single-threaded decompressor that simply skips the
+             metadata frames, while a parallel decompressor uses the embedded compressed-size
+             and uncompressed-size hint as random-access seek points and single-pass allocation
+             sizes.
+techniques:
+  - Skippable-frame chunk header: 4-byte magic 0x184D2A50 + 4-byte framesize(4) + 4-byte
+    compressed-size = 12 bytes per chunk for zstd/lz4/lz5/lizard
+  - Extended 16-byte header for codecs lacking native framing (brotli 'BR', snappy 'SP', lzfse
+    'LF'): adds 2-byte codec magic + 2-byte uncompressed-size hint as a 64KiB multiplier for
+    one-shot output allocation
+  - Decentralized self-scheduling worker pool: no dispatcher thread; each worker loops {acquire
+    read-mutex -> read one input chunk -> release -> compress independently -> acquire
+    write-mutex -> emit framed chunk} until EOF
+  - Two-mutex (read/write) coordination instead of a producer-consumer queue, preserving output
+    order by chunk while keeping per-thread compression fully parallel
+  - User-tunable input chunk size (-b N MiB, auto default) trading parallelism granularity vs
+    ratio, and thread count (-T N, defaults to core count)
+  - Three interchangeable backends (single-stream st, pthread create/join mt, thread-pool tp)
+    over one shared frame format
+  - Uniform multi-codec abstraction: one streaming API and one container format reused across 7
+    entropy/LZ backends
+nest steals: nest-format/src/encoding can adopt the skippable-frame chunking convention for its
+             zstd-compressed non-embedding sections (chunks_canonical text, provenance,
+             bm25_index, future json/pdf/parquet payloads): instead of one monolithic zstd frame
+             per section, store a section as a sequence of independently-compressed chunks each
+             prefixed with a 12-byte self-describing header. This is purely additive (a new
+             internal layout inside an existing encoding id, no NEST_FORMAT_VERSION bump, no new
+             section id), and unlocks (1) parallel decompression of large text sections at
+             materialize time in nest-runtime via the simd/rayon-style dispatcher, (2)
+             random-access decode of a single chunk for nest://content_hash/chunk_id citation
+             reopen without inflating the whole section, and (3) the 64KiB uncompressed-size
+             hint enables exact output buffer pre-allocation so materialize never reallocates.
+             Determinism is preserved by fixing chunk size and codec params; per-section
+             physical-bytes SHA-256 stays stable because the framed byte layout is
+             deterministic. Embeddings stay raw/f16/int8 as today (never touched, still scored
+             from mmap). The two-mutex worker pattern itself is the wrong concurrency model for
+             Rust (use rayon/crossbeam), but the on-disk frame format is the steal.
+compression: Indirect to raw ratio (multithreading and chunking slightly HURT ratio versus one big frame
+             because each chunk resets the codec window/dictionary), but high relevance to
+             nest's broader 'compress AND serve' north star: it is the canonical pattern for
+             making compressed sections seekable and parallel-decodable without giving up
+             single-file/offline/deterministic guarantees. To recover the ratio loss when nest
+             grows to large corpora, pair it with a shared trained zstd dictionary (zstd ZDICT)
+             referenced by all chunks, so small-chunk random access stops costing ratio. The
+             uncompressed-size-hint trick is directly reusable for any nest codec lacking
+             self-framing.
+perf:        posix-threads only (Windows via mingw CreateThread/WaitForMultipleObjects in later builds);
+             self-scheduling worker pool was benchmarked faster than upstream zstd's job-based
+             --nbWorkers and competitive with pzstd. Throughput scales near-linearly with cores
+             up to memory bandwidth; chunk size -b trades parallelism vs ratio. Decompression
+             historically single-threaded in zstd; the skippable-frame headers are exactly what
+             make per-chunk parallel decode and seek possible. Per-chunk overhead is only 12-16
+             bytes, negligible for >=128KiB chunks.
+license:     BSD-3-Clause / GPL-2.0 dual (follows upstream facebook/zstd licensing convention; library code
+             under permissive BSD, suitable for vendoring the format idea, though nest would
+             reimplement in Rust rather than link the C)

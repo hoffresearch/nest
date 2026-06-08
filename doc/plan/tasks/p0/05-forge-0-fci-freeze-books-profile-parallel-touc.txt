@@ -1,0 +1,106 @@
+==============================================================================================
+TASK #05 :: forge-0: .fci freeze + books profile (parallel, touches zero core files, ONE chunker)
+phase: phase 0   layer: forge
+status:  [ ] todo    [ ] doing    [ ] done
+==============================================================================================
+
+self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
+files listed before coding. do not summarize, do not skip. add a [ ] if something
+is missing. never skip silently.
+
+--- goal ---
+land the guardrails that de-risk the whole roadmap, the ONE parameterized rerank-honesty test
+that gates every future search path, the reconciled additive rails, AND the two flagship
+blockers (default static embedder, one concrete demo corpus). zero ratio yet; everything later
+ships behind proven gates.
+
+--- depends on ---
+  previous phase merged
+
+--- READ THESE COMPLETE FILES FIRST ---
+[ ] python/builder.py
+[ ] python/model_fingerprint.py
+[ ] doc/plan/master-plan/00-vision.txt
+[ ] doc/research/synthesis/data-pipeline.txt
+[ ] doc/plan/master-plan/05-forge.txt
+[ ] doc/plan/master-plan/03-roadmap.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and the current code you will change:)
+[ ] forge-core/Cargo.toml
+[ ] forge-core/src/fci/
+[ ] forge-core/src/normalize/
+[ ] forge-core/src/extract/pdf_text.rs
+[ ] forge-core/src/profile/
+[ ] python/forge/adapter.py
+[ ] python/forge/cli.py
+
+--- OWNS THESE CODE FILES (no parallel task edits them) ---
+  forge-core/Cargo.toml
+  forge-core/src/fci/
+  forge-core/src/normalize/
+  forge-core/src/extract/pdf_text.rs
+  forge-core/src/profile/
+  python/forge/adapter.py
+  python/forge/cli.py
+
+--- STEPS (check each) ---
+[ ] create forge-core as a SEPARATE cargo workspace; freeze the .fci schema (ChunkRecord
+    mirroring builder.ChunkSpec, EmbeddingRequest carrying space+model_fingerprint, Entity,
+    Edge, BlobRef)
+[ ] deterministic normalize + native-rust pdf-text + plaintext + books.toml; do NOT duplicate
+    the chunker - the python/forge adapter CALLS builder.chunk_text so there is one
+    authoritative chunker
+[ ] python/forge adapter driving the EXISTING builder.Pipeline; forge ingest / profiles / plan
+    cli
+
+--- draws from ---
+run-llama/semtools, activeloopai/deeplake, jvm-repo-rebuild/reproducible-central, openai/CLIP
+
+--- watch out ---
+  two chunkers WILL drift; keep ONE (builder.chunk_text) and have forge call it rather than
+  duplicate-then-reconcile, which is the more expensive path for a solo author.
+
+--- NEST RULES (check each) ---
+[ ] edition 2024; never panic in lib (typed thiserror). FORGE heavy/non-deterministic work
+    stays OUT of the sovereign crates/ workspace.
+[ ] format v1 FROZEN + ADDITIVE: no NEST_FORMAT_VERSION bump. use reserved encoding ids 4-9 /
+    section ids 0x09+.
+[ ] content_hash over DECODED bytes: codecs decode byte-identically so nest:// citations stay
+    stable.
+[ ] never zstd/dedup/shuffle the embeddings section (mmap SIMD hot path); only fixed-stride
+    quantization there.
+[ ] deterministic: the .nest build anchor is canonical extracted text + model fingerprint,
+    verify byte-identical across two builds.
+[ ] <=300 lines per rust src file; docs lowercase, no emoji, no em-dash. feature branch off
+    main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace ; cargo test --workspace (+ roundtrip+content_hash test
+    for new codecs)
+[ ] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if format/runtime/python changed ; ./scripts/release_check.sh
+    passes
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ____  after: ____
+  recall@10   before: ____  after: ____
+
+--- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
+update only what THIS task actually changed; check each:
+[ ] doc/arc/arc.md     architecture inventory + contract (boundaries/sections/data-flow/runtime)
+[ ] doc/arc/arc.yaml   machine architecture map (MUST move with arc.md, same commit)
+[ ] doc/arc/arc.mmd    mermaid build/query flow (if the flow changed)
+[ ] README.md          overview / cli / presets / highlights (if a user-visible surface changed)
+[ ] doc/usage.md       the how-to (if a command, flag, preset, or workflow changed)
+[ ] AGENTS.md          build/test cmds, conventions, gotchas, known gaps (if any changed)
+[ ] Cargo.toml         workspace version / deps / new crate (if crates or deps changed)
+[ ] pyproject.toml     python tooling / deps / targets (if the python surface changed)
+[ ] rustfmt.toml       only if a formatting rule must change (rare)
+the arc trio (arc.md + arc.yaml + arc.mmd) moves TOGETHER in the same commit when
+architecture / boundaries / data-flow / contracts / storage / runtime change.
+
+--- MERGE ---
+[ ] commit on branch feat/p0-05-forge-0-fci-freeze-books-profile-parallel-touc
+[ ] gate green -> merge, mark done in plan/kanban.txt

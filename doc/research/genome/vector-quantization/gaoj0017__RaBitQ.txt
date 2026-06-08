@@ -1,0 +1,69 @@
+================================================================================================
+gaoj0017/RaBitQ
+category: vector-quantization   |   steal priority: MUST
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A randomized 1-bit-per-dimension quantizer (SIGMOD 2024) that maps a normalized D-dim vector,
+             after a random orthogonal rotation, to its sign-bit string on the {+-1/sqrt(D)}^D
+             hypercube codebook, yielding an unbiased inner-product estimator with a sharp
+             O(1/sqrt(D)) error bound, computed via bitwise-AND + popcount.
+innovation:  Replace learned codebooks (PQ/OPQ) with a fixed deterministic codebook (the sign-corners of the
+             unit sphere scaled by 1/sqrt(D)) plus a random rotation P. Quantization is just
+             "rotate, take signs" -- no training, no k-means -- yet the estimator
+             <o-bar,q>/<o-bar,o> is provably unbiased with a per-vector O(1/sqrt(D)) error bound
+             holding with high probability. This makes ANN distance estimation a quantity with a
+             confidence interval, letting the search loop decide per-candidate whether to trust
+             the cheap estimate or trigger exact rerank.
+techniques:
+  - Fixed sphere-corner codebook C = {+1/sqrt(D), -1/sqrt(D)}^D; quantize = sign(P^-1 * o),
+    stored as a D-bit sign string (1 bit/dim)
+  - Random orthogonal rotation P (Johnson-Lindenstrauss style) randomizes geometry so the
+    sign-quantization error concentrates; same P reused for all vectors and queries
+  - Unbiased estimator: <o,q> ~= <o-bar,q>/<o-bar,o>, where <o-bar,o> (~0.8, concentrated) is
+    the single per-vector scalar stored alongside the bit code
+  - Asymmetric bit allocation: data = 1 bit/dim, query quantized to 4 bits/dim; error dominated
+    by data quantization so query precision is cheap insurance
+  - Weighted popcount kernel: dot = 1*popcount(code & q1) + 2*popcount(code & q2) +
+    4*popcount(code & q3) + 8*popcount(code & q4) over the 4 query bit-planes
+  - Distance reconstruction via law of cosines around a centroid c: ||o_r-q_r||^2 = ||o_r-c||^2
+    + ||q_r-c||^2 - 2*||o_r-c||*||q_r-c||*estIP
+  - FastScan-style batched layout: 32 codes reorganized at index time for SIMD lane-parallel
+    scan (AVX2/AVX512 VPOPCNTDQ); scalar bitwise fallback in space.h
+  - Per-vector footprint = D bits + a couple of f32 scalars (the <o-bar,o> factor and
+    ||o_r-c||), independent of any trained dictionary
+nest steals: Add an int1/rabitq embedding codec to nest-format encoding (new RESERVED encoding id 4-255,
+             additive within v1, repr(C) little-endian bit code + two f32 per-vector scalars).
+             The rotation matrix P is deterministic from a seed -> store the seed in
+             provenance/search_contract, preserving nest's reproducible-build + deterministic
+             guarantee (same seed => byte-identical codes). In nest-runtime add a rabitq
+             distance estimator beside the SIMD dot dispatcher: NEON vcnt/vaddv + AVX2 popcount
+             kernels off the mmapped bit codes, scalar fallback to satisfy "no panic /
+             three-arch" rule. This slots perfectly into nest's existing mandatory-exact-rerank
+             contract: RaBitQ becomes the cheap ANN proxy (replacing or feeding the hnsw
+             shortlist) and the stored real f32/f16 embeddings still drive the ground-truth
+             cosine rerank, so the returned score stays honest. The error bound lets nest cite a
+             recall guarantee in the search_contract, not just an empirical number.
+compression: Directly the compression key for the embeddings section, nest's largest and currently
+             least-compressed payload (zstd is banned on embeddings because they are scored from
+             mmap; today the smallest is int8 at 0.283 ratio). RaBitQ takes a 768-dim f32 vector
+             (3072 bytes) to ~768 bits + 8 bytes = ~104 bytes, a ~30x reduction (~0.034 ratio on
+             the embedding bytes), far below int8's 4x, while remaining directly scorable from
+             mmap via popcount with NO decompression on the hot path -- the exact property zstd
+             lacked. The provable O(1/sqrt(D)) error bound plus nest's existing exact rerank
+             means this extreme compression costs almost no recall (RaBitQ matches PQ/OPQ
+             accuracy at ~3x their speed; multi-bit 4-5 bit variants reach 90-95% recall with no
+             rerank at all). This is the single highest-leverage move toward the "compress data
+             more than everyone" north star.
+perf:        Distance estimate reduces to bitwise-AND + popcount, a 1-cycle-class op on modern CPUs;
+             dedicated AVX512VPOPCNTDQ on IceLake+/Zen4+, and aarch64 NEON has vcnt + horizontal
+             add (relevant since nest targets NEON). FastScan batches 32 codes for lane-parallel
+             SIMD scan. Reported ~3x faster than PQ/OPQ at equal accuracy. Memory: 1 bit/dim +
+             ~2 f32 scalars/vector, no trained dictionary to load, fully
+             streamable/mmap-friendly. Query-side cost is the 4 bit-plane weighted popcount;
+             estimator is branch-light.
+license:     Apache-2.0 (original archived repo; active development moved to VectorDB-NTU/RaBitQ-Library).
+             Method published SIGMOD 2024, arXiv 2405.12497, DOI 10.1145/3654970. C++ (Eigen
+             3.4.0) + Python; nest would reimplement clean-room in Rust, so only the algorithm
+             (patent-free, openly published) is used.

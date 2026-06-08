@@ -1,0 +1,66 @@
+================================================================================================
+quickwit-oss/quickwit
+category: fulltext-search   |   steal priority: MUST
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Distributed full-text/analytics search engine over object storage, built on the Tantivy Rust
+             library, whose immutable "split" files pack an FST term dictionary plus
+             128-doc-block SIMD-bitpacked posting lists and bitpacked columnar fast fields, all
+             mmap-readable and decompressed on the fly.
+innovation:  An mmap-first, fully block-structured inverted index where the term dictionary (FST), postings
+             (128-doc delta+SIMD-bitpacked blocks with a skip list), and field norms (1-byte
+             quantized) are all self-describing and decoded lazily off disk, enabling block-max
+             WAND pruning and branchless in-block search.
+techniques:
+  - FST term dictionary mapping term -> ordinal -> TermInfo, shared-prefix compressed,
+    O(term-len) lookup with free prefix/range scans
+  - 128-doc posting blocks: delta-encoded SIMD-bitpacked doc ids + separately bitpacked term
+    freqs, each block at its own optimal bit width
+  - VInt remainder for tails and rare terms (doc_freq<128) to avoid fixed block/skip overhead
+  - Per-block skip list (last_doc_id, bit widths, fieldnorm_id, max_term_freq) driving block-max
+    WAND top-K pruning
+  - Branchless unrolled binary search over fixed &[u32;128] yielding cmove-only code (~9.55
+    cycles/seek)
+  - 1-byte saturating field-norm quantization exploiting BM25 length-saturation
+  - Bitpacked columnar fast fields: min_value + fetch_bits, single-fetch random access
+  - Roaring-derived indexable bitset (dense 1.25 bits/doc popcount-rank vs sparse 16-bit) with
+    O(1) rank/select
+nest steals: Rebuild nest's bm25_index (section 0x08, built in nest-python, served in nest-runtime/src/bm25)
+             as an mmap-native block layout instead of an in-memory map. Concretely: (1) store
+             the term dictionary as an FST via the `fst` crate (pure-rust, MIT/Apache,
+             no_std-friendly) inside section 0x08 -- this replaces the alphabetical-term-order
+             map, keeps determinism (FST build over sorted terms is canonical), gives
+             prefix/range scan for free, and compresses the vocabulary; (2) encode each term's
+             postings as delta-encoded 128-doc blocks bitpacked with the `bitpacking` crate
+             (Tantivy's own subcrate, scalar+SIMD, falls back cleanly to scalar for nest's
+             portability rule), with a VInt remainder for rare terms; (3) add a per-block skip
+             list with last_doc_id + max_term_freq + fieldnorm to do block-max WAND so
+             search-text only decodes blocks that can affect top-K; (4) quantize doc lengths to
+             1 byte (BM25 saturation) and store as a bitpacked column. Each of these is
+             byte-deterministic (seeded/canonical ordering) and additive within format v1 (0x08
+             is already reserved, internal layout is free to evolve). The whole index becomes a
+             mmap-and-score artifact matching nest's "no socket, decode off disk" model, and
+             shrinks the bm25 section dramatically vs raw text -- directly serving the "compress
+             more than everyone" north star. nest-cli search-text then reads postings off mmap,
+             killing most of the 300-500ms python boot path because no python is needed to
+             query.
+compression: Very high. The 128-doc delta+bitpack block format with per-block optimal bit widths is a proven,
+             deterministic, mmap-friendly way to compress posting lists far below raw text, and
+             the FST term dictionary compresses the vocabulary via shared prefixes. The
+             1.25-bit/doc Roaring-style bitset and 1-byte field-norm quantization are concrete
+             near-entropy-minimal encodings. All bitpacking-based, so it composes with nest's
+             existing zstd-on-non-embedding-sections without fighting the hot path (postings
+             decode is cheap integer SIMD, not entropy decode).
+perf:        Posting blocks decompress on the fly from mmap via SIMD bitpacking; in-block seek is branchless
+             (LLVM unrolls a fixed-size 128-element binary search into 7 cmove iterations, ~9.55
+             CPU cycles). Fast-field reads are a single memory fetch (min + bitpacked slice).
+             Dense bitset rank is ~5ns via popcount on 64-bit mini-blocks (1.25 bits/doc).
+             Block-max WAND skips entire 128-doc blocks that cannot enter top-K, so query cost
+             scales with surviving blocks not corpus size. The `bitpacking` crate provides both
+             SSE/AVX2 and scalar paths, satisfying nest's NEON/scalar-fallback portability
+             constraint.
+license:     MIT (Tantivy, the fst crate, and the bitpacking crate are all MIT licensed; Quickwit itself is
+             AGPLv3, but the reusable building blocks nest would vendor -- tantivy, fst,
+             bitpacking -- are MIT, so safe to depend on/adapt)

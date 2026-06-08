@@ -1,0 +1,72 @@
+================================================================================================
+tidwall/buntdb
+category: embedded-db   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        An embeddable pure-Go in-memory key/value store that is ACID-durable via a single text
+             append-only file (AOF) replayed on open, with copy-on-write B-tree indexes,
+             pluggable Less comparators, GJSON path indexing, and an R-tree for spatial/k-NN
+             queries.
+innovation:  Durability and real-time edit on a single file without a WAL+pages engine: writes are serialized
+             as a RESP/text command log appended to one AOF, live state is an in-memory B-tree,
+             and crash recovery is just deterministic replay of the log in commit order.
+             Compaction is a Shrink() that rewrites the file as the minimal set of `set`
+             commands representing current state (an idempotent, replay-equivalent snapshot),
+             triggered when the log grows past AutoShrinkPercentage. Transaction rollback needs
+             no MVCC: each Tx records a rollbackItems map of the prior value (or tombstone) for
+             every key it touches, and on abort re-inserts those prior values into the B-tree.
+techniques:
+  - AOF as sole durability surface: each committed write appended as a RESP/text command
+    (set/del/SETEX); recovery = replay in order, no page cache or WAL checkpoints
+  - Shrink/compaction: rewrite AOF as minimal `set` snapshot of live state (idempotent,
+    replay-equivalent), gated by AutoShrinkPercentage + AutoShrinkMinSize
+  - Per-Tx rollbackItems map: store previous dbItem (or nil tombstone) per touched key; rollback
+    re-applies them, commit flushes one buffered byte slice then fsyncs per SyncPolicy
+  - Single-writer / multi-reader: one write Tx, many concurrent read Tx over stable snapshots,
+    no read-side lock contention
+  - Copy-on-write B-tree with path-hint Get/Set/Delete (SetHint/GetHint) to amortize repeated
+    nearby lookups during bulk insert/replay
+  - Pluggable Less comparator secondary indexes (IndexString/Int/Float/JSON/Rect/Desc), each a
+    B-tree selected by key glob pattern (user:*)
+  - GJSON zero-allocation path indexing of a JSON field (name.last) without deserializing the
+    whole document; R-tree for Intersects() bbox and Nearby() k-NN
+  - Configurable SyncPolicy (Never/EverySecond/Always) trading fsync frequency against a bounded
+    data-loss window
+nest steals: nest's hard gap is that the .nest v1 container is frozen/read-only (mmap + SIMD scoring) with no
+             edit path, yet the North Star demands real-time edit. Steal BuntDB's AOF+Shrink
+             model as nest's mutation layer WITHOUT touching the frozen v1 body. Add a new
+             optional binary append-only edit journal of typed records
+             (add_chunk{content_hash,chunk_id,canonical_bytes,embedding}, del_chunk{chunk_id})
+             written by nest-runtime in a new journal.rs (<300 loc, single responsibility,
+             little-endian repr(C), append-only -> matches additive-only + offline constraints).
+             The reader overlays journal deltas in memory on top of the mmap base sections: base
+             served from mmap, deltas merged at open. Adopt rollbackItems for transactional
+             edits (record prior dbItem per touched chunk_id, re-apply on abort) staying
+             typed-thiserror, never panicking. Adopt Shrink() as a nest-cli `compact` subcommand
+             that rewrites base+journal into a fresh deterministic .nest v1 holding only live
+             chunks, recomputing content_hash/file_hash so same live set => byte-identical
+             output (matches nest determinism law). Separately steal the pluggable-Less
+             secondary-index pattern for nest-runtime metadata filtering: a deterministic sorted
+             index over provenance fields (source/lang/timestamp), mirroring bm25's
+             alphabetical-order determinism rule.
+compression: Indirect but real. BuntDB does no entropy coding, so it is not a direct compression win. The
+             value is that AOF+Shrink is the only way nest gains real-time edit while preserving
+             single-file/deterministic guarantees, and the Shrink/compaction step is exactly
+             where extreme compression re-enters: compaction is the moment to re-run zstd on
+             non-embedding sections, re-quantize embeddings (int8/f16), drop dead chunks, and
+             rebuild hnsw/bm25 to the smallest preset (tiny, 0.283 size ratio, recall@10 0.992).
+             Without an edit-then-compact cycle nest can only compress at build time; with it
+             nest can absorb edits cheaply (append) and periodically re-derive a minimal
+             maximally-compressed container. Shrink idempotency (replay-equivalent minimal
+             snapshot) is the conceptual twin of nest's reproducible build.
+perf:        In-memory B-tree O(log n) ops; reads lock-free across concurrent read Tx. Writes serialized
+             (single writer), dominated by AOF append: EverySecond (default) buffers in memory
+             and fsyncs once/sec (<=1s loss window), Always fsyncs per commit, Never defers to
+             OS. Path-hint ops cut repeated comparisons during bulk replay. Cost: full dataset
+             resident in RAM (pure in-memory) -- contrast with nest, which mmaps and scores off
+             disk, so nest should keep base sections mmap-resident and hold only journal deltas
+             in RAM, avoiding BuntDB's whole-dataset-in-RAM cost. GJSON indexing is
+             zero-allocation over raw JSON bytes.
+license:     MIT

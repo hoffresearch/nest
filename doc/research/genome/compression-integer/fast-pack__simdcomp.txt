@@ -1,0 +1,65 @@
+================================================================================================
+fast-pack/simdcomp
+category: compression-integer   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A BSD-licensed C library that compresses blocks of 128 (or 256) 32-bit integers by SIMD
+             "vertical" binary bit-packing - computing the minimal common bit-width b and
+             packing values into b bits each - with an integrated delta+prefix-sum path for
+             sorted lists, decoding at ~15 GB/s (0.3 cycles/int) on SSE4.1/AVX2.
+innovation:  Vertical (transposed/lane-interleaved) bit-packing: instead of concatenating b-bit integers
+             end-to-end (the scalar BitPacker1x layout), values are laid out so each SIMD lane
+             owns a strided subset (4 lanes for SSE = BitPacker4x/128 ints, 8 lanes for AVX2 =
+             BitPacker8x/256 ints). All 128/256 integers in a block share one bit-width
+             b=maxbits() and are packed/unpacked with a single branch-free shift-mask-OR loop
+             across vector lanes. For sorted lists this is fused with a SIMD delta encoder
+             (alignr/shift to subtract the previous lane, seeded by an initvalue) and a SIMD
+             prefix-sum decoder (shift-add across lanes + a shuffle that carries the top lane
+             into the next block), so compress/decompress is integrated, not a two-pass
+             delta-then-pack.
+techniques:
+  - Vertical/lane-transposed bit-packing in blocks of 128 (SSE) or 256 (AVX2) ints, all values
+    sharing one bit-width b=maxbits()
+  - maxbits/maxbitsd1: OR-reduce a block (or its deltas) to find the minimal common bit-width in
+    one SIMD pass
+  - Integrated delta-1 coding: simdpackd1/simdunpackd1 carry a uint32 initvalue seed so block N
+    continues block N-1's running offset
+  - SIMD prefix-sum decode: shift-and-add across 128-bit lanes + _mm_shuffle to propagate the
+    highest lane as carry
+  - SIMD delta encode via _mm_alignr_epi8 (SSSE3) with a plain shift-or SSE2 fallback
+  - withoutmask fast path: when deltas are provably < 2^b, skip the AND-mask step
+  - Frame-of-reference (simdfor.h): pack value-minus-min so packed words stay directly
+    range-searchable in place
+  - Format-agnostic kernels: library ships only pack/unpack + simdpack_compressedbytes() sizing;
+    container and b-selector byte are the caller's job
+nest steals: Add an integer codec module in nest-format (crates/nest-format/src/encoding/bitpack.rs, <=300
+             loc) porting BitPacker4x-style vertical packing in safe Rust with NEON/AVX2/scalar
+             dispatch mirroring nest-runtime/src/simd. Apply it to the two sorted-integer hot
+             spots that today emit raw little-endian u32 with ZERO compression: (1) BM25
+             postings in nest-runtime/src/bm25/codec.rs - per-term doc-id lists are
+             monotonically increasing, so delta+bitpack (simdpackd1 path) collapses them while
+             staying losslessly decodable; tf bitpacks on its tiny bit-width; (2) HNSW
+             neighbor-id lists in nest-runtime/src/ann/codec.rs - small bounded u32 ids bitpack
+             to ~ceil(log2(n)) bits instead of 32. Also delta-encode chunks_original_spans
+             byte_start/byte_end (nest-format/src/sections/spans.rs), which are near-monotonic.
+             Stays inside the frozen format: these are payload-internal layouts of optional
+             sections 0x07/0x08 (bump only their per-section PAYLOAD_VERSION, never
+             NEST_FORMAT_VERSION) plus a span-section internal encoding; embeddings untouched
+             (still mmap-scored). Deterministic because packing is a pure function of the ints,
+             and content_hash is unchanged since decode reproduces identical ints.
+compression: Directly advances 'compress more than everyone' on the two sections nest leaves uncompressed.
+             BM25 posting lists and HNSW adjacency are pure sorted/small-integer data - the
+             exact workload where delta+vertical-bitpack beats zstd in BOTH ratio and decode
+             speed (15 GB/s, branch-free), shrinking the tiny/hybrid index sections without zstd
+             decompress cost on the search path. Leaves the embedding mmap dot-product hot path
+             untouched: pure upside for index-heavy presets.
+perf:        ~4-8 billion ints/s (~15 GB/s, 0.3 cycles/int Skylake) fully branch-free. Rust port
+             quickwit-oss/bitpacking: BitPacker4x compress ~5.3B/s, BitPacker8x decompress
+             ~6.5B/s, runtime SSE3/AVX2/scalar detection, no_std. Each 128-int block packs to
+             exactly b*16 bytes plus a 1-byte b selector; no heap churn, mmap-friendly. NEON has
+             no native 256-bit, so aarch64 targets the 128-int (4x-equivalent) layout to match
+             nest's NEON dispatcher.
+license:     BSD (simdcomp C lib); the Rust port quickwit-oss/bitpacking is MIT. Both permissive, compatible
+             with vendoring or clean-room reimplementation.

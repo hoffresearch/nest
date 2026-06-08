@@ -1,0 +1,66 @@
+================================================================================================
+bitsandbytes-foundation/bitsandbytes
+category: vector-quantization   |   steal priority: MUST
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A CUDA/C++/PyTorch library for k-bit weight quantization whose transferable core is NF4 (a fixed
+             16-entry quantile codebook information-theoretically optimal for normally
+             distributed data), blockwise absmax scaling, double/nested quantization of the
+             scales, and a dynamic-tree 8-bit data type with per-value exponent/fraction
+             allocation.
+innovation:  Codebook quantization driven by the data's own distribution: instead of uniform int8 (which
+             wastes code points on empty bins), NF4 places its 2^k reconstruction levels at the
+             quantiles of a standard normal so each level is used equally often (minimum-entropy
+             / Lloyd-Max optimal). Stored values are just k-bit indices into a tiny fixed lookup
+             table; reconstruction is index -> codebook[index] * blockwise_absmax. This is
+             strictly better than nest's current uniform int8 for L2-normalized embeddings,
+             whose per-dimension components are approximately zero-mean Gaussian.
+techniques:
+  - NF4 NormalFloat: hardcoded 16-level codebook at quantiles of N(0,1) (-1.0, -0.6962, -0.5251,
+    ... 0.0 ... 0.7230, 1.0), store 4-bit index per value
+  - Blockwise absmax scaling: split vector into blocks (default 64), normalize each block by its
+    max-abs into [-1,1], store one scale per block to bound error and absorb outliers
+  - Double/nested quantization: quantize the fp32 block scales themselves (groups of 256) to
+    8-bit, reclaiming ~0.4 bits/parameter of scale overhead
+  - Dynamic tree 8-bit: per-value variable exponent/fraction split via sign bit + run-of-zeros
+    exponent + indicator '1' bit + linear fraction, low relative error across magnitudes
+  - Quantile quantization (estimate_quantiles): build a data-adaptive codebook from the
+    empirical CDF so each code point holds equal mass (equal-frequency binning)
+  - Separation of storage dtype (4-bit index) from compute dtype (fp16/fp32): dequantize on the
+    hot path only, keep the dot product in float
+  - k-bit generalization: same codebook+absmax machinery parameterized to 8/4/lower bits, one
+    codec family spanning tiny->exact presets
+nest steals: Add codebook-based vector codecs to nest-format's encoding layer
+             (crates/nest-format/src/encoding) as new encoding ids in the additive v1 RESERVED
+             space (ids 4-255 free): e.g. id 4 = nf4-blockwise, id 5 = quantile-codebook-int8.
+             The embeddings section keeps its mmap-friendly fixed-stride layout but each vector
+             becomes [block_scales | packed k-bit indices], with a single shared 16- or
+             256-entry f32 codebook stored once in the section header. Determinism holds: the
+             codebook is either the fixed NF4 constants or computed by a seeded/sorted quantile
+             estimate over the corpus, so same chunks => byte-identical file. nest-runtime's
+             simd dispatcher (crates/nest-runtime simd module) gains a dequantize-and-dot
+             kernel: AVX2 vpermps / NEON vqtbl gather from the LUT into f32 lanes, multiply by
+             block absmax, then the existing SIMD dot, preserving the mandatory exact-cosine
+             rerank (ANN proxy never returned). Double-quantizing the block scales shrinks
+             per-vector scale overhead further. Unlocks a new preset below 'tiny': nf4
+             embeddings at ~0.5 bytes/dim vs int8's 1 byte/dim, roughly halving the dominant
+             embeddings section while staying offline, single-file, deterministic,
+             exact-on-rerank.
+compression: Directly central. Embeddings are the largest section and the one nest deliberately leaves
+             uncompressed (zstd banned on the hot path). NF4/quantile codebooks attack exactly
+             that: ~4 bits/dim instead of int8's 8 or f32's 32, near-lossless recall because the
+             codebook matches the Gaussian shape of normalized embedding components. Blockwise
+             absmax + double quantization push bytes/dim lower while bounding error, and the LUT
+             dequant is cheap enough to run inline before the SIMD dot, serving straight from
+             mmap. Most credible path to beating int8/'tiny' on the 'compress more than
+             everyone' north star for the vector payload.
+perf:        Reference kernels are CUDA; nest must reimplement in pure Rust SIMD. Dequant is a 16-entry LUT
+             gather (fits in registers/L1) plus one fp32 multiply by block scale before the dot.
+             AVX2: shuffle/permute-based 16-entry LUT (_mm256_permutevar8x32_ps / vpermps for 8
+             f32 lanes); NEON: vqtbl byte-table lookup of indices then convert. Packing 4-bit
+             indices is 2 values/byte, halving hot-path memory bandwidth vs int8, which often
+             makes dequant effectively free relative to bandwidth saved. Block size 64 keeps
+             scales in cache; double-quant of scales is a second tiny LUT.
+license:     MIT

@@ -1,0 +1,65 @@
+================================================================================================
+ogxd/gxhash
+category: hashing-crypto   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A non-cryptographic 32/64/128-bit hash that abuses the hardware AES round instruction (x86
+             aesenc/AES-NI, aarch64 NEON vaes) as a wide bit-mixer over a 128-bit SIMD state,
+             currently the fastest in its class at all input sizes (often >30 GB/s on large
+             inputs).
+innovation:  Use one hardware AES round (aesenc) as a single-instruction, fully-avalanching 128-bit
+             compression/mixing primitive instead of hand-rolled multiply-xor-shift chains.
+             Because AES-NI is one ~4-cycle pipelined instruction with near-perfect diffusion, a
+             few aesenc rounds over a 128-bit lane give SMHasher-passing quality (low
+             collisions, high avalanche) at a fraction of the bytecode of ahash/xxh3, which
+             inlines/caches better and saturates ILP.
+techniques:
+  - aesenc/vaesenc (AES-NI / NEON-AES) as the core 128-bit mixing round, not for encryption
+  - 128-bit SIMD State with factor-of-8 loop unrolling (8 independent accumulators) to fill the
+    AES-round pipeline and maximize ILP
+  - get_partial / get_partial_unsafe: branchless masked load of the trailing <16-byte block so
+    every byte influences the hash without OOB reads
+  - finalize(): a few terminal aesenc rounds against a fixed KEYS constant array to emit
+    32/64/128-bit digests
+  - wide-pipe (hybrid VAES+AVX2) construction for multicollision resistance when output <=64
+    bits
+  - seed randomization for DoS resistance with an opt-in deterministic feature flag
+  - cross-platform output stability guaranteed within a major version (same hash on x86 and
+    aarch64)
+nest steals: Two non-overlapping uses. (1) DO NOT touch the four SHA-256 integrity surfaces in
+             nest-format/src/reader/decode.rs and chunk.rs (header_checksum, per-section
+             checksum, file_hash, content_hash): these are cryptographic identity/citation
+             anchors (nest://content_hash/...) and must stay SHA-256. (2) Adopt gxhash only as
+             the in-memory BuildHasher for hot-path tables that never persist:
+             nest-runtime/src/bm25/index.rs (HashMap<String,TermEntry> built per query and at
+             index build, plus per-doc tf maps), bm25/fusion.rs RRF HashMap<usize,f32>, and
+             ann/search.rs visited HashSet<u32>. Replacing std SipHash with a gxhash/hashbrown
+             BuildHasher cuts BM25 build/query and HNSW traversal CPU with zero format impact. A
+             third, format-relevant use: a build-time content-defined chunk dedup pass in the
+             nest-python/writer path (writer/encoding_choice.rs) -- gxhash chunk bytes to find
+             duplicate chunks_canonical before encoding, storing each unique chunk once with
+             refcounting in chunk_ids. Stays additive (build-time decision, frozen v1 layout
+             unchanged). Enable gxhash's deterministic (fixed-seed) feature so identical corpora
+             still yield byte-identical files.
+compression: Indirect but real. gxhash is a hasher, not a compressor, so it shrinks nothing by itself. Its
+             leverage is enabling cheap content-defined chunk/block deduplication at build time:
+             hash every chunk (and sub-block fingerprints for near-dup detection) fast enough to
+             dedup large corpora and whole-repo ingestion before zstd, storing each unique chunk
+             once. This dedup-then-compress pipeline (restic/borg/casync style) is the
+             highest-yield path to beating everyone on multi-document and repo-scale corpora
+             where cross-document redundancy dominates. The hot-table speedups are latency wins,
+             not size wins.
+perf:        Often >30 GB/s on large inputs on modern x86 with AES-NI; fastest SMHasher-class non-crypto hash
+             at every input size. Wins from (a) aesenc being a single pipelined ~4-cycle
+             instruction with full diffusion, (b) 8-way unrolled 128-bit accumulators saturating
+             ILP, (c) tiny inlinable bytecode. HARD CAVEATS for nest: requires AES+SSE2 (x86) or
+             AES+NEON (aarch64) and HAS NO SCALAR FALLBACK -- fails to compile on unsupported
+             targets, which collides with nest's scalar-fallback guarantee. Must be
+             feature-gated behind target_feature detection with a portable fallback hasher
+             (foldhash/ahash-fallback or std SipHash) on non-AES targets, never a hard dep. Uses
+             heavy unsafe and aggressive opts (explicitly not for safety-critical use), so it
+             must not enter never-panic nest-format library code; confine it to runtime
+             in-memory tables and the build-time python/writer dedup pass.
+license:     MIT

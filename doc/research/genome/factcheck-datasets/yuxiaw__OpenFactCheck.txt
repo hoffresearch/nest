@@ -1,0 +1,56 @@
+================================================================================================
+yuxiaw/OpenFactCheck
+category: factcheck-datasets   |   steal priority: LOW
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Python fact-checking/factuality-evaluation framework that consolidates RARR, FacTool, and
+             FactCheckGPT into a YAML-configured solver DAG (claim_processor -> retriever ->
+             verifier) passing a single FactCheckerState dict, plus four human-annotated
+             benchmark datasets (FactQA 6,480 examples, FactBench claims with True/False/Unknown
+             labels).
+innovation:  Declarative pipeline-by-name-matching: solvers register via @Solver.register(name, input_name,
+             output_name) and are chained purely by string-matching one stage's output_name to
+             the next stage's input_name in a YAML config, carrying all state in one mutable
+             FactCheckerState bag with a success_flag. The pipeline topology is data, not code,
+             so heterogeneous stages from different systems compose without recompilation - this
+             is the Fairseq plugin pattern applied to a verification DAG.
+techniques:
+  - @Solver.register(name, input_name, output_name) decorator into a SOLVER_REGISTRY plus
+    YAML-declared stage order; chaining is validated by string-matching output_name->input_name
+  - Single FactCheckerState dict threaded through all stages with a boolean success_flag gating
+    progression (message-passing contract)
+  - BM25 over an offline Wikipedia dump for evidence retrieval (vs paid Serper/SerpAPI web
+    search) - explicit offline tier
+  - Atomic-claim decomposition: NLTK sentence split then LLM atomic-claim extraction +
+    decontextualization
+  - True/False/Unknown ternary verdict taxonomy with per-claim labels aggregated to a
+    response-level 'percentage true claims' (FactScore-style) score
+  - FactBench claim schema: question, domain (482), topic (4740), atomic_claims[], per-claim
+    factual_labels[], response_level_label
+  - Checker evaluation by precision/recall/F1 per label plus latency-hours and itemized
+    per-claim cost ($/claim) leaderboard
+nest steals: nest-runtime search_contract section + nest-cli: adopt the register-by-name output/input
+             string-matching as a data-encoded retrieval-stage graph in the already-required
+             search_contract section (no format bump, additive, deterministic, offline);
+             separately, nest-python demo corpus + provenance/citation: adopt the FactBench
+             claim+evidence+True/False/Unknown schema and percentage-true aggregation, mapping
+             evidence passages onto nest://content_hash/chunk_id citations.
+compression: n/a - OpenFactCheck contributes nothing to extreme compression. It has no entropy coder, no
+             quantization, no on-disk binary format, no SIMD; data lives in plain JSON/dict
+             structures and HF datasets. Its BM25-over-Wikipedia offline tier merely validates
+             nest's existing bm25_index(0x08) and offline-by-construction stance. Value to nest
+             is the demo/truth-feature domain (fact-check datasets + ternary verdict +
+             citation-as-evidence) and a declarative-pipeline engineering pattern, not byte
+             reduction.
+perf:        Pure Python, no SIMD or vectorization. Reported latencies are pipeline-level and dominated by
+             LLM API calls (FacTool ~0.49h, FactCheckGPT ~7.67h over a benchmark run), not
+             data-structure throughput. BM25 retrieval is the only local compute path. Cost is
+             tracked per atomic claim (~$0.02/claim) - a useful precedent for nest emitting
+             per-query cost/latency telemetry in benchmark/stats subcommands, but nothing
+             performance-transferable to the mmap hot path.
+license:     Apache-2.0 (per repo); permissive, compatible with vendoring schema/dataset ideas. Datasets
+             aggregate third-party benchmarks (FacTool-QA, FELM-WK, Factcheck-Bench, HaluEval,
+             FreshQA, SelfAware) each under their own upstream licenses - check before
+             redistributing in a .nest demo corpus.

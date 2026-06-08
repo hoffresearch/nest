@@ -1,0 +1,64 @@
+================================================================================================
+neo4j/neo4j-graphrag-python
+category: rag-orchestration   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Python GraphRAG orchestration library that builds a lexical+entity knowledge graph from
+             text/PDF (chunk -> entity -> relation) via schema-guided LLM extraction, then
+             serves it through vector, hybrid (vector+fulltext), graph-traversal-Cypher, and
+             text2cypher retrievers backed by Neo4j's HNSW vector index and Lucene fulltext
+             index.
+innovation:  The "lexical graph" overlay: every chunk becomes a node wired with typed edges (NEXT_CHUNK for
+             sequential context, FROM_DOCUMENT to source, FROM_CHUNK/PART_OF_CHUNK to extracted
+             entities), so retrieval can expand a vector hit into its neighborhood (prior/next
+             chunks, co-mentioned entities) instead of returning isolated chunks. This is the
+             minimal, deterministic graph layer that turns a flat chunk store into a navigable
+             graph -- exactly what nest needs to add "graph search" without a graph DB.
+techniques:
+  - Lexical graph: Document->Chunk->Entity nodes with typed edges NEXT_CHUNK, FROM_DOCUMENT,
+    FROM_CHUNK, PART_OF_CHUNK (an adjacency overlay over existing chunk_ids)
+  - Hybrid fusion via UNION of vector + fulltext branches with max-score normalization (n.score
+    / index_max_score) then per-node max() aggregation (the default RRF/'naive' ranker)
+  - Linear ranker: final = alpha*norm_vector + (1-alpha)*norm_fulltext, alpha in [0,1] -- one
+    tunable weight instead of RRF
+  - VectorCypherRetriever pattern: run ANN first, then a parameterized graph-traversal query
+    over the (node, score) seeds to pull connected context
+  - Schema-guided LLM entity/relation extraction with allowed node/rel/triplet patterns and
+    structured Pydantic/JSON output for validation
+  - FixedSizeSplitter with chunk_size/chunk_overlap and 'approximate' boundary mode that avoids
+    cutting words mid-token
+  - Entity resolution tiers: exact-property match, RapidFuzz Levenshtein fuzzy match,
+    spaCy-embedding cosine semantic match
+  - effective_search_ratio: over-fetch top_k*ratio ANN candidates then trim to recover recall
+    lost to approximation (mirrors nest's exact-rerank over-fetch)
+nest steals: Three concrete steals. (1) nest-format: add a RESERVED optional section graph_edges (next free
+             id 0x09) holding a deterministic CSR/adjacency list over chunk_ids -- src=chunk_id
+             u32, dst=chunk_id u32, edge_type u8 (0=NEXT_CHUNK, 1=FROM_DOCUMENT, 2=ENTITY_LINK).
+             All integers LE unsigned, repr(C), built python-side, sorted by (src,edge_type,dst)
+             for byte-identical reproducibility; gets its own per-section SHA-256 and feeds
+             content_hash. Additive-only, stays single-file/offline. (2) nest-runtime: a small
+             graph::Adjacency reader (mmap, no panic, ~150 loc under the 300-line cap) plus a
+             'search-graph' path that seeds from exact-cosine top-k then does a bounded BFS over
+             NEXT_CHUNK/ENTITY_LINK edges and re-runs exact cosine rerank on the expanded set so
+             returned scores stay real cosine, never an ann proxy. (3) nest-runtime fusion:
+             augment the current bm25/hnsw RRF with max-score-normalization + an optional
+             linear-alpha ranker (one f32 weight) for a deterministic, tunable vector/text
+             blend. nest-cli adds 'search-graph' as a 9th subcommand. Entity extraction stays in
+             nest-python build tooling, out of the frozen rust core.
+compression: Indirect but real. The lexical-graph adjacency is a compact integer overlay (CSR of u32 chunk
+             ids + u8 edge type), highly compressible with zstd as a non-embedding section, and
+             it lets nest reconstruct cross-chunk context WITHOUT duplicating overlapping text
+             -- drop chunk_overlap redundancy from chunks_canonical and recover neighbor context
+             via NEXT_CHUNK edges, shrinking the largest text section. The linear/max-norm
+             fusion adds zero storage. Entity dedup (fuzzy/exact) collapses repeated mentions,
+             reducing stored entity strings. Net: unlocks graph-search and removes overlap
+             redundancy while keeping single-file/offline/deterministic guarantees.
+perf:        Fusion is pure arithmetic over already-fetched top_k sets (negligible). Graph expansion is a
+             bounded BFS over a mmap'd CSR adjacency -- O(seeds * fanout * depth), no hot-path
+             allocations if depth/fanout are capped; the cost driver is the exact-cosine rerank
+             over the expanded candidate set, which reuses nest's existing SIMD dot products
+             (AVX2/NEON/scalar). The over-fetch ratio trades a few extra ANN candidates for
+             recall, matching nest's existing exact-rerank-after-ANN design.
+license:     Apache-2.0

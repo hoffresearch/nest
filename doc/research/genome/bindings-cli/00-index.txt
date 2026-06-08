@@ -1,0 +1,39 @@
+================================================================================================
+genome :: bindings-cli (index)
+language bindings, CLI ergonomics, distribution/client surfaces
+================================================================================================
+
+one file per project in this folder. open the one you need.
+
+[HIGH     ] PyO3__pyo3.txt                     PyO3 is a macro-driven Rust<->CPython FFI binding
+                                               layer that compiles a single cdylib extension
+                                               module against Python's stable ABI (abi3 /
+                                               Py_LIMITED_API) and enforces GIL-correct,
+                                               refcount-correct interop at compile time via
+                                               lifetime-tagged smart pointers (Python<'py>,
+                                               Bound<'py,T>, Py<T>).
+[MEDIUM   ] clap-rs__clap.txt                  A Rust CLI argument parser with a dual
+                                               builder/derive API, a modular feature-gated crate
+                                               split
+                                               (clap_builder/clap_derive/clap_lex/clap_complete/clap_mangen),
+                                               Jaro-distance typo correction, and a runtime "ask
+                                               the binary" dynamic shell-completion protocol.
+[MEDIUM   ] weaviate__weaviate-python-client.txt The official Python client for Weaviate: a
+                                               gRPC/protobuf v4 client where vectors are
+                                               serialized as length-prefixed flat float32 byte
+                                               blobs, batching is auto-tuned for throughput, and
+                                               a VectorType enum tags single vs multi-vector
+                                               layouts inside one wire field.
+[MEDIUM   ] weaviate__weaviate-go-client.txt   A native Go client for Weaviate that layers a
+                                               fluent builder-pattern API over dual GraphQL
+                                               (precise field selection) and gRPC/protobuf
+                                               transports, with the gRPC path packing dense
+                                               vectors as raw little-endian float32 byte blobs
+                                               rather than repeated proto float fields.
+[LOW      ] weaviate__weaviate-helm.txt        A Helm chart (Go-templated Kubernetes YAML) that
+                                               deploys the Weaviate vector DB as a StatefulSet,
+                                               driven by a single layered values.yaml whose
+                                               uniform per-module schema
+                                               (enabled/repo/tag/registry/inferenceUrl/envconfig/resources)
+                                               is compiled into ConfigMaps, Secrets, and an
+                                               aggregated ENABLE_MODULES env var.

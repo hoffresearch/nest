@@ -1,0 +1,73 @@
+================================================================================================
+BLAKE3-team/BLAKE3
+category: hashing-crypto   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Merkle-tree hash built on a reduced-round (7-round) ChaCha-derived BLAKE2 compression function
+             that splits input into fixed 1024-byte chunks, hashes them in parallel across SIMD
+             lanes and threads, and combines chaining values pairwise into parent nodes,
+             enabling parallelism, extendable XOF output, and verified streaming (Bao) where any
+             byte range is verifiable against the single 256-bit root.
+innovation:  A hash is a binary Merkle tree over fixed-size chunks (1024 B): the root is a single 32-byte
+             commitment, but every interior chaining value lets you verify an arbitrary
+             sub-range WITHOUT re-hashing the whole input. This decouples "one stable content
+             hash for the whole artifact" from "cheap incremental/partial verification of just
+             the bytes you touched" - exactly the tension nest has between its whole-file
+             content_hash and per-section/per-chunk integrity.
+techniques:
+  - Binary Merkle tree over fixed 1024-byte chunks; parent node = hash(left_CV || right_CV); odd
+    nodes promoted to next level
+  - Domain-separation flags (CHUNK_START/END, PARENT, ROOT, KEYED_HASH,
+    DERIVE_KEY_CONTEXT/MATERIAL): only the final root is flagged ROOT, preventing
+    length-extension and tree-substitution attacks
+  - 7-round ChaCha-quarter-round permutation over a 16-word state with 8-word 256-bit chaining
+    value and per-chunk 64-bit counter
+  - SIMD batch hashing of independent chunks across SSE2/SSE4.1/AVX2/AVX-512/NEON lanes with
+    runtime CPU feature detection (AVX-512 = 16 chunks at once)
+  - XOF extendable output via OutputReader (Read+Seek): root compression re-run with
+    incrementing output-block counter yields unlimited seekable output
+  - Bao verified-streaming format: 8-byte LE length prefix + chunks/parent nodes interleaved in
+    pre-order so depth-first read needs no seeking
+  - Bao slice format: transmit only parent CVs + chunks on the path to a target byte range,
+    verifying that range against the root alone (~3.1% metadata at 1KiB chunks)
+  - Configurable chunk groups (bao-tree): hash interior in 1024-B chunks for an unchanged root
+    but emit parent nodes only every N KiB, cutting metadata overhead from ~6% to ~0.1%
+nest steals: Two concrete, additive moves. (1) nest-format/hashing.rs: nest computes file_hash and
+             content_hash as flat SHA-256 over whole bodies. Adopt the BLAKE3 tree structure (or
+             BLAKE3 via the `blake3` crate, CC0/Apache, vendorable, no_std, deterministic) so
+             content_hash becomes a Merkle ROOT while interior chaining values let `nest
+             validate` verify a single section or chunk's byte span WITHOUT re-hashing the whole
+             file - turning O(file) validation into O(touched-bytes), which matters once nest
+             serves whole databases/repos/video. (2) The Bao slice format maps onto nest
+             citations: nest://content_hash/chunk_id already reopens an exact byte span; add a
+             RESERVED section (id 0x09+, additive within v1) holding interleaved parent-node CVs
+             (a merkle_index/bao_tree section) so a partial or remote consumer can
+             cryptographically verify just the cited chunk_id against the root with ~0.1%
+             overhead via chunk-grouped parents. Keep SHA-256 as the FROZEN default and
+             introduce BLAKE3 as a new hashing-algorithm id so the format stays additive and v1
+             never bumps. The 7-round SIMD core is also a reference model for nest-runtime's
+             AVX2/NEON/scalar dispatcher: the same lane-batching discipline (N independent items
+             per SIMD width, runtime detection) is how nest batches dot products - so BLAKE3's
+             guts are a reference kernel, not a dependency on the hot scoring path.
+compression: Indirect but real. BLAKE3 is not a compressor and does not shrink bytes. Its relevance to
+             "compress more than everyone" is structural: the Merkle-tree-over-fixed-chunks
+             layout is the standard substrate for content-defined chunking + dedup (the same
+             boundary discipline underlies CDC dedup in restic/casync/IPFS). A nest that chunks
+             artifacts on stable boundaries and addresses every chunk by its CV can dedup
+             identical spans across files/datasets/versions before any entropy coder runs -
+             cross-artifact dedup is often a larger win than the codec itself on
+             repos/databases. The 1KiB-chunk vs chunk-group tradeoff (3.1% vs 0.1% metadata) is
+             the exact knob nest must tune so verification metadata does not erode
+             compression-ratio gains.
+perf:        b3sum is ~an order of magnitude faster than sha256sum on desktop hardware due to (a) SIMD batch
+             hashing of independent chunks (AVX-512=16 lanes, AVX2=8, NEON=4) and (b) rayon
+             multithreading across independent subtrees. Throughput scales near-linearly with
+             cores and SIMD width because chunks are independent until a cheap combine step.
+             Memory: streaming with an O(log n) stack of pending chaining values, no need to
+             buffer the whole input. Chunk independence is what makes both parallelism AND
+             partial verification free - the property nest wants for large artifacts.
+license:     Dual-licensed CC0-1.0 / Apache-2.0; the `blake3` Rust crate is permissive, vendor-friendly,
+             no_std-capable with a portable scalar reference path - safe to vendor under nest's
+             offline single-file constraints.

@@ -1,0 +1,61 @@
+================================================================================================
+tmikolov/word2vec
+category: embeddings-models   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        The original C implementation of word2vec: trains static word embeddings (CBOW / skip-gram) with
+             negative sampling and hierarchical softmax, and ships utilities (distance,
+             word-analogy) that linear-scan a flat float32 matrix with precomputed L2-normalized
+             vectors so a dot product equals cosine.
+innovation:  Normalize-at-load + flat-contiguous-matrix + brute-force dot product so cosine is a single FMA
+             loop -- nest's exact-cosine ground truth, minus the per-query normalization cost.
+techniques:
+  - L2-normalize every vector once at load so dot(q,v) == cosine, removing per-query
+    sqrt/division from the scan loop
+  - Flat row-major contiguous matrix M[word*size + dim] with no per-vector object header --
+    ideal mmap target, stride = size*sizeof(real)
+  - Top-N nearest neighbor via insertion into sorted bestd[40]/bestw[40] arrays (no heap
+    allocation, branch-predictable shift) instead of a full sort
+  - Negative-sampling unigram table: precompute a 1e8-entry array filled proportional to
+    count^0.75, then sample neighbors/negatives by a single random index lookup (O(1)
+    frequency-weighted sampling)
+  - Sigmoid lookup table: EXP_TABLE_SIZE=1000 precomputed values over [-MAX_EXP=6, +6], index =
+    (f+6)*(1000/12), replacing exp() with a table read
+  - Huffman-tree hierarchical softmax giving each word a variable-length binary code
+    (MAX_CODE_LENGTH=40), frequent words get short paths -- a frequency-optimal prefix code
+  - Vocabulary hash: 30M-slot open-addressing table, polynomial rolling hash (*257 per char),
+    linear probing, rebuild when load factor > 0.7
+  - Tiny self-describing text header `vocab_size layer1_size\n` then either ASCII floats or raw
+    fwrite of float32 rows (binary flag) -- minimal format, no index
+nest steals: nest-runtime/src/search + simd dispatcher: adopt the normalize-at-build invariant. Store
+             embeddings L2-pre-normalized in the embeddings section (a one-time deterministic
+             transform recorded in provenance/search_contract) so the SIMD AVX2/NEON kernel runs
+             a pure dot product with zero per-query normalization, and the mandatory exact
+             rerank after hnsw/bm25 becomes a bare FMA scan -- faster hot path, byte-identical
+             determinism preserved. The bestd[40]/bestw[40] sorted-insert pattern maps directly
+             onto nest-runtime's top-k collection for small k (avoid a BinaryHeap; a fixed
+             sorted array is branch-predictable and allocation-free). For the int8 'tiny'
+             preset, pre-normalizing before int8 quantization tightens the value range and
+             improves recall@10. The count^0.75 unigram-table trick is reusable in
+             nest-runtime/bm25 or any future negative-sampling / frequency-weighted sampler as
+             an O(1) deterministic (seeded) sampler. The flat M[words x dim] row-major layout
+             validates nest-format's contiguous embeddings section as the correct mmap shape;
+             the 'vocab_size dim\\n' header is the minimalist ancestor of nest's manifest.
+compression: Indirect but real: the L2-normalize-then-quantize ordering directly helps nest's int8/float16
+             codecs -- normalized vectors have a bounded, predictable per-dimension range, so
+             int8 scale/zero-point is tighter and recall loss at the 0.283 'tiny' ratio shrinks.
+             The count^0.75 / Huffman-code ideas are frequency-optimal coding lessons (short
+             codes for frequent symbols) that generalize to entropy-coding the non-embedding
+             sections. word2vec itself does NO embedding compression (raw float32), so it is a
+             baseline to beat, not a source of a codec.
+perf:        Brute-force linear scan is O(words*dim) per query with a tight inner FMA loop over contiguous
+             memory -- cache-friendly, trivially SIMD/AVX-vectorizable, exactly nest's
+             exact-cosine path. Normalization moved to load (one-time) means the query loop has
+             no sqrt/div. Lookup tables (sigmoid 1000-entry, unigram 1e8-entry) trade memory for
+             branch-free O(1) compute. No threading in distance.c (single-thread scan); training
+             uses lock-free Hogwild-style multithreaded SGD. float32 throughout, no quantization
+             -- memory-bound at scale, which is why nest's int8/f16 + hnsw matter for anything
+             large.
+license:     Apache-2.0

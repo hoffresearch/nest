@@ -1,0 +1,85 @@
+================================================================================================
+serde-rs/serde
+category: serialization-parsing   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A serialization framework that decouples N Rust data structures from M wire formats through a
+             fixed 29-type abstract data model, with compile-time monomorphized derive codegen
+             (no reflection, no intermediate Value tree) and lifetime-parameterized zero-copy
+             deserialization (Deserialize&lt;'de&gt;) that borrows &amp;str/&amp;[u8] directly
+             out of the input buffer.
+innovation:  The visitor/data-model split that turns the NxM serialization problem into N+M: every type maps
+             itself to one of 29 abstract model types via a Serializer trait, and every format
+             implements that model once. Crucially for nest, the deserialize side is
+             lifetime-parameterized (Deserialize&lt;'de&gt; with visit_borrowed_str returning
+             &amp;'de str) so decoded values are borrowed views into the source bytes with zero
+             allocation and zero copy when the encoding permits it. This is exactly the
+             discipline nest needs: a section decoder that returns borrowed slices straight off
+             the mmap rather than owned Vecs.
+techniques:
+  - 29-type abstract data model (bool, i8..i128, u8..u128, f32/f64, char, string, byte array,
+    option, unit, unit_struct, unit_variant, newtype_struct, newtype_variant, seq, tuple,
+    tuple_struct, tuple_variant, map, struct, struct_variant) decoupling N types from M formats
+    into N+M impls
+  - Visitor pattern: Deserializer drives a Visitor by calling exactly one visit_* method; struct
+    keys known at compile time avoid map-style key hashing
+  - Zero-copy via Deserialize<'de> lifetime + visit_borrowed_str(&'de str)/visit_borrowed_bytes
+    vs transient visit_str/visit_string vs owned visit_string; Cow<'de, str> to fall back to
+    owned only when escapes force it
+  - Monomorphized compile-time codegen (serde_derive): static dispatch only, no vtables, no
+    reflection, no intermediate Value tree, no per-field allocation
+  - Three-phase compound encoding (serialize_struct/seq/map -> serialize_field/element -> end())
+    letting formats stream output without buffering the whole structure
+  - DeserializeSeed / stateful deserialization: thread external state (arenas, interners,
+    capacity hints) through the deserialize call without globals
+  - Length-aware vs length-free distinction: structs/tuples carry compile-time-known arity so
+    the format can omit length prefixes; maps/seqs carry runtime length
+nest steals: nest-format/src/sections/codec.rs and the per-section reader (crates/nest-format/src/reader/**)
+             should adopt a borrowed decode trait: SectionDecode<'a> returning views (&'a [u8],
+             &'a str, &'a [f32]) sliced directly from the mmap'd byte range instead of owned
+             buffers. This is the single biggest lever for nest's 'serve straight off disk'
+             promise -- chunks_canonical(text) and embeddings (raw/f16) can be returned as
+             borrowed slices with zero allocation, mirroring nest-runtime/src/materialize.rs
+             which already wants to hand back spans. Concretely: (1) add a
+             content_view(section_id) -> Cow<'a, [u8]> on the reader where raw/f16/int8
+             encodings return Borrowed and only zstd returns Owned (decompression unavoidably
+             allocates) -- this makes the borrow-vs-copy decision encoding-driven exactly like
+             serde's visit_borrowed_str-vs-visit_string; (2) refactor encoding/mod.rs Encoding
+             enum into a small visitor-style codec registry where each encoding id
+             (raw/zstd/float16/int8) implements one decode(&[u8]) -> view method, keeping the
+             additive encoding-id space (4-255 reserved) clean and each codec file under the
+             300-line cap; (3) thread a DeserializeSeed-style state param (out-buffer / scratch
+             reused across calls) through int8 dequant in encoding/int8.rs so per-query
+             embedding decode reuses one allocation instead of allocating per chunk on the hot
+             search path in nest-runtime/src/search.rs. Do NOT pull in the serde crate itself
+             for the frozen container -- the format is repr(C) little-endian and must stay
+             dependency-light and byte-deterministic; steal the design patterns (borrowed-view
+             codec, encoding-driven Cow, the N+M codec/section separation), not the dependency.
+             serde_json/serde_yaml/serde_cbor ARE worth a real dependency only in nest-python or
+             a build-time ingest path for parsing input json/yaml/parquet-adjacent sources
+             before they become canonical chunks.
+compression: Indirect but real. serde is not a compressor and adds no entropy coding, so it does not advance
+             the 'compress more than everyone' north star directly. Its relevance is to the
+             SERVE half of compress-and-serve: zero-copy borrowed decoding lets nest keep
+             aggressive encodings (int8, f16, zstd) while still materializing text/vectors at
+             near-zero cost off mmap, so compression does not cost runtime allocation. The
+             encoding-driven Cow pattern (borrow when raw/f16/int8, copy only when zstd) is the
+             right architectural seam to add MORE codecs later (delta/varint/bitpacking for
+             chunk_ids and spans, dictionary coding) without rewriting every section reader --
+             it makes the codec layer extensible, which is a prerequisite for pushing the
+             compression frontier.
+perf:        serde's performance comes entirely from monomorphization + static dispatch: the derive generates
+             a straight-line specialized function per type, so there is no vtable, no boxing,
+             and the optimizer can inline the whole serialize/deserialize path. Zero-copy
+             deserialization eliminates the dominant cost in real workloads (string/byte
+             allocation and memcpy) -- serde_json borrows &'de str directly when no JSON escapes
+             are present, falling back to owned only on escaped strings. No SIMD in serde core
+             itself (some downstream JSON parsers like simd-json add it). For nest the lesson
+             is: a borrowed-slice decode path keeps the SIMD dot-product hot loop
+             (nest-runtime/src/simd) reading f32/int8 lanes straight from mmap with zero
+             intervening copy, which is exactly the current design intent -- adopting serde's
+             view discipline guarantees no accidental owning allocation creeps into the
+             rerank/materialize path.
+license:     MIT OR Apache-2.0 (dual-licensed)

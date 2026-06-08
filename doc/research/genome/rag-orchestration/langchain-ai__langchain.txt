@@ -1,0 +1,67 @@
+================================================================================================
+langchain-ai/langchain
+category: rag-orchestration   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Python/JS LLM-orchestration framework whose retrieval layer contributes two reusable,
+             format-agnostic ideas: a content-hash record-manager indexing API for incremental
+             dedup/sync of a vector store, and a content-hash-keyed embedding cache namespaced
+             by model fingerprint.
+innovation:  The "record manager" indexing API: every derived document carries a deterministic hash of
+             (canonical content + metadata), plus a source_id and write timestamp. Re-indexing
+             computes hashes, skips any hash already present (dedup), deletes stale hashes that
+             share a touched source_id (incremental cleanup), and can scope cleanup to seen
+             sources (scoped_full). This turns a write-once vector store into an idempotent,
+             incrementally-syncable one keyed purely on content hashes, with no re-embed of
+             unchanged content. It pairs with CacheBackedEmbeddings, which keys the embedding
+             KV-cache on hash(text) prefixed by a model-name namespace so a model change
+             invalidates cleanly.
+techniques:
+  - Record-manager dedup: store per-chunk content_hash + source_id + write_time;
+    skip-if-hash-present, delete-stale-by-source_id
+  - Three cleanup policies: incremental (delete superseded chunks of touched sources
+    continuously), full (delete anything not in this run's universe), scoped_full (in-memory set
+    of seen source_ids)
+  - source_id_key grouping so all chunks derived from one source document update/delete
+    atomically
+  - force_update flag to invalidate the index on embedding-model change without changing content
+  - CacheBackedEmbeddings: cache key = namespace(model fingerprint) + hex(SHA-256(text)); only
+    cache misses hit the embedder
+  - Configurable key encoder (sha1/blake2b/sha256/sha512) trading collision-resistance vs speed
+  - SemanticChunker: embed sentences, split where cosine distance between consecutive embeddings
+    exceeds a percentile/stddev/IQR/gradient breakpoint
+  - RecursiveCharacterTextSplitter: ordered separator hierarchy [paragraph,line,word,char]
+    recursive descent until under chunk_size, then greedy merge with bounded overlap
+nest steals: nest-format already computes content_hash (decoded canonical sections, stable across encodings)
+             and per-chunk chunk_ids; this is exactly LangChain's record-manager key. Add an
+             optional section (reserved id 0x09+, additive within v1) holding a sorted manifest
+             of {chunk_content_hash -> source_id, original_span_ref} so a future `nest
+             update`/`nest merge` in nest-cli can do incremental edits: re-embed ONLY chunks
+             whose content_hash is absent, copy embeddings/spans for unchanged hashes
+             byte-for-byte from the old mmap, and drop chunks whose source_id was touched but
+             hash vanished. This delivers the mission's missing real-time edit while preserving
+             determinism (sorted hash order = byte-identical output for identical inputs) and
+             zero-cost dedup. Mirror CacheBackedEmbeddings as a deterministic on-disk
+             python-side cache in nest-python keyed by namespace(model fingerprint already in
+             provenance) + SHA-256(chunk_canonical_text) so rebuilds and cross-corpus dedup
+             never re-embed identical text. For compression: identical-chunk dedup across files
+             plus span-deduped storage shrinks multi-document/whole-repo .nest containers
+             (north-star use case) by collapsing repeated boilerplate to one physical
+             chunk+embedding referenced by many spans.
+compression: Indirect but real: content-hash dedup collapses repeated/boilerplate chunks (and their fp32
+             embeddings, the largest section) to one physical copy referenced by many spans --
+             the biggest lever when packing whole repos/datasets/databases into one container.
+             The embedding cache avoids recompute, not bytes, but cross-file hash dedup is a
+             genuine size win for multi-document containers. Semantic chunking yields more
+             self-similar chunks that zstd compresses better in non-embedding sections.
+perf:        Record manager is normally SQLite-backed (SQLRecordManager) but the algorithm is just a hash set
+             + source_id index -- nest can implement it as a sorted in-file manifest scanned at
+             build time, no DB, no socket, offline by construction. Hash cost is one SHA-256 per
+             chunk (nest already does this for content_hash, near-zero marginal cost).
+             LangChain's incremental cleanup has O(redundant) cost when a source's chunks span
+             batches; nest builds the whole corpus in-process so a single batch avoids it.
+             Time-based cleanup races are irrelevant since nest builds are single-shot and
+             deterministic, not clock-driven.
+license:     MIT

@@ -1,0 +1,69 @@
+================================================================================================
+weaviate/recipes
+category: rag-orchestration   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A collection of ~92% Jupyter notebooks demonstrating Weaviate features and integrations (RAG,
+             agents, hybrid/multi-vector search, multi-tenancy) whose only deeply transferable
+             systems content is the family of vector-quantization codecs the recipes exercise:
+             Product Quantization (PQ), Scalar (SQ), Binary (BQ), and the newest 8-bit
+             Rotational Quantization (RQ), all paired with an exact-vector rescoring step.
+innovation:  Rotational Quantization: a seeded Fast Walsh-Hadamard rotation before 8-bit scalar quantization
+             gaussianizes the vector so a single short quantization interval works for all
+             dimensions, giving ~99% recall at 4x compression where naive int8 loses recall, all
+             deterministically and with a SIMD integer-dot hot path plus exact rescoring.
+techniques:
+  - Fast Walsh-Hadamard Transform (FWHT) as O(D log D) pseudo-random orthogonal rotation: 3
+    rounds of blocked FWHT + random sign flips + element swaps, replacing an O(D^2) random
+    orthogonal matrix
+  - Per-dimension 8-bit scalar quantization into 256 evenly-spaced levels between a stored
+    min/max interval, stored as [u8*dim, f32 lo, f32 hi, f32 squared_norm]
+  - Asymmetric/expanded inner-product estimate: expand q.x into 4 terms where the dominant term
+    is an integer byte-vector dot product done with SIMD (~2.3x faster than f32)
+  - Exact-vector rescoring: ANN returns top-m on quantized distance, then recompute exact
+    distance on uncompressed vectors for those m to erase recall loss
+  - Product Quantization: split D into segments, k-means 256 centroids per segment (8
+    bits/segment) into a codebook, Asymmetric Distance Computation via precomputed per-segment
+    lookup tables, sparse Fisher-Yates training-set sampling
+  - Binary Quantization: 1 bit per dim (sign only), 32x compression, Hamming-distance prefilter
+    then rescore
+  - Scalar Quantization with data-trained per-dimension buckets rather than a single global
+    scale
+nest steals: Adapt RQ to upgrade nest-format's int8 codec (crates/nest-format/src/encoding/int8.rs, which
+             today does naive per-vector max-abs scalar quant) into a rotated-int8 codec.
+             Concretely: (1) add a deterministic seeded FWHT rotation in nest-format encoding
+             (new helper, well under the 300-line cap) applied at build time in
+             nest-python/build_fn.rs before quantization; (2) store the rotation seed +
+             per-vector or per-section min/max interval in the int8 payload header (the format
+             is additive: bump INT8_PAYLOAD_VERSION or add a new scale_kind, NO
+             NEST_FORMAT_VERSION bump, no new encoding id needed since it stays encoding=3); (3)
+             at query time in nest-runtime, rotate the query with the same seeded FWHT, run the
+             existing SIMD i8 dot kernel over mmap, then let the ALREADY-MANDATORY exact cosine
+             rerank in search.rs (score_subset on ANN/hybrid candidates) recover full recall
+             against unrotated f32 ground truth. This is pure additive change confined to one
+             codec file plus a rotation helper, fully deterministic (seeded), offline,
+             single-file. It directly improves the 'tiny' preset: same int8/4x footprint but
+             recall jumps toward 0.99+ instead of degrading on outlier-heavy embeddings, and
+             could let nest push toward sub-4x (with PQ next) without a server. PQ/BQ are the
+             natural follow-on as new encoding ids (4-255 reserved range) for even smaller
+             files.
+compression: Directly central. nest's north star is 'compress data more than everyone' while serving from
+             mmap. RQ is a near-drop-in win: it makes the existing int8/4x path nearly lossless
+             (99% recall@10) by adding only a deterministic O(D log D) rotation and a tiny
+             header, and it keeps the SIMD-on-mmap hot path (rotation happens at build time on
+             data, only the query is rotated at search time). PQ (compute lookup tables, store
+             8-bit codes per segment, ~8-16x) and BQ (1 bit/dim, 32x) chart nest's roadmap to
+             far smaller files; both fit nest's mandatory-exact-rerank model because nest
+             already always reranks ANN/hybrid candidates against true cosine, which is exactly
+             the rescoring step these codecs require for accuracy.
+perf:        RQ rotation ~7us for 1536-dim (O(D log D) FWHT). Quantized int8 SIMD distance ~2.3x faster than
+             f32; end-to-end 15-50% faster without rescore, 5-42% faster with rescore in
+             high-recall ranges. 1M x 1536 OpenAI embeddings: 1465 MB (RQ) vs 5859 MB (f32) =
+             4x. BQ ~97% memory reduction (32x), PQ ~85% (split-segment codebook), SQ ~75%. All
+             quantizers store uncompressed vectors alongside for rescoring (a tradeoff nest
+             avoids since it keeps f32/canonical separately and reranks from them).
+license:     BSD-3-Clause (weaviate/recipes repo); underlying Weaviate engine is BSD-3-Clause. Techniques
+             (FWHT rotation, PQ, BQ, SQ) are public algorithms, not patented by Weaviate; safe
+             to reimplement.
