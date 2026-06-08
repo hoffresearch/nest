@@ -129,7 +129,6 @@ inventory:
     - {path: "crates/nest-format/tests/negative_int8.rs", kind: rust-test, purpose: "invalid int8 rejection coverage", links: ["crates/nest-format/src/encoding/int8.rs"]}
     - {path: "crates/nest-format/tests/negative_zstd.rs", kind: rust-test, purpose: "illegal zstd use rejection coverage", links: ["crates/nest-format/src/encoding/zstd_codec.rs"]}
     - {path: "crates/nest-format/tests/reserved_ids.rs", kind: rust-test, purpose: "reconciled additive section-id bands are disjoint, excluded from content_hash, and unresolved until their feature ships", links: ["crates/nest-format/src/layout/mod.rs"]}
-    - {path: "crates/nest-format/tests/manifest_additivity.rs", kind: rust-test, purpose: "manifest additivity guard: unset optional fields omitted (byte-identical), byte-identical round-trip, unknown future fields survive via extra, capabilities_ext additive", links: ["crates/nest-format/src/manifest/mod.rs"]}
     - {path: "crates/nest-format/tests/roundtrip.rs", kind: rust-test, purpose: "roundtrip coverage across encoding variants", links: ["crates/nest-format/src/writer/mod.rs", "crates/nest-format/src/reader/mod.rs"]}
     - {path: "crates/nest-format/tests/v01_compat.rs", kind: rust-test, purpose: "v0.1 compatibility coverage", links: ["crates/nest-format/src/reader/mod.rs"]}
   nest_python:
