@@ -51,8 +51,8 @@ tagged by layer (forge/nest/lens/cross)
     data.
     refs: python/forge/demo_corpus/, doc/plan/master-plan/00-vision.txt, run-llama/semtools
 
-[x] codec registry refactor + reserve ALL reconciled ids in one pass (incl 0x16 overlay)
-    (HIGH/nest)  [p0 #02: WireCodec registry + encode_smallest + 0x11-0x16/0x20-0x3F reserved]
+[ ] codec registry refactor + reserve ALL reconciled ids in one pass (incl 0x16 overlay)
+    (HIGH/nest)
     visitor-style registry; reserve encoding 4-9 and section 0x09-0x10 (present) AND pre-claim
     0x11 GRAPH_NODES / 0x12 GRAPH_EDGE_PROPS / 0x13 GRAPH_ENTITY_MAP / 0x14 BLOB_REFS / 0x15
     SPACE_TABLE / 0x16 BLOB_SPAN_OVERLAY / 0x20-0x2F slabs / 0x30-0x3F fp, ALL excluded from
