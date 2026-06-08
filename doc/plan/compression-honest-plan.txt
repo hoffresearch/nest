@@ -71,6 +71,25 @@ patient (a different query), it makes within-a-known-group retrieval exact and c
 candidate set IS the group. the field name is just a string the caller chose; no market rule lives
 in nest.
 
+four, a structural audit of the source zip (notes.zip, 1,146,701 notes; phi-safe sample n=3823 at
+1:300, counts only) corrected three assumed test items before any of them was built. feature
+coverage, measured: date 100 percent, user_id (the note's author IS the therapist) 99.8 percent,
+patient_file_id 94.2 percent, decrypted_notes (the body) 91.7 percent; but session_id only 29.6
+percent and therapy_type only 14.1 percent. consequence: "whole-session chunking" can group at most
+30 percent of notes and "re-rank by therapy_type" rests on a feature present in one note in seven;
+date and therapist are the only clinical features dense enough to index or re-rank on. boilerplate
+at the line level is essentially zero: one 14-char line repeats across 143 notes, total boilerplate
+char-mass is 0.0 percent of indexed text, and no note embeds its previous_notes verbatim in its
+body. so "suppress boilerplate before indexing" has no target on this corpus; the cosine-near-1.0
+pairs the labeled set surfaced are short near-duplicate notes (a document-dedup question), not
+template lines. the only pre-index cleaning the data justifies is dropping the about 8 percent of
+notes with an empty body. therapist genericity was then proven on real data: rebuilding the cohort
+(2915 notes, 7595 chunks) with patient_file_id AND user_id both indexed yields a content_hash
+byte-identical to the no-meta build (b9219aef9) with a differing file_hash, and search_filtered
+returns 12/12 in-group hits for BOTH fields (bogus value to 0 hits, unfiltered search() unchanged
+over all 7595 chunks). the 0x17 index is field-generic on real data, and "index by therapist" is
+well-founded: therapist is the denser key (top therapist 1433 docs versus top patient 66).
+
 the unstoppable goal
 
 the nest is the most compact, sovereign, citable ai database in the world, in three layers:
