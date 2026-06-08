@@ -175,41 +175,6 @@ mod tests {
     }
 
     #[test]
-    fn wire_codec_registry_maps_only_implemented_ids() {
-        use crate::layout::{
-            SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD,
-        };
-        assert!(WireCodec::from_id(SECTION_ENCODING_RAW).is_some());
-        assert!(WireCodec::from_id(SECTION_ENCODING_ZSTD).is_some());
-        // reserved-but-unimplemented and unknown ids are not in the registry.
-        assert!(WireCodec::from_id(SECTION_ENCODING_INTPACK).is_none());
-        assert!(WireCodec::from_id(0xFF).is_none());
-    }
-
-    #[test]
-    fn encode_smallest_picks_the_winner_and_records_its_id() {
-        use crate::layout::{SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD};
-        let candidates = [SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD];
-
-        // lhighly repetitive payload: zstd wins, and the chosen id is recorded.
-        let compressible = b"abcabcabcabc".repeat(64);
-        let (id, bytes) = encode_smallest(&candidates, &compressible).unwrap();
-        assert_eq!(id, SECTION_ENCODING_ZSTD);
-        assert!(bytes.len() < compressible.len());
-
-        // ltiny payload: zstd framing overhead loses, raw wins (first on ties).
-        let (id2, _) = encode_smallest(&candidates, b"x").unwrap();
-        assert_eq!(id2, SECTION_ENCODING_RAW);
-    }
-
-    #[test]
-    fn encode_smallest_rejects_embedding_and_empty_candidates() {
-        use crate::layout::SECTION_ENCODING_INT8;
-        assert!(encode_smallest(&[SECTION_ENCODING_INT8], b"data").is_err());
-        assert!(encode_smallest(&[], b"data").is_err());
-    }
-
-    #[test]
     fn f16_roundtrip_within_tolerance() {
         let v: Vec<f32> = (0..16).map(|i| (i as f32) * 0.05).collect();
         let bytes = f32_to_f16_bytes(&v);

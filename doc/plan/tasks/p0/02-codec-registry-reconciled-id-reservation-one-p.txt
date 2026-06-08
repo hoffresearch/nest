@@ -1,7 +1,7 @@
 ==============================================================================================
 TASK #02 :: codec registry + reconciled id reservation (one pass)
 phase: phase 0   layer: nest
-status:  [ ] todo    [x] doing    [ ] done   (impl + gate green; pending owner ok to commit/merge)
+status:  [ ] todo    [ ] doing    [ ] done
 ==============================================================================================
 
 self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
@@ -35,20 +35,14 @@ ships behind proven gates.
   crates/nest-format/src/writer/encoding_choice.rs
 
 --- STEPS (check each) ---
-[x] turn decode_payload into a visitor-style registry, one <=300-line module per encoding id
-    -> encoding/mod.rs: WireCodec enum + from_id registry; decode_payload dispatches through it.
-       byte-identical decode (raw/f16/int8 borrow, zstd decompress, reserved ids rejected).
-       adding a codec = a variant + a from_id arm + a decode arm + its module.
-[x] reserve encoding ids 4-9 AND section ids 0x09-0x10 as named constants (already present, kept)
-[x] ALSO pre-claim 0x11=GRAPH_NODES .. 0x16=BLOB_SPAN_OVERLAY + 0x20-0x2F / 0x30-0x3F bands
-    -> layout/mod.rs: named constants for 0x11-0x16, SECTION_SPACE_EMBEDDINGS_BASE=0x20,
-       SECTION_SPACE_EMBEDDINGS_FP_BASE=0x30, SPACE_BAND_LEN=0x10, all excluded from
-       content_hash. disjoint-bands + content_hash-exclusion test in tests/reserved_ids.rs
-       (the in-file reserved_additive_ids test also extended for 0x11-0x16 contiguity).
-[x] cost-driven try-all-pick-smallest encoder recording the chosen id
-    -> encoding/mod.rs: encode_smallest(candidates, payload) tries each non-embedding encoder,
-       returns (id, bytes) of the smallest (ties to earliest = cheaper decode). additive, not
-       wired into existing presets, so frozen output stays byte-identical.
+[ ] turn decode_payload into a visitor-style registry, one <=300-line module per encoding id
+[ ] reserve encoding ids 4-9 AND section ids 0x09-0x10 as named constants (already present in
+    layout/mod.rs; keep)
+[ ] ALSO pre-claim 0x11=GRAPH_NODES, 0x12=GRAPH_EDGE_PROPS, 0x13=GRAPH_ENTITY_MAP,
+    0x14=BLOB_REFS, 0x15=SPACE_TABLE, 0x16=BLOB_SPAN_OVERLAY, 0x20-0x2F space slabs, 0x30-0x3F
+    space fp, ALL excluded from content_hash, with a disjoint-bands test extending
+    reserved_additive_ids_are_in_range_and_distinct
+[ ] cost-driven try-all-pick-smallest encoder recording the chosen id
 
 --- draws from ---
 serde-rs/serde, ebiggers/libdeflate, duckdb/duckdb
@@ -74,25 +68,16 @@ serde-rs/serde, ebiggers/libdeflate, duckdb/duckdb
     main.
 
 --- DONE WHEN (all green) ---
-[x] cargo build --release --workspace ; cargo test --workspace  (141 rust tests pass)
-[x] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
-[x] rebuild python/_nest.so ; ./scripts/release_check.sh passes (ALL GATES PASS)
-[x] python/tools/measure_presets.py: size ratio + recall@10 unchanged (reservation/registry task)
-
-  scope notes:
-  - byte-identical confirmed: golden_v1_minimal (5/5) and v01_compat green, so the registry
-    refactor + id reservation changed no emitted bytes and no decode behavior.
-  - branch off research/nest-genome-v2 (OWNS disjoint from #01, parallelizable). cherry-picked
-    the golden-fixture lfs-pointer fix (also on feat/p0-01) so this branch's gate runs; the
-    fixture binary is committed here too (idempotent across both branches).
-  - encode_smallest reachable as nest_format::encoding::encode_smallest (pub mod), so no
-    nest-format lib.rs change was needed.
+[ ] cargo build --release --workspace ; cargo test --workspace (+ roundtrip+content_hash test
+    for new codecs)
+[ ] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if format/runtime/python changed ; ./scripts/release_check.sh
+    passes
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
 
 --- RESULT (fill in) ---
-  size ratio  before: exact 1.000 / compressed 0.350 / tiny 0.283 / hybrid 0.668
-              after:  exact 1.000 / compressed 0.350 / tiny 0.283 / hybrid 0.668  (unchanged)
-  recall@10   before: 1.0000 / 1.0000 / 0.9920 / 1.0000
-              after:  1.0000 / 1.0000 / 0.9920 / 1.0000  (unchanged; reservation + registry only)
+  size ratio  before: ____  after: ____
+  recall@10   before: ____  after: ____
 
 --- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
 update only what THIS task actually changed; check each:
