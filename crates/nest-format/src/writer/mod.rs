@@ -41,6 +41,9 @@ pub struct NestFileBuilder {
     /// the runtime's job.
     pub(super) hnsw_index: Option<Vec<u8>>,
     pub(super) bm25_index: Option<Vec<u8>>,
+    /// lOptional graph_adjacency (0x0C) csr payload, fully encoded by the
+    /// caller (chunk-to-chunk edges). additive, excluded from content_hash.
+    pub(super) graph_adjacency: Option<Vec<u8>>,
 }
 
 impl NestFileBuilder {
@@ -54,6 +57,7 @@ impl NestFileBuilder {
             dtype: EmbeddingDType::Float32,
             hnsw_index: None,
             bm25_index: None,
+            graph_adjacency: None,
         }
     }
 
@@ -114,6 +118,20 @@ impl NestFileBuilder {
     pub fn bm25_index(mut self, payload: Vec<u8>) -> Self {
         self.bm25_index = Some(payload);
         self.manifest.capabilities.supports_bm25 = true;
+        self
+    }
+
+    /// lAttach a graph_adjacency (0x0C) csr payload (chunk-to-chunk edges,
+    /// already encoded by `encode_graph_adjacency`). Sets the additive
+    /// `capabilities_ext.graph_present = Some(true)` flag so the runtime opens
+    /// the section behind a capability, exactly like hnsw/bm25. The section is
+    /// EXCLUDED from content_hash, so adding a graph never invalidates a
+    /// nest:// citation. Emitted raw, like hnsw.
+    pub fn graph_adjacency(mut self, payload: Vec<u8>) -> Self {
+        self.graph_adjacency = Some(payload);
+        let mut ext = self.manifest.capabilities_ext.take().unwrap_or_default();
+        ext.graph_present = Some(true);
+        self.manifest.capabilities_ext = Some(ext);
         self
     }
 

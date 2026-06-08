@@ -96,6 +96,14 @@ useful for debugging or measuring `ef_search` curves. falls back to exact if the
 nest search-ann my_corpus.nest "[0.1, 0.2, ...]" -k 10 --ef 200
 ```
 
+### graph search (chunk-to-chunk)
+
+seeds from the exact-cosine top-`ef`, expands a bounded breadth-first walk over the chunk-to-chunk graph (`--hops`), then exact-reranks the union. the graph only generates candidates; the returned score is real cosine (recall is not computed, the rerank guarantees the score). falls back to exact if the file has no `graph_adjacency` (0x0C) section. build a graph-carrying file with `nest.build(..., with_graph=True)` (default off); the section is additive and excluded from content_hash, so adding a graph never changes a citation.
+
+```sh
+nest search-graph my_corpus.nest "[0.1, 0.2, ...]" -k 10 --hops 2 --ef 100
+```
+
 ## 6. presets
 
 `preset=` selects a (text encoding, embedding dtype, optional ANN, optional BM25) bundle. per-knob overrides win, see `BuildConfig.text_encoding`, `.dtype`, `.with_hnsw`, `.with_bm25`, `.mrl_dim`.

@@ -7,7 +7,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
-use crate::build_inputs::{parse_chunks, truncate_renormalize};
+use crate::build_inputs::{build_graph_payload, parse_chunks, truncate_renormalize};
 
 /// lBuild a .nest file from already-embedded chunks.
 ///
@@ -41,6 +41,13 @@ use crate::build_inputs::{parse_chunks, truncate_renormalize};
 ///     slice + renorm, so byte-identical builds hold.
 ///   - `with_hnsw`: bool (overrides preset; default per preset)
 ///   - `with_bm25`: bool (overrides preset; default per preset)
+///   - `with_graph`: bool (default off). Emits the additive chunk-to-chunk
+///     graph_adjacency (0x0C) csr: NEXT_CHUNK edges (sequential ordinals) +
+///     top-`graph_top_m` SEMANTIC edges from the hnsw level-0 graph,
+///     canonically sorted. Excluded from content_hash, so citations are
+///     unchanged. Builds (and discards) an hnsw index for the semantic edges
+///     even when `with_hnsw` is off.
+///   - `graph_top_m`: int (default 8). Max semantic edges per node.
 ///   - `hnsw_m`, `hnsw_ef_construction`, `hnsw_seed`: HNSW knobs
 #[pyfunction]
 #[pyo3(signature = (
@@ -65,6 +72,8 @@ use crate::build_inputs::{parse_chunks, truncate_renormalize};
     mrl_dim=None,
     with_hnsw=None,
     with_bm25=None,
+    with_graph=false,
+    graph_top_m=8,
     hnsw_m=16,
     hnsw_ef_construction=400,
     hnsw_seed=42,
@@ -92,6 +101,8 @@ pub fn build(
     mrl_dim: Option<u32>,
     with_hnsw: Option<bool>,
     with_bm25: Option<bool>,
+    with_graph: bool,
+    graph_top_m: usize,
     hnsw_m: usize,
     hnsw_ef_construction: usize,
     hnsw_seed: u64,
@@ -224,23 +235,42 @@ pub fn build(
 
     // lHNSW: build the index from f32 vectors (we have them in chunk_inputs
     // already). The runtime materializes f32 vectors at open time too —
-    // here we use the originals so build is independent of dtype loss.
-    if want_hnsw {
+    // here we use the originals so build is independent of dtype loss. The
+    // index is also the source of top-m SEMANTIC edges for the optional graph,
+    // so build it whenever hnsw OR the graph is wanted; only attach the hnsw
+    // SECTION when hnsw is wanted.
+    let n = chunk_inputs.len();
+    let hnsw_index = if want_hnsw || with_graph {
         let dim = embedding_dim as usize;
-        let n = chunk_inputs.len();
         let mut flat: Vec<f32> = Vec::with_capacity(n * dim);
         for c in &chunk_inputs {
             flat.extend_from_slice(&c.embedding);
         }
-        let idx = nest_runtime::ann::HnswIndex::build(
+        Some(nest_runtime::ann::HnswIndex::build(
             flat,
             n,
             dim,
             hnsw_m,
             hnsw_ef_construction,
             hnsw_seed,
-        );
-        builder = builder.hnsw_index(idx.to_bytes());
+        ))
+    } else {
+        None
+    };
+    if want_hnsw {
+        if let Some(idx) = hnsw_index.as_ref() {
+            builder = builder.hnsw_index(idx.to_bytes());
+        }
+    }
+
+    // lOptional chunk-to-chunk graph (G1). NEXT_CHUNK edges (sequential
+    // ordinals) + top-m SEMANTIC edges from the hnsw level-0 graph,
+    // canonically sorted (byte-identical builds). additive, excluded from
+    // content_hash; sets capabilities_ext.graph_present. default off.
+    if with_graph {
+        if let Some(payload) = build_graph_payload(hnsw_index.as_ref(), n, graph_top_m)? {
+            builder = builder.graph_adjacency(payload);
+        }
     }
 
     if want_bm25 {

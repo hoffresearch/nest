@@ -19,6 +19,11 @@ pub use error::{NestError, Result};
 pub use layout::*;
 pub use manifest::{Capabilities, Manifest};
 pub use reader::NestView;
+pub use sections::graph::{
+    CsrParts, EDGE_TYPE_CITATION, EDGE_TYPE_NEXT_CHUNK, EDGE_TYPE_SEMANTIC, Edge,
+    GRAPH_ADJACENCY_PAYLOAD_VERSION, GRAPH_MAX_DEGREE, decode_graph_adjacency,
+    encode_graph_adjacency, parse_csr_parts,
+};
 pub use sections::{
     OriginalSpan, SearchContract, decode_chunk_ids, decode_chunks_canonical,
     decode_chunks_original_spans, decode_provenance, decode_search_contract, decode_txt_streams,
