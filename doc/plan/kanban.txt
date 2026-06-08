@@ -36,15 +36,26 @@ tagged by layer (forge/nest/lens/cross)
     refs: crates/nest-runtime/src/materialize.rs, crates/nest-runtime/src/ann/mod.rs,
           microsoft/onnxruntime
 
-[ ] flagship blocker: vendor a static model2vec/potion default embedder   (CRITICAL/forge)
-    a pip-install flagship that fetches a sentence-transformers model on first use (the
-    current python embed path) VIOLATES offline-by-construction for a new user. vendor a
-    static table as the default: tiny, fully offline, byte-identical-deterministic; support a
-    brought model whose fingerprint is recorded. moved OUT of open-decisions/research INTO a
-    now-blocker.
+[x] flagship blocker: offline static default embedder (FLOOR only)   (CRITICAL/forge)
+    [p0 #04: python/forge/embed_default.py, offline stdlib-only static embedder, deterministic,
+     f32-stable, self-fingerprinting model_hash; brought-model path kept as quality ceiling]
+    the offline-by-construction blocker is CLOSED. but the shipped default is a randomized
+    bag-of-words (token -> fixed pseudo-random vector, text -> normalized mean): cosine reflects
+    shared LITERAL tokens only, NO semantic generalization (carro vs automovel ~ carro vs
+    banana). good enough as an offline FLOOR; the real model2vec/potion table is a separate
+    REQUIRED card below.
     refs: python/forge/embed_default.py, crates/nest-cli/src/main.rs, minishlab/model2vec
 
-[ ] flagship blocker: pick ONE concrete license-clean demo corpus now   (HIGH/forge)
+[ ] vendor a REAL model2vec/potion static table (semantic, drop-in)   (HIGH/forge)
+    the #04 default is lexical-only; the flagship pitch is SEMANTIC retrieval. vendor an actual
+    distilled model2vec/potion table (still offline, tiny, no torch) behind the SAME
+    StaticEmbedder interface + model_hash convention, so it is a drop-in swap. REQUIRED before
+    the flagship demo (#08) and the gate, or the one-gif demo retrieves by keyword and the
+    'semantic' claim is hollow. validate per-query recall vs the lexical floor.
+    refs: python/forge/embed_default.py, minishlab/model2vec, run-llama/semtools
+
+[x] flagship blocker: pick ONE concrete license-clean demo corpus now   (HIGH/forge)
+    [p0 #04: python/forge/demo_corpus/, cc0 original docs about nest itself, redistributable]
     every vertical demo is currently 'a synthetic monolith' with no actual corpus chosen. the
     one-gif flagship demo needs a concrete, vendored, permissively-licensed doc folder picked
     NOW; it gates the whole go-to-market. cheap and currently absent. never academic-only

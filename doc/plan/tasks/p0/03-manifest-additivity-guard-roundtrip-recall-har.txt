@@ -1,7 +1,7 @@
 ==============================================================================================
 TASK #03 :: manifest additivity guard + roundtrip + recall harness + distribution
 phase: phase 0   layer: nest
-status:  [ ] todo    [x] doing    [ ] done   (step 1 manifest-additivity guard done + gate green;
+status:  [ ] todo    [ ] doing    [x] done   (step 1 (manifest-additivity guard) merged; steps 2-4 DEFERRED to a separate task)
          steps 2-4 are a different OWNS set, scoped to a separate task by the owner)
 ==============================================================================================
 
