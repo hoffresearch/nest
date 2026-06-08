@@ -9,8 +9,18 @@ defense-in-depth controls, so the controls are auditable and re-installable.
 
 The development environment performs **environment-level auto-commit/push** of the
 working tree (it is not a repo hook — the only `.git/hooks` present are benign
-git-lfs delegators). The risk is: a PHI artifact lands inside the repo working
-tree and an auto-committer stages + pushes it to GitHub before a human notices.
+git-lfs delegators). The primary risk is: a PHI artifact lands inside the repo
+working tree and an auto-committer stages + pushes it to GitHub before a human
+notices.
+
+A second vector is **scratch / measurement artifacts**: tools that read PHI
+(cohort builders, the relevance ruler, dedup audits) can write cleartext
+intermediates — sidecars, per-pair note files, temp `.nest` — to `/tmp` or the
+work dir. `/tmp` is world-traversable (mode `1777`) and cleaned only by a periodic
+job (files older than ~3 days), so PHI written there is readable by any local user
+until then. Separately, these controls protect the *git repo*, not the *disk*:
+`/Volumes/<redacted>` is an **unencrypted** external APFS volume, so physical loss/theft
+or remounting it on another machine bypasses Unix permissions entirely.
 
 ## Controls (defense in depth)
 
@@ -48,6 +58,14 @@ Install on a fresh clone (`.git/hooks` is not version-tracked):
 cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 ```
 
+**4. Scratch hygiene — PHI never in `/tmp`, work dir locked down.**
+All PHI intermediates go under `/Volumes/<redacted>/dat/psy/work` (mode `700`), **never
+`/tmp`** (world-traversable). PHI files there are mode `600`. Measurement
+artifacts (per-pair note files, sidecars, cohort `.nest`) are EPHEMERAL: deleted
+(`trash`) immediately after the analysis that needs them; only non-PHI derived
+results (counts, AUC, the numbers committed to the plan) persist. A tool that
+reads note text writes its output to the work dir and cleans up on completion.
+
 ## Verifying the controls
 
 ```sh
@@ -65,9 +83,28 @@ git reset -q dat/measure/zzz_fake_phi.nest && trash dat/measure/zzz_fake_phi.nes
 git check-ignore -q dat/corpus_next.v1.nest && echo IGNORED-BAD || echo ok-trackable
 ```
 
+## Residual risks (not closed by these controls)
+
+These controls protect the **git repository**. Two PHI vectors remain — owned by
+the operator, not the code:
+
+- **Disk encryption (open).** `/Volumes/<redacted>` is an unencrypted external USB APFS
+  volume (`diskutil info /Volumes/<redacted>` → `Encrypted: No`). `chmod 600` stops other
+  users on the *running* system, not physical theft or remounting the disk
+  elsewhere as admin. **Mitigation: enable APFS / FileVault encryption on the
+  volume.** This is the one link `chmod` cannot close.
+- **Backup / sync (verified clear, re-check before enabling any).** At audit time:
+  **no Time Machine destination** (`tmutil destinationinfo` → none) and **no
+  third-party cloud-sync daemon** (Dropbox/Drive/OneDrive) over the volume; the
+  system iCloud `bird` daemon does not sync arbitrary external volumes. A backup
+  tool, once enabled, copies PHI regardless of file mode — exclude `/Volumes/<redacted>`
+  if one is ever turned on.
+
 ## Audit (as of this writing)
 
 - PHI directory is outside any git repo: confirmed.
 - Tracked `.nest` files: only the three public corpora above. No PHI tracked.
 - Working tree: clean.
-- All three controls verified end-to-end.
+- All three repo controls verified end-to-end.
+- Work dir `dat/psy/work` is mode `700`, PHI files `600`; `/tmp` cleared of PHI.
+- Volume is unencrypted (residual risk above); no Time Machine, no cloud sync.

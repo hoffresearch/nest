@@ -2,13 +2,16 @@
 # scripts/pre-commit — defense-in-depth against committing PHI / data artifacts.
 #
 # Clinical data MUST live OUTSIDE this repo (e.g. /Volumes/<redacted>/dat/psy/work).
-# The .gitignore already skips *.sidecar.jsonl / cohort_*.nest / **/pairs/, but
-# this hook is the stronger backstop: it ABORTS any commit that stages a data
-# artifact (.nest / .sidecar.jsonl / a file under pairs/) that is not on the
-# explicit allow-list of sanctioned public corpora below.
+# The .gitignore already ignores *.nest / *.sidecar.jsonl / **/pairs/ (a catch-all
+# that negates only the sanctioned public corpora), but this hook is the stronger
+# backstop: it ABORTS any commit that stages a data artifact (.nest /
+# .sidecar.jsonl / a file under pairs/) that is not on the explicit allow-list of
+# sanctioned public corpora below — catching a `git add -f` that bypasses gitignore.
 #
-# Enable once per clone (it lives outside .git/hooks so it is version-tracked):
-#   git config core.hooksPath scripts && git lfs install --local
+# Install once per clone (it lives outside .git/hooks so it is version-tracked).
+# Copy it in rather than `core.hooksPath scripts`, which would DISABLE the git-lfs
+# hooks (LFS uses post-commit/pre-push, not pre-commit, so the two coexist):
+#   cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 #
 set -eu
 
