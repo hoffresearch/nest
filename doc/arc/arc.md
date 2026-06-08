@@ -1,6 +1,6 @@
 ---
 project: nest
-last-updated: "2026-05-19"
+last-updated: "2026-06-05"
 domain: architecture
 ---
 
@@ -24,6 +24,8 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - raw and zstd apply to non-embedding payloads. float16 and int8 apply only to embeddings. embeddings never use zstd because the runtime scores them directly from mmap through the simd path.
 - the four integrity surfaces are header_checksum, section checksum over physical bytes, file_hash over the whole pre-footer body, and content_hash over decoded canonical sections.
 - exact search is always the ground truth path. hnsw and hybrid search return final hits only after exact cosine rerank.
+- the mandatory exact rerank reads through one explicit rerank source (runtime/src/rerank.rs): the full-precision embeddings_fp (0x09) slab when present, else the stored dtype slab, so the returned score is always real cosine (at stored precision unless an fp source is present). every candidate-generating path (ann, hybrid, and future graph/space/cross) ends in this source; the rerank-honesty contract test (runtime/tests/rerank_contract.rs) asserts the returned score equals the exact rerank byte-for-byte and recall is NaN for every non-exact path, and gates the release check.
+- the optional embeddings_fp (0x09) section is a fixed-stride raw slab (float32 or float16, never zstd) read at open; its write path lands with the sub-int8 codecs (phase 3).
 - citation ids use the form nest://content_hash/chunk_id, so references remain stable across raw versus zstd text encodings.
 
 ## root
@@ -165,9 +167,10 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - crates/nest-runtime/src/bm25/tokenize.rs | rust source | lowercases and tokenizes on unicode-aware alphanumeric boundaries.
 - crates/nest-runtime/src/error.rs | rust source | RuntimeError surface that wraps format errors and query validation failures.
 - crates/nest-runtime/src/lib.rs | rust source | public SearchHit and SearchResult types plus runtime re-exports.
-- crates/nest-runtime/src/materialize.rs | rust source | materializes stored embeddings into f32 vectors for ann build and attach paths.
-- crates/nest-runtime/src/mmap_file.rs | rust source | owns the mmap, decodes metadata and optional indices at open time, and exposes inspect and revalidate helpers while assuming embeddings stay directly readable from the mapped file.
-- crates/nest-runtime/src/search.rs | rust source | validates queries, scores exact rows, reranks ann and hybrid candidates, and materializes stable hit contracts.
+- crates/nest-runtime/src/materialize.rs | rust source | PackedVectors store for the ann graph: keeps int8/float16 rows in their on-disk packing and decodes one row at a time into a scratch buffer, removing the old n*dim*4 f32 snapshot while keeping distances byte-identical.
+- crates/nest-runtime/src/rerank.rs | rust source | the explicit rerank-source handle (RerankSource) the exact-cosine recompute reads through, plus FpSlab detection for the optional embeddings_fp (0x09) full-precision slab; ready for per-space routing.
+- crates/nest-runtime/src/mmap_file.rs | rust source | owns the mmap, decodes metadata and optional indices at open time (including the optional embeddings_fp slab and the packed ann vector store), and exposes inspect and revalidate helpers while assuming embeddings stay directly readable from the mapped file.
+- crates/nest-runtime/src/search.rs | rust source | validates queries, scores exact rows and reranks ann and hybrid candidates through the single rerank source, and materializes stable hit contracts.
 - crates/nest-runtime/src/simd/avx2.rs | rust source | x86_64 avx2 kernels for dot products over f32 and int8 hot paths.
 - crates/nest-runtime/src/simd/mod.rs | rust source | once-only backend detection plus dispatch for scalar, avx2, and neon kernels.
 - crates/nest-runtime/src/simd/neon.rs | rust source | aarch64 neon kernels, including float16 and int8 specialized paths.
@@ -175,6 +178,7 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - crates/nest-runtime/src/simd/tests.rs | rust test | parity coverage across scalar and simd implementations.
 - crates/nest-runtime/tests/fp16_topk_recall_vs_f32.rs | rust test | recall and score-drift checks for float16 against float32 exact search.
 - crates/nest-runtime/tests/hnsw_recall.rs | rust test | release-mode recall floors for the ann path.
+- crates/nest-runtime/tests/rerank_contract.rs | rust test | the honest-rerank gate: every non-exact path returns the exact-cosine rerank score byte-for-byte and recall is NaN; parameterized over all search entry points.
 - crates/nest-runtime/tests/search_exact.rs | rust test | exact search behavior, query validation, and stable ordering tests.
 
 ## data and docs
