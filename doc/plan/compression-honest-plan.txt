@@ -124,11 +124,17 @@ whereas potion's mean-of-words is naturally length-robust and captures the topic
 "same theme / same patient" relevance rewards. so on this task the embedder is NOT the lever: the
 0.13 ms/query static model is the best of the three tested. the one model not yet tested is
 multilingual-e5-large, which UNLIKE minilm/labse is retrieval-tuned (query:/passage: prefixes) and
-is the prior session's 0.19-group-recall model; it needs a ~2 gb download and runs at ~84 ms/query
-(635x potion). given two transformers already lost, the prior that e5 earns that cost is weak, but
-it is the one clean remaining embedder test. the honest direction the evidence points: stop investing
-in the embedder; the wins on this corpus came from the metadata filter (point three) and from
-recognizing the ruler artifact (points four and five), not from a heavier model.
+is the prior session's 0.19-group-recall model. that test is now closed with its cheaper retrieval-
+tuned sibling multilingual-e5-small (384d, query:/passage: prefixes, full-note chunk-pooled like the
+others): auc 0.693 loose / 0.636 strict — it LOSES to potion on loose and only ties on strict, and
+its cosine is likewise compressed ([0.82, 0.99]). so even the retrieval-tuned family does not beat
+the static model on this corpus. caveat: this is e5-small, not e5-large (1024d, the 0.19 model);
+e5-large could in principle gain a little more capacity, but with four embedders measured (the
+retrieval-tuned one included) all at or below potion, the prior that e5-large earns its ~2 gb / ~84
+ms-per-query / 635x cost is very weak — not worth the download. the honest direction the evidence
+points: stop investing in the embedder; the wins on this corpus came from the metadata filter
+(point three) and from recognizing the ruler artifact (points four and five), not from a heavier
+model. embedder question: CLOSED.
 
 the unstoppable goal
 
