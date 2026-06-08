@@ -18,6 +18,7 @@
 //! tests and as the lower-bound reference baseline.
 
 use super::{Candidate, cosine_dist};
+use crate::materialize::PackedVectors;
 
 /// lAlgorithm 3: keep the `m` closest candidates by distance ascending.
 /// lStable: ties break by ascending id so the same candidate set + same
@@ -41,19 +42,22 @@ pub(super) fn select_neighbors_simple(candidates: &[Candidate], m: usize) -> Vec
 /// with diversity.
 ///
 /// `candidates` are pre-scored against the query (the node being inserted
-/// or the node whose backlink list overflowed). `vectors` is row-major
-/// f32 storage so we can compute candidate-to-candidate distances on the
-/// fly. The `keep_pruned` refill is on by default in build to guarantee
-/// neighbor lists actually reach `m` even when most candidates get
-/// shadowed.
+/// or the node whose backlink list overflowed). `store` decodes rows on
+/// the fly (into `sa`/`sb`) so we can compute candidate-to-candidate
+/// distances without an f32 snapshot. The `keep_pruned` refill is on by
+/// default in build to guarantee neighbor lists actually reach `m` even
+/// when most candidates get shadowed.
 ///
 /// lDeterminism: ties in distance break by ascending id so the same
 /// inputs always produce the same output ordering.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn select_neighbors_heuristic(
     candidates: &[Candidate],
     m: usize,
-    vectors: &[f32],
+    store: &PackedVectors,
     dim: usize,
+    sa: &mut [f32],
+    sb: &mut [f32],
     keep_pruned: bool,
 ) -> Vec<u32> {
     if candidates.is_empty() || m == 0 {
@@ -74,11 +78,10 @@ pub(super) fn select_neighbors_heuristic(
         if chosen.len() >= m {
             break;
         }
-        let cand_row = &vectors[(cand.id as usize) * dim..(cand.id as usize + 1) * dim];
+        let cand_row = store.row(cand.id as usize, dim, sa);
         let mut shadowed = false;
         for chosen_one in &chosen {
-            let chosen_row =
-                &vectors[(chosen_one.id as usize) * dim..(chosen_one.id as usize + 1) * dim];
+            let chosen_row = store.row(chosen_one.id as usize, dim, sb);
             let d_cc = cosine_dist(cand_row, chosen_row);
             // lCandidate is shadowed: an already-chosen neighbor is
             // closer to it than the query is. Adding it gives no new
@@ -142,7 +145,10 @@ mod tests {
             0.0, -1.0, // 3: -y
         ];
         let cs = vec![cand(0, 0.0), cand(1, 0.5), cand(2, 1.0), cand(3, 1.5)];
-        let picked = select_neighbors_heuristic(&cs, 2, &vectors, 2, true);
+        let store = PackedVectors::F32(vectors);
+        let mut sa = store.scratch(2);
+        let mut sb = store.scratch(2);
+        let picked = select_neighbors_heuristic(&cs, 2, &store, 2, &mut sa, &mut sb, true);
         assert!(picked.len() <= 2, "len={} > 2", picked.len());
         assert!(picked.contains(&0), "closest must always be picked");
     }
@@ -160,7 +166,10 @@ mod tests {
             0.0, 1.0, // 2: +y
         ];
         let cs = vec![cand(0, 0.05), cand(1, 0.06), cand(2, 1.0)];
-        let picked = select_neighbors_heuristic(&cs, 2, &vectors, 2, true);
+        let store = PackedVectors::F32(vectors);
+        let mut sa = store.scratch(2);
+        let mut sb = store.scratch(2);
+        let picked = select_neighbors_heuristic(&cs, 2, &store, 2, &mut sa, &mut sb, true);
         assert_eq!(picked.len(), 2);
         assert!(picked.contains(&0));
         assert!(
@@ -181,7 +190,10 @@ mod tests {
             0.98, 0.02, // 2: shadowed by 0 and 1
         ];
         let cs = vec![cand(0, 0.05), cand(1, 0.06), cand(2, 0.07)];
-        let picked = select_neighbors_heuristic(&cs, 3, &vectors, 2, true);
+        let store = PackedVectors::F32(vectors);
+        let mut sa = store.scratch(2);
+        let mut sb = store.scratch(2);
+        let picked = select_neighbors_heuristic(&cs, 3, &store, 2, &mut sa, &mut sb, true);
         assert_eq!(picked.len(), 3);
         assert_eq!(picked, vec![0, 1, 2]);
     }
