@@ -49,7 +49,12 @@ fn build_file(path: &PathBuf, with_meta: bool) {
     if with_meta {
         let cols = vec![(
             "g".to_string(),
-            vec![Some("a".into()), Some("b".into()), Some("a".into()), Some("b".into())],
+            vec![
+                Some("a".into()),
+                Some("b".into()),
+                Some("a".into()),
+                Some("b".into()),
+            ],
         )];
         builder = builder.meta_index(MetaIndex::build(&cols).to_bytes());
     }
@@ -98,7 +103,10 @@ fn missing_value_field_and_no_index_are_honest_empty() {
     assert_eq!(v.hits.len(), 0);
     assert!(v.recall.is_nan());
     // absent field -> empty.
-    assert_eq!(rt.search_filtered(&q, "nope", "a", 10).unwrap().hits.len(), 0);
+    assert_eq!(
+        rt.search_filtered(&q, "nope", "a", 10).unwrap().hits.len(),
+        0
+    );
     // k far exceeding the subset must not panic.
     assert!(rt.search_filtered(&q, "g", "a", 1000).unwrap().hits.len() <= 2);
 

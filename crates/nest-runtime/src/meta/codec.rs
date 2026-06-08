@@ -113,9 +113,7 @@ impl MetaIndex {
                     // lreject a zero gap (dup) or wrap (non-monotonic): a corrupt
                     // payload would otherwise yield a duplicate citation.
                     if j > 0 && p <= prev {
-                        return Err(malformed(
-                            "meta_index: non-ascending or duplicate posting",
-                        ));
+                        return Err(malformed("meta_index: non-ascending or duplicate posting"));
                     }
                     prev = p;
                     postings.push(p);
