@@ -98,8 +98,15 @@ def _baseline_row(base_size: int, t_exact: list[float], db_exact):
     return row, measurement
 
 
+# dtypes that store BELOW int8 precision (int8 codes or coarser): for these the
+# 0x09 embeddings_fp source is NOT wired (no SECTION_EMBEDDINGS_FP/FpSlab in the
+# writer), so net-of-fp ratio == stored ratio. recall@10 is real cosine AT THE
+# STORED PRECISION, disclosed via dtype (+ mrl_dim/full_dim where matryoshka).
+_SUB_INT8_DTYPES = {"int8", "int4"}
+
+
 def _variant_row(
-    preset, size, base_size, build_time, db_v, t_v, recall, drift_max, drift_mean, mode
+    preset, size, base_size, build_time, db_v, t_v, recall, drift_max, drift_mean, mode, full_dim
 ):
     size_ratio = size / base_size
     row = (
@@ -133,6 +140,21 @@ def _variant_row(
         "file_hash": db_v.file_hash,
         "content_hash": db_v.content_hash,
     }
+    # lhonest net-of-fp disclosure (machine-checkable). every sub-int8 row is
+    # STORED-PRECISION: the 0x09 embeddings_fp writer is not wired, so the
+    # net-of-fp ratio equals the stored ratio and the recall is real cosine at
+    # the stored precision. surface that explicitly plus the precision axis.
+    if db_v.dtype in _SUB_INT8_DTYPES:
+        measurement["stored_precision"] = True
+        measurement["has_fp_source"] = False  # 0x09 embeddings_fp slab not emitted
+        measurement["net_of_fp_ratio"] = round(size_ratio, 4)
+    # lmatryoshka disclosure: when the stored dim is shorter than the source
+    # dim, record both so the dimension lever is visible and a citation is
+    # honestly tied to a given mrl_dim. derived from the built file's stride,
+    # so it is machine-checkable straight off the published ladder JSON.
+    if db_v.embedding_dim != full_dim:
+        measurement["mrl_dim"] = db_v.embedding_dim
+        measurement["full_dim"] = full_dim
     return row, measurement
 
 
@@ -142,7 +164,20 @@ def main():
     ap.add_argument("--n-queries", type=int, default=50)
     ap.add_argument("--k", type=int, default=10)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--variants", default="compressed,tiny,hybrid")
+    ap.add_argument(
+        "--variants",
+        default=(
+            # the published ladder: named rungs first (compressed -> tiny ->
+            # micro -> nano -> hybrid), then the matryoshka curve points so the
+            # full honest size/recall tradeoff is emitted, not a cherry-pick.
+            # micro = mrl256-int8 (aliased); the curve below reports the rest of
+            # the dimension axis at int8 and int4. mrl96-int8 is the smallest
+            # int8 rung (int4 at 96 is blocked: 96%64!=0).
+            "compressed,tiny,micro,nano,hybrid,"
+            "mrl256-int8,mrl192-int8,mrl128-int8,mrl96-int8,"
+            "mrl256-int4,mrl192-int4,mrl128-int4"
+        ),
+    )
     ap.add_argument(
         "--json",
         action="store_true",
@@ -207,7 +242,7 @@ def main():
 
         if db_v.has_ann and db_v.has_bm25 and preset == "hybrid":
             mode = "hybrid"
-        elif db_v.has_ann and preset == "tiny":
+        elif db_v.has_ann and (preset in ("tiny", "nano", "micro") or preset.startswith("mrl")):
             mode = "ann"
         else:
             mode = "exact"
@@ -217,7 +252,20 @@ def main():
             f"search_mode={mode}  build={build_time:.1f}s",
             file=log,
         )
-        t_v, hits_v = run_bench(db_v, queries, args.k, mode=mode)
+        # lmatryoshka: the stored vectors are truncated to mrl_dim, so the
+        # query must be sliced to the same prefix and re-L2-normalized to
+        # match the build-time truncate-then-renormalize. Recall is still
+        # measured against the FULL-dim baseline top-k, so the curve is the
+        # honest cost of truncation (MiniLM is not matryoshka-trained).
+        v_queries = queries
+        if db_v.embedding_dim != meta["embedding_dim"]:
+            mrl = db_v.embedding_dim
+            v_queries = []
+            for qvec, qtext in queries:
+                prefix = list(qvec[:mrl])
+                norm = sum(x * x for x in prefix) ** 0.5 or 1.0
+                v_queries.append(([x / norm for x in prefix], qtext))
+        t_v, hits_v = run_bench(db_v, v_queries, args.k, mode=mode)
 
         recalls, drifts = [], []
         for h_exact, h_v, base_score in zip(hits_exact, hits_v, base_top_score, strict=False):
@@ -241,6 +289,7 @@ def main():
             drift_max,
             drift_mean,
             mode,
+            meta["embedding_dim"],
         )
         rows.append(row)
         measurements.append(m)

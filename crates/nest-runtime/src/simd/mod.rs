@@ -7,7 +7,12 @@
 //!   f32 · f32    8 lanes (f32x8)       4 lanes (f32x4)       autovec
 //!   f32 · f16    8 lanes (load+cvt)    4 lanes (load+cvt)    autovec
 //!   f32 · i8     16 lanes (i8 -> i32)  16 lanes (i8 -> i32)  autovec
+//!   f32 · i4     32-nib unpack/step    32-nib unpack/step    autovec
 //! ```
+//!
+//! The int4 kernel is block-64 (per-group f16 absmax scale). SIMD
+//! vectorizes the nibble unpack but reduces per group identically to the
+//! scalar path, so all three backends agree bit-for-bit.
 //!
 //! Accumulators are always f32. The query is f32 (L2-normalized), the
 //! database is f32 / f16 / i8 (i8 with a per-vector scale). Final score
@@ -30,7 +35,9 @@ use std::sync::OnceLock;
 
 use nest_format::Int8EmbeddingsView;
 
-pub use scalar::{dot_f32_f16_scalar, dot_f32_i8_scalar, dot_f32_scalar};
+pub use scalar::{
+    dot_f32_f16_scalar, dot_f32_i4_blocked_scalar, dot_f32_i8_scalar, dot_f32_scalar,
+};
 
 /// lWhat backend is the runtime using right now? Useful for `nest stats`
 /// / benchmarks so the user can see whether SIMD is active.
@@ -129,6 +136,35 @@ pub fn dot_f32_i8(q: &[f32], row: &[i8], scale: f32) -> f32 {
         _ => scalar::dot_f32_i8_scalar(q, row),
     };
     acc * scale
+}
+
+/// lFused dequant + dot for an int4 block-`block` row against an f32 query.
+/// `codes` is `dim/2` packed nibble bytes (low nibble first), `group_scales`
+/// is one f32 per `block`-dim group. The SIMD backends vectorize the nibble
+/// unpack but reduce per-group identically to scalar, so the result is
+/// bit-for-bit equal across all three backends (float add is not
+/// associative; a lane-parallel reduction would diverge in the last ulp).
+///
+/// `f32_value ~= code * group_scales[group]`, so the cosine is
+/// `sum_g scale_g * sum_{j in g} q_j * code_j` accumulated in f32.
+#[inline]
+pub fn dot_f32_i4_blocked(
+    q: &[f32],
+    codes: &[u8],
+    group_scales: &[f32],
+    dim: usize,
+    block: usize,
+) -> f32 {
+    debug_assert_eq!(q.len(), dim);
+    debug_assert_eq!(codes.len(), dim / 2);
+    debug_assert_eq!(group_scales.len(), dim / block);
+    match detect_backend() {
+        #[cfg(target_arch = "x86_64")]
+        SimdBackend::Avx2 => unsafe { avx2::dot_f32_i4_avx2(q, codes, group_scales, dim, block) },
+        #[cfg(target_arch = "aarch64")]
+        SimdBackend::Neon => unsafe { neon::dot_f32_i4_neon(q, codes, group_scales, dim, block) },
+        _ => scalar::dot_f32_i4_blocked_scalar(q, codes, group_scales, dim, block),
+    }
 }
 
 /// lScore every row of an int8 embeddings section against `q`.

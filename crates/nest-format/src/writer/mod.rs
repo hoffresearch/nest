@@ -19,6 +19,7 @@ mod encoding_choice;
 mod payload;
 #[cfg(test)]
 mod tests;
+mod text_codec;
 
 pub use encoding_choice::{EmbeddingDType, REPRODUCIBLE_CREATED, SectionEncoding};
 

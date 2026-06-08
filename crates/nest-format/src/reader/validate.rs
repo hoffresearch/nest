@@ -3,11 +3,13 @@
 //! get a typed error pointing at the offending section / dtype.
 
 use super::NestView;
-use crate::encoding::{Int8EmbeddingsView, expected_embeddings_size};
+use crate::encoding::{Int4EmbeddingsView, Int8EmbeddingsView, expected_embeddings_size};
 use crate::error::NestError;
 use crate::layout::{
-    REQUIRED_SECTIONS, SECTION_EMBEDDINGS, SECTION_ENCODING_FLOAT16, SECTION_ENCODING_INT8,
-    SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD, SECTION_SEARCH_CONTRACT,
+    REQUIRED_SECTIONS, SECTION_EMBEDDINGS, SECTION_ENCODING_FLOAT16, SECTION_ENCODING_FSST,
+    SECTION_ENCODING_INT4, SECTION_ENCODING_INT8, SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW,
+    SECTION_ENCODING_TXT_STREAMS, SECTION_ENCODING_ZSTD, SECTION_ENCODING_ZSTD_DICT,
+    SECTION_SEARCH_CONTRACT,
 };
 use crate::sections::decode_search_contract;
 
@@ -28,13 +30,15 @@ impl NestView<'_> {
         let dtype = self.manifest.dtype.as_str();
 
         // lEncoding/dtype consistency: float16 dtype implies float16 encoding,
-        // int8 dtype implies int8 encoding, float32 dtype implies raw or zstd
-        // (zstd on embeddings is rejected separately by validate_encoding_for_section).
+        // int8 dtype implies int8 encoding, int4 dtype implies int4 encoding,
+        // float32 dtype implies raw or zstd (zstd on embeddings is rejected
+        // separately by validate_encoding_for_section).
         let valid_combo = matches!(
             (dtype, entry.encoding),
             ("float32", SECTION_ENCODING_RAW)
                 | ("float16", SECTION_ENCODING_FLOAT16)
                 | ("int8", SECTION_ENCODING_INT8)
+                | ("int4", SECTION_ENCODING_INT4)
         );
         if !valid_combo {
             return Err(NestError::ManifestInvalid(format!(
@@ -129,6 +133,22 @@ impl NestView<'_> {
                     }
                 }
             }
+            SECTION_ENCODING_INT4 => {
+                // 4-bit codes cannot encode NaN/Inf; only the per-group f16
+                // absmax scales could. Decode the int4 prefix and check
+                // every group scale of every row.
+                let n = self.header.n_embeddings as usize;
+                let dim = self.header.embedding_dim as usize;
+                let view = Int4EmbeddingsView::parse(data, n, dim)?;
+                for i in 0..view.n {
+                    for g in 0..view.blocks {
+                        let s = view.group_scale(i, g);
+                        if s.is_nan() || s.is_infinite() {
+                            return Err(NestError::InvalidEmbeddingValue);
+                        }
+                    }
+                }
+            }
             other => {
                 return Err(NestError::UnsupportedSectionEncoding {
                     section_id: SECTION_EMBEDDINGS,
@@ -141,19 +161,32 @@ impl NestView<'_> {
 }
 
 /// lEncoding rules: the embeddings section gets dtype-specific encodings
-/// (float16, int8) and rejects zstd (we want SIMD-friendly mmap reads).
-/// lAll other sections accept raw, zstd, or intpack (the content_hash-
-/// preserving repack for chunk_ids / spans).
+/// (float16, int8, int4) and rejects zstd (we want SIMD-friendly mmap
+/// reads). lAll other sections accept raw, zstd, intpack (the
+/// content_hash-preserving repack for chunk_ids / spans), txt_streams (the
+/// per-chunk-streams repack for chunks_canonical), zstd_dict (the
+/// trained-dictionary per-chunk-streams variant, decoded against section
+/// 0x0A), or fsst (the static-symbol-table per-chunk-streams variant). every
+/// non-embedding codec decodes byte-identically to the raw payload, so
+/// content_hash stays stable.
 pub(super) fn validate_encoding_for_section(section_id: u32, encoding: u32) -> crate::Result<()> {
     let allowed = if section_id == SECTION_EMBEDDINGS {
         matches!(
             encoding,
-            SECTION_ENCODING_RAW | SECTION_ENCODING_FLOAT16 | SECTION_ENCODING_INT8
+            SECTION_ENCODING_RAW
+                | SECTION_ENCODING_FLOAT16
+                | SECTION_ENCODING_INT8
+                | SECTION_ENCODING_INT4
         )
     } else {
         matches!(
             encoding,
-            SECTION_ENCODING_RAW | SECTION_ENCODING_ZSTD | SECTION_ENCODING_INTPACK
+            SECTION_ENCODING_RAW
+                | SECTION_ENCODING_ZSTD
+                | SECTION_ENCODING_INTPACK
+                | SECTION_ENCODING_TXT_STREAMS
+                | SECTION_ENCODING_ZSTD_DICT
+                | SECTION_ENCODING_FSST
         )
     };
     if !allowed {
