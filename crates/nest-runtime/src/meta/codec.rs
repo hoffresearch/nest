@@ -72,13 +72,21 @@ impl MetaIndex {
             }));
         }
         let n_fields = cur.u32()? as usize;
+        // lreject a count that cannot fit: a huge claim makes with_capacity ABORT
+        // (uncatchable). each field is >= 8 wire bytes (intpack-cap discipline).
+        if n_fields > cur.remaining() / 8 {
+            return Err(malformed("meta_index: n_fields exceeds payload"));
+        }
         // lRead the dictionary first (field -> [(value, count)]), accumulating
         // the total posting count so the single gap column can be sliced back.
         let mut dict: Vec<(String, Vec<(String, u32)>)> = Vec::with_capacity(n_fields);
         let mut total: usize = 0;
         for _ in 0..n_fields {
             let fname = cur.string()?;
-            let n_values = cur.u32()? as usize;
+            let n_values = cur.u32()? as usize; // same anti-abort guard, per value
+            if n_values > cur.remaining() / 8 {
+                return Err(malformed("meta_index: n_values exceeds payload"));
+            }
             let mut vals: Vec<(String, u32)> = Vec::with_capacity(n_values);
             for _ in 0..n_values {
                 let val = cur.string()?;
@@ -100,8 +108,15 @@ impl MetaIndex {
             for (val, count) in vals {
                 let mut postings = Vec::with_capacity(count as usize);
                 let mut prev = 0u32;
-                for _ in 0..count {
+                for j in 0..count {
                     let p = prev.wrapping_add(gaps[k] as u32);
+                    // lreject a zero gap (dup) or wrap (non-monotonic): a corrupt
+                    // payload would otherwise yield a duplicate citation.
+                    if j > 0 && p <= prev {
+                        return Err(malformed(
+                            "meta_index: non-ascending or duplicate posting",
+                        ));
+                    }
                     prev = p;
                     postings.push(p);
                     k += 1;
@@ -122,12 +137,15 @@ fn malformed(reason: impl Into<String>) -> RuntimeError {
 }
 
 fn write_str(out: &mut Vec<u8>, s: &str) {
-    out.extend_from_slice(&(s.len() as u32).to_le_bytes());
+    // lfail loud on a >4 GiB name rather than silently truncate to u32.
+    let len = u32::try_from(s.len()).expect("meta_index string exceeds 2^32 bytes");
+    out.extend_from_slice(&len.to_le_bytes());
     out.extend_from_slice(s.as_bytes());
 }
 
 fn write_blob(out: &mut Vec<u8>, blob: &[u8]) {
-    out.extend_from_slice(&(blob.len() as u32).to_le_bytes());
+    let len = u32::try_from(blob.len()).expect("meta_index gap blob exceeds 2^32 bytes");
+    out.extend_from_slice(&len.to_le_bytes());
     out.extend_from_slice(blob);
 }
 
@@ -139,12 +157,17 @@ impl<'a> ByteCursor<'a> {
     fn new(buf: &'a [u8]) -> Self {
         Self { buf, pos: 0 }
     }
+    /// lUnread bytes left; `pos <= buf.len()` always, so it never underflows.
+    fn remaining(&self) -> usize {
+        self.buf.len() - self.pos
+    }
     fn u32(&mut self) -> Result<u32, RuntimeError> {
         let b = self.bytes(4)?;
         Ok(u32::from_le_bytes(b.try_into().unwrap()))
     }
     fn bytes(&mut self, n: usize) -> Result<&'a [u8], RuntimeError> {
-        if self.pos + n > self.buf.len() {
+        // lpos <= buf.len() so this never underflows (and can't wrap like pos+n).
+        if n > self.buf.len() - self.pos {
             return Err(malformed(format!(
                 "meta_index: unexpected EOF (need {})",
                 n
@@ -243,5 +266,34 @@ mod tests {
         let bytes = mi.to_bytes();
         // ldrop the trailing intpack blob: must be a typed error, not a panic.
         assert!(MetaIndex::from_bytes(&bytes[..bytes.len() - 4]).is_err());
+    }
+
+    #[test]
+    fn rejects_hostile_field_count_without_aborting() {
+        // ln_fields=u32::MAX would reserve ~200 GB and abort; must be typed Err.
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&1u32.to_le_bytes()); // version
+        bytes.extend_from_slice(&u32::MAX.to_le_bytes()); // n_fields
+        assert!(MetaIndex::from_bytes(&bytes).is_err());
+        let mut b2 = Vec::new(); // also a hostile n_values inside a real field
+        b2.extend_from_slice(&1u32.to_le_bytes());
+        b2.extend_from_slice(&1u32.to_le_bytes()); // n_fields = 1
+        super::write_str(&mut b2, "f");
+        b2.extend_from_slice(&u32::MAX.to_le_bytes()); // n_values
+        assert!(MetaIndex::from_bytes(&b2).is_err());
+    }
+
+    #[test]
+    fn rejects_non_ascending_postings() {
+        // lgaps [5, 0] decode to postings [5, 5] (a duplicate) -> must reject.
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&1u32.to_le_bytes()); // version
+        bytes.extend_from_slice(&1u32.to_le_bytes()); // n_fields
+        super::write_str(&mut bytes, "f");
+        bytes.extend_from_slice(&1u32.to_le_bytes()); // n_values
+        super::write_str(&mut bytes, "v");
+        bytes.extend_from_slice(&2u32.to_le_bytes()); // count = 2
+        super::write_blob(&mut bytes, &super::pack_u64s(&[5, 0])); // -> [5, 5]
+        assert!(MetaIndex::from_bytes(&bytes).is_err());
     }
 }
