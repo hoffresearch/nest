@@ -21,7 +21,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # python/
 
 from forge.embed_default import default_embedder as lexical_embedder
-from forge.embed_potion import MODEL_DIR, PotionEmbedder, default_embedder, potion_embedder
+from forge.embed_potion import MODEL_DIR, PotionEmbedder, potion_embedder
 
 _EMB = potion_embedder()
 
