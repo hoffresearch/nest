@@ -2,6 +2,7 @@
 TASK #01 :: honest-rerank gate + rerank-source handle + ram-leak fix
 phase: phase 0   layer: nest
 status:  [ ] todo    [x] doing    [ ] done   (impl + gate green; pending owner ok to commit/merge)
+status:  [ ] todo    [ ] doing    [ ] done
 ==============================================================================================
 
 self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
