@@ -14,10 +14,10 @@ use nest_format::layout::{
     SECTION_CHUNK_IDS, SECTION_CHUNK_SCALARS, SECTION_CHUNKS_CANONICAL,
     SECTION_CHUNKS_ORIGINAL_SPANS, SECTION_DEDUP_MAP, SECTION_DICTIONARY, SECTION_EDIT_JOURNAL,
     SECTION_EMBEDDINGS, SECTION_EMBEDDINGS_FP, SECTION_GRAPH_ADJACENCY, SECTION_GRAPH_EDGE_PROPS,
-    SECTION_GRAPH_ENTITY_MAP, SECTION_GRAPH_NODES, SECTION_HNSW_INDEX, SECTION_PROVENANCE,
-    SECTION_REPRO_MANIFEST, SECTION_SEARCH_CONTRACT, SECTION_SPACE_EMBEDDINGS_BASE,
-    SECTION_SPACE_EMBEDDINGS_FP_BASE, SECTION_SPACE_TABLE, SECTION_TOKENIZER_MODEL, SPACE_BAND_LEN,
-    section_name,
+    SECTION_GRAPH_ENTITY_MAP, SECTION_GRAPH_NODES, SECTION_HNSW_INDEX, SECTION_META_INDEX,
+    SECTION_PROVENANCE, SECTION_REPRO_MANIFEST, SECTION_SEARCH_CONTRACT,
+    SECTION_SPACE_EMBEDDINGS_BASE, SECTION_SPACE_EMBEDDINGS_FP_BASE, SECTION_SPACE_TABLE,
+    SECTION_TOKENIZER_MODEL, SPACE_BAND_LEN, section_name,
 };
 
 fn implemented() -> Vec<u32> {
@@ -75,6 +75,8 @@ fn all_reserved_bands_are_disjoint() {
     // graph_adjacency (0x0C) left reserved_scalars when it shipped (G1) but is
     // still a distinct id that must not collide with any other band.
     all.push(SECTION_GRAPH_ADJACENCY);
+    // meta_index (0x17): same status — an active OPTIONAL_SECTION, distinct id.
+    all.push(SECTION_META_INDEX);
     all.extend(space_band());
     all.extend(space_fp_band());
 
@@ -109,6 +111,19 @@ fn reserved_ids_are_excluded_from_content_hash_and_unresolved() {
             "reserved id {s:#x} must not resolve via section_name until its feature ships"
         );
     }
+}
+
+#[test]
+fn meta_index_resolves_but_excluded_from_content_hash() {
+    // meta_index (0x17) resolves via section_name (an active OPTIONAL_SECTION)
+    // but MUST stay out of CANONICAL_SECTIONS so attaching it never enters
+    // content_hash and never invalidates a nest:// citation.
+    assert_eq!(section_name(SECTION_META_INDEX), Some("meta_index"));
+    let canonical: Vec<u32> = CANONICAL_SECTIONS.iter().map(|(id, _)| *id).collect();
+    assert!(
+        !canonical.contains(&SECTION_META_INDEX),
+        "meta_index must stay excluded from content_hash"
+    );
 }
 
 #[test]
