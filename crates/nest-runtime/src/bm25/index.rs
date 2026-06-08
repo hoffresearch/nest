@@ -5,7 +5,13 @@ use std::collections::HashMap;
 
 use super::tokenize::tokenize;
 
-pub const BM25_PAYLOAD_VERSION: u32 = 1;
+/// on-disk payload version for the bm25 section (`0x08`). v1 stored every
+/// posting as raw `(u32 doc, u32 tf)`; v2 delta-gaps the (sorted) doc ids
+/// and bitpacks the gaps, the term-frequencies, and the doc lengths with
+/// `intpack`. the decoded index is identical, so scores are unchanged. the
+/// reader still accepts v1. the section is optional and excluded from
+/// content_hash, so this bump is additive within v1.
+pub const BM25_PAYLOAD_VERSION: u32 = 2;
 pub const DEFAULT_K1: f32 = 1.5;
 pub const DEFAULT_B: f32 = 0.75;
 

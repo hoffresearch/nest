@@ -35,6 +35,8 @@ fn unset_additive_fields_are_omitted() {
         "description",
         "authors",
         "license",
+        "mrl_dim",
+        "full_dim",
         "capabilities_ext",
     ] {
         assert!(
@@ -78,6 +80,42 @@ fn unknown_future_field_survives_via_extra() {
         m.extra.get("storage_mode"),
         Some(&serde_json::json!("catalog")),
         "the unknown field must be preserved in extra so old readers round-trip it"
+    );
+}
+
+/// lThe matryoshka disclosure fields (mrl_dim/full_dim) are additive: unset
+/// they are omitted (a non-truncated file stays byte-identical to a v1
+/// manifest), and a manifest WITH them set round-trips byte-identically so a
+/// reader that reads then rewrites a truncated file does not move its
+/// file_hash.
+#[test]
+fn mrl_fields_are_additive_and_round_trip() {
+    // lunset: omitted, byte-identical to a v1 manifest.
+    let base = valid_manifest();
+    assert!(base.mrl_dim.is_none() && base.full_dim.is_none());
+    let base_json = String::from_utf8(base.to_canonical_json().unwrap()).unwrap();
+    assert!(!base_json.contains("mrl_dim") && !base_json.contains("full_dim"));
+
+    // lset: appears, round-trips byte-identically.
+    let mut m = valid_manifest();
+    m.embedding_dim = 128;
+    m.mrl_dim = Some(128);
+    m.full_dim = Some(384);
+    let bytes = m.to_canonical_json().unwrap();
+    let s = String::from_utf8(bytes.clone()).unwrap();
+    assert!(s.contains("\"mrl_dim\":128"));
+    assert!(s.contains("\"full_dim\":384"));
+    let back: Manifest = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(m, back, "mrl fields must round-trip exactly");
+    assert_eq!(
+        back.to_canonical_json().unwrap(),
+        bytes,
+        "re-serialization must be byte-identical (file_hash stability)"
+    );
+    assert_ne!(
+        bytes,
+        base.to_canonical_json().unwrap(),
+        "a truncated file legitimately differs from a full-dim manifest"
     );
 }
 

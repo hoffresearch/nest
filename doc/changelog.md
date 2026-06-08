@@ -4,6 +4,34 @@ all notable changes to `nest` are documented here.
 
 format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). versioning follows [semver](https://semver.org/spec/v2.0.0.html). the on-disk container format is frozen at v1; breaking changes bump `NEST_FORMAT_VERSION` (binary) or `NEST_SCHEMA_VERSION` (manifest fields).
 
+## [unreleased]
+
+### note (2026-06-07): recall ruler provenance
+
+every `recall@10` figure in this changelog is measured on a SELF-PERTURBATION ruler (each query is a corpus vector plus tiny noise, a near-duplicate of an existing point), so it reports rank-stability under quantization, NOT real-query retrieval, and is likely inflated. `dat/measure/ladder.json` and `dat/measure/baseline.json` now carry a `ruler` provenance field saying so. the real-query (mteb-style) ruler is gate-zero (pending); see `doc/plan/compression-honest-plan.txt`.
+
+### added
+
+int4 block-64 embeddings, the first real sub-int8 size lever (additive within v1, no format-version bump):
+
+- `encoding=7` int4 embeddings. layout: 8-byte prefix (`payload_version=1`, `scale_kind=1`), then per-64-dim-group f16 absmax scales (row-major), then packed 4-bit signed codes (`[-7, 7]`, two nibbles per byte, low nibble first). requires `dtype="int4"` and `embedding_dim` divisible by 64. each 64-dim block carries its own scale so one block's outlier cannot crush another. validated like int8: the 4-bit codes cannot encode NaN/Inf, only the f16 group scales are range-checked.
+- fused dequant+dot kernel in the runtime simd module (`dot_f32_i4_blocked`): avx2 and neon vectorize the nibble unpack 16 packed bytes at a time, then run the identical per-group scalar reduction, so all three backends agree bit-for-bit (a lane-parallel float reduction would diverge in the last ulp). the embeddings section is scored straight off mmap; like int8 it is never zstd/dedup/shuffled.
+- the mandatory exact rerank reads the stored int4 slab (no separate full-precision source, exactly like int8), so the returned `score` is real cosine AT THE INT4 STORED PRECISION. disclosed via `manifest.dtype` and the `dtype=int4` / `encoding=int4` lines in `nest stats`, never reported as a bare-slab ratio.
+- `nano` preset: zstd text, int4 embeddings, HNSW, no BM25. sits below `tiny`. on the project's PT-BR corpus (n=30,725, dim=384, NEON, 100 queries, k=10): embeddings section 11.92 MB (int8) -> 6.27 MB (int4), ~1.9x over int8 and ~7.5x over float32; file size_ratio 0.209; recall@10 0.913 vs the float32 exact baseline.
+- `dtype` extended to `"float32" | "float16" | "int8" | "int4"`. python `build(..., preset="nano")` or `dtype="int4"` rejects `embedding_dim` not divisible by 64 with a typed error.
+- `compare_measure.py` gains conditional `nano` regression gates (`size_ratio <= 0.25`, `recall_at_k >= 0.85`), active only when the run includes the nano preset.
+
+scope note: rabitq (encoding 8), dedup-before-zstd (0x0B), and chunk_scalars (0x0D) are the other legs of the same plan task and are not part of this change.
+
+published preset ladder + honest net-of-fp reconciliation (measurement and docs only, no format/runtime change):
+
+- `measure_presets.py` names two explicit sub-int8 ladder rungs: `nano` (int4 full-dim) and `micro` (the matryoshka lever, an alias for `mrl256-int8`: `mrl_dim=256` + int8). the default `--variants` now emit the full ladder `compressed,tiny,micro,nano,hybrid` plus the mrl curve `mrl256/192/128-int8`, `mrl96-int8`, `mrl256/192/128-int4`.
+- the full ladder ran at 100 queries, k=10, on the LFS baseline `dat/corpus_next.v1.nest` (n=30,725, dim=384, NEON). published to the new `dat/measure/ladder.json` (the curve, not a cherry-pick) and `dat/measure/baseline.json`'s named rows refreshed to the freshly-measured numbers.
+- honest reconciliation: the intpack chunk_ids/spans repack and the bitpacked hnsw/bm25 payloads shrank the indexed presets below the v0.2 published figures. the committed numbers now match the build: `tiny` 0.283 -> 0.256, `compressed` 0.350 -> 0.339, `hybrid` 0.668 -> 0.609. recall@10 unchanged (`tiny` 0.992, `compressed`/`hybrid` 1.000).
+- net-of-fp framing: the 0x09 `embeddings_fp` writer is not wired, so every shipped sub-int8 preset (`nano`/int4, `micro`/mrl-int8, the mrl-int4 curve) is STORED-PRECISION: net-of-fp ratio == stored ratio, disclosed as real cosine at the stored int4/int8 precision. each published sub-int8 row carries `dtype`, `stored_precision`, `has_fp_source=false`, `net_of_fp_ratio`, and (for matryoshka rows) `mrl_dim`/`full_dim`, so the disclosure is machine-checkable. rabitq 1-bit (which would need a counted f16 fp source) stays out of scope.
+- `compare_measure.py` gains a conditional `micro` gate (`size_ratio <= 0.25`, `recall_at_k >= 0.78`), mirroring the existing `nano` and `mrl256-int8` gates; it fires only when the run includes `micro`.
+- published numbers (100 queries, k=10, vs the float32 exact baseline): `compressed` 0.339 / 1.000, `tiny` 0.256 / 0.992, `micro` 0.223 / 0.810, `nano` 0.209 / 0.913, `hybrid` 0.609 / 1.000.
+
 ## [0.2.0] - 2026-04-28
 
 production-ready release. extends v1 with new section encodings, optional ANN and lexical sections, runtime SIMD dispatch, and offline model verification. existing v0.1 files load unchanged in v0.2 readers.

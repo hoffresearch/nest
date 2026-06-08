@@ -80,8 +80,47 @@ clap-rs/clap, langchain-ai/langchain, supermemoryai/supermemory, PyO3/pyo3
 [ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
 
 --- RESULT (fill in) ---
-  size ratio  before: ____  after: ____
-  recall@10   before: ____  after: ____
+  size ratio  before: 0.256  after: 0.256   (tiny preset; this WO is read-side only, zero format bytes)
+  recall@10   before: 0.9900 after: 0.9900  (tiny, NEST_QUERIES=30, vs the f32 exact baseline; held)
+
+  delivered (additive, read-side only; no NEST_FORMAT_VERSION bump, no format bytes):
+  - additive SearchExplain { route, exact/ann/bm25/graph_candidates, fusion_mode,
+    rerank_source: RerankSourceKind, recall_estimate } on SearchResult (nest-runtime/src/lib.rs),
+    populated on all four search fns (nest-runtime/src/search.rs). rerank_source is the honesty
+    backbone: FullPrecision="real cosine" (0x09 fp slab present or stored f32) vs
+    StoredPrecision="real cosine at stored precision" (lossy stored slab, no fp).
+  - nest ask (cmd/ask.rs): offline potion embed + model_hash gate + capability route, --disclose
+    answer (cited text + nest:// only) | explain (adds the rerank-source honesty line + route).
+  - nest retrieve (cmd/retrieve.rs): json/jsonl answer-pack where score IS the exact rerank value,
+    tier-1 stored canonical text + hashes + citation_id; cite round-trips.
+  - NestFile.retrieve (nest-python/src/retrieve_fn.rs, RetrieveHitPy) + re-exported on python/nest.py;
+    python/forge/retrieve.py (offline potion-embed -> retrieve + one-gif demo over demo_corpus);
+    python/forge/embed_query_potion.py (the offline embedder the cli verbs shell out to).
+  - cite stays TIER-1 ONLY (stored canonical text + verifying hashes); no original-byte reopen claim.
+  - DEFERRED per WO + risks-quickwins: verb-collapse, nest dev namespace, nest-profile crate,
+    --disclose hits/trace, graph/export/cosmos verbs, tier-2 original-byte reopen, maturin/PyPI,
+    zero-copy PyBuffer, weighted/relativeScore fusion.
+
+  research_drawn (concrete techniques used, recorded per the WO):
+  - lens (doc/plan/master-plan/09-lens.txt): the exact SearchExplain field shape, the
+    --disclose answer|explain levels, the rerank-source honesty line wording, and the
+    capability-route default (exact if only embeddings, hybrid if bm25, +graph if adjacency).
+  - risks-quickwins (04): "ship ask+cite+retrieve as soon as phase 0-1 is green; needs no new
+    format and no original-byte reopen"; "add SearchExplain during phase-0 so the disclose line
+    and retrieve provenance come free"; the tier-1/tier-2 cite split (cite returns stored canonical
+    text today, original-byte reopen is net-new tier-2); the UX-bloat mitigation (ship exactly
+    ask+cite, keep the 8 subcommands under the hood, defer verb-collapse/nest-profile);
+    the default static potion embedder is the offline flagship blocker.
+  - rag-orchestration synthesis + langchain ref: content_hash citation_id as the record key;
+    "embeddings stored quantized but always paired with an exact rescoring pass" (= score IS the
+    exact rerank value, the flagship-is-a-lie guard); model2vec/POTION offline static embedder so
+    the embed step itself is sovereign (no sentence-transformers on the ask path).
+  - bindings-cli synthesis + pyo3 ref: keep PyO3 confined to nest-python, typed thiserror ->
+    PyValueError never a panic (retrieve_fn.rs), offline-by-construction no-socket (the watch-out
+    that the ask path must NEVER spawn the sentence-transformers embedder).
+  - supermemory ref: the agent-native answer-pack is the smallest most-defensible surface
+    (cited offline retrieval), reinforcing the flagship scoping.
+  - clap ref: thin clap verb surface; did_you_mean/dynamic-completion noted as out of scope here.
 
 --- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
 update only what THIS task actually changed; check each:

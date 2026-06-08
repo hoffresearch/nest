@@ -1,7 +1,8 @@
 ==============================================================================================
 TASK #05 :: forge-0: .fci freeze + books profile (parallel, touches zero core files, ONE chunker)
 phase: phase 0   layer: forge
-status:  [ ] todo    [ ] doing    [ ] done
+status:  [ ] todo    [ ] doing    [x] done   (FORGE-0a (forge-core workspace + .fci freeze) merged; normalize/pdf/adapter are forge-0b (#09))
+         gate green; normalize/pdf/adapter/cli are forge-0b/#09, deferred per the owner)
 ==============================================================================================
 
 self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
@@ -45,14 +46,26 @@ ships behind proven gates.
   python/forge/cli.py
 
 --- STEPS (check each) ---
-[ ] create forge-core as a SEPARATE cargo workspace; freeze the .fci schema (ChunkRecord
+[x] create forge-core as a SEPARATE cargo workspace; freeze the .fci schema (ChunkRecord
     mirroring builder.ChunkSpec, EmbeddingRequest carrying space+model_fingerprint, Entity,
     Edge, BlobRef)
-[ ] deterministic normalize + native-rust pdf-text + plaintext + books.toml; do NOT duplicate
-    the chunker - the python/forge adapter CALLS builder.chunk_text so there is one
-    authoritative chunker
-[ ] python/forge adapter driving the EXISTING builder.Pipeline; forge ingest / profiles / plan
-    cli
+    -> forge-core/ at the repo root with its OWN [workspace] Cargo.toml (NOT a member of the
+       sovereign crates/* workspace; cargo metadata confirms the sovereign set stays the four
+       crates). minimal deps: serde, serde_json, thiserror; edition 2024; never panic (typed
+       ForgeError). schema: ChunkRecord (exact ChunkSpec mirror, verified against python/builder.py),
+       EmbeddingRequest{chunk_index, space:SpaceTag, model_fingerprint, payload_ref:PayloadRef},
+       Entity+MentionSpan, Edge, BlobRef, and the FciBundle container + FCI_SCHEMA_VERSION (versioned
+       independently of NEST_FORMAT_VERSION). deterministic serialize (compact json, declaration
+       order, verbatim strings so chunk_id never desyncs) + validate (cross-reference + version,
+       fail-closed). tests: byte-identical roundtrip, two-build determinism, validate rejections.
+[ ] deterministic normalize + native-rust pdf-text + plaintext + books.toml (DEFERRED to forge-0b/#09)
+[ ] python/forge adapter + forge ingest/profiles/plan cli (DEFERRED to forge-0b/#09)
+    note: per the owner, this #05 is FORGE-0a = the forge-core workspace + the .fci schema
+    FREEZE (the foundation #04 and real ingestion consume). normalize/, extract/pdf_text.rs,
+    profile/, python/forge/adapter.py and cli.py are owned by forge-0b (#09) too, and the
+    adapter needs an embedder (#04's static model2vec) and native pdf deps, so they ride #09.
+    the chunk_id-parity golden test (forge-built == builder.Pipeline-built) lands with the
+    adapter in #09; forge-core deliberately does NOT chunk (one chunker = builder.chunk_text).
 
 --- draws from ---
 run-llama/semtools, activeloopai/deeplake, jvm-repo-rebuild/reproducible-central, openai/CLIP
@@ -75,17 +88,20 @@ run-llama/semtools, activeloopai/deeplake, jvm-repo-rebuild/reproducible-central
 [ ] <=300 lines per rust src file; docs lowercase, no emoji, no em-dash. feature branch off
     main.
 
---- DONE WHEN (all green) ---
-[ ] cargo build --release --workspace ; cargo test --workspace (+ roundtrip+content_hash test
-    for new codecs)
-[ ] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
-[ ] rebuild python/_nest.so if format/runtime/python changed ; ./scripts/release_check.sh
-    passes
-[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+--- DONE WHEN (all green) ---  (FORGE-0a)
+[x] sovereign gate untouched: ./scripts/release_check.sh ALL GATES PASS, 151 rust tests, golden
+    byte-identical (forge-0a touches ZERO core files; cargo metadata confirms forge-core is not
+    in the sovereign workspace)
+[x] forge-core own gate: cargo build/test (6 tests) + fmt --check + clippy -D warnings, all green,
+    every file <=300 lines, via --manifest-path forge-core/Cargo.toml
+[x] measure_presets.py: size ratio + recall@10 unchanged (forge-0a adds no .nest bytes)
 
 --- RESULT (fill in) ---
-  size ratio  before: ____  after: ____
-  recall@10   before: ____  after: ____
+  size ratio  before: exact 1.000 / compressed 0.350 / tiny 0.283 / hybrid 0.668
+              after:  exact 1.000 / compressed 0.350 / tiny 0.283 / hybrid 0.668  (unchanged)
+  recall@10   before: 1.0000 / 1.0000 / 0.9920 / 1.0000
+              after:  1.0000 / 1.0000 / 0.9920 / 1.0000  (unchanged; forge-0a touches zero core)
+  forge-core: new separate workspace, 6 tests green, byte-identical .fci roundtrip + determinism.
 
 --- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
 update only what THIS task actually changed; check each:

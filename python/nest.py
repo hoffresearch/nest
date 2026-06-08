@@ -7,6 +7,11 @@ and re-exports a stable surface:
   - NestFile.search(query, k)           -> list[SearchHit] (exact, recall=1.0)
   - NestFile.search_ann(query, k, ef)   -> list[SearchHit] (HNSW + exact rerank)
   - NestFile.search_hybrid(query, query_text, k, candidates) -> list[SearchHit]
+  - NestFile.retrieve(query, k, ...)    -> list[RetrieveHit] (agent-native:
+        routes by manifest capability, score IS the exact-cosine rerank value,
+        each hit carries the tier-1 stored canonical text + verifying hashes +
+        the nest:// citation_id + the rerank_source precision marker. embed the
+        query OFFLINE first; see python/forge/retrieve.py for the potion path.)
   - NestFile.embedding_dim
   - NestFile.n_embeddings
   - NestFile.dtype                       ("float32" | "float16" | "int8")
@@ -46,6 +51,7 @@ _spec.loader.exec_module(_mod)
 
 NestFile = _mod.NestFile
 SearchHit = _mod.SearchHitPy
+RetrieveHit = _mod.RetrieveHitPy
 build = _mod.build
 chunk_id = _mod.chunk_id
 
@@ -55,4 +61,4 @@ def open(path: str):
     return NestFile.open(path)
 
 
-__all__ = ["NestFile", "SearchHit", "open", "build", "chunk_id"]
+__all__ = ["NestFile", "SearchHit", "RetrieveHit", "open", "build", "chunk_id"]

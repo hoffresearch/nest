@@ -1,7 +1,8 @@
 ==============================================================================================
 TASK #03 :: manifest additivity guard + roundtrip + recall harness + distribution
 phase: phase 0   layer: nest
-status:  [ ] todo    [ ] doing    [ ] done
+status:  [ ] todo    [ ] doing    [x] done   (step 1 (manifest-additivity guard) merged; steps 2-4 DEFERRED to a separate task)
+         steps 2-4 are a different OWNS set, scoped to a separate task by the owner)
 ==============================================================================================
 
 self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
@@ -39,17 +40,25 @@ ships behind proven gates.
   crates/nest-format/src/manifest/mod.rs
 
 --- STEPS (check each) ---
-[ ] state and TEST that ALL new manifest fields (spaces, storage_mode, every new capability)
-    are Option<T> with skip_serializing_if=is_none and defaulted on read; new capability flags
-    go in a new Option<CapabilitiesExt> or the flattened extra map, NEVER as new required bool
-    fields on Capabilities (manifest/mod.rs:21-40); v01_compat test: old manifest still
-    deserializes, new default-valued manifest serializes byte-identical to old
-[ ] roundtrip+content_hash-equality template every new codec (and every new
-    space/graph/blob/overlay section) must pass
-[ ] mteb-style seeded recall@k vs exact f32 per preset + byte-identical-build ci check; every
-    sub-int8 RESULT reports NET-OF-FP ratio
-[ ] reserve SECTION_REPRO_MANIFEST=0x10 + verify-reproducible; maturin cp312-abi3 wheel +
-    zero-copy PyBuffer query
+[x] state and TEST that ALL new manifest fields are Option<T> + skip_serializing_if, defaulted
+    on read; new capability flags in Option<CapabilitiesExt> or the flatten extra map, NEVER as
+    new required bools on Capabilities; v01_compat byte-identical test
+    -> manifest/mod.rs: added CapabilitiesExt (Option<bool> flags, all skip_serializing_if) and
+       capabilities_ext: Option<CapabilitiesExt> on Manifest (skip_serializing_if=is_none,
+       default None). doc rule on Capabilities forbidding new required bools. reader/decode.rs:
+       documented that the manifest rides file_hash only, never content_hash, so additive fields
+       never move a citation. guard tests in tests/manifest_additivity.rs (unset fields omitted,
+       byte-identical round-trip, unknown future field survives via extra, capabilities_ext
+       additive). serde defaults a missing Option to None, so old manifests still deserialize;
+       capabilities_ext=None serializes to nothing, so golden + v01_compat stay byte-identical.
+       fixed 5 exhaustive Manifest test literals (negative_*, dual_integrity, fp16_topk) with
+       capabilities_ext: None.
+[ ] roundtrip+content_hash-equality template (DEFERRED - different OWNS, separate task)
+[ ] mteb-style recall harness + net-of-fp (DEFERRED - owns benchmark.rs / runtime/metrics/)
+[ ] repro_manifest 0x10 + maturin wheel + zero-copy PyBuffer (DEFERRED - owns nest_file.rs / pyproject)
+    note: per the owner, this chat's #03 OWNS are manifest/mod.rs + reader/decode.rs only
+    (the manifest-additivity guard). steps 2-4 own benchmark.rs, runtime/src/metrics/,
+    nest_file.rs and belong to a separate task/agent; not started here.
 
 --- draws from ---
 embeddings-benchmark/mteb, jvm-repo-rebuild/reproducible-central, PyO3/pyo3
@@ -73,17 +82,19 @@ embeddings-benchmark/mteb, jvm-repo-rebuild/reproducible-central, PyO3/pyo3
 [ ] <=300 lines per rust src file; docs lowercase, no emoji, no em-dash. feature branch off
     main.
 
---- DONE WHEN (all green) ---
-[ ] cargo build --release --workspace ; cargo test --workspace (+ roundtrip+content_hash test
-    for new codecs)
-[ ] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
-[ ] rebuild python/_nest.so if format/runtime/python changed ; ./scripts/release_check.sh
-    passes
-[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+--- DONE WHEN (all green) ---  (for the manifest-additivity guard, step 1)
+[x] cargo build --release --workspace ; cargo test --workspace  (151 rust tests pass)
+[x] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
+[x] rebuild python/_nest.so ; ./scripts/release_check.sh passes (ALL GATES PASS)
+[x] measure_presets.py: size ratio + recall@10 unchanged; golden + v01_compat byte-identical
 
 --- RESULT (fill in) ---
-  size ratio  before: ____  after: ____
-  recall@10   before: ____  after: ____
+  size ratio  before: exact 1.000 / compressed 0.350 / tiny 0.283 / hybrid 0.668
+              after:  exact 1.000 / compressed 0.350 / tiny 0.283 / hybrid 0.668  (unchanged)
+  recall@10   before: 1.0000 / 1.0000 / 0.9920 / 1.0000
+              after:  1.0000 / 1.0000 / 0.9920 / 1.0000  (unchanged; manifest guard only)
+  byte-identity: golden 5/5 and v01_compat green -> capabilities_ext=None serializes to
+              nothing, so existing files' file_hash is untouched.
 
 --- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
 update only what THIS task actually changed; check each:

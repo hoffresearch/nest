@@ -5,7 +5,7 @@ use nest_format::manifest::Manifest;
 use nest_format::sections::{
     decode_chunk_ids, decode_chunks_canonical, decode_chunks_original_spans,
 };
-use nest_format::writer::NestFileBuilder;
+use nest_format::writer::{EmbeddingDType, NestFileBuilder};
 use nest_format::{ChunkInput, NestView};
 
 fn tmp_path(name: &str) -> PathBuf {
@@ -79,6 +79,98 @@ fn writer_reader_roundtrip() {
     assert_eq!(spans[0].byte_end, 5);
 
     let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn int4_preset_roundtrip_decodes_canonical_unchanged_and_content_hash_differs() {
+    // ldim divisible by 64 (one block per row). Build an int4 file and an
+    // f32 file over the SAME corpus; chunk_ids/spans/canonical text decode
+    // identically, but content_hash differs (the embeddings bytes are
+    // quantized, exactly as int8/f16 already differ from f32).
+    let dim = 64usize;
+    let n = 3usize;
+    let mk = |i: usize| -> ChunkInput {
+        let mut emb = vec![0.0f32; dim];
+        emb[i % dim] = 1.0;
+        emb[(i + 7) % dim] = -0.5;
+        let norm = emb.iter().map(|x| x * x).sum::<f32>().sqrt();
+        for x in &mut emb {
+            *x /= norm;
+        }
+        chunk(
+            &format!("text {i} alpha"),
+            "doc.txt",
+            (i * 10) as u64,
+            ((i + 1) * 10) as u64,
+            emb,
+        )
+    };
+
+    let f32_bytes = NestFileBuilder::new(manifest(dim as u32, n as u64))
+        .reproducible(true)
+        .add_chunks((0..n).map(mk))
+        .build_bytes()
+        .unwrap();
+    let int4_bytes = NestFileBuilder::new(manifest(dim as u32, n as u64))
+        .reproducible(true)
+        .embedding_dtype(EmbeddingDType::Int4)
+        .add_chunks((0..n).map(mk))
+        .build_bytes()
+        .unwrap();
+
+    let v32 = NestView::from_bytes(&f32_bytes).unwrap();
+    let v4 = NestView::from_bytes(&int4_bytes).unwrap();
+    v4.validate_embeddings_values().unwrap();
+    assert_eq!(v4.manifest.dtype, "int4");
+    let emb_entry = v4
+        .section_table
+        .iter()
+        .find(|e| e.section_id == SECTION_EMBEDDINGS)
+        .unwrap();
+    assert_eq!(emb_entry.encoding, SECTION_ENCODING_INT4);
+
+    // canonical text / chunk_ids / spans decode identically across dtypes.
+    let ids32 = decode_chunk_ids(v32.get_section_data(SECTION_CHUNK_IDS).unwrap(), n).unwrap();
+    let ids4 = decode_chunk_ids(v4.get_section_data(SECTION_CHUNK_IDS).unwrap(), n).unwrap();
+    assert_eq!(ids32, ids4);
+    let tx32 = decode_chunks_canonical(v32.get_section_data(SECTION_CHUNKS_CANONICAL).unwrap(), n)
+        .unwrap();
+    let tx4 =
+        decode_chunks_canonical(v4.get_section_data(SECTION_CHUNKS_CANONICAL).unwrap(), n).unwrap();
+    assert_eq!(tx32, tx4);
+    let sp32 = decode_chunks_original_spans(
+        v32.get_section_data(SECTION_CHUNKS_ORIGINAL_SPANS).unwrap(),
+        n,
+    )
+    .unwrap();
+    let sp4 = decode_chunks_original_spans(
+        v4.get_section_data(SECTION_CHUNKS_ORIGINAL_SPANS).unwrap(),
+        n,
+    )
+    .unwrap();
+    assert_eq!(sp32.len(), sp4.len());
+    for (a, b) in sp32.iter().zip(sp4.iter()) {
+        assert_eq!(a.source_uri, b.source_uri);
+        assert_eq!(a.byte_start, b.byte_start);
+        assert_eq!(a.byte_end, b.byte_end);
+    }
+
+    // content_hash DIFFERS: the embeddings bytes are quantized (expected,
+    // exactly like int8/f16 vs f32). nest:// citations are tied to a
+    // specific quantization, never claimed stable across precision.
+    assert_ne!(
+        v32.content_hash_hex().unwrap(),
+        v4.content_hash_hex().unwrap()
+    );
+
+    // int4 build is deterministic: a second build is byte-identical.
+    let int4_again = NestFileBuilder::new(manifest(dim as u32, n as u64))
+        .reproducible(true)
+        .embedding_dtype(EmbeddingDType::Int4)
+        .add_chunks((0..n).map(mk))
+        .build_bytes()
+        .unwrap();
+    assert_eq!(int4_bytes, int4_again);
 }
 
 #[test]
@@ -623,5 +715,93 @@ fn reader_rejects_misaligned_section() {
         matches!(res, Err(nest_format::NestError::SectionMisaligned { .. })),
         "expected SectionMisaligned, got {:?}",
         res.err()
+    );
+}
+
+#[test]
+fn compressed_preset_chunks_canonical_decodes_identical_and_same_content_hash() {
+    use nest_format::writer::SectionEncoding;
+
+    // a multi-chunk corpus, built two ways: f32 raw-text vs f32 zstd-text.
+    // under the compressed preset the chunks_canonical section takes the
+    // SMALLER of single-frame zstd vs the per-chunk txt-streams encoding
+    // (id 10). either way it decodes BYTE-IDENTICAL to the raw build, so
+    // content_hash and citations are unchanged across the encodings.
+    let dim = 4u32;
+    let bodies = [
+        "primeiro parágrafo com coração e informação",
+        "segundo parágrafo, açaí é ótimo à tarde",
+        "terceiro: São Paulo, ñ, ü, ç repetido repetido",
+        "quarto trecho com conteúdo distinto e mais longo para variar o tamanho",
+    ];
+    let n = bodies.len() as u64;
+    let mk = || {
+        bodies.iter().enumerate().map(|(i, b)| {
+            let mut emb = vec![0.0f32; dim as usize];
+            emb[i % dim as usize] = 1.0;
+            chunk(b, "doc.txt", (i * 50) as u64, (i * 50 + 40) as u64, emb)
+        })
+    };
+
+    let raw_bytes = NestFileBuilder::new(manifest(dim, n))
+        .reproducible(true)
+        .add_chunks(mk())
+        .build_bytes()
+        .unwrap();
+    let zst_bytes = NestFileBuilder::new(manifest(dim, n))
+        .reproducible(true)
+        .text_encoding(SectionEncoding::Zstd)
+        .add_chunks(mk())
+        .build_bytes()
+        .unwrap();
+
+    let vraw = NestView::from_bytes(&raw_bytes).unwrap();
+    let vzst = NestView::from_bytes(&zst_bytes).unwrap();
+
+    // the compressed build's chunks_canonical encoding is whichever won the
+    // try-smaller: single-frame zstd (1) or per-chunk txt-streams (10).
+    let enc = vzst
+        .section_table
+        .iter()
+        .find(|e| e.section_id == SECTION_CHUNKS_CANONICAL)
+        .unwrap()
+        .encoding;
+    assert!(
+        enc == SECTION_ENCODING_ZSTD || enc == SECTION_ENCODING_TXT_STREAMS,
+        "unexpected chunks_canonical encoding {enc}"
+    );
+
+    // chunks_canonical decodes byte-identically across the two builds.
+    let traw = vraw.decoded_section(SECTION_CHUNKS_CANONICAL).unwrap();
+    let tzst = vzst.decoded_section(SECTION_CHUNKS_CANONICAL).unwrap();
+    assert_eq!(
+        traw.as_ref(),
+        tzst.as_ref(),
+        "decoded canonical text differs"
+    );
+    // and the decoded canonical text parses back to the original bodies.
+    let texts = decode_chunks_canonical(&tzst, n as usize).unwrap();
+    assert_eq!(
+        texts,
+        bodies.iter().map(|s| s.to_string()).collect::<Vec<_>>()
+    );
+
+    // SAME content_hash across raw and compressed encodings: the whole point.
+    assert_eq!(
+        vraw.content_hash_hex().unwrap(),
+        vzst.content_hash_hex().unwrap(),
+        "content_hash must be stable across text encodings"
+    );
+
+    // determinism: a second compressed build is byte-identical.
+    let zst_again = NestFileBuilder::new(manifest(dim, n))
+        .reproducible(true)
+        .text_encoding(SectionEncoding::Zstd)
+        .add_chunks(mk())
+        .build_bytes()
+        .unwrap();
+    assert_eq!(
+        zst_bytes, zst_again,
+        "compressed build is not deterministic"
     );
 }

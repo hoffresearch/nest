@@ -50,8 +50,67 @@ def run_bench(
     return times, results
 
 
+def parse_variant(name: str):
+    """Resolve a variant name into nest.build kwargs.
+
+    Three forms:
+      - a plain preset: "exact" | "compressed" | "tiny" | "nano" | "hybrid"
+        (built via `preset=`, default base-dim).
+      - a named ladder point: "micro" | "nano". These are the two explicit,
+        published sub-int8 ladder rungs. `nano` is the existing preset
+        (int4 full-dim, ~0.209 ratio, ~0.913 recall@10). `micro` is the
+        matryoshka lever mapped to the documented honest point mrl256-int8
+        (mrl_dim=256 + int8, ~0.223 ratio, ~0.810 recall@10 on the non-mrl
+        MiniLM baseline). `micro` is an ALIAS for mrl256-int8 kwargs, labelled
+        "micro" so the published ladder has a stable name; both surface dtype
+        and (for micro) mrl_dim/full_dim, so the stored precision is disclosed.
+      - a matryoshka ladder point: "mrl<DIM>-<dtype>", where <dtype> is one
+        of f32|f16|int8|int4 (e.g. "mrl256-int8", "mrl128-int4"). Built with
+        `mrl_dim=<DIM>` + the explicit dtype on a zstd-text/hnsw base so it is
+        comparable to the existing tiny/nano presets. The truncation +
+        L2-renorm happens build-time in the rust builder before quantization.
+
+    Returns `(label, kwargs)` where kwargs feed straight into nest.build.
+    """
+    dtype_alias = {
+        "f32": "float32",
+        "f16": "float16",
+        "int8": "int8",
+        "int4": "int4",
+        "float32": "float32",
+        "float16": "float16",
+    }
+    # `micro` is the named matryoshka rung of the published ladder: it reuses
+    # the mrl256-int8 build path (mrl_dim=256, dtype=int8) but keeps the stable
+    # public label "micro". `nano` falls through to the plain-preset path.
+    if name == "micro":
+        return name, dict(
+            text_encoding="zstd",
+            dtype="int8",
+            mrl_dim=256,
+            with_hnsw=True,
+            with_bm25=False,
+        )
+    if name.startswith("mrl") and "-" in name:
+        dim_part, dtype_part = name[3:].split("-", 1)
+        mrl_dim = int(dim_part)
+        dtype = dtype_alias.get(dtype_part)
+        if dtype is None:
+            raise ValueError(f"unknown dtype in variant {name!r}: {dtype_part}")
+        kwargs = dict(
+            text_encoding="zstd",
+            dtype=dtype,
+            mrl_dim=mrl_dim,
+            with_hnsw=True,
+            with_bm25=False,
+        )
+        return name, kwargs
+    return name, dict(preset=name)
+
+
 def build_variant(chunks, meta, preset: str, out_path: Path):
-    """Build `out_path` with the given preset; return seconds elapsed.
+    """Build `out_path` with the given preset or mrl ladder point; return
+    seconds elapsed.
 
     Imports `nest` lazily because `_bench_runner` is meant to be cheap
     to import (unlike the PyO3 extension load, which pulls a 1.6 MB .so).
@@ -60,6 +119,8 @@ def build_variant(chunks, meta, preset: str, out_path: Path):
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     import nest
+
+    _label, variant_kwargs = parse_variant(preset)
 
     if out_path.exists():
         out_path.unlink()
@@ -72,6 +133,6 @@ def build_variant(chunks, meta, preset: str, out_path: Path):
         model_hash=meta["model_hash"],
         chunks=chunks,
         reproducible=True,
-        preset=preset,
+        **variant_kwargs,
     )
     return time.time() - t0

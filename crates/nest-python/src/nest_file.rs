@@ -42,6 +42,28 @@ impl NestFile {
         Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
     }
 
+    /// lGraph search (exact top-ef seed -> bounded bfs over the chunk graph
+    /// -> exact rerank on the union). Falls back to `search()` when no
+    /// graph_adjacency section is present. The graph only generates
+    /// candidates; the returned score is real cosine.
+    #[pyo3(signature = (query, k, hops=1, ef=100))]
+    fn search_graph(
+        &self,
+        query: &Bound<PyAny>,
+        k: i32,
+        hops: usize,
+        ef: usize,
+    ) -> PyResult<Vec<SearchHitPy>> {
+        let qvec: Vec<f32> = query
+            .extract()
+            .map_err(|e| PyValueError::new_err(format!("invalid query vector: {}", e)))?;
+        let res = self
+            .rt
+            .search_graph(&qvec, k, hops, ef)
+            .map_err(|e| PyValueError::new_err(format!("{}", e)))?;
+        Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
+    }
+
     /// lHybrid (BM25 ∪ vector → exact rerank). Falls back to `search()`
     /// when no BM25 section is present.
     fn search_hybrid(
@@ -59,6 +81,24 @@ impl NestFile {
             .search_hybrid(&qvec, query_text, k, candidates)
             .map_err(|e| PyValueError::new_err(format!("{}", e)))?;
         Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
+    }
+
+    /// lAgent-native flagship: a pre-embedded query in, cited spans out.
+    /// each hit's `score` IS the exact-cosine rerank value; routes by
+    /// manifest capability (hnsw/hybrid/graph/exact). every hit carries the
+    /// tier-1 stored canonical `text`, the verifying hashes, the stable
+    /// citation_id, and the rerank-source precision marker. embed the query
+    /// OFFLINE first (see python/forge/retrieve.py for the potion path).
+    #[pyo3(signature = (query, k, candidates=None, hops=1, ef=100))]
+    fn retrieve(
+        &self,
+        query: &Bound<PyAny>,
+        k: i32,
+        candidates: Option<usize>,
+        hops: usize,
+        ef: usize,
+    ) -> PyResult<Vec<crate::retrieve_fn::RetrieveHitPy>> {
+        crate::retrieve_fn::retrieve(&self.rt, query, k, candidates, hops, ef)
     }
 
     #[getter]
@@ -89,6 +129,11 @@ impl NestFile {
     #[getter]
     fn has_bm25(&self) -> bool {
         self.rt.has_bm25()
+    }
+
+    #[getter]
+    fn has_graph(&self) -> bool {
+        self.rt.has_graph()
     }
 
     #[getter]
