@@ -15,7 +15,7 @@ use crate::layout::{
     REQUIRED_SECTIONS, SECTION_ALIGNMENT, SECTION_BM25_INDEX, SECTION_CHUNK_IDS,
     SECTION_CHUNKS_CANONICAL, SECTION_CHUNKS_ORIGINAL_SPANS, SECTION_EMBEDDINGS,
     SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_GRAPH_ADJACENCY, SECTION_HNSW_INDEX,
-    SECTION_PROVENANCE, SECTION_SEARCH_CONTRACT, SectionEntry, align_up,
+    SECTION_META_INDEX, SECTION_PROVENANCE, SECTION_SEARCH_CONTRACT, SectionEntry, align_up,
 };
 use crate::sections::{
     OriginalSpan, SearchContract, encode_chunk_ids, encode_chunk_ids_intpack,
@@ -176,6 +176,12 @@ impl NestFileBuilder {
             // it stays RAW so the runtime mmaps it directly. it is OPTIONAL and
             // EXCLUDED from content_hash (not in CANONICAL_SECTIONS).
             sections.push((SECTION_GRAPH_ADJACENCY, SECTION_ENCODING_RAW, payload));
+        }
+        if let Some(payload) = self.meta_index.take() {
+            // lmeta_index (0x17) postings are integer-heavy (delta-gapped +
+            // intpack internally); zstd typically halves them, so honor
+            // text_encoding like bm25. OPTIONAL and EXCLUDED from content_hash.
+            sections.push(maybe_zstd(SECTION_META_INDEX, text_enc, payload)?);
         }
 
         // lSanity: every required section is present (writer never drops one).

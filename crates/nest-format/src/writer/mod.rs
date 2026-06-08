@@ -44,6 +44,10 @@ pub struct NestFileBuilder {
     /// lOptional graph_adjacency (0x0C) csr payload, fully encoded by the
     /// caller (chunk-to-chunk edges). additive, excluded from content_hash.
     pub(super) graph_adjacency: Option<Vec<u8>>,
+    /// lOptional meta_index (0x17) payload, a generic (field, value) ->
+    /// chunk-ordinals inverted index, fully encoded by the caller. additive,
+    /// excluded from content_hash; opened by section presence like bm25/hnsw.
+    pub(super) meta_index: Option<Vec<u8>>,
 }
 
 impl NestFileBuilder {
@@ -58,6 +62,7 @@ impl NestFileBuilder {
             hnsw_index: None,
             bm25_index: None,
             graph_adjacency: None,
+            meta_index: None,
         }
     }
 
@@ -132,6 +137,16 @@ impl NestFileBuilder {
         let mut ext = self.manifest.capabilities_ext.take().unwrap_or_default();
         ext.graph_present = Some(true);
         self.manifest.capabilities_ext = Some(ext);
+        self
+    }
+
+    /// lAttach a generic metadata inverted index (0x17) payload (field/value
+    /// -> chunk-ordinal postings, already encoded by `nest-runtime`). additive,
+    /// EXCLUDED from content_hash, so attaching it never invalidates a nest://
+    /// citation. opened by section presence like bm25/hnsw — no manifest flag,
+    /// so a file with the index has the SAME content_hash as one without it.
+    pub fn meta_index(mut self, payload: Vec<u8>) -> Self {
+        self.meta_index = Some(payload);
         self
     }
 

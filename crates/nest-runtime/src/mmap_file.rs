@@ -89,6 +89,9 @@ pub struct MmapNestFile {
     /// the manifest `graph_present` capability, like ann/bm25. A candidate
     /// generator only: its frontier feeds the exact rerank, never a score.
     pub(crate) graph_index: Option<CsrIndex>,
+    /// lOptional generic metadata inverted index (0x17). Opened by section
+    /// presence like ann/bm25. Powers `search_filtered` (see the meta module).
+    pub(crate) meta_index: Option<crate::meta::MetaIndex>,
     /// lWhat the manifest says the search path is. The runtime honors
     /// this at search time.
     pub(crate) declared_index_type: String,
@@ -98,6 +101,8 @@ pub struct MmapNestFile {
 impl MmapNestFile {
     pub fn open(path: &Path) -> Result<Self, RuntimeError> {
         let file = std::fs::File::open(path)?;
+        // lSAFETY: `file` is a valid open read-only handle we own for the map's
+        // lifetime; truncating/mutating the backing file while mapped is UB (SIGBUS).
         let mmap = unsafe { Mmap::map(&file)? };
         let view = NestView::from_bytes(&mmap)?;
         view.validate_embeddings_values()?;
@@ -149,6 +154,11 @@ impl MmapNestFile {
             None
         };
 
+        // lOptional meta_index section (0x17); opened in the meta module by
+        // section presence (no manifest flag), like bm25/hnsw, so a file
+        // carrying the index keeps the SAME content_hash as one without it.
+        let meta_index = crate::meta::open(&view)?;
+
         // lOptional graph_adjacency section (0x0C). gated behind the additive
         // `graph_present` capability (delivered via Option<CapabilitiesExt>),
         // mirroring how ann/bm25 are opened. raw payload; the csr bitpacks its
@@ -194,6 +204,7 @@ impl MmapNestFile {
             ann_index,
             bm25_index,
             graph_index,
+            meta_index,
             declared_index_type,
             declared_score_type,
         })

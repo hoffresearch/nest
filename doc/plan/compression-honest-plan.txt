@@ -36,6 +36,139 @@ is a corpus vector plus tiny noise, so the figure measures rank-stability under 
 real-query retrieval. ladder.json and baseline.json now carry a ruler-provenance field that says
 so, and gate-zero replaces this ruler before any "greater than or equal to 0.96" is trusted.
 
+addendum 2026-06-07 (measured on the clinical corpus, post-compression-run; extends the errata,
+does not replace it)
+
+three things were measured after the errata and are recorded here so the plan stops chasing a
+number that does not exist.
+
+one, the group ruler has no statistical power below tiny. at about 3000 queries the standard
+error on a group-recall rate near 0.05 is about 0.005, and the sub-tiny presets sit within one or
+two of those of each other (nano 0.050, mrl128-int8 0.054, mrl128-int4 0.046). that spread is
+noise. the group ruler cannot rank nano versus mrl128; any "this preset wins by 0.004" claim below
+tiny is unsupported. report sub-tiny presets as a tie on this ruler, not as an ordering.
+
+two, the 0.96-with-margin target was calibrated on the weak self-perturbation ruler and does not
+exist in the real problem. on the real group ruler the best embedder tested (multilingual-e5-large,
+a 1024-dim transformer) tops out at recall 0.19, and the offline potion baselines sit at 0.06 to
+0.12. so the ceiling of the whole retrieval problem on this corpus, with the best available model,
+is about 0.19, not 0.96. chasing 0.96 is chasing a ruler artifact. the honest, defensible
+compression result is narrower and true: int8 tracks exact within about two points on every ruler
+measured (self-perturbation, title-body, group). that is the whole claim compression earns,
+"compression does not degrade what the model already knows", nothing more. whether 0.19 is the
+ruler ceiling or the embedder ceiling is unknown without a small human-judged labeled set on this
+corpus (the real gate-zero), which is the next measurement.
+
+three, a generic metadata filter beats the embedder ceiling for the scoped query, with no new model
+or codec. a new optional section (meta_index, 0x17: a generic (field, value) to chunk-ordinals
+inverted index, excluded from content_hash exactly like bm25 and hnsw, opened by section presence)
+plus a runtime search_filtered now scope the exact cosine to one (field, value) subset. measured on
+the clinical corpus (2915 notes, 7595 chunks, default potion): scoping by patient_file_id moves
+group-recall@10 from 0.092 (whole corpus, 7595 candidates) to 0.999 (patient scope, about 48
+candidates), at 0.015 ms per query versus 0.568. the content_hash is byte-identical with and without
+the section, so a nest:// citation is unaffected. honest framing: this does not find the right
+patient (a different query), it makes within-a-known-group retrieval exact and complete because the
+candidate set IS the group. the field name is just a string the caller chose; no market rule lives
+in nest.
+
+four, a structural audit of the source zip (notes.zip, 1,146,701 notes; phi-safe sample n=3823 at
+1:300, counts only) corrected three assumed test items before any of them was built. feature
+coverage, measured: date 100 percent, user_id (the note's author IS the therapist) 99.8 percent,
+patient_file_id 94.2 percent, decrypted_notes (the body) 91.7 percent; but session_id only 29.6
+percent and therapy_type only 14.1 percent. consequence: "whole-session chunking" can group at most
+30 percent of notes and "re-rank by therapy_type" rests on a feature present in one note in seven;
+date and therapist are the only clinical features dense enough to index or re-rank on. boilerplate
+at the line level is essentially zero: one 14-char line repeats across 143 notes, total boilerplate
+char-mass is 0.0 percent of indexed text, and no note embeds its previous_notes verbatim in its
+body. so "suppress boilerplate before indexing" has no target on this corpus; the cosine-near-1.0
+pairs the labeled set surfaced are short near-duplicate notes (a document-dedup question), not
+template lines. the only pre-index cleaning the data justifies is dropping the about 8 percent of
+notes with an empty body. therapist genericity was then proven on real data: rebuilding the cohort
+(2915 notes, 7595 chunks) with patient_file_id AND user_id both indexed yields a content_hash
+byte-identical to the no-meta build (b9219aef9) with a differing file_hash, and search_filtered
+returns 12/12 in-group hits for BOTH fields (bogus value to 0 hits, unfiltered search() unchanged
+over all 7595 chunks). the 0x17 index is field-generic on real data, and "index by therapist" is
+well-founded: therapist is the denser key (top therapist 1433 docs versus top patient 66).
+
+five, the 0.19 "ceiling" from point two is mostly a RULER ARTIFACT, shown by a real human-judged
+relevance ruler (the gate-zero that point two said was the next measurement). 186 (query-note,
+candidate-note) pairs were sampled stratified by retrieval rank (rank 1, 5, 20, 60, and a random
+non-retrieved note) and labeled 0/1/2 for clinical relevance by an llm judge reading the full note
+text locally (phi-safe: only id, label, and a generic category were returned; no note text, names,
+or ids left the judge). result: retrieval rank tracks human relevance cleanly. the rank-1 candidate
+is relevant (label>=1) 80 percent of the time and clearly relevant (label==2) 48 percent, decaying
+monotonically to a random note at 22 and 7 percent (rank 5: 70/40, rank 20: 58/28, rank 60: 49/13).
+so potion retrieval surfaces relevant notes at the top far better than the 0.097 group-recall
+implied; the group ruler undercounted because "same patient_file_id" is not "relevant" — a note on
+the same clinical theme from a DIFFERENT patient is genuinely relevant but the group ruler scored it
+a miss. potion cosine itself is a real but COMPRESSED relevance signal: auc 0.735 loose / 0.646
+strict, with only a 0.05 to 0.07 mean-cosine separation (relevant 0.91 versus irrelevant 0.84)
+because the potion cosines are jammed into [0.79, 0.92]. honest readout: 0.19 is NOT the embedder's
+relevance ceiling, it is the group ruler's artifact. loose thematic retrieval already works; strict
+"clearly related" retrieval (48 percent at rank 1) is the part with headroom, and that is exactly
+where a higher-dynamic-range embedder (e5) could help — now a cheap, well-posed test on these same
+labels, since the labels are embedder-independent and only the cosine predictor changes. caveats:
+single llm rater (no inter-rater agreement measured, not a licensed clinician), note-to-note
+relevance is one definition of the task, and n is 40 queries / 186 pairs. this corrects point two:
+do not quote 0.19 as the problem ceiling; quote the human ruler (rank-1 relevant 80 percent loose,
+48 percent strict) and treat e5-versus-potion on these labels as the open question.
+
+six, on that human ruler a bigger / transformer embedder does NOT beat the tiny static potion. the
+same 186 labels re-scored three embedders, all seeing the WHOLE note (potion = mean of every word
+vector; the two cached transformers windowed into 512-token chunks and mean-pooled, so truncation is
+not the handicap): potion auc 0.735 loose / 0.646 strict; labse (768d) 0.693 / 0.580;
+paraphrase-multilingual-minilm (384d) 0.612 / 0.474 (strict below chance). both transformers LOSE to
+potion, minilm badly. the likely reason: minilm and labse are sentence / bitext models trained on
+short text, and mean-pooling them over a long clinical note leaves their training distribution,
+whereas potion's mean-of-words is naturally length-robust and captures the topical overlap that
+"same theme / same patient" relevance rewards. so on this task the embedder is NOT the lever: the
+0.13 ms/query static model is the best of the three tested. the one model not yet tested is
+multilingual-e5-large, which UNLIKE minilm/labse is retrieval-tuned (query:/passage: prefixes) and
+is the prior session's 0.19-group-recall model. that test is now closed with its cheaper retrieval-
+tuned sibling multilingual-e5-small (384d, query:/passage: prefixes, full-note chunk-pooled like the
+others): auc 0.693 loose / 0.636 strict — it LOSES to potion on loose and only ties on strict, and
+its cosine is likewise compressed ([0.82, 0.99]). so even the retrieval-tuned family does not beat
+the static model on this corpus. caveat: this is e5-small, not e5-large (1024d, the 0.19 model);
+e5-large could in principle gain a little more capacity, but with four embedders measured (the
+retrieval-tuned one included) all at or below potion, the prior that e5-large earns its ~2 gb / ~84
+ms-per-query / 635x cost is very weak — not worth the download. the honest direction the evidence
+points: stop investing in the embedder; the wins on this corpus came from the metadata filter
+(point three) and from recognizing the ruler artifact (points four and five), not from a heavier
+model. embedder question: CLOSED.
+
+seven, the high-confidence duplicate noise the owner flagged is REAL, and exact chunk dedup removes
+it. my point-four claim "boilerplate is essentially zero" was measured at the LINE level (repeated
+lines inside long notes) and is right for that, but i wrongly extrapolated it to "nothing to
+suppress". at the CHUNK level — what is actually indexed — the cohort has 585 exact-duplicate chunks
+(7.7 percent of 7595) in 189 groups, with one 512-char block repeated 240 times. those are identical
+vectors: using that block as a query returns 30 near-perfect (cosine >= 0.9999) hits in the top 30,
+pure redundancy crowding out every diverse result. build_from_zip.py now drops exact-duplicate (and
+empty) chunks before indexing, ON BY DEFAULT (--no-dedup to keep them): the cohort falls to 7010
+unique chunks and the same query returns 1 near-perfect hit then diverse content. it is deterministic,
+hash-based (normalized text), zero false positives; a globally-duplicate chunk is indexed once, under
+the first doc that produced it, and meta_index columns stay aligned to the kept chunks. note-level
+the same corpus has 80 byte-identical notes (3.2 percent) and 163 (6.6 percent) with a >= 0.999
+near-twin. the residual near-duplicates (>= 0.999 cosine but not byte-identical) would need an
+embedding-time pass and are left as an optional follow-up — exact dedup is the simple, safe win.
+
+eight, the 0x17 feature (point three) passed an INDEPENDENT pre-merge review (19 agents, four
+dimensions, each finding adversarially skeptic-verified). it confirmed all five invariants
+empirically (content_hash exclusion on two real files, no-panic on stale/truncated input,
+honest-empty filtered result, recall-1.0-within-filter, byte-identical builds) and found one blocker
++ one major, both at the DECODE trust boundary, both now fixed with regression tests. blocker:
+from_bytes reserved Vec capacity from attacker-controlled u32 length prefixes BEFORE reading, a
+multi-GB reservation that aborts (uncatchable, worse than a panic) on strict-overcommit hosts; now
+bounded by the remaining bytes, the same discipline the intpack codec already used. major: from_bytes
+did not re-validate posting monotonicity, so a corrupt/hostile 0x17 could decode to duplicate or
+non-ascending ordinals (duplicate citations + inflated subset in search_filtered); now rejected with
+a typed error at decode. plus three minors (non-wrapping bounds check for 32-bit safety; recall = NaN
+on an empty candidate set instead of a vacuous 1.0; fail-loud on a >4 GiB length instead of silent
+u32 truncation) and the integration coverage the review flagged as missing (end-to-end content_hash
+exclusion built on two real files; a search_filtered runtime test for subset restriction + membership,
+honest-empty on absent value/field/no-index, and no panic when k >> subset). three findings were
+refuted by the verifiers as latent-coupling notes enforced elsewhere. the branch
+research/0x17-metafilter is green (clippy clean, 300-line guard, all tests) and merge-ready.
+
 the unstoppable goal
 
 the nest is the most compact, sovereign, citable ai database in the world, in three layers:

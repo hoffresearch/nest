@@ -79,15 +79,11 @@ pub const SECTION_ENCODING_FRONTCODE: u32 = 6;
 pub const SECTION_ENCODING_INT4: u32 = 7;
 pub const SECTION_ENCODING_RABITQ: u32 = 8;
 pub const SECTION_ENCODING_FSST: u32 = 9;
-/// l`10 = txt_streams`: the chunks_canonical (0x02) section's COMPRESSED
-/// form re-laid-out from one concatenated zstd-19 blob into N independently
-/// zstd-encoded streams (one per canonical string) behind an intpack offset
-/// table (O(1) single-chunk seek/reopen). decodes BYTE-IDENTICALLY to the
-/// raw chunks_canonical payload, so content_hash and nest:// citations are
-/// unchanged. only valid for non-embedding sections. this is the named
-/// prerequisite layout for the dict(5)/fsst(9) text levers; a per-chunk
-/// frame loses cross-chunk LZ context (small ratio cost today) but is where
-/// a trained dict/fsst can beat one big zstd-19 blob.
+/// l`10 = txt_streams`: the chunks_canonical (0x02) COMPRESSED form re-laid
+/// from one zstd-19 blob into N independently zstd-encoded streams behind an
+/// intpack offset table (O(1) reopen). decodes BYTE-IDENTICALLY to the raw
+/// payload, so content_hash/citations are unchanged. non-embedding only; the
+/// named prerequisite layout for the dict(5)/fsst(9) text levers.
 pub const SECTION_ENCODING_TXT_STREAMS: u32 = 10;
 
 /// lFormat version of the binary layout. Bumped when the on-disk
@@ -126,12 +122,9 @@ pub const SECTION_EDIT_JOURNAL: u32 = 0x0F;
 pub const SECTION_REPRO_MANIFEST: u32 = 0x10;
 
 // reconciled additive optional sections past 0x10 (see doc/plan/master-plan
-// 02-format.txt). the four redesign pillars each independently proposed
-// 0x11; this is the single disjoint map that resolves that collision in one
-// pass, BEFORE any feature edits this file. ALL are EXCLUDED from
-// content_hash, so adding any of them never invalidates a nest:// citation.
-// claimed as named constants; NOT yet emitted or read until each feature
-// ships its section codec and a manifest capability.
+// 02-format.txt). the four redesign pillars each independently proposed 0x11;
+// this is the single disjoint map resolving that collision in one pass. ALL
+// are EXCLUDED from content_hash; NOT yet emitted/read until each feature ships.
 pub const SECTION_GRAPH_NODES: u32 = 0x11;
 pub const SECTION_GRAPH_EDGE_PROPS: u32 = 0x12;
 pub const SECTION_GRAPH_ENTITY_MAP: u32 = 0x13;
@@ -142,6 +135,10 @@ pub const SECTION_SPACE_TABLE: u32 = 0x15;
 // optional section keyed by chunk ordinal, so self_contained and catalog
 // twins keep the SAME content_hash and old readers still open the file.
 pub const SECTION_BLOB_SPAN_OVERLAY: u32 = 0x16;
+// generic metadata inverted index (field,value)->sorted chunk ordinals;
+// additive, content_hash-excluded, resolves via section_name like
+// graph_adjacency. powers search_filtered; field names are caller-chosen.
+pub const SECTION_META_INDEX: u32 = 0x17;
 
 // per-space vector bands. each non-text embedding space gets one fixed-
 // stride 64-byte-aligned slab in 0x20-0x2F (NEVER zstd, scored by the
@@ -178,6 +175,8 @@ pub const OPTIONAL_SECTIONS: &[(u32, &str)] = &[
     // graph_adjacency (0x0C, G1): additive chunk-to-chunk csr. resolves via
     // section_name but stays OUT of CANONICAL_SECTIONS (content_hash-excluded).
     (SECTION_GRAPH_ADJACENCY, "graph_adjacency"),
+    // meta_index (0x17): generic (field,value)->ordinals; content_hash-excluded.
+    (SECTION_META_INDEX, "meta_index"),
 ];
 
 pub fn section_name(id: u32) -> Option<&'static str> {

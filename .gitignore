@@ -66,3 +66,11 @@ dat/measure/*.nest-*
 # Local symlink to external hoff database (not part of this repo)
 dat/hoff.db
 
+# PHI / clinical artifacts — NEVER commit. clinical data lives OUTSIDE this repo
+# (e.g. /Volumes/<redacted>/dat/psy/work). these patterns are defense-in-depth so a
+# misdirected --out into the repo tree can never be staged or pushed by any
+# auto-committer. the demo corpus_*.nest above are non-PHI and handled separately.
+*.sidecar.jsonl
+cohort_*.nest
+**/pairs/
+
