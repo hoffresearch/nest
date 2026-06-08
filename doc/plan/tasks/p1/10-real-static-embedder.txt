@@ -1,0 +1,132 @@
+==============================================================================================
+TASK #10 :: real model2vec/potion static embedder (the semantic default)
+phase: phase 1   layer: forge
+status:  [ ] todo    [x] doing    [ ] done   (delivered on branch, awaiting maintainer review + merge)
+note: filename slot p1/10; the gate work-order also carries #10 under gate/. numbering to be
+reconciled by the maintainer; this card is the p1/forge "vendor a REAL model2vec/potion table".
+==============================================================================================
+
+self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
+files listed before coding. do not summarize, do not skip. add a [ ] if something
+is missing. never skip silently.
+
+--- goal ---
+swap the offline DEFAULT embedder from the lexical floor (#04: bag-of-words, token -> fixed
+pseudo-random vector, NO semantic generalization) to a REAL vendored model2vec/potion static
+table, still offline and with no torch, behind the SAME StaticEmbedder interface and the SAME
+model_hash convention so it is a drop-in. this is what unblocks the flagship "semantic" claim
+(#08) and matryoshka (later); the lexical floor stays as a zero-dep fallback and the brought
+sentence-transformers model stays the quality ceiling.
+
+--- depends on ---
+  #04 merged (offline FLOOR + cc0 demo corpus). model CRAVADO: minishlab/potion-base-8M
+  (MIT, dim 256 confirmed from config.json hidden_dim + the safetensors embeddings shape
+  [29528, 256], 7.6M params). dim 256 is drop-in with the tiny floor, keeps the .nest small.
+  NOT retrieval-32M (dim ~1024 inflates the .nest); leave that as a measured option only.
+
+--- READ THESE COMPLETE FILES FIRST ---
+[ ] python/forge/embed_default.py        (interface StaticEmbedder + model_hash floor)
+[ ] python/forge/test_embed_default.py   (the floor self-test, incl. the lexical-signal test)
+[ ] python/forge/demo_corpus/            (the cc0 validation corpus, 4 docs about nest)
+[ ] python/model_fingerprint.py          (the model_hash idiom this mirrors)
+[ ] doc/plan/kanban.txt                  (card "vendor a REAL model2vec/potion table")
+[ ] doc/plan/master-plan/05-forge.txt    (forge lives OUTSIDE the core sovereign workspace)
+[ ] AGENTS.md                            (rules: <=333 lines/file, lowercase docs, no emoji)
+
+--- OWNS THESE CODE FILES (no parallel task edits them) ---
+  python/forge/embed_potion.py                       (the real embedder)
+  python/forge/test_embed_potion.py                  (semantic + determinism + no-network)
+  python/forge/recall_harness.py                     (potion vs floor recall, side by side)
+  python/forge/models/potion-base-8M/                (the vendored offline table, asset)
+  python/forge/__init__.py                           (re-export the real default)
+  pyproject.toml                                     (register numpy + tokenizers deps)
+  .gitattributes                                     (LFS for *.safetensors)
+
+--- STEPS (check each) ---
+[x] vendor the table offline: model.safetensors + tokenizer.json + config.json (+ modules.json,
+    tokenizer_config.json, special_tokens_map.json) under python/forge/models/potion-base-8M/.
+    track *.safetensors via Git LFS (the 30MB table); the json files stay in regular git.
+    if there is NO network in the env, STOP and report the table + the download command for the
+    maintainer to fetch; do not invent a fallback.  (network WAS available; fetched + sha256-logged)
+[x] offline inference, no torch: load the tokenizer from the local tokenizer.json, read the
+    safetensors embedding table with stdlib (8-byte len + json header + np.frombuffer of the
+    f32 payload), tokenize (add_special_tokens=False) -> gather token rows -> mean pool -> L2
+    normalize (config.json normalize=true). runtime is ZERO network (fail-closed,
+    HF_HUB_OFFLINE=1, never any download call); a test proves no socket is opened at embed time.
+[x] same interface: PotionEmbedder delivers stable, deterministic f32 vectors behind the SAME
+    api as the floor (embedding_model, embedding_dim, fingerprint, model_hash, embed_texts,
+    __call__ over ChunkSpec-likes/strings), and a new model_hash = "sha256:" + sha256(canonical
+    -json(config)) over the vendored files (model_id, files_hash, tokenizer_hash, dim, pooling,
+    normalize). the brought-model path stays the ceiling; forge.default_embedder() now returns
+    PotionEmbedder, with lexical_embedder() kept as the zero-dep fallback.
+
+--- DECISIVE ACCEPTANCE (what the reviewer will check by eye) ---
+[x] the semantic jump shows: floor is lexical so "car vs automobile" ~ "car vs banana"; with
+    potion, car~automobile MUST sit well above car~banana. explicit test with the numbers.
+    -> potion car~automobile=+0.7789, car~vehicle=+0.7202 vs car~banana=+0.0439, car~fruit=+0.0785.
+       floor car~automobile=-0.0691 vs car~banana=+0.0161 (separation -0.085: floor CANNOT tell).
+       potion separation +0.735. portuguese (honest, weak): carro~automovel=+0.077 > carro~banana=-0.055.
+[x] per-query recall on demo_corpus: potion vs the lexical floor, side by side, proving potion
+    retrieves by meaning where the floor (keyword overlap) misses.
+    -> recall@1/recall@3/mrr  potion 0.875/1.000/0.938  vs  floor 0.250/0.875/0.552 (delta +0.625 r@1).
+[x] determinism: embed the same text twice -> byte-identical f32. (test_dim_norm_determinism passes)
+[x] offline: the no-network leak test passes (sockets blocked, embed still works).
+
+--- draws from ---
+minishlab/model2vec, minishlab/potion-base-8M, run-llama/semtools
+
+--- watch out ---
+  potion-base-8M is an ENGLISH (bge-base-en-v1.5) distillation; non-english synonym pairs
+  (carro/automovel) ride on english subword rows, so report them honestly and anchor the
+  decisive test on unambiguous english pairs too. the vendored safetensors is ~30MB: LFS, never
+  a raw git blob, never git add -A. determinism here is same-machine byte-identical (numpy ops),
+  the same guarantee the floor's test asserts.
+
+--- NEST RULES (check each) ---
+[ ] edition 2024; never panic in lib (typed thiserror). FORGE heavy/non-deterministic work
+    stays OUT of the sovereign crates/ workspace. (this card is python-only, zero rust changes.)
+[ ] format v1 FROZEN + ADDITIVE: no NEST_FORMAT_VERSION bump. (no format change here.)
+[ ] content_hash over DECODED bytes: codecs decode byte-identically so nest:// citations stay
+    stable. (unchanged; this only swaps the embedder.)
+[ ] never zstd/dedup/shuffle the embeddings section (mmap SIMD hot path). (unchanged.)
+[ ] deterministic: the .nest build anchor is canonical extracted text + model fingerprint; the
+    new model_hash fingerprints exactly the vendored table.
+[ ] <=333 lines per file; docs lowercase, no emoji, no em-dash. feature branch off main.
+
+--- DONE WHEN (all green) ---
+[x] python/forge/test_embed_potion.py passes (semantic jump, determinism, f32-stable, ~unit
+    norm, no-network leak, interface parity, model_hash stable + config-sensitive)
+[x] python/forge/recall_harness.py prints potion vs floor recall per query on demo_corpus
+[x] python/forge/test_embed_default.py still passes (the floor is untouched)
+[x] ruff check . clean on the new python (ruff 0.13.0 via uvx, repo config); release_check is a
+    full rust+measure gate and this card is python-only (zero rust/core); see the run note in
+    the commit/summary for which gates the env ran
+
+--- RESULT (fill in) ---
+  semantic   car~automobile: +0.7789  vs  car~banana: +0.0439   (floor: -0.0691 vs +0.0161)
+             potion separation +0.7350 vs floor -0.0853; pt carro~automovel +0.077 > banana -0.055
+  recall@k   potion: 0.875 / 1.000 / 0.938   floor: 0.250 / 0.875 / 0.552   (recall@1/@3/mrr)
+  model_hash potion: sha256:8f2eb91a754b4da5...   dim 256, table 29528x256 f32, ~30MB (git-lfs)
+             vendored minishlab/potion-base-8M (mit); inference numpy+tokenizers, matches the
+             model2vec reference vector-for-vector; ruff clean; floor test still green.
+
+--- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
+update only what THIS task actually changed; check each:
+[x] doc/arc/arc.md     forge narrative + inventory: potion is the semantic default, floor is fallback
+[x] doc/arc/arc.yaml   machine map updated (embed_potion + models + tests + harness), with arc.md
+[ ] doc/arc/arc.mmd    no change: the build/query flow ("chunk + embed + model_hash") is unchanged
+[ ] README.md          no change: it does not name the build-side embedder
+[ ] doc/usage.md       no change: no command/flag/preset/workflow changed
+[x] AGENTS.md          build/test cmds (potion self-test + deps + git-lfs) + new known gap (english)
+[ ] Cargo.toml         no change: zero rust/crate changes
+[x] pyproject.toml     numpy + tokenizers registered under [dependency-groups] forge
+[ ] rustfmt.toml       no change
+the arc trio (arc.md + arc.yaml + arc.mmd) moves TOGETHER in the same commit when
+architecture / boundaries / data-flow / contracts / storage / runtime change.
+
+--- MERGE ---
+[ ] commit on branch research/nest-genome-v2 (or feat/p1-10-real-static-embedder)
+[ ] reviewer confirms with their own eyes -> maintainer merges, marks done in plan/kanban.txt.
+    this agent does NOT merge and does NOT mark done.
+</content>
+</invoke>

@@ -1,0 +1,352 @@
+==============================================================================================
+nest pillar :: forge: the ingestion layer
+layer: forge
+==============================================================================================
+
+a design doc. the executable steps are in ../tasks/.
+
+thesis
+----------------------------------------------------------------------------------------------
+forge is the messy half of nest that the sovereign core refuses to be. it turns raw
+heterogeneous files (pdf, image, font, dataset, dump, zip) into a deterministic canonical
+intermediate the existing python builder.py/nest.build() path already eats, and it lives
+entirely OUTSIDE the rust crates so it can be heavy, pluggable, and occasionally
+non-deterministic without contaminating the byte-identical container guarantee. the design
+rests on one boundary rule: the determinism anchor is the CANONICAL EXTRACTED TEXT plus the
+per-space model fingerprint, NOT the raw pdf. a pdf re-saved by a different ghostscript build,
+an ocr engine swapped paddleocr<->native, a font re-hinted: none of these change the .nest as
+long as the extracted canonical text and the embedding model fingerprints are byte-identical.
+forge is split in two: (1) forge-core, a small deterministic rust crate (NOT in the sovereign
+workspace, a sibling tool) that owns the canonical-intermediate schema (.fci, forge canonical
+intermediate), the deterministic normalization (unicode nfc, newline/whitespace canon,
+deterministic chunking with byte-accurate spans), profile resolution, the per-format extractor
+TRAIT, and the cas-addressed extraction cache; and (2) forge-belt, an OPTIONAL heavy
+python/process toolbelt (paddleocr, fonttools, pdfium, clip, stanza ner) invoked behind a
+uniform subprocess/json contract so the heavy deps never enter the rust dependency tree.
+extractors are chosen by --profile (books / osint / fonts / datasets / catalog) which is a
+frozen toml recipe, not code; the profile id + extractor versions are recorded in provenance
+so a build is auditable and reproducible-given-the-same-canonical-text. forge emits a .fci
+bundle (canonical text shards + per-modality embedding requests + entities + blob manifest)
+that a single thin adapter feeds into builder.Pipeline; multimodal becomes 'multiple named
+embedding requests per chunk', graph becomes 'entities + typed edges in the .fci', and catalog
+mode becomes 'blob manifest references original bytes by content-hash instead of inlining'.
+forge stays pluggable and replaceable; the .fci schema is the contract that makes the rest of
+nest never care which ocr engine ran.
+
+format impact
+----------------------------------------------------------------------------------------------
+none required for v1 reads/writes; forge produces inputs to the EXISTING builder.Pipeline +
+nest.build() contract (canonical_text, source_uri, byte_start, byte_end, embedding). forge
+USES (does not define) two already-reserved additive lanes when its richer outputs are
+present: SECTION_GRAPH_ADJACENCY=0x0C carries entities+typed edges, and the multimodal
+named-embedding-space carrier (one tagged vector pool keyed by model_fingerprint, landing as
+additive embedding sub-sections / the embeddings_fp lane convention). catalog mode needs ONE
+additive optional section, SECTION_BLOB_MANIFEST (claim the next free reserved id after 0x10
+in layout/mod.rs, e.g. 0x11, EXCLUDED from content_hash): a sorted table of (content_hash,
+original_uri, byte_len, optional sidecar_offset) so citations resolve to external blobs by
+hash with integrity preserved. all additive within frozen v1; no NEST_FORMAT_VERSION bump.
+forge itself defines the .fci intermediate schema, which is a forge artifact NOT part of the
+.nest format, so it can version independently.
+
+architecture changes
+----------------------------------------------------------------------------------------------
+new sibling rust crate forge-core (its OWN cargo workspace, NOT added to the sovereign crates/
+workspace so its dependency tree never touches nest-format/nest-runtime; edition 2024,
+never-panic typed thiserror, <=300 lines per file). modules: forge-core/src/fci/ (canonical
+intermediate schema: ChunkRecord, EmbeddingRequest{space, model_fingerprint, payload_ref},
+Entity, Edge, BlobRef; serde to a stable sorted-json + binary shard layout),
+forge-core/src/normalize/ (deterministic unicode nfc + whitespace/newline canon + the
+byte-accurate chunker mirroring builder.chunk_text so spans match), forge-core/src/extract/
+(the Extractor trait + native-rust handlers: pdf_text via pdfium-render or lopdf, plaintext,
+image_meta, font_glyphs via a fonttools-free ttf parser, dataset_rows for csv/jsonl/parquet,
+archive for zip/tar), forge-core/src/profile/ (frozen toml profile loader + resolver +
+sniffer), forge-core/src/cache/ (cas extraction cache keyed by
+sha256(raw_bytes)+extractor_version, so re-ingest skips work and stays deterministic),
+forge-core/src/belt/ (the subprocess contract: spawn engine, exchange json over stdin/stdout,
+capture engine version into provenance). a thin python adapter python/forge/
+(forge/__init__.py cli, forge/adapter.py that reads a .fci bundle and drives the EXISTING
+builder.Pipeline + nest.build, forge/belt_engines/ python wrappers for
+paddleocr/clip/stanza/fonttools that speak the belt json contract). NO changes to
+nest-format/nest-runtime/nest-cli except the single additive SECTION_BLOB_MANIFEST id
+reservation in layout/mod.rs (phase FORGE-2). the sovereign nest binary stays 8 subcommands;
+forge is a separate executable so the core install is unchanged.
+
+ux
+----------------------------------------------------------------------------------------------
+one new cli verb on the python side, kept out of the sovereign nest binary: `forge ingest
+<paths...> --profile books|osint|fonts|datasets|catalog --out corpus.nest`. progressive
+disclosure: bare `forge ingest ./books --out x.nest` picks the books profile by sniffing file
+types and uses only native-rust extractors (no heavy deps, fully offline, deterministic);
+`--belt` opts into the heavy toolbelt (ocr/clip/ner) and prints exactly which external
+engines+versions it will shell to before running, so the user consents to the
+non-deterministic surface. `forge profiles` lists frozen profiles and their extractor stack;
+`forge plan <paths>` does a dry-run that prints the extraction plan, per-file handler, and
+whether catalog mode will inline or reference, WITHOUT running heavy work (mirrors
+img2dataset's shadow-sidecar dry-run and mteb's plan-before-compute). every run writes a
+forge_manifest into provenance (profile id, extractor versions, engine fingerprints, per-file
+extraction-cache hit/miss) so the build is auditable. accessibility/graph-first: forge always
+extracts entities+edges when the profile asks, so the Lens graph viewer has structure to show;
+for the gifted/adhd/autistic audience that thinks in images and graphs, `forge plan` output is
+itself a small graph (files -> handlers -> spaces -> sections) rendered as an indented tree
+now, a node-link diagram in Lens later. all output lowercase, no emoji, no em-dash. ethics:
+redaction is an OPTIONAL profile flag (--redact pii) that runs the ner pass and writes a
+redaction map into provenance, never a gate; sovereignty is the default because forge --belt
+is the only thing that ever touches an external process and it is opt-in and offline.
+
+phase placement
+----------------------------------------------------------------------------------------------
+a new consolidated phase that runs ALONGSIDE compression phases 0-3, not after them, because
+the flagship vertical (agent-native knowledge file) needs ingestion to exist at all. sequence:
+FORGE-0 (the .fci schema freeze + adapter into builder.Pipeline + the books profile with
+native-rust pdf text extraction only) lands in parallel with compression phase 0/1 guardrails,
+since it touches zero rust-core files and unblocks real corpora. FORGE-1 (forge-belt
+subprocess contract + paddleocr/clip/fonttools optional engines + osint profile for
+zip/json/sql dumps) follows once phase 1 free-integer wins are in. FORGE-2 (catalog mode +
+SECTION_BLOB_MANIFEST + entity/edge extraction feeding graph_adjacency) aligns with the graph
+pillar's phase-4 graph_adjacency landing and compression phase 2 (so giant catalogs get the
+trained zstd dict). priority: FORGE-0 is HIGH (flagship-blocking), FORGE-1 MEDIUM, FORGE-2
+LOW-until-graph-pillar-lands. forge never blocks a compression card and no compression card
+blocks forge: they share only the stable builder.Pipeline contract.
+
+draws from
+----------------------------------------------------------------------------------------------
+run-llama/semtools, rom1504/img2dataset, activeloopai/deeplake, openai/CLIP,
+MinishLab/model2vec, embeddings-benchmark/mteb, NixOS/nix, ipfs/kubo,
+jvm-repo-rebuild/reproducible-central, stanfordnlp/stanza, google/sentencepiece
+
+proposed tasks
+----------------------------------------------------------------------------------------------
+* FORGE-0a: freeze the .fci canonical-intermediate schema + forge-core crate skeleton
+    goal:   define the stable forge canonical intermediate (.fci) that decouples messy extraction from the
+            deterministic .nest build: a versioned schema of canonical text shards +
+            per-modality embedding requests + entities/edges + blob refs, serialized
+            sorted-deterministically, so any extractor (native or belt) produces the SAME .fci
+            for the same canonical text and the rest of nest never sees which engine ran.
+    owns:   forge-core/Cargo.toml, forge-core/src/lib.rs, forge-core/src/fci/mod.rs,
+            forge-core/src/fci/record.rs, forge-core/src/fci/embedding_request.rs,
+            forge-core/src/fci/entity.rs, forge-core/src/fci/blob_ref.rs,
+            forge-core/src/fci/serialize.rs, forge-core/src/error.rs
+      - create forge-core as a SEPARATE cargo workspace (its own Cargo.toml, NOT a member of
+        crates/), edition 2024, deps minimal (serde, sha2, thiserror); confirm it does not
+        pull nest-format/nest-runtime
+      - define ChunkRecord { canonical_text: String, source_uri: String, byte_start: u64,
+        byte_end: u64 } mirroring builder.ChunkSpec EXACTLY so the adapter is a 1:1 map and
+        spans round-trip through nest cite
+      - define EmbeddingRequest { space: SpaceTag(text|image|glyph|symbol), model_fingerprint:
+        String, payload_ref: PayloadRef(InlineText | BlobHash) } so one chunk can request
+        multiple named-space embeddings (the multimodal carrier)
+      - define Entity { id, kind, canonical_name, mention_spans: Vec<(chunk_idx, byte_start,
+        byte_end)> } and Edge { src, dst, edge_type, weight } so the graph pillar gets
+        structure straight from forge
+      - define BlobRef { content_hash: [u8;32], original_uri: String, byte_len: u64, inlined:
+        bool } for catalog mode (referenced) vs normal mode (inlined)
+      - implement deterministic serialize: sorted keys, fixed field order, NFC-normalized
+        strings, LE binary shards for embedding payloads; add a SCHEMA_VERSION constant
+        independent of NEST_FORMAT_VERSION
+      - write a roundtrip test: serialize(.fci) -> deserialize -> serialize is byte-identical,
+        and two builds from the same canonical text produce byte-identical .fci
+    risk:   schema drift: if ChunkRecord diverges from builder.ChunkSpec the spans stop round-tripping
+            through nest cite. mitigation: a golden test that feeds a .fci through the adapter
+            and asserts the resulting chunk_id matches nest.chunk_id() for the same fields,
+            run in CI.
+
+* FORGE-0b: deterministic normalize + chunker + the books profile (native-rust pdf text, zero
+  heavy deps)
+    goal:   land the determinism anchor: deterministic unicode/whitespace normalization and a
+            byte-accurate chunker that produces the SAME spans builder.chunk_text would, plus
+            the first end-to-end profile (books) using only native-rust pdf-text extraction so
+            a folder of pdfs becomes a deterministic .fci with no external process and no
+            network.
+    owns:   forge-core/src/normalize/mod.rs, forge-core/src/normalize/unicode.rs,
+            forge-core/src/normalize/chunker.rs, forge-core/src/extract/mod.rs,
+            forge-core/src/extract/pdf_text.rs, forge-core/src/extract/plaintext.rs,
+            forge-core/src/profile/mod.rs, forge-core/src/profile/books.toml
+      - implement normalize: unicode NFC, canonical newline (\r\n -> \n), trailing-whitespace
+        strip, deterministic; document that THIS canonical text (not the raw pdf) is the
+        reproducibility anchor
+      - implement chunker mirroring builder.chunk_text (greedy char window, optional overlap,
+        byte spans into the UTF-8 of normalized text); assert byte_end <= len(encoded) exactly
+        as builder does
+      - define the Extractor trait { fn extract(&self, raw: &[u8], uri: &str) ->
+        Result<CanonicalText, ForgeError> } and a registry keyed by detected file type
+      - implement pdf_text using a permissively-licensed native-rust pdf text layer
+        (lopdf/pdf-extract style) returning text + best-effort page boundaries; on a
+        scanned/imageless pdf, return a NeedsOcr marker rather than empty (belt handles it
+        later)
+      - implement plaintext passthrough for .txt/.md
+      - write profile/mod.rs to load a frozen toml profile (name, file-type -> handler map,
+        which embedding spaces, chunk params) and a books.toml that selects
+        pdf_text+plaintext, text space only, max_chars 512
+      - test: ingest a 3-pdf fixture folder twice -> byte-identical .fci; feed through adapter
+        -> .nest validates and nest cite round-trips a span
+    risk:   native-rust pdf text extraction is lower quality than poppler/pdfium for complex layouts, so
+            canonical text (the anchor) may differ from what a user expects. mitigation: pin
+            the extractor version into provenance, treat extractor_version as part of the
+            reproducibility recipe, and route hard pdfs to the belt ocr path in FORGE-1 behind
+            an explicit --belt opt-in.
+
+* FORGE-0c: python adapter from .fci into the existing builder.Pipeline + forge ingest cli
+    goal:   wire forge to the sovereign core through the ONE stable contract: read a .fci bundle and drive
+            the existing python builder.Pipeline + nest.build() with zero changes to
+            nest-format/nest-runtime, exposing `forge ingest <paths> --profile <p> --out
+            <file>.nest` as a thin python cli separate from the 8-subcommand nest binary.
+    owns:   python/forge/__init__.py, python/forge/adapter.py, python/forge/cli.py, python/forge/plan.py,
+            python/forge/provenance.py
+      - adapter.py: read a .fci bundle (call forge-core binary or load its serialized output),
+        map each ChunkRecord -> builder.ChunkSpec, gather text-space EmbeddingRequests, and
+        emit via builder.Pipeline with an embedder callable
+      - for the text space, default the embedder to a model2vec-style static offline embedder
+        (sovereign, deterministic, no network) and record its table hash as model_hash via
+        model_fingerprint conventions
+      - provenance.py: assemble forge_manifest { profile_id, extractor_versions,
+        belt_engines_used, cache_hits, fci_schema_version } and pass it as
+        builder.emit(provenance=...) so the build is auditable
+      - cli.py: `forge ingest` (sniff types, resolve profile, run forge-core extraction, run
+        adapter), `forge profiles` (list frozen profiles), and delegate `forge plan` to
+        plan.py
+      - plan.py: dry-run that prints files -> handlers -> spaces -> sections as an indented
+        tree and whether catalog mode would inline or reference, WITHOUT running heavy
+        extraction (img2dataset shadow-sidecar dry-run)
+      - test: `forge ingest dat/demo/<a-folder> --profile books --out /tmp/t.nest` produces a
+        file that `nest validate` accepts and whose chunk_ids match a direct builder.Pipeline
+        build of the same canonical text
+    risk:   doubling the build path (forge adapter vs existing nest_build_corpus.py) risks divergence in
+            chunk_id/provenance. mitigation: adapter.py MUST call the same
+            builder.Pipeline/nest.build (no parallel build logic), and a CI test asserts
+            forge-built and pipeline-built .nest from identical canonical text are
+            byte-identical.
+
+* FORGE-1: forge-belt subprocess contract + optional heavy engines (paddleocr / clip /
+  fonttools / stanza ner) + osint and fonts profiles
+    goal:   add the OPTIONAL heavy toolbelt as an opt-in (--belt) subprocess layer so ocr,
+            image/glyph/symbol embeddings, and entity extraction never enter the sovereign
+            rust dependency tree, while the canonical-text determinism boundary holds (ocr
+            output IS the new anchor, engine version is recorded, swapping engines does not
+            corrupt prior builds).
+    owns:   forge-core/src/belt/mod.rs, forge-core/src/belt/contract.rs,
+            forge-core/src/extract/image_meta.rs, forge-core/src/extract/font_glyphs.rs,
+            forge-core/src/extract/archive.rs, forge-core/src/extract/dataset_rows.rs,
+            forge-core/src/profile/osint.toml, forge-core/src/profile/fonts.toml,
+            python/forge/belt_engines/paddleocr_engine.py,
+            python/forge/belt_engines/clip_engine.py,
+            python/forge/belt_engines/stanza_ner_engine.py
+      - belt/contract.rs: define a uniform engine protocol (json over stdin/stdout: { op,
+        payload_ref, params } -> { output, engine_name, engine_version }); engine_version is
+        captured and written into provenance so a build records which ocr/clip ran
+      - belt/mod.rs: spawn an engine subprocess only when --belt is set; on missing engine,
+        fail closed with a typed error naming the missing tool (never network-fetch it); print
+        the engine list before running so the user consents to the non-deterministic surface
+      - extract handlers: image_meta (native dimensions/format, emits image-space
+        EmbeddingRequest -> clip engine), font_glyphs (native ttf/otf parse for glyph outlines
+        + unicode coverage, emits glyph/symbol-space requests), archive (deterministic-order
+        walk of zip/tar -> recurse extractors), dataset_rows (csv/jsonl/parquet -> one
+        canonical record per row)
+      - belt_engines: paddleocr_engine (scanned-pdf/image -> text, the new canonical anchor
+        for those inputs), clip_engine (image-space + text-space cross-modal vectors,
+        L2-normalized per CLIP convention), stanza_ner_engine (entities + edges for the graph
+        pillar, deterministic given pinned model)
+      - osint.toml: zip/json/sql/jsonl handlers, text+entity spaces, ner on, optional --redact
+        flag wiring; fonts.toml: ttf/otf handlers, glyph+symbol spaces, etymology/unicode
+        metadata
+      - for each non-text space, the EmbeddingRequest carries its own model_fingerprint so
+        text/image/glyph/symbol coexist and search routes per space (multimodal requirement)
+      - test: --belt run on a fixture with one scanned pdf + one png + one ttf produces a .fci
+        with three named embedding spaces; without --belt the same inputs degrade gracefully
+        (NeedsOcr markers, image metadata only) and still build
+    risk:   belt engines are non-deterministic across versions/hardware (paddleocr, clip on gpu), which
+            could be mistaken for a determinism violation. mitigation: the determinism
+            contract is canonical-text-given, not raw-file-given; pin+record engine versions
+            in provenance, cache belt outputs in the cas extraction cache keyed by
+            (input_hash, engine_version) so a re-run with the same engine is reproducible, and
+            document loudly that --belt outputs are reproducible only given the same engine
+            fingerprint.
+
+* FORGE-2: catalog mode + SECTION_BLOB_MANIFEST + entity/edge feed into graph_adjacency
+    goal:   let one .nest index a huge corpus (webarchive, hundreds of GB of books/datasets, giant
+            parquet) by holding embeddings+index+graph+canonical-text while REFERENCING
+            original blobs by content-hash via an optional sidecar blob store, so citations
+            and integrity survive without inlining terabytes, and wire forge entities/edges
+            into the reserved graph_adjacency section.
+    owns:   forge-core/src/cache/mod.rs, forge-core/src/cache/cas.rs,
+            forge-core/src/profile/datasets.toml, forge-core/src/profile/catalog.toml,
+            python/forge/catalog.py, crates/nest-format/src/layout/mod.rs
+      - reserve SECTION_BLOB_MANIFEST in layout/mod.rs as the next free additive id after 0x10
+        (e.g. 0x11), EXCLUDED from content_hash, holding a sorted table of (content_hash[32],
+        original_uri, byte_len, optional sidecar_offset) -- ADDITIVE ONLY, no
+        NEST_FORMAT_VERSION bump, old runtimes skip it as an optional section
+      - cas.rs: content-defined-chunking-free content-hash store (sha256 of raw blob) with an
+        optional sidecar blob file written next to the .nest; nix/ipfs lesson: address by
+        hash, dedup identical blobs, never re-encode media
+      - catalog.toml + catalog.py: in catalog mode, BlobRef.inlined=false; forge extracts
+        canonical text + embeddings + entities but stores raw bytes in the sidecar (or leaves
+        them in place addressed by hash), and writes the blob manifest so nest cite resolves
+        nest://content_hash/chunk_id to the external blob with integrity intact
+      - datasets.toml: parquet/jsonl/csv ml-dataset handler that emits per-row canonical
+        records + scalar columns (lang, byte_len, source_id) for the chunk_scalars pre-filter
+      - wire Entity/Edge from the .fci into the adapter so when graph_adjacency (0x0C) lands
+        it is fed real typed edges (entity co-occurrence, NEXT_CHUNK, citation), giving the
+        Lens graph viewer structure off mmap
+      - test: catalog-mode ingest of a multi-file fixture produces a small .nest + a sidecar
+        blob store; nest cite resolves a citation to the external blob and verifies its
+        content_hash; verify the .nest still validates and old-runtime compat (skips 0x11)
+        holds
+    risk:   catalog mode splits the single-file guarantee (the headline property) into file + sidecar,
+            weakening sovereignty if the sidecar is lost. mitigation: make catalog mode
+            explicit and opt-in (catalog profile only), keep the .nest self-sufficient for
+            search/graph (only original-blob reopen needs the sidecar), and have nest cite
+            fail with a typed, actionable error (not a panic) when a referenced blob is
+            unavailable, so integrity is verifiable even offline. note: editing
+            crates/nest-format/src/layout/mod.rs must coordinate with the codec-registry
+            refactor (task #08) which also reserves ids there -- sequence FORGE-2 after #08
+            merges to avoid a parallel-edit conflict.
+
+risks
+----------------------------------------------------------------------------------------------
+  - forge is the one place nest can become 10 mediocre products: every profile is a temptation
+    to special-case. mitigation: profiles are frozen toml recipes over a fixed Extractor
+    trait, not bespoke code paths; adding a vertical adds a toml file, not a subsystem.
+  - the determinism boundary is subtle and easy to misstate: users will expect 'same pdf =>
+    same .nest', but the real guarantee is 'same canonical text + same model fingerprint =>
+    byte-identical .nest'. if this is not documented loudly, the reproducibility claim looks
+    broken when an ocr engine updates. mitigation: provenance records extractor+engine
+    versions and forge plan prints them.
+  - forge-belt heavy deps (paddleocr, clip, stanza) are large and platform-fragile; bundling
+    them would bloat the sovereign install. mitigation: belt is a separate opt-in install
+    (--belt), the rust core never depends on it, and missing engines fail closed with a named
+    error rather than auto-download.
+  - catalog mode reintroduces multi-file fragility that the single-file thesis exists to kill.
+    mitigation: keep it strictly opt-in and keep the .nest fully functional for search/graph
+    without the sidecar; only original-byte reopen needs it.
+  - forge-core as a second rust workspace risks code/version drift from the sovereign crates
+    (e.g. the chunk_id contract). mitigation: a CI golden test that asserts forge-built and
+    builder.Pipeline-built .nest are byte-identical for the same canonical text, so the two
+    stay locked.
+  - FORGE-2 edits crates/nest-format/src/layout/mod.rs which the codec-registry refactor (task
+    #08) also owns, creating a parallel-edit hazard. mitigation: sequence FORGE-2 strictly
+    after #08 merges and have it claim only the single new section-id constant.
+
+open questions
+----------------------------------------------------------------------------------------------
+  - should the default sovereign text embedder be a vendored model2vec/potion static table
+    (offline, deterministic, no pytorch) shipped beside forge, or do we require the user to
+    bring a sentence-transformers model? a static table makes byte-identical builds trivial
+    but caps quality; this affects how model_fingerprint is computed for forge-built corpora.
+  - is the multimodal carrier best as multiple additive named embedding sub-sections (clean,
+    one fingerprint each, easy per-space routing) or a single tagged vector pool with a
+    (space_id, fingerprint) sidecar (better cache locality, one section)? the .fci already
+    supports both; the .nest side decision can be deferred but should be settled before image
+    search ships.
+  - for catalog mode, should the sidecar blob store be a flat cas directory (ipfs-style,
+    simplest) or a single packed blob file with the manifest as its index (closer to
+    single-file ethos)? the packed file preserves more of the one-file guarantee but
+    complicates append.
+  - where does deterministic chunking truly live: forge-core (so spans are fixed before the
+    embedder runs) or builder.chunk_text (existing)? FORGE-0b duplicates it in rust; long-term
+    one of them should call the other to avoid two chunkers drifting.
+  - should forge-core be a public reusable rust crate (others can write extractors) or an
+    internal tool? public widens the contributor surface (good for the agent-native vertical)
+    but commits us to a stable Extractor trait sooner.
+  - redaction (--redact pii) writes a redaction map into provenance, but should redacted spans
+    be physically removed from canonical text (changing content_hash, breaking the 'same
+    input' promise) or only marked? the ethics stance says optional-not-gate, but the
+    integrity implications of physical removal need a decision.

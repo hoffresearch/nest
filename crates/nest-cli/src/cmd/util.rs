@@ -1,6 +1,10 @@
 //! Shared CLI helpers: pretty-printers and embedder discovery.
 
+use anyhow::Result;
 use std::path::PathBuf;
+use std::process::Command as ProcCommand;
+
+use nest_runtime::{MmapNestFile, SearchResult};
 
 pub fn print_result(result: &nest_runtime::SearchResult) {
     println!("index_type:   {}", result.index_type);
@@ -42,6 +46,8 @@ pub fn encoding_name(e: u32) -> &'static str {
         nest_format::layout::SECTION_ENCODING_ZSTD => "zstd",
         nest_format::layout::SECTION_ENCODING_FLOAT16 => "float16",
         nest_format::layout::SECTION_ENCODING_INT8 => "int8",
+        nest_format::layout::SECTION_ENCODING_INT4 => "int4",
+        nest_format::layout::SECTION_ENCODING_INTPACK => "intpack",
         _ => "unknown",
     }
 }
@@ -62,4 +68,155 @@ pub fn default_embedder_path() -> PathBuf {
         }
     }
     PathBuf::from("python/embed_query.py")
+}
+
+/// lFind the OFFLINE potion embedder script (`python/forge/embed_query_potion.py`).
+/// the flagship verbs (`ask`/`retrieve`) embed with the default static potion
+/// table, NEVER sentence-transformers, so an offline corpus gets a cited answer
+/// with no network. distinct from `default_embedder_path` (the legacy
+/// sentence-transformers path that `search-text` keeps).
+pub fn default_potion_embedder_path() -> PathBuf {
+    let rel = PathBuf::from("python")
+        .join("forge")
+        .join("embed_query_potion.py");
+    let candidates = [
+        std::env::current_dir().ok().map(|p| p.join(&rel)),
+        std::env::current_dir()
+            .ok()
+            .map(|p| p.join("..").join(&rel)),
+    ];
+    for c in candidates.into_iter().flatten() {
+        if c.exists() {
+            return c;
+        }
+    }
+    rel
+}
+
+/// lThe embedder's json contract (shared by `embed_query.py` and the offline
+/// `embed_query_potion.py`): the compact `model_hash` is the source of truth
+/// for the manifest gate; `fingerprint` is diagnostic only.
+#[derive(serde::Deserialize)]
+struct EmbedderOutput {
+    model_hash: String,
+    embedding_model: String,
+    embedding_dim: usize,
+    vector: Vec<f32>,
+    #[serde(default)]
+    fingerprint: serde_json::Value,
+}
+
+const PLACEHOLDER_MODEL_HASH: &str =
+    "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+
+/// lEmbed `query` OFFLINE with the potion table, validate the embedder's
+/// model_hash against the manifest exactly like `search_text.rs`, then route
+/// by manifest capability (`declared_index_type` / has_ann / has_bm25 /
+/// has_graph) and run search. the returned `SearchResult` carries the
+/// additive `SearchExplain` so callers can disclose the rerank-source honesty
+/// line. shared by `ask` and `retrieve` so the gate lives in one place.
+///
+/// `model_path` overrides the vendored potion table dir for fully-offline
+/// operation. a model_hash mismatch is a typed error (never a wrong score).
+pub fn embed_and_search(
+    runtime: &MmapNestFile,
+    query: &str,
+    k: i32,
+    candidates: Option<usize>,
+    embedder: Option<PathBuf>,
+    model_path: Option<PathBuf>,
+) -> Result<SearchResult> {
+    let info: serde_json::Value = serde_json::from_str(&runtime.inspect_json()?)?;
+    let model = info["manifest"]["embedding_model"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("manifest.embedding_model missing"))?
+        .to_string();
+    let declared_dim = info["manifest"]["embedding_dim"]
+        .as_u64()
+        .ok_or_else(|| anyhow::anyhow!("manifest.embedding_dim missing"))?
+        as usize;
+    let declared_model_hash = info["manifest"]["model_hash"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("manifest.model_hash missing"))?
+        .to_string();
+
+    let embedder = embedder.unwrap_or_else(default_potion_embedder_path);
+    if !embedder.exists() {
+        anyhow::bail!(
+            "offline embedder script not found: {} (override with --embedder)",
+            embedder.display()
+        );
+    }
+
+    // lthe interpreter the offline embedder runs under. defaults to `python3`
+    // but `NEST_PYTHON` overrides it, so a venv carrying the forge deps
+    // (numpy + tokenizers for the potion table) can be selected without
+    // touching PATH. the embedder itself opens no socket.
+    let interpreter = std::env::var("NEST_PYTHON").unwrap_or_else(|_| "python3".into());
+    let mut cmd = ProcCommand::new(&interpreter);
+    cmd.arg(&embedder);
+    if let Some(p) = &model_path {
+        cmd.arg("--model-path").arg(p);
+    }
+    cmd.arg(&model).arg(query);
+    let out = cmd
+        .output()
+        .map_err(|e| anyhow::anyhow!("failed to spawn embedder: {} ({})", e, embedder.display()))?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "embedder failed (status={}): {}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    let payload: EmbedderOutput = serde_json::from_slice(&out.stdout).map_err(|e| {
+        anyhow::anyhow!(
+            "invalid embedder output: {} (stdout={:?})",
+            e,
+            String::from_utf8_lossy(&out.stdout)
+        )
+    })?;
+
+    // lLayer 1/2/3 gate, identical to search_text.rs: name, dim, model_hash.
+    if payload.embedding_model != model {
+        anyhow::bail!(
+            "model name mismatch: manifest={}, embedder reports={}",
+            model,
+            payload.embedding_model
+        );
+    }
+    if payload.embedding_dim != declared_dim || payload.vector.len() != declared_dim {
+        anyhow::bail!(
+            "dim mismatch: manifest={}, embedder dim={}, vector len={}",
+            declared_dim,
+            payload.embedding_dim,
+            payload.vector.len()
+        );
+    }
+    if declared_model_hash == PLACEHOLDER_MODEL_HASH {
+        anyhow::bail!(
+            "manifest carries the legacy placeholder model_hash. rebuild this \
+             corpus with a real fingerprint."
+        );
+    }
+    if payload.model_hash != declared_model_hash {
+        anyhow::bail!(
+            "model_hash mismatch: corpus was built with {}, embedder reports {}\n\
+             fingerprint reported by embedder: {}",
+            declared_model_hash,
+            payload.model_hash,
+            payload.fingerprint
+        );
+    }
+
+    // lRoute by manifest capability, then run. every printed score is the
+    // exact-cosine rerank value (the candidate paths all end in score_subset).
+    let cand = candidates.unwrap_or(((k as usize) * 4).max(64));
+    let result = match runtime.declared_index_type() {
+        "hnsw" => runtime.search_ann(&payload.vector, k, cand)?,
+        "hybrid" => runtime.search_hybrid(&payload.vector, query, k, cand)?,
+        "graph" => runtime.search_graph(&payload.vector, k, 1, cand)?,
+        _ => runtime.search(&payload.vector, k)?,
+    };
+    Ok(result)
 }

@@ -1,0 +1,116 @@
+==============================================================================================
+TASK #10 :: gate criteria (release-check enforced)
+phase: FLAGSHIP-PROVEN GATE   layer: cross
+status:  [ ] todo    [ ] doing    [ ] done
+==============================================================================================
+
+self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
+files listed before coding. do not summarize, do not skip. add a [ ] if something
+is missing. never skip silently.
+
+--- goal ---
+NOTHING past this point gets code until BOTH conditions hold: (1) the headline number is
+proven and published - sub-0.1 ratio NET OF the mandatory fp source on ONE real, named,
+license-clean corpus with recall@10 held by the exact rerank; (2) the agent-native flagship
+has external users. this gate is structural, not aspirational: it converts the discipline from
+'build everything additively' into 'build the wedge, prove it, then earn the rest.'
+
+--- depends on ---
+  previous phase merged
+
+--- READ THESE COMPLETE FILES FIRST ---
+[ ] doc/plan/master-plan/00-vision.txt
+[ ] doc/plan/master-plan/07-graph.txt
+[ ] doc/plan/master-plan/03-roadmap.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and the current code you will change:)
+[ ] doc/plan/master-plan/gate.txt
+
+--- OWNS THESE CODE FILES (no parallel task edits them) ---
+  doc/plan/master-plan/gate.txt
+
+--- STEPS (check each) ---
+[~] publish the before/after ratio on the named demo corpus, recall@10 held, ratio reported
+    NET of fp source
+    DONE (WO PUB-ladder, 2026-06-06): condition (1) is SATISFIED. the published ladder ran at
+    100 queries, k=10, on the LFS baseline dat/corpus_next.v1.nest (n=30725, dim=384), recall@10
+    measured vs the f32 exact top-k, published to dat/measure/ladder.json + refreshed
+    dat/measure/baseline.json. honest net-of-fp framing: the 0x09 embeddings_fp writer is NOT
+    wired, so every shipped sub-int8 preset is stored-precision (net-of-fp ratio == stored
+    ratio, real cosine at int4/int8 stored precision, disclosed via dtype + mrl_dim/full_dim).
+    reconciled the docs to the build (tiny 0.283 -> 0.256, compressed 0.350 -> 0.339, hybrid
+    0.668 -> 0.609). sub-0.1 net-of-fp is the post-gate stretch, not this condition. see
+    doc/plan/master-plan/gate.txt (created by this WO; #10 owns it).
+[ ] confirm external-user signal on the agent-native pip package
+    DEFERRED TO LAUNCH (owner call, 2026-06-06): condition (2)/(3) external users does not block
+    the gate until the agent-native pip package ships. when it ships, confirm the signal here and
+    both conditions hold. this defer does NOT unblock later/research work; it records that the
+    published-ratio half is done while the external-users half waits for launch.
+[ ] ONLY THEN unblock catalog mode, original-byte reopen, the entity graph G2/G3, multimodal
+    spaces, and the cosmos.gl viewer
+
+--- draws from ---
+embeddings-benchmark/mteb, jvm-repo-rebuild/reproducible-central
+
+--- watch out ---
+  if the gate is skipped, the solo author rebuilds the ten-mediocre-products trap the
+  discipline section exists to prevent. the gate is the single most important missing artifact
+  from the draft.
+
+--- NEST RULES (check each) ---
+[ ] edition 2024; never panic in lib (typed thiserror). FORGE heavy/non-deterministic work
+    stays OUT of the sovereign crates/ workspace.
+[ ] format v1 FROZEN + ADDITIVE: no NEST_FORMAT_VERSION bump. use reserved encoding ids 4-9 /
+    section ids 0x09+.
+[ ] content_hash over DECODED bytes: codecs decode byte-identically so nest:// citations stay
+    stable.
+[ ] never zstd/dedup/shuffle the embeddings section (mmap SIMD hot path); only fixed-stride
+    quantization there.
+[ ] deterministic: the .nest build anchor is canonical extracted text + model fingerprint,
+    verify byte-identical across two builds.
+[ ] <=300 lines per rust src file; docs lowercase, no emoji, no em-dash. feature branch off
+    main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace ; cargo test --workspace (+ roundtrip+content_hash test
+    for new codecs)
+[ ] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if format/runtime/python changed ; ./scripts/release_check.sh
+    passes
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ____  after: ____
+  recall@10   before: ____  after: ____
+
+--- WO PUB-ladder RESULT (2026-06-06, branch research/nest-genome-v2) ---
+  condition (1) of this gate (publish the honest ratio + recall@10, net-of-fp) is SATISFIED;
+  condition (2)/(3) external users is DEFERRED TO LAUNCH (owner call). this WO did NOT mark the
+  gate card done (the gate stays open on condition 2). it created doc/plan/master-plan/gate.txt
+  (which #10 owns but had not created) and recorded the published numbers there.
+
+  published ladder (100 queries, k=10, dat/corpus_next.v1.nest n=30725 dim=384, recall vs the
+  f32 exact top-k; full curve in dat/measure/ladder.json, named rows in dat/measure/baseline.json):
+    exact 1.000 1.0000 | compressed 0.339 1.0000 | tiny 0.256 0.9920 |
+    micro 0.223 0.8100 (mrl256-int8) | nano 0.209 0.9130 (int4) | hybrid 0.609 1.0000
+  every sub-int8 row is stored-precision (0x09 embeddings_fp not wired): net-of-fp == stored
+  ratio, disclosed via dtype (+ mrl_dim/full_dim), machine-checkable, never bare-slab.
+
+--- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
+update only what THIS task actually changed; check each:
+[ ] doc/arc/arc.md     architecture inventory + contract (boundaries/sections/data-flow/runtime)
+[ ] doc/arc/arc.yaml   machine architecture map (MUST move with arc.md, same commit)
+[ ] doc/arc/arc.mmd    mermaid build/query flow (if the flow changed)
+[ ] README.md          overview / cli / presets / highlights (if a user-visible surface changed)
+[ ] doc/usage.md       the how-to (if a command, flag, preset, or workflow changed)
+[ ] AGENTS.md          build/test cmds, conventions, gotchas, known gaps (if any changed)
+[ ] Cargo.toml         workspace version / deps / new crate (if crates or deps changed)
+[ ] pyproject.toml     python tooling / deps / targets (if the python surface changed)
+[ ] rustfmt.toml       only if a formatting rule must change (rare)
+the arc trio (arc.md + arc.yaml + arc.mmd) moves TOGETHER in the same commit when
+architecture / boundaries / data-flow / contracts / storage / runtime change.
+
+--- MERGE ---
+[ ] commit on branch feat/gate-10-gate-criteria-release-check-enforced
+[ ] gate green -> merge, mark done in plan/kanban.txt

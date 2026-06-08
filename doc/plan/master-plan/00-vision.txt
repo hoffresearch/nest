@@ -1,0 +1,218 @@
+==============================================================================================
+nest master plan v2 :: vision + three-layer model
+==============================================================================================
+
+part 00. see ./README.txt for all parts.
+
+vision
+----------------------------------------------------------------------------------------------
+nest is the most compact, sovereign, citable ai database in the world, expressed as three
+layers instead of one: forge turns any messy heterogeneous corpus into a clean deterministic
+canonical intermediate, nest compresses and serves it as one frozen-v1 single-file mmap that
+never opens a socket and always returns a real-cosine cited score, and lens lets a human or an
+agent search, traverse, and see it. the four properties no competitor combines stay the spine
+(sovereign/offline, single-file, deterministic, citable). the redesign keeps those properties
+but is sequenced for a solo author with one flagship first: the agent-native knowledge file, a
+pip-installable retrieve() that returns cited spans an llm can trust, proven on one real
+corpus at a published before/after ratio before any of the larger subsystems (entity graph,
+multimodal spaces, catalog blob store, webgl viewer) gets a line of code. the redesign's later
+capabilities still extend the spine across modality (named text/image/glyph/symbol spaces),
+structure (a first-class in-.nest knowledge graph traversed off mmap and fed to the same exact
+rerank), and scale (catalog mode references hundreds of GB of original blobs by content-hash
+while keeping the index small), but every one of them sits BEHIND a hard FLAGSHIP-PROVEN gate,
+not inside a linear build-everything roadmap. accessibility is a design driver, not
+decoration: a huge audience thinks in images and graphs, so graph-first, deterministic,
+low-cognitive-load, screen-reader-clean output is a feature. the discipline is structural, not
+aspirational: the core stays small and sovereign, forge and lens are pluggable surfaces, every
+new capability is additive within frozen v1 (and the two places the draft smuggled a breaking
+change past that guard are fixed below), and one flagship ships and earns users before the
+rest are built.
+
+the three-layer model (forge / nest / lens)
+----------------------------------------------------------------------------------------------
+forge (ingestion, outside the core, heavy/pluggable/possibly non-deterministic): raw
+heterogeneous files (pdf, image, font, dataset, dump, zip) -> a deterministic canonical
+intermediate (.fci: normalized text shards + per-modality embedding requests + entities/edges
++ blob manifest). hundreds of options (ocr engine, extraction depth, which modalities, layer
+separation, redaction) live here as frozen toml profiles, not code. the determinism anchor is
+the canonical extracted text + per-space model fingerprint, NOT the raw input. one
+authoritative chunker: builder.chunk_text stays the single source of truth and forge-core
+calls it through the python adapter (no duplicate-then-reconcile chunker), so the two-chunker
+drift risk is removed by construction rather than by a test. nest (the sovereign container +
+engine, the four frozen-v1 crates, unchanged philosophy): compact, deterministic, single-file,
+citable; mmaps the file, runs simd dot products off disk, never opens a socket; lossy
+candidates always feed a mandatory exact-cosine rerank so the returned score is real cosine;
+everything new is additive within v1 and never bumps a canonical content-hashed section. lens
+(consumption, outside the core): search, cite, and (later, gated) visualize. the flagship
+surface is two user-facing verbs, ask and cite; the existing 8 subcommands stay as-is under
+the hood (renaming is deferred churn). a graph viewer (cosmos.gl/webgl) renders the in-.nest
+graph for the image/graph-thinking audience, but only after the flagship is proven; cli now,
+gui later, both reading the same local files the engine reads. forge produces, nest
+stores+serves, lens consumes; the .fci schema and the .nest format are the two stable
+contracts that let forge and lens be swapped without touching the core.
+
+architecture
+----------------------------------------------------------------------------------------------
+four sovereign crates stay frozen-v1; two pluggable surfaces sit outside them; one new crate
+(nest-profile) is DEFERRED until a second vertical proves it is needed. nest (the sovereign
+core, four crates, unchanged philosophy): nest-format (frozen container; grows a codec
+registry + new optional sections via the reserved 0x09+ lanes, never a NEST_FORMAT_VERSION
+bump and never a payload-version bump on a canonical content-hashed section), nest-runtime
+(mmap + ann + bm25 + simd + score_subset exact rerank; score_subset is refactored EARLY to
+take an explicit rerank-source handle so the fp slab and per-space routing can plug in without
+weakening the gate), nest-cli (thin clap surface; flagship ships ask + cite, keeps the
+existing 8 subcommands underneath, defers verb-collapse), nest-python (pyo3 abi3 bridge owning
+retrieve()). forge (NEW, outside the cargo workspace, can be heavy and occasionally
+non-deterministic): a sibling rust crate forge-core (its OWN cargo workspace so
+paddleocr/clip/fonttools deps never enter nest-format/nest-runtime) owning the .fci
+canonical-intermediate schema, deterministic normalize, the Extractor trait, frozen toml
+profiles, and a cas extraction cache; chunking is NOT duplicated here - forge calls the
+existing builder.chunk_text through the python adapter; plus forge-belt, an opt-in python
+toolbelt (paddleocr/clip/stanza/fonttools) behind a subprocess/json contract; plus a thin
+python/forge/ adapter that drives the EXISTING builder.Pipeline + nest.build() through the one
+stable contract. forge-core is INTERNAL first, no public Extractor trait commitment until the
+profiles stabilize. lens (NEW, outside the rust core): the consumption surface. flagship cli
+is ask + cite over the existing engine; a nest-profile crate and a collapsed verb set are
+DEFERRED to the second vertical; gui-later as a thin webview over the same json envelopes. the
+graph visualizer (cosmos.gl/webgl) lives in lens/, a standalone static web project NEVER
+compiled into the rust core and opening no socket, and is BUILT ONLY AFTER the flagship-proven
+gate. the discipline seam: adding a vertical adds a forge profile (toml) + a lens verb alias +
+a demo corpus, NEVER a new core crate, a required section, or a format-version bump. the
+determinism anchor moves up one level: it is the CANONICAL EXTRACTED TEXT + per-space model
+fingerprint, not the raw pdf/parquet/font.
+
+pillars
+----------------------------------------------------------------------------------------------
+1. [nest] compression core (the foundation, ships first)
+   the consolidated phases 0-3 stack stays the foundation and ships first: phase 0 guardrails
+   (embeddings_fp rerank source, materialize-to-f32 ram-leak fix, codec registry refactor,
+   per-codec roundtrip+content_hash+recall harness, AND a single parameterized rerank-honesty
+   contract test that gates the release check before any new search path lands), phase 1 free
+   integer/string wins (intpack on hnsw/bm25/spans, chunk_ids as 32 raw bytes, front-coding) +
+   the chunk-csr G1, phase 2 trained zstd dict + fsst + block/rotational int8, phase 3
+   sub-byte embeddings (int4, rabitq 1-bit guarded by the exact rerank, ratio reported NET of
+   the mandatory fp source) + content-hash dedup-before-zstd. nothing in the redesign reorders
+   or undoes this; everything else is additive on top AND behind the flagship-proven gate.
+   draws from: facebook/zstd, gaoj0017/RaBitQ, lemire/FastPFor, BurntSushi/fst,
+   microsoft/onnxruntime, NixOS/nix
+
+2. [forge] forge: the ingestion layer
+   a sibling forge-core rust crate (own cargo workspace, deps never touch the sovereign core)
+   owns the .fci canonical-intermediate schema, deterministic unicode/whitespace normalize,
+   the Extractor trait + native-rust handlers (pdf text, plaintext, image meta, font glyphs,
+   dataset rows, archive walk), frozen toml profiles, and a cas extraction cache. CHUNKING IS
+   NOT DUPLICATED: forge-core does not own a second chunker; the python/forge adapter calls
+   the EXISTING builder.chunk_text so there is ONE authoritative chunker and no drift to
+   reconcile. an opt-in forge-belt python toolbelt (paddleocr/clip/stanza/fonttools) sits
+   behind a subprocess/json contract so heavy deps stay out of the rust tree. multimodal
+   becomes multiple named embedding requests per chunk; graph becomes entities+typed edges in
+   the .fci; catalog becomes a blob manifest. the boundary rule: same canonical text + same
+   model fingerprint => byte-identical .nest. forge-core is INTERNAL first; the Extractor
+   trait is not stabilized as public until the profiles settle.
+   draws from: run-llama/semtools, rom1504/img2dataset, activeloopai/deeplake, openai/CLIP,
+   stanfordnlp/stanza, NixOS/nix, ipfs/kubo, jvm-repo-rebuild/reproducible-central,
+   google/sentencepiece
+
+3. [lens] flagship: agent-native knowledge file + the cited-span contract
+   the FLAGSHIP and the only vertical that gets code before the proven gate. a pip-installable
+   retrieve() returning clean, compact, CITED, offline spans an llm can trust, where the
+   returned score IS the exact-cosine rerank value. it needs ONLY phase 0-1; it ships two
+   user-facing verbs (ask, cite) and the python retrieve(), keeps the existing 8 subcommands
+   underneath, and adds the additive SearchExplain field for the honesty line. CITATION TIERS
+   MADE EXPLICIT: tier-1 canonical-span reopen (cite returns the canonical text + verifying
+   hashes; this EXISTS today and is ALL the flagship needs); tier-2 original-byte reopen +
+   blob-digest verify (NET-NEW, today cite never opens source_uri or reads original bytes; it
+   belongs with catalog mode, explicitly OUT of the flagship). the flagship work-order must
+   claim ONLY tier-1. the DEFAULT EMBEDDER is decided here, not deferred: vendor a static
+   model2vec/potion table beside forge as the default so pip-install is tiny, fully offline,
+   and byte-identical-deterministic with no network round-trip on first use (the current
+   python embed path needs the sentence-transformers cache and a network fetch, which breaks
+   offline-by-construction for a new user); power users may bring a stronger model whose
+   fingerprint is recorded.
+   draws from: langchain-ai/langchain, run-llama/llama_index, supermemoryai/supermemory,
+   minishlab/model2vec, PyO3/pyo3, clap-rs/clap
+
+4. [cross] chunk-graph G1 (retrieval + compression, pre-gate)
+   the ONLY graph work allowed before the flagship-proven gate, because it earns its place on
+   compression+retrieval merit alone: graph_adjacency(0x0C) chunk-to-chunk csr (intpack
+   offsets, delta-gapped neighbors, edge-type runs), gated behind a graph_present capability,
+   EXCLUDED from content_hash, traversed off mmap with bounded-bfs seeded from exact-cosine
+   top-k and feeding the SAME score_subset exact rerank (recall NaN, score real cosine). it
+   pays for itself by letting nest drop chunk_overlap. this is DECOUPLED in the plan text from
+   the entity graph: 'G1 landed' is NOT license to start G2/G3. heavy edge generation lives in
+   forge.
+   draws from: graph-db/vesoft-inc__nebula, graph-db/kuzudb__kuzu,
+   graph-db/FalkorDB__FalkorDB, run-llama/llama_index, lemire/FastPFor
+
+5. [cross] entity graph G2/G3 + visual-first lens (POST-GATE)
+   a real property graph in the .nest, but GATED: no code until the flagship has external
+   users and the headline ratio is proven on a real corpus. additive optional sections
+   built/served exactly like hnsw: graph_nodes(0x11) entity table, graph_edge_props(0x12)
+   columnar typed-edge props, graph_entity_map(0x13) mention csr; all reuse intpack, all
+   excluded from content_hash, bounded-bfs seeded from exact-cosine top-k or entity match,
+   feeding the SAME score_subset rerank. the core ships ONLY flat readable csr + property
+   columns + bounded-bfs + integer edge-type filter: NO query language, NO planner, NO write
+   path - the scope-creep fence is explicit because the plan itself flagged this as where
+   creep is most dangerous. heavy entity/edge extraction lives in forge. lens owns a separate
+   cosmos.gl/webgl viewer (also post-gate) reading a versioned read-only export json,
+   accessibility-first, never compiled into the core, opening no socket.
+   draws from: graph-db/vesoft-inc__nebula, graph-db/kuzudb__kuzu,
+   semantic-rdf/terminusdb__terminusdb-store, graph-db/FalkorDB__FalkorDB,
+   graph-db/neo4j__neo4j, graph-db/neo4j__neo4j-graphrag-python, run-llama/llama_index
+
+6. [nest] catalog mode: reference huge corpora without inlining (POST-GATE)
+   GATED behind flagship-proven. a .nest in catalog mode stores embeddings + index + graph +
+   canonical TEXT inline but references the heavy ORIGINAL source bytes by content-hash via
+   blob_refs(0x14) + an optional .nestpack sidecar (own magic NPAK). this REQUIRES a net-new
+   original-byte reopen path: today cite returns only the stored canonical text and prints
+   source_uri as a string, it never opens the original file or reads its bytes, so 'reopen the
+   exact original span and verify the digest' is a feature to BUILD inside catalog, scheduled
+   as its own card before any blob_refs work. citations stay provably valid across the
+   boundary because content_hash is over the decoded canonical-six and never depends on
+   whether originals are inlined. blob-relative span info lives in the SEPARATE excluded 0x16
+   overlay (NOT a spans v1->2 bump), keyed by chunk ordinal, so self_contained and catalog
+   twins keep the SAME content_hash and old readers still open the file. self_contained stays
+   the byte-identical default; the sidecar is strictly opt-in; the .nest is fully functional
+   for search/graph/verifiable-citation without it (only original-byte reopen needs it). this
+   is the duckdb/parquet/osint-monolith antidote: extract once, mmap+index, no query-engine
+   spin-up.
+   draws from: content-addressed/NixOS__nix, content-addressed/ipfs__kubo,
+   vector-db/lancedb__lancedb, data-pipeline/activeloopai__deeplake,
+   embedded-db/duckdb__duckdb, BurntSushi/fst, google/flatbuffers
+
+7. [nest] multimodal embedding spaces in one .nest (POST-GATE)
+   GATED behind flagship-proven; the one genuinely new format capability. one .nest holds many
+   named embedding spaces (text, image/clip, glyph/typography, symbol): the v1 required
+   embeddings(0x04) is space[0]=text and stays in content_hash; each extra space is a
+   self-describing descriptor in a SPACE_TABLE(0x15), a fixed-stride 64-byte-aligned slab in
+   0x20-0x2F (so the EXISTING simd dot kernels score it unchanged), and an optional per-space
+   fp rerank source in 0x30-0x3F. search routes to ONE space then runs the SAME mandatory
+   exact rerank per space; cross-modal is route-then-rerank, never mixing scores. each
+   sub-int8 space is gated by its own fp source (writer rejects a sub-int8 space with no fp
+   source) and its RESULT reports the NET-OF-FP ratio. CONTRACT PREREQUISITE: score_subset
+   today hard-dispatches on a single dtype and the single 0x04 section; it MUST be refactored
+   in phase 0 to take an explicit rerank-source handle and per-space routing BEFORE any space
+   path lands, and the parameterized rerank-honesty test must already cover
+   search_space/search_cross. image/glyph/symbol vector GENERATION lives in forge, never in
+   nest-runtime.
+   draws from: vector-db/qdrant__qdrant, vector-db/weaviate__weaviate,
+   vector-db/lancedb__lancedb, embeddings-models/openai__CLIP, ann-index/unum-cloud__USearch,
+   vector-quantization/gaoj0017__RaBitQ, vector-db/asg017__sqlite-vec
+
+8. [cross] verticals + sequencing (one engine, gated)
+   one engine, three packagings, never a fork: a vertical is a forge profile (toml) + a lens
+   verb alias + a demo corpus, enforced structurally (it can never add a crate, a required
+   section, or a format-version bump). a HARD FLAGSHIP-PROVEN gate sits between the flagship
+   and everything else. flagship FIRST: the agent-native knowledge file (provable with phase
+   0-1 alone, buyer == builder, default static embedder so offline-install works, ONE concrete
+   license-clean demo corpus picked now). GATE: prove sub-0.1 net-of-fp on ONE real corpus
+   with recall@10 held, published, AND the flagship has external users, before any of the
+   below get code. SECOND (post-gate): the sovereign osint data lake (catalog mode +
+   original-byte reopen + the entity graph). THIRD (post-gate): the pattern-lover instrument
+   (multimodal spaces). ethics stay light-touch: sovereignty/offline IS the privacy feature,
+   dual-use accepted, redaction/provenance/encryption optional features never gates, no
+   user-policing, no telemetry.
+   draws from: langchain-ai/langchain, run-llama/llama_index, supermemoryai/supermemory,
+   content-addressed/NixOS__nix, content-addressed/ipfs__kubo,
+   graph-db/neo4j__neo4j-graphrag-python, embeddings-models/QwenLM__Qwen3-Embedding,
+   jvm-repo-rebuild/reproducible-central

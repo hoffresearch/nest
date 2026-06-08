@@ -32,6 +32,110 @@ pub(super) unsafe fn dot_f32_avx2(q: &[f32], row_bytes: &[u8]) -> f32 {
     }
 }
 
+/// lFused dequant + dot for int4 block-`block` codes. AVX2 unpacks the
+/// nibbles 16 packed bytes (32 nibbles) at a time into an f32 scratch row,
+/// then runs the IDENTICAL per-group scalar reduction over it (float add
+/// is not associative, so a lane-parallel reduction would diverge from the
+/// scalar backend in the last ulp; the win here is the vectorized unpack).
+#[target_feature(enable = "avx2,fma")]
+pub(super) unsafe fn dot_f32_i4_avx2(
+    q: &[f32],
+    codes: &[u8],
+    group_scales: &[f32],
+    dim: usize,
+    block: usize,
+) -> f32 {
+    unsafe {
+        use std::arch::x86_64::*;
+        let mut scratch = vec![0.0f32; dim];
+        let nbytes = dim / 2;
+        let chunks = nbytes / 16;
+        let lo_mask = _mm_set1_epi8(0x0F);
+        for c in 0..chunks {
+            let packed = _mm_loadu_si128(codes.as_ptr().add(c * 16) as *const __m128i);
+            // llow nibbles: mask -> shift left 4 -> arithmetic shift right 4.
+            let lo_masked = _mm_and_si128(packed, lo_mask);
+            let lo = mm_srai_epi8_4(_mm_slli_epi16(lo_masked, 4));
+            // lhigh nibbles: arithmetic shift right by 4 (sign-extends bit 7).
+            let hi = mm_srai_epi8_4(packed);
+            // linterleave lo/hi so component order is lo0,hi0,lo1,hi1,...
+            let lo_part = _mm_unpacklo_epi8(lo, hi); // components 0..16
+            let hi_part = _mm_unpackhi_epi8(lo, hi); // components 16..32
+            store_i8x16_as_f32(lo_part, &mut scratch[c * 32..]);
+            store_i8x16_as_f32(hi_part, &mut scratch[c * 32 + 16..]);
+        }
+        for idx in (chunks * 32)..dim {
+            let byte = codes[idx / 2];
+            let nib = if idx % 2 == 0 { byte } else { byte >> 4 };
+            let n = nib & 0x0F;
+            let s = if n & 0x08 != 0 {
+                (n | 0xF0) as i8
+            } else {
+                n as i8
+            };
+            scratch[idx] = s as f32;
+        }
+        dot_scratch_blocked(q, &scratch, group_scales, dim, block)
+    }
+}
+
+/// lArithmetic shift right by 4 on packed i8 lanes (AVX2 has no epi8 SRA),
+/// emulated via the epi16 SRA plus a byte-wise blend of even/odd lanes.
+#[target_feature(enable = "avx2,fma")]
+unsafe fn mm_srai_epi8_4(v: std::arch::x86_64::__m128i) -> std::arch::x86_64::__m128i {
+    unsafe {
+        use std::arch::x86_64::*;
+        // lshift each 16-bit lane right by 4 arithmetically: this is correct
+        // for the HIGH byte of each pair; the LOW byte gets the high byte's
+        // low bits shifted in, so mask it out and recompute the low byte
+        // from a separately-shifted copy.
+        let sra16 = _mm_srai_epi16(v, 4);
+        // lhigh bytes (odd lanes) are now correct; keep them.
+        let hi_bytes = _mm_and_si128(sra16, _mm_set1_epi16(0xFF00u16 as i16));
+        // lfor low bytes: shift the byte into the high half of its 16-bit
+        // lane first (<<8), SRA by 4, then SRA the result back down 8, so the
+        // low byte is arithmetically shifted in isolation.
+        let lo16 = _mm_srai_epi16(_mm_srai_epi16(_mm_slli_epi16(v, 8), 4), 8);
+        let lo_bytes = _mm_and_si128(lo16, _mm_set1_epi16(0x00FF));
+        _mm_or_si128(hi_bytes, lo_bytes)
+    }
+}
+
+/// lWiden an i8x16 vector to f32 and store into `out[..16]`.
+#[target_feature(enable = "avx2,fma")]
+unsafe fn store_i8x16_as_f32(v: std::arch::x86_64::__m128i, out: &mut [f32]) {
+    unsafe {
+        use std::arch::x86_64::*;
+        let lo = _mm256_cvtepi8_epi32(v);
+        let hi = _mm256_cvtepi8_epi32(_mm_srli_si128(v, 8));
+        _mm256_storeu_ps(out.as_mut_ptr(), _mm256_cvtepi32_ps(lo));
+        _mm256_storeu_ps(out.as_mut_ptr().add(8), _mm256_cvtepi32_ps(hi));
+    }
+}
+
+/// lPer-group reduction over an already-dequantized f32 scratch row,
+/// matching `scalar::dot_f32_i4_blocked` operation-for-operation.
+#[inline]
+fn dot_scratch_blocked(
+    q: &[f32],
+    scratch: &[f32],
+    group_scales: &[f32],
+    dim: usize,
+    block: usize,
+) -> f32 {
+    let mut acc = 0.0f32;
+    let _ = dim;
+    for (g, &scale) in group_scales.iter().enumerate() {
+        let mut part = 0.0f32;
+        let base = g * block;
+        for j in 0..block {
+            part += q[base + j] * scratch[base + j];
+        }
+        acc += part * scale;
+    }
+    acc
+}
+
 #[target_feature(enable = "avx2,fma")]
 pub(super) unsafe fn dot_f32_i8_avx2(q: &[f32], row: &[i8]) -> f32 {
     unsafe {

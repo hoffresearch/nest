@@ -5,14 +5,36 @@
 
 use std::collections::{BinaryHeap, HashSet};
 
-use super::{Candidate, HnswIndex, Node, cosine_dist};
+use super::{Candidate, HnswIndex, Node, dist_q};
+use crate::materialize::PackedVectors;
 
 impl HnswIndex {
-    /// lAttach the f32 vectors needed at search time. Called by
-    /// `MmapNestFile::open` after the embeddings section is decoded.
+    /// lAttach f32 vectors as the search store. Kept for callers that
+    /// already hold an f32 buffer (build, tests); the runtime open path
+    /// uses `attach_store` to avoid an f32 expansion.
     pub fn attach_vectors(&mut self, vectors: Vec<f32>) {
         debug_assert_eq!(vectors.len(), self.n * self.dim);
-        self.vectors = vectors;
+        self.store = PackedVectors::F32(vectors);
+    }
+
+    /// lAttach a packed vector store at open time. Keeps int8/f16 rows in
+    /// their on-disk packing so the resident footprint is the packed size,
+    /// not the old `n*dim*4` f32 snapshot.
+    pub(crate) fn attach_store(&mut self, store: PackedVectors) {
+        self.store = store;
+    }
+
+    /// lLevel-0 (densest layer) out-neighbors of node `i`, or an empty slice
+    /// if `i` is out of range. Read-only accessor the graph build path uses to
+    /// derive top-m semantic edges from the already-built hnsw graph without
+    /// re-running an O(n^2) exact knn. The neighbor SET is the build-order
+    /// hnsw adjacency; the graph builder sorts canonically before writing.
+    pub fn level0_neighbors(&self, i: usize) -> &[u32] {
+        self.nodes
+            .get(i)
+            .and_then(|node| node.neighbors.first())
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 
     /// lSearch for the `ef` closest candidates to `q`. Returns ids only —
@@ -22,14 +44,14 @@ impl HnswIndex {
         if self.n == 0 {
             return Vec::new();
         }
-        if self.vectors.is_empty() {
+        if !self.store.is_attached() {
             // lIndex is loaded but vectors haven't been attached. Return
             // an empty candidate set; runtime falls back to exact.
             return Vec::new();
         }
         let mut curr = self.entry_point;
         for layer in (1..=self.max_level).rev() {
-            curr = greedy_search(curr, q, layer, &self.nodes, &self.vectors, self.dim);
+            curr = greedy_search(curr, q, layer, &self.nodes, &self.store, self.dim);
         }
         let candidates = layer_search(
             &[curr],
@@ -37,7 +59,7 @@ impl HnswIndex {
             0,
             ef.max(self.ef_search),
             &self.nodes,
-            &self.vectors,
+            &self.store,
             self.dim,
             u32::MAX,
         );
@@ -51,14 +73,12 @@ pub(super) fn greedy_search(
     q: &[f32],
     layer: u32,
     nodes: &[Node],
-    vectors: &[f32],
+    store: &PackedVectors,
     dim: usize,
 ) -> u32 {
+    let mut scratch = store.scratch(dim);
     let mut curr = entry;
-    let mut curr_dist = cosine_dist(
-        q,
-        &vectors[(curr as usize) * dim..(curr as usize + 1) * dim],
-    );
+    let mut curr_dist = dist_q(store, q, curr as usize, dim, &mut scratch);
     loop {
         let layer_idx = layer as usize;
         if layer_idx >= nodes[curr as usize].neighbors.len() {
@@ -68,7 +88,7 @@ pub(super) fn greedy_search(
         let mut best = curr;
         let mut best_dist = curr_dist;
         for &nbr in nbrs {
-            let d = cosine_dist(q, &vectors[(nbr as usize) * dim..(nbr as usize + 1) * dim]);
+            let d = dist_q(store, q, nbr as usize, dim, &mut scratch);
             if d < best_dist {
                 best = nbr;
                 best_dist = d;
@@ -91,10 +111,11 @@ pub(super) fn layer_search(
     layer: u32,
     ef: usize,
     nodes: &[Node],
-    vectors: &[f32],
+    store: &PackedVectors,
     dim: usize,
     skip_id: u32,
 ) -> Vec<Candidate> {
+    let mut scratch = store.scratch(dim);
     let mut visited: HashSet<u32> = HashSet::new();
     // lBinaryHeap orderings:
     //   `frontier` — min-heap by distance (closest first to expand).
@@ -106,7 +127,7 @@ pub(super) fn layer_search(
         if e == skip_id {
             continue;
         }
-        let d = cosine_dist(q, &vectors[(e as usize) * dim..(e as usize + 1) * dim]);
+        let d = dist_q(store, q, e as usize, dim, &mut scratch);
         let c = Candidate { id: e, dist: d };
         frontier.push(ByDistAsc(c));
         result.push(ByDistDesc(c));
@@ -127,7 +148,7 @@ pub(super) fn layer_search(
             if nbr == skip_id || !visited.insert(nbr) {
                 continue;
             }
-            let d = cosine_dist(q, &vectors[(nbr as usize) * dim..(nbr as usize + 1) * dim]);
+            let d = dist_q(store, q, nbr as usize, dim, &mut scratch);
             let worst = result.peek().map(|r| r.0.dist).unwrap_or(f32::INFINITY);
             if result.len() < ef || d < worst {
                 let c = Candidate { id: nbr, dist: d };

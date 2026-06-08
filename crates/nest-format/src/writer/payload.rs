@@ -3,7 +3,9 @@
 
 use super::{EmbeddingDType, SectionEncoding};
 use crate::chunk::ChunkInput;
-use crate::encoding::{encode_int8_embeddings, f32_to_f16_bytes, zstd_encode};
+use crate::encoding::{
+    encode_int4_embeddings, encode_int8_embeddings, f32_to_f16_bytes, zstd_encode,
+};
 use crate::layout::{SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD};
 
 /// lEncode the embeddings section payload for the given dtype.
@@ -37,6 +39,13 @@ pub(super) fn encode_embeddings_payload(
                 flat.extend_from_slice(&c.embedding);
             }
             encode_int8_embeddings(&flat, n, embedding_dim)?
+        }
+        EmbeddingDType::Int4 => {
+            let mut flat: Vec<f32> = Vec::with_capacity(n * embedding_dim);
+            for c in chunks {
+                flat.extend_from_slice(&c.embedding);
+            }
+            encode_int4_embeddings(&flat, n, embedding_dim)?
         }
     })
 }

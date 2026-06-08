@@ -1,0 +1,284 @@
+==============================================================================================
+TASK #11 :: trained dict + fsst + block/rotational int8 + micro preset
+phase: phase 1 (PRE-GATE, pulled forward in the compression rebalance)   layer: nest
+status:  [ ] todo    [ ] doing    [ ] done
+==============================================================================================
+
+NOTE (from #06 diligence, 2026-06-06): the dict/fsst TEXT ratio gain needs the canonical text
+section split into per-chunk independent streams (the O(1) single-chunk reopen layout); today it
+is ONE concatenated zstd-19 blob where a trained dict and fsst do not beat zstd, so that layout
+change is a prerequisite and is out of this task's current scope.
+
+self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
+files listed before coding. do not summarize, do not skip. add a [ ] if something
+is missing. never skip silently.
+
+--- goal ---
+land the two SAFE headline ratio levers PRE-GATE so the flagship is born compressing: trained
+zstd dict + fsst on text, and block/rotational int8 at ~4x near-lossless. ship a micro preset
+below tiny 0.283 with measured recall - this is the number the gate publishes. the risky
+sub-byte step (int4/rabitq) stays post-gate.
+
+--- depends on ---
+  phase-0 codec registry (#02) + honest-rerank handle (#01) + roundtrip/recall harness (#03),
+  all merged. PRE-GATE: this IS part of the flagship proof, not gated behind it.
+
+--- READ THESE COMPLETE FILES FIRST ---
+[ ] doc/plan/master-plan/01-compression.txt
+[ ] doc/research/genome/compression-general/facebook__zstd.txt
+[ ] doc/research/synthesis/vector-quantization.txt
+[ ] doc/plan/master-plan/02-format.txt
+[ ] doc/plan/master-plan/03-roadmap.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and the current code you will change:)
+[ ] crates/nest-format/src/encoding/zstd_dict.rs
+[ ] crates/nest-format/src/encoding/fsst.rs
+[ ] crates/nest-format/src/encoding/int8.rs
+[ ] crates/nest-format/src/encoding/fwht.rs
+
+--- OWNS THESE CODE FILES (no parallel task edits them) ---
+  crates/nest-format/src/encoding/zstd_dict.rs
+  crates/nest-format/src/encoding/fsst.rs
+  crates/nest-format/src/encoding/int8.rs
+  crates/nest-format/src/encoding/fwht.rs
+
+--- STEPS (check each) ---
+[ ] trained shared zstd dictionary(0x0A) + fsst(9) + zstd level/ldm knobs (sorted samples,
+    pinned zstd version for reproducibility)
+[ ] int8 scale_kind=1 block-scaled + seeded-FWHT rotational int8 (~0.99 recall at 4x, no new
+    id), rotation computed backend-independently at build time for cross-cpu determinism
+[ ] matryoshka prefix truncation + micro preset below tiny 0.283 with measured recall, ratio
+    reported net of fp where sub-int8
+
+--- draws from ---
+facebook/zstd, ggml-org/ggml, weaviate/recipes, QwenLM/Qwen3-Embedding
+
+--- watch out ---
+  ZDICT must be fed sorted samples and pinned to a zstd version or reproducible builds break;
+  fwht rotation determinism hinges on identical float ops - compute backend-independently at
+  build time.
+
+--- NEST RULES (check each) ---
+[ ] edition 2024; never panic in lib (typed thiserror). FORGE heavy/non-deterministic work
+    stays OUT of the sovereign crates/ workspace.
+[ ] format v1 FROZEN + ADDITIVE: no NEST_FORMAT_VERSION bump. use reserved encoding ids 4-9 /
+    section ids 0x09+.
+[ ] content_hash over DECODED bytes: codecs decode byte-identically so nest:// citations stay
+    stable.
+[ ] never zstd/dedup/shuffle the embeddings section (mmap SIMD hot path); only fixed-stride
+    quantization there.
+[ ] deterministic: the .nest build anchor is canonical extracted text + model fingerprint,
+    verify byte-identical across two builds.
+[ ] <=300 lines per rust src file; docs lowercase, no emoji, no em-dash. feature branch off
+    main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace ; cargo test --workspace (+ roundtrip+content_hash test
+    for new codecs)
+[ ] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if format/runtime/python changed ; ./scripts/release_check.sh
+    passes
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ____  after: ____
+  recall@10   before: ____  after: ____
+
+--- WO EMB-matryoshka RESULT (2026-06-06, branch research/nest-genome-v2) ---
+  step 3 of this task (matryoshka prefix truncation + micro preset) shipped as a
+  standalone WO. build-time truncate-then-renormalize (Qwen3/ST/BGE): nest.build
+  gains an mrl_dim kwarg; each l2-normalized f32 row is sliced to the prefix and
+  re-l2-normalized BEFORE quantization, so int8/int4 calibrate on the shorter
+  renormalized row. header/manifest embedding_dim becomes mrl_dim; full_dim +
+  mrl_dim recorded as additive optional manifest fields (unset files stay
+  byte-identical). NO runtime kernel change (reader strides by header.embedding_dim).
+  determinism verified: two builds at the same mrl_dim are byte-identical.
+
+  measured on dat/corpus_next.v1.nest (n=30725, dim=384 MiniLM, NOT mrl-trained),
+  100 queries, k=10, recall vs the full-dim float32 baseline:
+
+    f32 truncation-only curve (isolates the dimension axis):
+      mrl256 ratio 0.419 recall 0.811 | mrl192 0.353 0.732 | mrl128 0.288 0.657 | mrl96 0.255 0.574
+    int8 ladder {256,192,128,96}:
+      mrl256-int8 0.223 0.810 | mrl192 0.207 0.733 | mrl128 0.190 0.659 | mrl96 0.182 0.574
+    int4 ladder {256,192,128} (96 BLOCKED: 96%64=32, int4 needs dim%64==0):
+      mrl256-int4 0.191 0.777 | mrl192 0.183 0.713 | mrl128 0.174 0.627
+
+  honest finding: MiniLM front-loading is NOT guaranteed, so truncation costs
+  real recall (int8/f32 curves nearly identical => the loss is the dimension axis,
+  quant adds ~nothing at int8, ~3-5 pts at int4). NO ladder point holds the nano
+  floor (recall@10>=0.85): the existing nano (int4 full-dim, 0.209, 0.913) still
+  WINS on recall while every mrl point is smaller. the smallest point within a
+  reported tolerance is mrl256-int8 (0.223 ratio, 0.810 recall): the micro lever
+  to use ONLY when size beats the last ~10 recall points, or once a real
+  mrl-trained model lands (the curve front-loads and these numbers jump). reported
+  as a curve, not a cherry-pick; size lever disclosed with measured recall@10 +
+  stated dim/dtype per COMPRESSION-HONESTY. conditional micro-mrl gate added to
+  compare_measure.py (mrl256-int8: size_ratio<=0.25, recall@k>=0.78). all green:
+  build+fmt+clippy+test pass, measure shows recall held.
+  (the dict/fsst/rotational-int8 steps of #11 remain todo, out of this WO's scope.)
+
+--- WO TXT-streams RESULT (2026-06-06, branch research/nest-genome-v2) ---
+  the NOTE prerequisite at the top of this task (canonical text split into
+  per-chunk independent streams = the O(1) single-chunk reopen layout)
+  shipped as a standalone WO. new wire encoding id 10 = txt_streams: the
+  chunks_canonical (0x02) COMPRESSED form is re-laid-out from one
+  concatenated zstd-19 blob into N independently zstd-encoded streams (one
+  per canonical string) behind an intpack (id 4, reused) offset table of
+  n+1 byte offsets giving O(1) seek to any chunk. decode() rebuilds the
+  EXACT canonical payload (12-byte prefix + per chunk u32 len + utf-8)
+  BYTE-IDENTICALLY to sections::encode_chunks_canonical, so content_hash and
+  nest:// citations are unchanged (validated against the intpack-repack
+  precedent). additive within frozen v1: NO NEST_FORMAT_VERSION bump; ids
+  5(zstd_dict) and 9(fsst) kept free for the codecs this unlocks.
+
+  wired into the builder under a compressed (text_encoding=Zstd) preset
+  ONLY: chunks_canonical takes the SMALLER of single-frame maybe_zstd vs the
+  per-chunk txt-streams form (same try-smaller as spans intpack-vs-zstd), so
+  the build never regresses. raw-text presets and the golden fixture
+  (golden_v1_minimal.nest, 1366 bytes) stay byte-identical (golden uses raw
+  text, untouched). reader/validate.rs extends the non-embedding allow-list
+  to raw/zstd/intpack/txt_streams.
+
+  HONEST MEASUREMENT (dat/corpus_next.v1.nest, n=30725, dim=384 MiniLM):
+    chunks_canonical text section, single-frame zstd-19 vs per-chunk
+    txt_streams (measured via the real codec on the corpus text):
+      single-frame zstd-19 = 15,730,724 B   (the existing form)
+      per-chunk txt_streams = 29,247,724 B   (+85.9%, +13.5MB)
+    => the chooser keeps single-frame zstd; the compressed/tiny/nano files
+       are BYTE-IDENTICAL before/after (chunks_canonical encoding stays
+       zstd=1, size 15,730,724 B confirmed in the built corpora). overall
+       size_ratio UNCHANGED (tiny 0.256, recall@10 0.9900 held vs baseline).
+    the +85.9% is the expected, disclosed cross-chunk-context loss: a per-
+    chunk frame is where a trained dict/fsst can later beat one big zstd-19
+    blob (and the O(1) reopen layout), so this WO ships the LAYOUT that
+    unlocks the ratio win, not the ratio win itself. the runtime O(1)
+    single-chunk consumer (cite/materialize through a per-chunk accessor)
+    is the follow-on, kept OUT of scope to keep the diff additive (the
+    TxtStreams reader's O(1) text(i) accessor is the on-disk handle).
+  all green: build+fmt+clippy+test pass, measure shows recall held.
+
+--- WO TXT-dict-fsst-dedup RESULT (2026-06-06, branch research/nest-genome-v2) ---
+  the THREE SAFE text-section ratio levers of step 1 of this task shipped as a
+  standalone WO, all additive within frozen v1, all decoding chunks_canonical
+  (0x02) BYTE-IDENTICALLY (content_hash + nest:// citations unchanged), all
+  chosen per-build by the existing try-smaller chooser so they never regress.
+
+  (1) trained zstd dict, encoding id SECTION_ENCODING_ZSTD_DICT=5: a
+      TXT_STREAMS_V2 variant re-framing each per-chunk canonical stream against
+      ONE shared dictionary via zstd 0.13 EncoderDictionary/DecoderDictionary
+      (workspace zstd features bumped to experimental+zdict_builder, no new
+      dep). the dict is trained deterministically over SORTED unique canonical
+      texts via zstd::dict::from_continuous (pure function of sorted samples,
+      pinned zstd version, cap proportionate to corpus up to ~112 KiB) and
+      stored in the new optional SECTION_DICTIONARY=0x0A (excluded from
+      CANONICAL_SECTIONS so content_hash is untouched). reuses the txt_streams
+      intpack offset table + O(1) reopen. decode threads the dict via
+      decode_payload_with_dict from reader/decode.rs.
+  (2) fsst, encoding id SECTION_ENCODING_FSST=9: a TXT_STREAMS_V3 clean-room
+      255-entry static symbol table (1-8 byte substrings to 1-byte codes, 0xFF
+      escape), built deterministically from a greedy frequency pass and
+      embedded in the payload (self-contained, no external section). keeps O(1)
+      single-string decode; competes in the chooser, best for short streams.
+  (3) dedup-before-zstd, new optional SECTION_DEDUP_MAP=0x0B
+      (content_hash-excluded): a build-time first-seen pass on the DECOMPRESSED
+      canonical texts (the nix/ipfs order rule) storing each unique text once +
+      a u32 back-reference array (intpack); zstd/dict/fsst applied AFTER dedup.
+      decode re-expands through the back-refs to identical logical bytes before
+      content_hash sees them.
+
+  the writer's new text-codec chooser (writer/text_codec.rs) picks the SMALLEST
+  of single-frame zstd, txt_streams cold, txt_streams+dict, txt_streams+fsst,
+  and dedup+zstd (single-frame zstd always in the race => never regresses);
+  compressed preset only, raw presets and the golden (1366 B) stay
+  byte-identical. embeddings NEVER touched; int4/rabitq/rotational-int8/
+  matryoshka OUT of scope (the micro preset was NOT shipped: see HONEST below).
+
+  HONEST MEASUREMENT (text section on dat/corpus_next.v1.nest, n=30725, all
+  unique, dim=384 MiniLM; measured via the real codecs on the corpus text):
+      raw canonical        65,025,729 B
+      single-frame zstd-19 15,730,724 B   <- WINNER (the existing form)
+      txt_streams cold     29,247,724 B   (+85.9%)
+      txt_streams + dict   21,183,074 B   (+34.7%, dict blob 114,688 B)
+      txt_streams + fsst   48,467,351 B   (+208%)
+    => on this contiguous, all-unique pt-br prose the single zstd-19 window
+       already captures the cross-chunk redundancy a per-chunk dict/fsst frame
+       fragments, so single-frame zstd wins and the chooser keeps it. the
+       trained dict recovers most of the per-chunk-frame loss (it cuts the
+       txt_streams +85.9% to +34.7% by sharing a prior) but cannot beat one big
+       zstd-19 blob here; fsst loses badly on long-ish prose chunks (its win is
+       short structured strings). dedup is proven (codec + file-level tests) to
+       win ONLY on far-apart repeats beyond a single zstd window; the shipped
+       corpus is all-unique so it does not engage. this is the modest,
+       non-redundant-prose result the WO predicted: the LEVERS + the never-
+       regress chooser ship; the ratio win waits for the regime that needs them
+       (redundant/boilerplate corpora, beyond-window duplicates, O(1) reopen).
+    file/preset effect: chooser keeps single-frame zstd, tiny preset stays
+       BYTE-IDENTICAL to baseline (0.256 size_ratio, recall@10 0.9900 held vs
+       dat/measure/baseline.json, NEST_QUERIES=30). no new preset shipped, so
+       compare_measure.py is unchanged (gate only when a new preset ships).
+  determinism verified: two compressed builds with the levers engaged are
+  byte-identical (the dict trainer, fsst table, dedup pass, and chooser are all
+  pure functions). all green: cargo build --release --workspace, fmt --check,
+  clippy -D warnings, test --release --workspace all pass; measure holds.
+  (the rotational-int8 + micro-preset steps of #11 remain todo, out of scope.)
+
+--- WO PUB-ladder RESULT (2026-06-06, branch research/nest-genome-v2) ---
+  the PUBLISH step for compression: the micro lever of this task is now NAMED and PUBLISHED as
+  a ladder rung (the size levers themselves - int4 enc=7, matryoshka mrl_dim, the three text
+  codecs - were already landed by prior WOs; this WO added NO codecs). measure_presets.py wires
+  two explicit named sub-int8 rungs: nano (int4 full-dim, existing) and micro (the matryoshka
+  lever, mapped to the documented honest point mrl256-int8 via a parse_variant alias ->
+  mrl_dim=256, dtype=int8; nano stays int4 full-dim). the default --variants now emit the full
+  ladder compressed,tiny,micro,nano,hybrid plus the mrl curve mrl256/192/128-int8, mrl96-int8,
+  mrl256/192/128-int4.
+
+  ran the FULL ladder at 100 queries, k=10 on the LFS baseline dat/corpus_next.v1.nest
+  (n=30725, dim=384 MiniLM, NEON), recall@10 measured vs the f32 exact top-k. published to the
+  new dat/measure/ladder.json (the whole curve, not a cherry-pick) and refreshed the named rows
+  of dat/measure/baseline.json:
+    exact 1.000 1.0000 | compressed 0.339 1.0000 | tiny 0.256 0.9920 |
+    micro 0.223 0.8100 (mrl256-int8) | nano 0.209 0.9130 (int4) | hybrid 0.609 1.0000
+    mrl curve: mrl256-int8 0.223 0.810 | mrl192 0.207 0.733 | mrl128 0.190 0.659 |
+               mrl96 0.182 0.574 | mrl256-int4 0.191 0.777 | mrl192 0.183 0.713 |
+               mrl128 0.174 0.627
+
+  HONEST net-of-fp framing: the 0x09 embeddings_fp writer is NOT wired (verified: no
+  SECTION_EMBEDDINGS_FP/FpSlab emission in writer/ or nest-python), so every shipped sub-int8
+  preset (nano/int4, micro/mrl-int8, the mrl-int4 curve) is STORED-PRECISION: net-of-fp ratio
+  == stored ratio, real cosine at the int4/int8 stored precision. every published sub-int8 row
+  carries the machine-checkable disclosure (dtype, stored_precision, has_fp_source=false,
+  net_of_fp_ratio, plus mrl_dim/full_dim where matryoshka). rabitq 1-bit (the only lever that
+  would need a counted f16 fp source) stays out of scope.
+
+  HONEST reconciliation (the core honesty deliverable): the intpack chunk_ids/spans repack +
+  bitpacked hnsw/bm25 payloads shrank the indexed presets below the v0.2 published figures, so
+  the committed docs/baseline were republished to match the build (tiny 0.283 -> 0.256,
+  compressed 0.350 -> 0.339, hybrid 0.668 -> 0.609; recall unchanged). compare_measure.py gains
+  a conditional micro gate (size_ratio <= 0.25, recall >= 0.78) beside the existing nano and
+  mrl256-int8 gates; baseline.json vs ladder.json passes ALL gates (exit 0). determinism
+  verified: two micro builds are byte-identical (file_hash equal). published into README presets
+  + mrl table, doc/usage.md section 6, doc/changelog.md, the arc trio, kanban + the gate WO
+  (#10: condition 1 satisfied, condition 3 external-users deferred to launch; created
+  doc/plan/master-plan/gate.txt). this WO is measurement/publish only: no rust change, no codec,
+  no format/runtime touch. (the trained-dict/fsst and rotational-int8 build-side steps of #11
+  remain todo, out of this WO's scope.)
+
+--- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
+update only what THIS task actually changed; check each:
+[ ] doc/arc/arc.md     architecture inventory + contract (boundaries/sections/data-flow/runtime)
+[ ] doc/arc/arc.yaml   machine architecture map (MUST move with arc.md, same commit)
+[ ] doc/arc/arc.mmd    mermaid build/query flow (if the flow changed)
+[ ] README.md          overview / cli / presets / highlights (if a user-visible surface changed)
+[ ] doc/usage.md       the how-to (if a command, flag, preset, or workflow changed)
+[ ] AGENTS.md          build/test cmds, conventions, gotchas, known gaps (if any changed)
+[ ] Cargo.toml         workspace version / deps / new crate (if crates or deps changed)
+[ ] pyproject.toml     python tooling / deps / targets (if the python surface changed)
+[ ] rustfmt.toml       only if a formatting rule must change (rare)
+the arc trio (arc.md + arc.yaml + arc.mmd) moves TOGETHER in the same commit when
+architecture / boundaries / data-flow / contracts / storage / runtime change.
+
+--- MERGE ---
+[ ] commit on branch feat/p1-11-trained-dict-fsst-block-rotational-int8-micro-
+[ ] gate green -> merge, mark done in plan/kanban.txt
