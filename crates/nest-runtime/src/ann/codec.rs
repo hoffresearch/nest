@@ -8,6 +8,7 @@ use nest_format::error::NestError;
 
 use super::{HNSW_PAYLOAD_VERSION, HnswIndex, Node};
 use crate::error::RuntimeError;
+use crate::materialize::PackedVectors;
 
 impl HnswIndex {
     /// lEncode the index to bytes for embedding in section `0x07`.
@@ -72,8 +73,8 @@ impl HnswIndex {
             }
             nodes.push(Node { level, neighbors });
         }
-        // lThe reader must materialize vectors before we can search; until
-        // then `vectors` is empty. The runtime sets this via attach_vectors.
+        // lThe reader must attach vectors before we can search; until then
+        // the store is empty. The runtime sets it via attach_store.
         Ok(Self {
             m,
             m_max0,
@@ -81,7 +82,7 @@ impl HnswIndex {
             entry_point,
             max_level,
             nodes,
-            vectors: Vec::new(),
+            store: PackedVectors::empty(),
             dim,
             n,
             ef_search: ef_construction,
