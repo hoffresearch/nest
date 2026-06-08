@@ -15,6 +15,14 @@ pub fn run(file: PathBuf) -> Result<()> {
     println!("chunks:       {}", view.header.n_chunks);
     println!("embeddings:   {}", view.header.n_embeddings);
     println!("dim:          {}", view.header.embedding_dim);
+    // lmatryoshka disclosure: when the file was built with prefix truncation,
+    // surface the effective prefix dim and the full source dim so the
+    // size/recall tradeoff is visible. content_hash is over the truncated
+    // embeddings, so a citation is tied to this mrl_dim.
+    if let (Some(mrl), Some(full)) = (view.manifest.mrl_dim, view.manifest.full_dim) {
+        println!("mrl_dim:      {} (prefix of {})", mrl, full);
+        println!("full_dim:     {}", full);
+    }
     println!("dtype:        {}", view.manifest.dtype);
     println!("metric:       {}", view.manifest.metric);
     println!("score_type:   {}", view.manifest.score_type);

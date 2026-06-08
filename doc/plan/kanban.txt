@@ -183,6 +183,22 @@ tagged by layer (forge/nest/lens/cross)
     also serves forge's heterogeneous text inputs unchanged.
     refs: crates/nest-format/src/encoding/zstd_dict.rs,
           crates/nest-format/src/encoding/fsst.rs, facebook/zstd
+    NOTE (WO TXT-dict-fsst-dedup, 2026-06-06, branch research/nest-genome-v2): the three SAFE
+    text levers SHIPPED, all additive within frozen v1, all decoding chunks_canonical
+    BYTE-IDENTICALLY (content_hash + citations unchanged) and all chosen per-build by the
+    existing try-smaller chooser so they never regress: zstd_dict(5) = TXT_STREAMS_V2 against a
+    trained shared dict (deterministic ZDICT from_continuous over SORTED unique texts, pinned
+    zstd, dict blob in new SECTION_DICTIONARY 0x0A, content_hash-excluded); fsst(9) =
+    TXT_STREAMS_V3 clean-room 255-entry static symbol table embedded in the payload; and
+    dedup-before-zstd (new SECTION_DEDUP_MAP 0x0B, content_hash-excluded) on DECOMPRESSED bytes
+    (nix/ipfs order rule) + u32 back-refs. honest text-section measurement on the shipped
+    all-unique pt-br corpus (n=30725): single-frame zstd-19 = 15.73MB still WINS (dict 21.18MB,
+    txt_streams 29.25MB, fsst 48.47MB), so the chooser keeps single-frame zstd, the tiny preset
+    stays byte-identical (0.256 ratio, recall@10 0.9900 held), and the file never regresses. the
+    dict recovers most of the txt_streams cross-chunk-context loss (+85.9% -> +34.7%) but cannot
+    beat one big zstd-19 frame on contiguous all-unique prose; dedup is proven to win only on
+    far-apart repeats beyond a single zstd window. STILL TODO on this card: the zstd level/ldm
+    knobs and the rotational-int8 micro preset (separate scope).
 
 [ ] block-scaled + rotational int8 (scale_kind=1, no new id, no version bump) (PRE-GATE, rebalanced)
     (HIGH/nest)
@@ -207,6 +223,18 @@ tagged by layer (forge/nest/lens/cross)
     important artifact missing from the draft.
     refs: doc/plan/master-plan/gate.txt, embeddings-benchmark/mteb,
           jvm-repo-rebuild/reproducible-central
+    NOTE (WO PUB-ladder, 2026-06-06, branch research/nest-genome-v2): condition (1) the
+    published honest ratio + recall@10 is SATISFIED; condition (3)/(2) external users is
+    DEFERRED TO LAUNCH (owner call), so the gate stays OPEN (card not flipped). created
+    doc/plan/master-plan/gate.txt (which #10 owns but had not created). published ladder ran at
+    100 queries, k=10, on the LFS baseline dat/corpus_next.v1.nest (n=30725, dim=384), recall vs
+    the f32 exact top-k, in dat/measure/ladder.json + refreshed dat/measure/baseline.json named
+    rows: compressed 0.339/1.000, tiny 0.256/0.992, micro 0.223/0.810 (mrl256-int8 alias), nano
+    0.209/0.913 (int4), hybrid 0.609/1.000. honest net-of-fp: the 0x09 embeddings_fp writer is
+    NOT wired, so every shipped sub-int8 preset is stored-precision (net-of-fp == stored ratio,
+    real cosine at int4/int8 precision, disclosed via dtype + mrl_dim/full_dim, machine-
+    checkable, never bare-slab); rabitq 1-bit stays out of scope. reconciled the published docs
+    to the build (tiny 0.283 -> 0.256, compressed 0.350 -> 0.339, hybrid 0.668 -> 0.609).
 
 
 ##############################################################################################
@@ -232,6 +260,13 @@ tagged by layer (forge/nest/lens/cross)
     fp ~ roughly 2x, never bare 32x).
     refs: crates/nest-format/src/encoding/int4.rs, crates/nest-format/src/encoding/rabitq.rs,
           NixOS/nix
+    note (EMB-int4): the int4(7) leg is DONE. block-64 per-group f16 absmax scales + packed
+          4-bit codes; fused dequant+dot kernel (avx2/neon/scalar, bit-for-bit); stored-precision
+          rerank like int8 (no fp source), disclosed via dtype; 'nano' preset (zstd/int4/hnsw).
+          measured: embeddings 11.92MB -> 6.27MB (1.9x over int8, 7.5x over f32), file
+          size_ratio 0.209, recall@10 0.913 vs the f32 exact baseline (100 queries, dim 384).
+          named 'nano' (not 'micro') to keep 'micro' reserved for the dict+fsst+int8 task.
+          still open on #14: rabitq(8), dedup-before-zstd(0x0B), chunk_scalars(0x0D).
 
 [ ] forge-1: belt subprocess contract + paddleocr/clip/fonttools/stanza + osint/fonts profiles
     (post-gate)   (MEDIUM/forge)

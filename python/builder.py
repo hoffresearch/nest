@@ -149,14 +149,22 @@ class BuildConfig:
     license: str | None = None
     reproducible: bool = True
     # encoding presets:
-    #   "exact"      — raw text, float32 embeddings, no ANN, no BM25
-    #   "compressed" — zstd text, float16 embeddings, no ANN, no BM25
-    #   "tiny"       — zstd text, int8 embeddings, HNSW, no BM25
-    #   "hybrid"     — zstd text, float32 embeddings, HNSW, BM25
+    #   "exact"      - raw text, float32 embeddings, no ANN, no BM25
+    #   "compressed" - zstd text, float16 embeddings, no ANN, no BM25
+    #   "tiny"       - zstd text, int8 embeddings, HNSW, no BM25
+    #   "nano"       - zstd text, int4 block-64 embeddings, HNSW, no BM25
+    #                  (first sub-int8 size lever; embedding_dim must be
+    #                  divisible by 64; stored-precision cosine)
+    #   "hybrid"     - zstd text, float32 embeddings, HNSW, BM25
     preset: str = "exact"
     # per-knob overrides (None = inherit from preset)
     text_encoding: str | None = None  # "raw" | "zstd"
-    dtype: str | None = None  # "float32" | "float16" | "int8"
+    dtype: str | None = None  # "float32" | "float16" | "int8" | "int4"
+    # matryoshka prefix dim (None = no truncation). When set, each vector is
+    # sliced to the first mrl_dim components and re-L2-normalized at build time
+    # (before quantization); the file's embedding_dim becomes mrl_dim and the
+    # source dim is recorded as full_dim. int4 needs mrl_dim divisible by 64.
+    mrl_dim: int | None = None
     with_hnsw: bool | None = None
     with_bm25: bool | None = None
     hnsw_m: int = 16
@@ -265,6 +273,7 @@ class Pipeline:
             preset=self.cfg.preset,
             text_encoding=self.cfg.text_encoding,
             dtype=self.cfg.dtype,
+            mrl_dim=self.cfg.mrl_dim,
             with_hnsw=self.cfg.with_hnsw,
             with_bm25=self.cfg.with_bm25,
             hnsw_m=self.cfg.hnsw_m,

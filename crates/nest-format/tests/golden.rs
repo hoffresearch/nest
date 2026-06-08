@@ -143,6 +143,27 @@ fn golden_file_parses_with_full_validation() {
 }
 
 #[test]
+fn golden_chunks_canonical_stays_raw_not_txt_streams() {
+    // the txt_streams codec (encoding id 10) must NEVER touch raw-text
+    // presets. the golden uses the default (raw) text encoding, so its
+    // chunks_canonical section stays SECTION_ENCODING_RAW and the file is
+    // byte-identical at 1366 bytes. this is the content_hash + citation
+    // stability guard for the per-chunk-streams re-layout.
+    assert_eq!(GOLDEN.len(), GOLDEN_LEN);
+    let view = NestView::from_bytes(GOLDEN).unwrap();
+    let enc = view
+        .section_table
+        .iter()
+        .find(|e| e.section_id == SECTION_CHUNKS_CANONICAL)
+        .unwrap()
+        .encoding;
+    assert_eq!(
+        enc, SECTION_ENCODING_RAW,
+        "golden chunks_canonical must stay raw, never txt_streams"
+    );
+}
+
+#[test]
 fn rebuilding_reproduces_golden() {
     use nest_format::manifest::Manifest;
     let m = Manifest {

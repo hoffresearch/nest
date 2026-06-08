@@ -98,18 +98,40 @@ nest search-ann my_corpus.nest "[0.1, 0.2, ...]" -k 10 --ef 200
 
 ## 6. presets
 
-`preset=` selects a (text encoding, embedding dtype, optional ANN, optional BM25) bundle. per-knob overrides win, see `BuildConfig.text_encoding`, `.dtype`, `.with_hnsw`, `.with_bm25`.
+`preset=` selects a (text encoding, embedding dtype, optional ANN, optional BM25) bundle. per-knob overrides win, see `BuildConfig.text_encoding`, `.dtype`, `.with_hnsw`, `.with_bm25`, `.mrl_dim`.
 
-| preset       | text encoding | embeddings | ANN | BM25 | size_ratio | recall@10 |
-|--------------|---------------|------------|-----|------|-----------:|----------:|
-| `exact`      | raw           | float32    | no  | no   |      1.000 |    1.0000 |
-| `compressed` | zstd          | float16    | no  | no   |      0.350 |    1.0000 |
-| `tiny`       | zstd          | int8       | yes | no   |      0.283 |    0.9920 |
-| `hybrid`     | zstd          | float32    | yes | yes |      0.668 |    1.0000 |
+| preset       | text encoding | embeddings  | ANN | BM25 | size_ratio | recall@10 |
+|--------------|---------------|-------------|-----|------|-----------:|----------:|
+| `exact`      | raw           | float32     | no  | no   |      1.000 |    1.0000 |
+| `compressed` | zstd          | float16     | no  | no   |      0.339 |    1.0000 |
+| `tiny`       | zstd          | int8        | yes | no   |      0.256 |    0.9920 |
+| `micro`      | zstd          | mrl256-int8 | yes | no   |      0.223 |    0.8100 |
+| `nano`       | zstd          | int4        | yes | no   |      0.209 |    0.9130 |
+| `hybrid`     | zstd          | float32     | yes | yes  |      0.609 |    1.0000 |
 
-numbers measured on the project's PT-BR fake-news corpus (n=30,725, dim=384). latency ranges (NEON, hot cache): exact p50 ~3.0 ms, tiny p50 ~1.3 ms, hybrid p50 ~4.5 ms.
+numbers measured on the project's PT-BR fake-news corpus (n=30,725, dim=384), 100 queries, k=10 vs the float32 exact baseline (the published ladder `dat/measure/ladder.json`, gated against `dat/measure/baseline.json`). these are the honest current sizes after the text-codec repack (intpack chunk_ids/spans, bitpacked hnsw/bm25 payloads) shrank the indexed presets below the v0.2 figures: `tiny` 0.283 -> 0.256, `compressed` 0.350 -> 0.339, `hybrid` 0.668 -> 0.609. latency ranges (NEON, hot cache): exact p50 ~3.1 ms, tiny p50 ~1.2 ms, micro p50 ~0.8 ms, nano p50 ~2.1 ms, hybrid p50 ~4.0 ms.
 
-pick `tiny` for the smallest distributable file (~30% of `exact`), `compressed` when you need lossless cosine + 3x compression, `hybrid` when queries include rare terms, proper nouns, or siglas that pure embeddings underweight, and `exact` when storage isn't the bottleneck and you want the recall=1.0 ground truth.
+the `exact`/`compressed`/`tiny`/`nano`/`hybrid` rows are direct `preset=` values; `micro` is the published name for the matryoshka size lever (the documented honest point `mrl256-int8`), built with `nest.build(text_encoding="zstd", dtype="int8", mrl_dim=256, with_hnsw=True)` and emitted by `measure_presets.py --variants ...,micro,...`.
+
+pick `nano` for the smallest distributable file with recall above the nano floor: int4 block-64 embeddings (per-64-dim-group f16 absmax scales + packed 4-bit codes) take the embeddings section from int8's 11.92 MB down to 6.27 MB (~1.9x over int8, ~7.5x over float32). `nano`/`micro` require the effective `embedding_dim` divisible by 64. every sub-int8 preset (`micro`/`nano` and the whole mrl curve) is STORED-PRECISION: the 0x09 `embeddings_fp` rerank source is not wired, so the net-of-fp ratio equals the stored ratio and `score`/`recall@10` are real cosine AT THE STORED PRECISION (int4/int8), disclosed via `dtype` (and `mrl_dim`/`full_dim` for `micro`) in `nest stats` and on every result, never a bare-slab ratio. `micro` trades recall for size on this non-mrl MiniLM baseline (0.810 recall@10 at 0.223 ratio, see the curve below); pick it only when raw size beats the last ~10 recall points or once a real mrl-trained model lands. pick `tiny` when you want a smaller file than `compressed` with recall still above 0.99, `compressed` when you need lossless cosine + 3x compression, `hybrid` when queries include rare terms, proper nouns, or siglas that pure embeddings underweight, and `exact` when storage isn't the bottleneck and you want the recall=1.0 ground truth.
+
+### matryoshka prefix truncation (`mrl_dim`)
+
+`nest.build(..., mrl_dim=K)` (or `BuildConfig.mrl_dim`) slices each l2-normalized vector to its first `K` components and re-l2-normalizes the prefix BEFORE quantization (Qwen3/ST/BGE truncate-then-renormalize). this is the dimension axis: orthogonal to and multiplicative with the dtype levers. the stored `embedding_dim` becomes `K`, the source dim is recorded as `full_dim`, and both appear in `nest stats`. queries are striped at `K` too, so a full-dim query against a truncated file is a dimension mismatch; slice + renorm the query to `K` first. truncation is a pure deterministic op, so builds stay byte-identical; `content_hash` is over the truncated embeddings, so a citation is tied to its `mrl_dim` (never claimed stable across dims). int4 still needs the effective dim divisible by 64, so `mrl_dim` in {256, 192, 128} works with int4 but 96 does not (use int8/f16/f32 at 96).
+
+matryoshka pays off on a model trained for it (information front-loads into the prefix). the shipped MiniLM corpus is NOT mrl-trained, so truncation costs real recall@10 there; the published ladder in `dat/measure/ladder.json` (100 queries, k=10) reports the honest curve and `python/tools/measure_presets.py` emits it (the default `--variants` are `compressed,tiny,micro,nano,hybrid` plus `mrl256/192/128-int8`, `mrl96-int8`, `mrl256/192/128-int4`):
+
+| ladder        | size ratio | recall@10 |
+|---------------|-----------:|----------:|
+| `mrl256-int8` (`micro`) |     0.223  |   0.810   |
+| `mrl192-int8` |     0.207  |   0.733   |
+| `mrl128-int8` |     0.190  |   0.659   |
+| `mrl96-int8`  |     0.182  |   0.574   |
+| `mrl256-int4` |     0.191  |   0.777   |
+| `mrl192-int4` |     0.183  |   0.713   |
+| `mrl128-int4` |     0.174  |   0.627   |
+
+on that baseline `nano` (full-dim int4) still beats every truncated point on recall, so reach for `mrl_dim` (the `micro` rung is `mrl256-int8`) when raw size matters more than the last ~10 recall points, or once an mrl-trained embedder is in play. `compare_measure.py` gates `micro`/`nano`/`mrl256-int8` conditionally (size_ratio <= 0.25; recall >= 0.78 for micro/mrl256-int8, >= 0.85 for nano), only when the run includes them.
 
 ## 7. model_hash and offline operation (`--model-path`)
 

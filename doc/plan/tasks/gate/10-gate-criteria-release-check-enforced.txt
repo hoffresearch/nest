@@ -31,9 +31,22 @@ has external users. this gate is structural, not aspirational: it converts the d
   doc/plan/master-plan/gate.txt
 
 --- STEPS (check each) ---
-[ ] publish the before/after ratio on the named demo corpus, recall@10 held, ratio reported
+[~] publish the before/after ratio on the named demo corpus, recall@10 held, ratio reported
     NET of fp source
+    DONE (WO PUB-ladder, 2026-06-06): condition (1) is SATISFIED. the published ladder ran at
+    100 queries, k=10, on the LFS baseline dat/corpus_next.v1.nest (n=30725, dim=384), recall@10
+    measured vs the f32 exact top-k, published to dat/measure/ladder.json + refreshed
+    dat/measure/baseline.json. honest net-of-fp framing: the 0x09 embeddings_fp writer is NOT
+    wired, so every shipped sub-int8 preset is stored-precision (net-of-fp ratio == stored
+    ratio, real cosine at int4/int8 stored precision, disclosed via dtype + mrl_dim/full_dim).
+    reconciled the docs to the build (tiny 0.283 -> 0.256, compressed 0.350 -> 0.339, hybrid
+    0.668 -> 0.609). sub-0.1 net-of-fp is the post-gate stretch, not this condition. see
+    doc/plan/master-plan/gate.txt (created by this WO; #10 owns it).
 [ ] confirm external-user signal on the agent-native pip package
+    DEFERRED TO LAUNCH (owner call, 2026-06-06): condition (2)/(3) external users does not block
+    the gate until the agent-native pip package ships. when it ships, confirm the signal here and
+    both conditions hold. this defer does NOT unblock later/research work; it records that the
+    published-ratio half is done while the external-users half waits for launch.
 [ ] ONLY THEN unblock catalog mode, original-byte reopen, the entity graph G2/G3, multimodal
     spaces, and the cosmos.gl viewer
 
@@ -70,6 +83,19 @@ embeddings-benchmark/mteb, jvm-repo-rebuild/reproducible-central
 --- RESULT (fill in) ---
   size ratio  before: ____  after: ____
   recall@10   before: ____  after: ____
+
+--- WO PUB-ladder RESULT (2026-06-06, branch research/nest-genome-v2) ---
+  condition (1) of this gate (publish the honest ratio + recall@10, net-of-fp) is SATISFIED;
+  condition (2)/(3) external users is DEFERRED TO LAUNCH (owner call). this WO did NOT mark the
+  gate card done (the gate stays open on condition 2). it created doc/plan/master-plan/gate.txt
+  (which #10 owns but had not created) and recorded the published numbers there.
+
+  published ladder (100 queries, k=10, dat/corpus_next.v1.nest n=30725 dim=384, recall vs the
+  f32 exact top-k; full curve in dat/measure/ladder.json, named rows in dat/measure/baseline.json):
+    exact 1.000 1.0000 | compressed 0.339 1.0000 | tiny 0.256 0.9920 |
+    micro 0.223 0.8100 (mrl256-int8) | nano 0.209 0.9130 (int4) | hybrid 0.609 1.0000
+  every sub-int8 row is stored-precision (0x09 embeddings_fp not wired): net-of-fp == stored
+  ratio, disclosed via dtype (+ mrl_dim/full_dim), machine-checkable, never bare-slab.
 
 --- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
 update only what THIS task actually changed; check each:

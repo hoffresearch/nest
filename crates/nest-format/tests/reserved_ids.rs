@@ -33,7 +33,11 @@ fn implemented() -> Vec<u32> {
     ]
 }
 
-/// lReserved scalar ids (0x09..=0x16): not yet emitted/read.
+/// lReserved scalar ids (0x09..=0x16). SECTION_DICTIONARY (0x0A) and
+/// SECTION_DEDUP_MAP (0x0B) are now EMITTED by the dict/dedup text levers,
+/// but stay EXCLUDED from CANONICAL_SECTIONS / content_hash and unresolved
+/// by section_name (they are physical-encoding aux sections, never canonical
+/// content). the rest are still not emitted/read.
 fn reserved_scalars() -> Vec<u32> {
     vec![
         SECTION_EMBEDDINGS_FP,

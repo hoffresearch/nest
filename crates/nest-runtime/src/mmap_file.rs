@@ -26,6 +26,7 @@ pub enum DType {
     Float32,
     Float16,
     Int8,
+    Int4,
 }
 
 impl DType {
@@ -34,16 +35,21 @@ impl DType {
             "float32" => Ok(Self::Float32),
             "float16" => Ok(Self::Float16),
             "int8" => Ok(Self::Int8),
+            "int4" => Ok(Self::Int4),
             other => Err(RuntimeError::Format(NestError::UnsupportedDType(
                 other.into(),
             ))),
         }
     }
+    /// lNominal on-disk bytes per stored embedding value. int4 packs two
+    /// codes per byte (rounds to 0 here); the exact section size, with the
+    /// f16 group scales, is `expected_embeddings_size`.
     pub fn bytes_per_value(self) -> usize {
         match self {
             Self::Float32 => 4,
             Self::Float16 => 2,
             Self::Int8 => 1,
+            Self::Int4 => 0,
         }
     }
     pub fn name(self) -> &'static str {
@@ -51,6 +57,7 @@ impl DType {
             Self::Float32 => "float32",
             Self::Float16 => "float16",
             Self::Int8 => "int8",
+            Self::Int4 => "int4",
         }
     }
 }
@@ -64,9 +71,8 @@ pub struct MmapNestFile {
     pub(crate) embeddings_offset: usize,
     /// lTotal physical bytes of the embeddings section.
     pub(crate) embeddings_size: usize,
-    /// lOptional full-precision rerank slab (`embeddings_fp`, 0x09). When
-    /// present, the exact rerank reads it instead of the stored dtype slab
-    /// so a sub-int8 candidate slab still returns a real cosine.
+    /// lOptional full-precision rerank slab (`embeddings_fp`, 0x09): when
+    /// present the exact rerank reads it instead of the stored dtype slab.
     pub(crate) embeddings_fp: Option<FpSlab>,
     pub(crate) chunk_ids: Vec<String>,
     pub(crate) spans: Vec<OriginalSpan>,
