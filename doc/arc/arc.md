@@ -21,6 +21,7 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 ## format and runtime contract
 
 - required sections are chunk_ids, chunks_canonical, chunks_original_spans, embeddings, provenance, and search_contract. optional sections are hnsw_index and bm25_index.
+- additive section ids past the implemented 0x01-0x08 are reserved in one reconciled, disjoint map in layout/mod.rs: 0x09-0x10 (scalar reservations: embeddings_fp, dictionary, dedup_map, graph_adjacency, chunk_scalars, tokenizer_model, edit_journal, repro_manifest), 0x11-0x16 (graph_nodes, graph_edge_props, graph_entity_map, blob_refs, space_table, blob_span_overlay), and the per-space bands 0x20-0x2F (space embeddings) and 0x30-0x3F (space fp). all are excluded from content_hash and unresolved by section_name until their feature ships; tests/reserved_ids.rs asserts the bands are disjoint and content_hash-safe. wire encodings reserve 4-9 (intpack, zstd_dict, frontcode, int4, rabitq, fsst); decode_payload dispatches through a wire-codec registry that rejects reserved-but-unimplemented ids.
 - raw and zstd apply to non-embedding payloads. float16 and int8 apply only to embeddings. embeddings never use zstd because the runtime scores them directly from mmap through the simd path.
 - the four integrity surfaces are header_checksum, section checksum over physical bytes, file_hash over the whole pre-footer body, and content_hash over decoded canonical sections.
 - exact search is always the ground truth path. hnsw and hybrid search return final hits only after exact cosine rerank.
@@ -107,12 +108,12 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - crates/nest-format/src/chunk.rs | rust source | defines ChunkInput, validates per-chunk invariants, and derives deterministic chunk_id values.
 - crates/nest-format/src/encoding/float16.rs | rust source | float16 encode and decode helpers for compact embedding storage.
 - crates/nest-format/src/encoding/int8.rs | rust source | int8 quantization, scale handling, and parsed views over quantized embeddings.
-- crates/nest-format/src/encoding/mod.rs | rust source | central encoding exports and shared helpers used by writer and runtime.
+- crates/nest-format/src/encoding/mod.rs | rust source | wire-codec registry (WireCodec) that decode_payload dispatches through, the cost-driven encode_smallest try-all-pick-smallest encoder, and central encoding exports used by writer and runtime.
 - crates/nest-format/src/encoding/zstd_codec.rs | rust source | zstd helpers for non-embedding sections that can be compressed without changing content_hash semantics.
 - crates/nest-format/src/error.rs | rust source | typed NestError variants that cover layout, manifest, checksum, query, and input failures.
 - crates/nest-format/src/layout/footer.rs | rust source | footer struct and file-hash trailer definitions.
 - crates/nest-format/src/layout/header.rs | rust source | header struct, version fields, offsets, sizes, and checksum slot layout.
-- crates/nest-format/src/layout/mod.rs | rust source | section ids, encoding ids, format constants, and layout re-exports.
+- crates/nest-format/src/layout/mod.rs | rust source | section ids (incl the reconciled reserved 0x11-0x16 and the per-space 0x20-0x2F / 0x30-0x3F bands), encoding ids, format constants, and layout re-exports.
 - crates/nest-format/src/layout/section_entry.rs | rust source | section-table entry shape, offsets, sizes, checksums, and section-name mapping.
 - crates/nest-format/src/lib.rs | rust source | public re-export surface for chunking, encoding, manifest, reader, sections, and writer APIs.
 - crates/nest-format/src/manifest/canonical.rs | rust source | canonical json serialization for deterministic manifest bytes.
@@ -139,6 +140,7 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - crates/nest-format/tests/negative_fp16.rs | rust test | rejects invalid float16 payloads and value edge cases.
 - crates/nest-format/tests/negative_int8.rs | rust test | rejects malformed int8 payloads, scales, and truncation.
 - crates/nest-format/tests/negative_zstd.rs | rust test | rejects invalid zstd use and illegal encoding combinations.
+- crates/nest-format/tests/reserved_ids.rs | rust test | asserts the reconciled additive section-id bands (0x09-0x16, 0x20-0x2F, 0x30-0x3F) are disjoint, excluded from content_hash, and unresolved by section_name until each feature ships.
 - crates/nest-format/tests/roundtrip.rs | rust test | exercises roundtrip behavior across raw, zstd, float16, and int8 combinations.
 - crates/nest-format/tests/v01_compat.rs | rust test | ensures v0.1 fixtures still load under the v0.2 reader.
 
