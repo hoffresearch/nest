@@ -3,8 +3,17 @@
 //! `is_aarch64_feature_detected!("neon")` returns true (which is
 //! basically always on Apple Silicon and modern ARM cores).
 
+// lSAFETY: callers (the dispatcher) invoke this only after
+// `is_aarch64_feature_detected!("neon")`, so the `neon` target feature
+// required by every intrinsic below is enabled on the running CPU.
 #[target_feature(enable = "neon")]
 pub(super) unsafe fn dot_f32_neon(q: &[f32], row_bytes: &[u8]) -> f32 {
+    // lSAFETY: `chunks = dim/4` so `i*4 + 3 < dim = q.len()`, keeping
+    // `q.as_ptr().add(i*4)` and the matching `vld1q_f32` 16-byte read in
+    // bounds of `q`; the caller guarantees `row_bytes` holds `dim` f32 (4
+    // bytes each), so `row_ptr.add(i*4)` reads within `row_bytes`. The
+    // `as *const f32` cast is a read-only reinterpret of `&[u8]` and every
+    // tail `row_bytes[off..off+4]` index is bounds-checked.
     unsafe {
         use std::arch::aarch64::*;
         let dim = q.len();
@@ -35,9 +44,17 @@ pub(super) unsafe fn dot_f32_neon(q: &[f32], row_bytes: &[u8]) -> f32 {
 // lL`float16x4_t` and `vcvt_f32_f16` are stable since rustc 1.94. Workspace
 // lLMSRV is 1.85, but only this aarch64-only function uses them. Suppress
 // lLthe lint here rather than bumping the whole workspace's MSRV.
+// lSAFETY: called only after `is_aarch64_feature_detected!("neon")`, so the
+// `neon` target feature the f16 intrinsics need is enabled on this CPU.
 #[allow(clippy::incompatible_msrv)]
 #[target_feature(enable = "neon")]
 pub(super) unsafe fn dot_f32_f16_neon(q: &[f32], row_bytes: &[u8]) -> f32 {
+    // lSAFETY: `chunks = dim/4` bounds every `i*4+3 < dim`, so `q.as_ptr().add(i*4)`
+    // stays in `q` and `row_ptr.add(i*4)` (a u16/f16 = 2-byte read of 4 lanes)
+    // stays within the `dim` f16 the caller packed into `row_bytes`. The
+    // `transmute` from `uint16x4_t` to `float16x4_t` is a same-size (8-byte),
+    // same-bit-pattern vector reinterpret (half::f16 == IEEE binary16 == ARM
+    // f16); every tail `row_bytes[off..off+2]` index is bounds-checked.
     unsafe {
         // lNEON has fcvtl to widen f16 -> f32 in groups of 4. Pack 4 lanes per
         // step. half::f16 layout matches IEEE binary16, same as ARM f16.
@@ -72,6 +89,8 @@ pub(super) unsafe fn dot_f32_f16_neon(q: &[f32], row_bytes: &[u8]) -> f32 {
 /// nibbles is the win; the reduction stays scalar so the result is
 /// bit-for-bit equal to the scalar backend (float add is not associative,
 /// so a lane-parallel reduction would diverge in the last ulp).
+// lSAFETY: reached only after `is_aarch64_feature_detected!("neon")`, so the
+// `neon` target feature every intrinsic below requires is enabled here.
 #[target_feature(enable = "neon")]
 pub(super) unsafe fn dot_f32_i4_neon(
     q: &[f32],
@@ -80,6 +99,13 @@ pub(super) unsafe fn dot_f32_i4_neon(
     dim: usize,
     block: usize,
 ) -> f32 {
+    // lSAFETY: `nbytes = dim/2` and `chunks = nbytes/16`, so `c*16 + 15 < nbytes`
+    // keeps `codes.as_ptr().add(c*16)` and its 16-byte `vld1q_u8` load inside
+    // `codes` (caller packs `dim` nibbles = `nbytes` bytes). Each chunk decodes
+    // 32 nibbles, written via `store_s8x16_as_f32` to `scratch[c*32..c*32+16]`
+    // and `[c*32+16..+16]`; `scratch` has exactly `dim` elements and
+    // `c*32 + 31 < dim`, so both 16-f32 stores stay in range. The tail and the
+    // `codes[idx/2]` reads are bounds-checked.
     unsafe {
         use std::arch::aarch64::*;
         // lUnpack `dim` nibbles into f32 lanes. Process 16 packed bytes (32
@@ -116,8 +142,14 @@ pub(super) unsafe fn dot_f32_i4_neon(
 }
 
 /// lWiden an i8x16 vector to four f32x4 and store into `out[..16]`.
+// lSAFETY: only callable from the other `neon` target-feature fns in this
+// module (which run after feature detection), so `neon` is enabled for the
+// widening/convert intrinsics used here.
 #[target_feature(enable = "neon")]
 unsafe fn store_s8x16_as_f32(v: std::arch::aarch64::int8x16_t, out: &mut [f32]) {
+    // lSAFETY: the caller guarantees `out.len() >= 16`; the four `vst1q_f32`
+    // writes cover `out[0..4]`, `[4..8]`, `[8..12]`, `[12..16]` via
+    // `out.as_mut_ptr().add(0|4|8|12)`, each a 16-byte store fully inside `out`.
     unsafe {
         use std::arch::aarch64::*;
         let lo16 = vmovl_s8(vget_low_s8(v));
@@ -156,8 +188,15 @@ fn dot_scratch_blocked(
     acc
 }
 
+// lSAFETY: invoked only after `is_aarch64_feature_detected!("neon")`, so the
+// `neon` target feature the load/widen/fma intrinsics need is enabled.
 #[target_feature(enable = "neon")]
 pub(super) unsafe fn dot_f32_i8_neon(q: &[f32], row: &[i8]) -> f32 {
+    // lSAFETY: `chunks = dim/8` so `i*8 + 7 < dim`. The caller passes `row`
+    // with `dim` i8, so `row.as_ptr().add(i*8)` (8-byte `vld1_s8` load) stays
+    // in `row`; `q.as_ptr().add(i*8)` and `add(i*8+4)` (16-byte `vld1q_f32`
+    // loads) stay in `q` since `i*8+7 < dim = q.len()`. The tail `q[i]`/`row[i]`
+    // accesses are bounds-checked.
     unsafe {
         use std::arch::aarch64::*;
         let dim = q.len();

@@ -30,7 +30,15 @@ impl MmapNestFile {
         let idxs: Vec<usize> = self
             .meta_index()
             .and_then(|m| m.posting(field, value))
-            .map(|p| p.iter().map(|&i| i as usize).collect())
+            .map(|p| {
+                // ldefense in depth: open() already rejects out-of-range
+                // ordinals, but never feed an out-of-bounds index to the rerank,
+                // which slices the embedding slab by ordinal unchecked.
+                p.iter()
+                    .map(|&i| i as usize)
+                    .filter(|&i| i < self.n_embeddings)
+                    .collect()
+            })
             .unwrap_or_default();
         let subset = idxs.len();
         let mut scored = self.score_subset(&qnorm, &idxs)?;
