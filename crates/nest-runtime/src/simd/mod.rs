@@ -95,8 +95,18 @@ pub fn dot_f32_bytes(q: &[f32], row_bytes: &[u8]) -> f32 {
     debug_assert_eq!(row_bytes.len(), q.len() * 4);
     match detect_backend() {
         #[cfg(target_arch = "x86_64")]
+        // lSAFETY: this arm is reached only when detect_backend() returned Avx2,
+        // which is gated on runtime is_x86_feature_detected!("avx2"/"fma"), so the
+        // fn's #[target_feature(avx2,fma)] is satisfied. q and row_bytes are valid
+        // slices; the upstream debug_assert row_bytes.len() == q.len()*4 means the
+        // kernel's *const f32 reads over chunks of q.len() stay in bounds.
         SimdBackend::Avx2 => unsafe { avx2::dot_f32_avx2(q, row_bytes) },
         #[cfg(target_arch = "aarch64")]
+        // lSAFETY: this arm is reached only when detect_backend() returned Neon,
+        // gated on runtime is_aarch64_feature_detected!("neon"), satisfying the
+        // fn's #[target_feature(neon)]. q and row_bytes are valid slices; the
+        // upstream debug_assert row_bytes.len() == q.len()*4 keeps the kernel's
+        // *const f32 reads over q.len() components in bounds.
         SimdBackend::Neon => unsafe { neon::dot_f32_neon(q, row_bytes) },
         _ => scalar::dot_f32_scalar(q, row_bytes),
     }
@@ -110,6 +120,12 @@ pub fn dot_f32_f16_bytes(q: &[f32], row_bytes: &[u8]) -> f32 {
     debug_assert_eq!(row_bytes.len(), q.len() * 2);
     match detect_backend() {
         #[cfg(target_arch = "aarch64")]
+        // lSAFETY: reached only when detect_backend() returned Neon (runtime
+        // is_aarch64_feature_detected!("neon")), satisfying #[target_feature(neon)].
+        // q and row_bytes are valid slices; the upstream debug_assert
+        // row_bytes.len() == q.len()*2 keeps the *const u16 reads in bounds. The
+        // kernel's transmute u16x4 -> float16x4_t is a same-size (8-byte) reinterpret
+        // and half::f16 / row bytes are IEEE binary16, matching ARM f16 layout.
         SimdBackend::Neon => unsafe { neon::dot_f32_f16_neon(q, row_bytes) },
         // lAVX2 has no native f16->f32 unless F16C is present; our cutoff
         // is "AVX2 + FMA" which usually pulls F16C along. Using a portable
@@ -130,8 +146,17 @@ pub fn dot_f32_i8(q: &[f32], row: &[i8], scale: f32) -> f32 {
     debug_assert_eq!(row.len(), q.len());
     let acc = match detect_backend() {
         #[cfg(target_arch = "x86_64")]
+        // lSAFETY: reached only when detect_backend() returned Avx2 (runtime
+        // is_x86_feature_detected!("avx2"/"fma")), satisfying #[target_feature(avx2,fma)].
+        // q and row are valid slices; the upstream debug_assert row.len() == q.len()
+        // means the kernel's 8-byte (*const i64) loads from row and f32 loads from q
+        // over q.len() components stay in bounds.
         SimdBackend::Avx2 => unsafe { avx2::dot_f32_i8_avx2(q, row) },
         #[cfg(target_arch = "aarch64")]
+        // lSAFETY: reached only when detect_backend() returned Neon (runtime
+        // is_aarch64_feature_detected!("neon")), satisfying #[target_feature(neon)].
+        // q and row are valid slices; the upstream debug_assert row.len() == q.len()
+        // keeps the kernel's i8x8 loads from row and f32x4 loads from q in bounds.
         SimdBackend::Neon => unsafe { neon::dot_f32_i8_neon(q, row) },
         _ => scalar::dot_f32_i8_scalar(q, row),
     };
@@ -160,8 +185,20 @@ pub fn dot_f32_i4_blocked(
     debug_assert_eq!(group_scales.len(), dim / block);
     match detect_backend() {
         #[cfg(target_arch = "x86_64")]
+        // lSAFETY: reached only when detect_backend() returned Avx2 (runtime
+        // is_x86_feature_detected!("avx2"/"fma")), satisfying #[target_feature(avx2,fma)].
+        // All slices are valid; the upstream debug_asserts (q.len()==dim,
+        // codes.len()==dim/2, group_scales.len()==dim/block) guarantee the kernel's
+        // 16-byte code loads, dim-lane scratch unpack, and per-group reduction over
+        // q/group_scales all index within bounds.
         SimdBackend::Avx2 => unsafe { avx2::dot_f32_i4_avx2(q, codes, group_scales, dim, block) },
         #[cfg(target_arch = "aarch64")]
+        // lSAFETY: reached only when detect_backend() returned Neon (runtime
+        // is_aarch64_feature_detected!("neon")), satisfying #[target_feature(neon)].
+        // All slices are valid; the upstream debug_asserts (q.len()==dim,
+        // codes.len()==dim/2, group_scales.len()==dim/block) guarantee the kernel's
+        // 16-byte code loads, dim-lane scratch unpack, and per-group reduction over
+        // q/group_scales all index within bounds.
         SimdBackend::Neon => unsafe { neon::dot_f32_i4_neon(q, codes, group_scales, dim, block) },
         _ => scalar::dot_f32_i4_blocked_scalar(q, codes, group_scales, dim, block),
     }

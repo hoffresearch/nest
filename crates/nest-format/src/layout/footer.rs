@@ -24,11 +24,17 @@ impl NestFooter {
 
     pub fn as_bytes(&self) -> &[u8] {
         let size = std::mem::size_of::<Self>();
+        // lSAFETY: `self` is a valid `&Self`, so the pointer is non-null, aligned for u8 (align 1),
+        // and `size == size_of::<Self>()` bytes are owned and initialized; the returned slice borrows
+        // `self` immutably so it stays in bounds and valid for the lifetime of the borrow.
         unsafe { std::slice::from_raw_parts(self as *const _ as *const u8, size) }
     }
 
     pub fn as_bytes_mut(&mut self) -> &mut [u8] {
         let size = std::mem::size_of::<Self>();
+        // lSAFETY: `self` is a valid `&mut Self`, so the pointer is non-null, aligned for u8 (align 1),
+        // and `size == size_of::<Self>()` bytes are owned and initialized; the exclusive `&mut self`
+        // borrow guarantees no aliasing, keeps the slice in bounds, and valid for the borrow's lifetime.
         unsafe { std::slice::from_raw_parts_mut(self as *mut _ as *mut u8, size) }
     }
 
