@@ -4,6 +4,11 @@ phase: phase 1 (PRE-GATE, pulled forward in the compression rebalance)   layer: 
 status:  [ ] todo    [ ] doing    [ ] done
 ==============================================================================================
 
+NOTE (from #06 diligence, 2026-06-06): the dict/fsst TEXT ratio gain needs the canonical text
+section split into per-chunk independent streams (the O(1) single-chunk reopen layout); today it
+is ONE concatenated zstd-19 blob where a trained dict and fsst do not beat zstd, so that layout
+change is a prerequisite and is out of this task's current scope.
+
 self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
 files listed before coding. do not summarize, do not skip. add a [ ] if something
 is missing. never skip silently.
