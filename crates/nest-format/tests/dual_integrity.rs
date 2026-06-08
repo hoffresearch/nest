@@ -56,6 +56,7 @@ fn manifest_for(n: u64) -> Manifest {
         description: None,
         authors: None,
         license: None,
+        capabilities_ext: None,
         extra: Default::default(),
     }
 }
