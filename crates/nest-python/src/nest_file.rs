@@ -42,6 +42,28 @@ impl NestFile {
         Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
     }
 
+    /// lGraph search (exact top-ef seed -> bounded bfs over the chunk graph
+    /// -> exact rerank on the union). Falls back to `search()` when no
+    /// graph_adjacency section is present. The graph only generates
+    /// candidates; the returned score is real cosine.
+    #[pyo3(signature = (query, k, hops=1, ef=100))]
+    fn search_graph(
+        &self,
+        query: &Bound<PyAny>,
+        k: i32,
+        hops: usize,
+        ef: usize,
+    ) -> PyResult<Vec<SearchHitPy>> {
+        let qvec: Vec<f32> = query
+            .extract()
+            .map_err(|e| PyValueError::new_err(format!("invalid query vector: {}", e)))?;
+        let res = self
+            .rt
+            .search_graph(&qvec, k, hops, ef)
+            .map_err(|e| PyValueError::new_err(format!("{}", e)))?;
+        Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
+    }
+
     /// lHybrid (BM25 ∪ vector → exact rerank). Falls back to `search()`
     /// when no BM25 section is present.
     fn search_hybrid(
@@ -89,6 +111,11 @@ impl NestFile {
     #[getter]
     fn has_bm25(&self) -> bool {
         self.rt.has_bm25()
+    }
+
+    #[getter]
+    fn has_graph(&self) -> bool {
+        self.rt.has_graph()
     }
 
     #[getter]

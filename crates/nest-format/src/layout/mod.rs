@@ -175,6 +175,9 @@ pub const REQUIRED_SECTIONS: &[(u32, &str)] = CANONICAL_SECTIONS;
 pub const OPTIONAL_SECTIONS: &[(u32, &str)] = &[
     (SECTION_HNSW_INDEX, "hnsw_index"),
     (SECTION_BM25_INDEX, "bm25_index"),
+    // graph_adjacency (0x0C, G1): additive chunk-to-chunk csr. resolves via
+    // section_name but stays OUT of CANONICAL_SECTIONS (content_hash-excluded).
+    (SECTION_GRAPH_ADJACENCY, "graph_adjacency"),
 ];
 
 pub fn section_name(id: u32) -> Option<&'static str> {
@@ -283,11 +286,15 @@ mod tests {
         assert_eq!(SECTION_SPACE_EMBEDDINGS_BASE, 0x20);
         assert_eq!(SECTION_SPACE_EMBEDDINGS_FP_BASE, 0x30);
         assert_eq!(SPACE_BAND_LEN, 0x10);
-
-        // reserved sections are not yet advertised as active optional sections,
-        // so section_name does not resolve them until their feature ships.
+        // reserved sections stay section_name-unresolved until their feature
+        // ships. EXCEPTION: graph_adjacency (0x0C, G1) resolves yet stays
+        // content_hash-excluded (see reserved_ids.rs).
         for &s in sec.iter().chain(recon.iter()) {
-            assert!(section_name(s).is_none());
+            if s == SECTION_GRAPH_ADJACENCY {
+                assert_eq!(section_name(s), Some("graph_adjacency"));
+            } else {
+                assert!(section_name(s).is_none());
+            }
         }
     }
 }

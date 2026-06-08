@@ -35,6 +35,64 @@ pub(crate) fn truncate_renormalize(
     }
 }
 
+/// lBuild the chunk-to-chunk graph_adjacency (0x0C) csr payload for `n`
+/// chunks: NEXT_CHUNK edges (sequential ordinals, both directions so the
+/// bounded bfs can reconstruct neighbor context on either side) plus up to
+/// `top_m` SEMANTIC edges per node taken from the already-built hnsw level-0
+/// adjacency. canonically sorted by `encode_graph_adjacency` (ascending src,
+/// edge_type, dst) so two builds are byte-identical. returns `None` when
+/// there is nothing to emit (n < 2). deterministic and pure.
+pub(crate) fn build_graph_payload(
+    hnsw: Option<&nest_runtime::ann::HnswIndex>,
+    n: usize,
+    top_m: usize,
+) -> PyResult<Option<Vec<u8>>> {
+    use nest_format::{EDGE_TYPE_NEXT_CHUNK, EDGE_TYPE_SEMANTIC, Edge, encode_graph_adjacency};
+    if n < 2 {
+        return Ok(None);
+    }
+    let mut edges: Vec<Edge> = Vec::new();
+    // NEXT_CHUNK: i <-> i+1 (sequential reading order, both directions).
+    for i in 0..n - 1 {
+        edges.push(Edge {
+            src: i as u32,
+            dst: (i + 1) as u32,
+            edge_type: EDGE_TYPE_NEXT_CHUNK,
+        });
+        edges.push(Edge {
+            src: (i + 1) as u32,
+            dst: i as u32,
+            edge_type: EDGE_TYPE_NEXT_CHUNK,
+        });
+    }
+    // SEMANTIC: top-m from the hnsw level-0 graph (already built, no o(n^2)
+    // knn). skip self-loops; the encoder dedups by canonical sort, so a node
+    // appearing in both a NEXT_CHUNK and a SEMANTIC edge keeps both typed
+    // edges (different edge_type = different canonical key).
+    if let Some(idx) = hnsw {
+        for i in 0..n {
+            let mut count = 0usize;
+            for &nbr in idx.level0_neighbors(i) {
+                if count >= top_m {
+                    break;
+                }
+                if nbr as usize == i {
+                    continue;
+                }
+                edges.push(Edge {
+                    src: i as u32,
+                    dst: nbr,
+                    edge_type: EDGE_TYPE_SEMANTIC,
+                });
+                count += 1;
+            }
+        }
+    }
+    let payload = encode_graph_adjacency(n, &edges)
+        .map_err(|e| PyValueError::new_err(format!("graph_adjacency encode: {}", e)))?;
+    Ok(Some(payload))
+}
+
 pub(crate) fn parse_chunks(chunks: &Bound<PyList>) -> PyResult<Vec<nest_format::ChunkInput>> {
     use nest_format::ChunkInput;
     let mut out: Vec<ChunkInput> = Vec::with_capacity(chunks.len());

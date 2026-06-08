@@ -9,8 +9,8 @@
 //! vector gets from flat exact search; and the path must report
 //! `recall = NaN` (it never claims a recall it did not measure).
 //!
-//! PARAMETERIZED OVER EVERY SEARCH ENTRY POINT. Today that is `ann` and
-//! `hybrid`. When `graph`, `space`, or `cross` paths land they MUST be
+//! PARAMETERIZED OVER EVERY SEARCH ENTRY POINT. Today that is `ann`,
+//! `hybrid`, and `graph`. When `space` or `cross` paths land they MUST be
 //! added to `non_exact_paths` below; a new non-exact search verb that is
 //! not covered here is a release-check failure by policy (master-plan
 //! 03-roadmap, 04-risks-quickwins). The list is the gate.
@@ -18,6 +18,7 @@
 use nest_format::ChunkInput;
 use nest_format::manifest::Manifest;
 use nest_format::writer::NestFileBuilder;
+use nest_format::{EDGE_TYPE_NEXT_CHUNK, EDGE_TYPE_SEMANTIC, Edge, encode_graph_adjacency};
 use nest_runtime::ann::{DEFAULT_EF_CONSTRUCTION, DEFAULT_M, HnswIndex};
 use nest_runtime::bm25::Bm25Index;
 use nest_runtime::{MmapNestFile, SearchResult};
@@ -100,9 +101,33 @@ fn build_indexed_corpus(path: &PathBuf, n: usize, dim: usize) -> Vec<f32> {
             embedding: vectors[i * dim..(i + 1) * dim].to_vec(),
         });
     }
+    // graph_adjacency (0x0C): NEXT_CHUNK (both directions) + a few semantic
+    // edges, so search_graph exercises the real bfs path rather than falling
+    // back to exact. excluded from content_hash; sets graph_present.
+    let mut edges: Vec<Edge> = Vec::new();
+    for i in 0..n - 1 {
+        edges.push(Edge {
+            src: i as u32,
+            dst: (i + 1) as u32,
+            edge_type: EDGE_TYPE_NEXT_CHUNK,
+        });
+        edges.push(Edge {
+            src: (i + 1) as u32,
+            dst: i as u32,
+            edge_type: EDGE_TYPE_NEXT_CHUNK,
+        });
+        edges.push(Edge {
+            src: i as u32,
+            dst: ((i + 11) % n) as u32,
+            edge_type: EDGE_TYPE_SEMANTIC,
+        });
+    }
+    let graph = encode_graph_adjacency(n, &edges).unwrap();
+
     builder = builder
         .hnsw_index(hnsw.to_bytes())
         .bm25_index(bm25.to_bytes())
+        .graph_adjacency(graph)
         .hybrid();
     builder.write_to_path(path).unwrap();
     vectors
@@ -129,6 +154,10 @@ fn non_exact_paths_return_real_cosine_byte_for_byte_and_recall_is_nan() {
     let rt = MmapNestFile::open(&path).unwrap();
     assert!(rt.has_ann(), "fixture must carry an HNSW section");
     assert!(rt.has_bm25(), "fixture must carry a BM25 section");
+    assert!(
+        rt.has_graph(),
+        "fixture must carry a graph_adjacency section"
+    );
 
     // lGround truth: exact flat search over ALL chunks gives, per chunk,
     // the real-cosine score. We compare every non-exact hit against this
@@ -150,8 +179,10 @@ fn non_exact_paths_return_real_cosine_byte_for_byte_and_recall_is_nan() {
     let non_exact_paths: Vec<NonExactPath> = {
         let qa = q.clone();
         let qh = q.clone();
+        let qg = q.clone();
         let rt_a = &rt;
         let rt_h = &rt;
+        let rt_g = &rt;
         vec![
             (
                 "ann",
@@ -163,6 +194,10 @@ fn non_exact_paths_return_real_cosine_byte_for_byte_and_recall_is_nan() {
                     rt_h.search_hybrid(&qh, "alpha shared3 term12", 10, 100)
                         .unwrap()
                 }),
+            ),
+            (
+                "graph",
+                Box::new(move || rt_g.search_graph(&qg, 10, 2, 100).unwrap()),
             ),
         ]
     };

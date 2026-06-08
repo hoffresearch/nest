@@ -8,7 +8,7 @@ use memmap2::Mmap;
 use nest_format::NestError;
 use nest_format::layout::{
     SECTION_BM25_INDEX, SECTION_CHUNK_IDS, SECTION_CHUNKS_ORIGINAL_SPANS, SECTION_EMBEDDINGS,
-    SECTION_HNSW_INDEX,
+    SECTION_GRAPH_ADJACENCY, SECTION_HNSW_INDEX,
 };
 use nest_format::reader::NestView;
 use nest_format::sections::{OriginalSpan, decode_chunk_ids, decode_chunks_original_spans};
@@ -16,6 +16,7 @@ use nest_format::sections::{OriginalSpan, decode_chunk_ids, decode_chunks_origin
 use crate::ann;
 use crate::bm25;
 use crate::error::RuntimeError;
+use crate::graph::CsrIndex;
 use crate::materialize::PackedVectors;
 use crate::rerank::FpSlab;
 use crate::simd::{self, SimdBackend};
@@ -84,6 +85,10 @@ pub struct MmapNestFile {
     pub(crate) ann_index: Option<ann::HnswIndex>,
     /// lOptional BM25 index. Mostly tiny ints; deserialized eagerly.
     pub(crate) bm25_index: Option<bm25::Bm25Index>,
+    /// lOptional chunk-to-chunk graph (graph_adjacency 0x0C). Opened behind
+    /// the manifest `graph_present` capability, like ann/bm25. A candidate
+    /// generator only: its frontier feeds the exact rerank, never a score.
+    pub(crate) graph_index: Option<CsrIndex>,
     /// lWhat the manifest says the search path is. The runtime honors
     /// this at search time.
     pub(crate) declared_index_type: String,
@@ -144,6 +149,28 @@ impl MmapNestFile {
             None
         };
 
+        // lOptional graph_adjacency section (0x0C). gated behind the additive
+        // `graph_present` capability (delivered via Option<CapabilitiesExt>),
+        // mirroring how ann/bm25 are opened. raw payload; the csr bitpacks its
+        // own integer columns with intpack internally.
+        let graph_present = view
+            .manifest
+            .capabilities_ext
+            .as_ref()
+            .and_then(|e| e.graph_present)
+            .unwrap_or(false);
+        let graph_index = if graph_present
+            && view
+                .section_table
+                .iter()
+                .any(|e| e.section_id == SECTION_GRAPH_ADJACENCY)
+        {
+            let bytes = view.decoded_section(SECTION_GRAPH_ADJACENCY)?;
+            Some(CsrIndex::from_bytes(&bytes, n)?)
+        } else {
+            None
+        };
+
         let embedding_model = view.manifest.embedding_model.clone();
         let declared_index_type = view.manifest.index_type.clone();
         let declared_score_type = view.manifest.score_type.clone();
@@ -166,6 +193,7 @@ impl MmapNestFile {
             content_hash,
             ann_index,
             bm25_index,
+            graph_index,
             declared_index_type,
             declared_score_type,
         })
@@ -201,47 +229,8 @@ impl MmapNestFile {
     pub fn has_bm25(&self) -> bool {
         self.bm25_index.is_some()
     }
-
-    /// lRe-parse the mmap and return a JSON document mirroring `nest
-    /// inspect`: header fields, section table entries, manifest, hashes,
-    /// and the runtime SIMD backend.
-    pub fn inspect_json(&self) -> Result<String, RuntimeError> {
-        let view = NestView::from_bytes(&self._mmap)?;
-        let magic = std::str::from_utf8(&view.header.magic)
-            .unwrap_or("")
-            .to_string();
-        let sections: Vec<serde_json::Value> = view
-            .section_table
-            .iter()
-            .map(|e| {
-                let name = nest_format::layout::section_name(e.section_id).unwrap_or("unknown");
-                serde_json::json!({
-                    "section_id": e.section_id,
-                    "name": name,
-                    "encoding": e.encoding,
-                    "offset": e.offset,
-                    "size": e.size,
-                    "checksum": hex::encode(e.checksum),
-                })
-            })
-            .collect();
-        let doc = serde_json::json!({
-            "magic": magic,
-            "version_major": view.header.version_major,
-            "version_minor": view.header.version_minor,
-            "format_version": view.manifest.format_version,
-            "schema_version": view.manifest.schema_version,
-            "embedding_dim": view.header.embedding_dim,
-            "n_chunks": view.header.n_chunks,
-            "n_embeddings": view.header.n_embeddings,
-            "file_size": view.header.file_size,
-            "manifest": view.manifest,
-            "sections": sections,
-            "file_hash": view.file_hash_hex(),
-            "content_hash": view.content_hash_hex()?,
-            "simd_backend": self.simd_backend().name(),
-        });
-        serde_json::to_string(&doc).map_err(|e| RuntimeError::Format(NestError::Json(e)))
+    pub fn has_graph(&self) -> bool {
+        self.graph_index.is_some()
     }
 
     /// lRe-run all reader-side validation. The file was already
