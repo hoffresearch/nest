@@ -1,0 +1,109 @@
+==============================================================================================
+TASK #12 :: original-byte reopen path + catalog blob_refs(0x14) + 0x16 overlay + .nestpack
+phase: phase 2 (post-gate)   layer: nest
+status:  [ ] todo    [ ] doing    [ ] done
+==============================================================================================
+
+self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
+files listed before coding. do not summarize, do not skip. add a [ ] if something
+is missing. never skip silently.
+
+--- goal ---
+land the two biggest near-term ratio levers (trained zstd dict + fsst; block/rotational int8),
+open forge to heavy heterogeneous inputs via the opt-in belt, build the net-new original-byte
+reopen path, and ship catalog mode so the osint-lake vertical becomes possible.
+
+--- depends on ---
+  previous phase merged  + the FLAGSHIP-PROVEN GATE
+
+--- READ THESE COMPLETE FILES FIRST ---
+[ ] doc/research/synthesis/content-addressed.txt
+[ ] crates/nest-cli/src/cmd/cite.rs
+[ ] crates/nest-format/src/sections/spans.rs
+[ ] crates/nest-format/src/layout/mod.rs
+[ ] doc/plan/master-plan/02-format.txt
+[ ] doc/plan/master-plan/03-roadmap.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and the current code you will change:)
+[ ] crates/nest-cli/src/cmd/cite.rs
+[ ] crates/nest-format/src/sections/blob_refs.rs
+[ ] crates/nest-format/src/sections/blob_span_overlay.rs
+[ ] crates/nest-format/src/blobstore/
+[ ] crates/nest-runtime/src/blobref.rs
+
+--- OWNS THESE CODE FILES (no parallel task edits them) ---
+  crates/nest-cli/src/cmd/cite.rs
+  crates/nest-format/src/sections/blob_refs.rs
+  crates/nest-format/src/sections/blob_span_overlay.rs
+  crates/nest-format/src/blobstore/
+  crates/nest-runtime/src/blobref.rs
+
+--- STEPS (check each) ---
+[ ] BUILD the tier-2 original-byte reopen path first: cite today returns stored canonical text
+    and prints source_uri as a string only (cite.rs:43-62); add an opener that reads original
+    bytes by source_uri/blob-digest and verifies the digest, as its own card BEFORE blob_refs
+[ ] reserve SECTION_BLOB_REFS=0x14 + storage_mode manifest flag (Option, default
+    self_contained, byte-identical); catalog blob-relative span info goes in the SEPARATE
+    excluded SECTION_BLOB_SPAN_OVERLAY=0x16 keyed by chunk ordinal - NEVER a spans v1->2 bump
+    (spans is canonical + content-hashed + required; a v2 there breaks every reader and
+    changes content_hash); cross-mode content_hash-equality test asserts self_contained and
+    catalog twins hash identically
+[ ] blobstore/ .nestpack (magic NPAK, sorted digest directory, mmap binary search,
+    deterministic dedup) + runtime blobref resolver chain (sidecar|unavailable, never panic;
+    'citation verifiable, original unavailable' is a first-class non-alarming typed state)
+
+--- draws from ---
+content-addressed/NixOS__nix, content-addressed/ipfs__kubo, vector-db/lancedb__lancedb,
+BurntSushi/fst
+
+--- watch out ---
+  the draft assumed original-byte reopen exists; it does not (cite returns stored text). and
+  the draft's spans v1->2 bump was a breaking change to a canonical content-hashed section
+  sold as additive; replaced here by the excluded 0x16 overlay so self_contained and catalog
+  twins keep the SAME content_hash and old readers still open the file. sidecar stays strictly
+  optional.
+
+--- NEST RULES (check each) ---
+[ ] edition 2024; never panic in lib (typed thiserror). FORGE heavy/non-deterministic work
+    stays OUT of the sovereign crates/ workspace.
+[ ] format v1 FROZEN + ADDITIVE: no NEST_FORMAT_VERSION bump. use reserved encoding ids 4-9 /
+    section ids 0x09+.
+[ ] content_hash over DECODED bytes: codecs decode byte-identically so nest:// citations stay
+    stable.
+[ ] never zstd/dedup/shuffle the embeddings section (mmap SIMD hot path); only fixed-stride
+    quantization there.
+[ ] deterministic: the .nest build anchor is canonical extracted text + model fingerprint,
+    verify byte-identical across two builds.
+[ ] <=300 lines per rust src file; docs lowercase, no emoji, no em-dash. feature branch off
+    main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace ; cargo test --workspace (+ roundtrip+content_hash test
+    for new codecs)
+[ ] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if format/runtime/python changed ; ./scripts/release_check.sh
+    passes
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ____  after: ____
+  recall@10   before: ____  after: ____
+
+--- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
+update only what THIS task actually changed; check each:
+[ ] doc/arc/arc.md     architecture inventory + contract (boundaries/sections/data-flow/runtime)
+[ ] doc/arc/arc.yaml   machine architecture map (MUST move with arc.md, same commit)
+[ ] doc/arc/arc.mmd    mermaid build/query flow (if the flow changed)
+[ ] README.md          overview / cli / presets / highlights (if a user-visible surface changed)
+[ ] doc/usage.md       the how-to (if a command, flag, preset, or workflow changed)
+[ ] AGENTS.md          build/test cmds, conventions, gotchas, known gaps (if any changed)
+[ ] Cargo.toml         workspace version / deps / new crate (if crates or deps changed)
+[ ] pyproject.toml     python tooling / deps / targets (if the python surface changed)
+[ ] rustfmt.toml       only if a formatting rule must change (rare)
+the arc trio (arc.md + arc.yaml + arc.mmd) moves TOGETHER in the same commit when
+architecture / boundaries / data-flow / contracts / storage / runtime change.
+
+--- MERGE ---
+[ ] commit on branch feat/p2-12-original-byte-reopen-path-catalog-blob-refs-0x
+[ ] gate green -> merge, mark done in plan/kanban.txt

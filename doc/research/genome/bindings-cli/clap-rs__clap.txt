@@ -1,0 +1,41 @@
+================================================================================================
+clap-rs/clap
+category: bindings-cli   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Rust CLI argument parser with a dual builder/derive API, a modular feature-gated crate split
+             (clap_builder/clap_derive/clap_lex/clap_complete/clap_mangen), Jaro-distance typo
+             correction, and a runtime "ask the binary" dynamic shell-completion protocol.
+innovation:  The binary, not a static script, is the source of truth for valid inputs at runtime.
+techniques:
+  - strsim::jaro did_you_mean at 0.7 cutoff, candidates sorted ascending by similarity
+  - CompleteEnv env-var re-exec completion protocol (COMPLETE/_CLAP_COMPLETE_INDEX/_CLAP_IFS)
+  - CompletionCandidate type decoupling generation from per-shell rendering
+  - feature-gated crate split (clap re-exports clap_builder) for binary-size minimization
+  - clap_lex OsStr-aware lossless arg tokenizer
+  - derive layer compiling to the same Command/Arg builder model
+  - ArgValueCompleter per-arg dynamic candidate closures
+nest steals: nest-cli gets Jaro did_you_mean over its 8 subcommand names (clap's `suggestions` feature,
+             deterministic). Extend the same Jaro scorer over real container chunk_ids (mmapped
+             by nest-runtime) so a missed `nest cite` suggests the nearest valid id without
+             altering the frozen format. Adopt CompleteEnv-style re-exec completion that reads
+             the actual .nest file for content_hash/chunk_id/preset completion, staying offline
+             and single-file. Mirror clap's feature-gated crate split to keep hnsw/bm25/pyo3
+             opt-in for the smallest sovereign binary.
+compression: n/a directly. clap is a CLI ergonomics/distribution-surface project with no entropy coder,
+             quantizer, or on-disk codec to lift; it does not advance the
+             compress-more-than-everyone north star. Its value to nest is purely the client
+             surface (typo correction, dynamic completion, binary-size minimization), which
+             improves the portable/clean/light pillars but not raw compression ratio.
+perf:        Parsing is allocation-light; clap_lex avoids premature UTF-8 decoding (works on OsStr) and the
+             builder model is the runtime data structure with no reflection. Binary size is
+             controlled by opt-in cargo features rather than a monolith. No SIMD or hot-path
+             numerics relevant to nest's scoring kernels; the Jaro suggestion path runs only on
+             the error branch so its cost is irrelevant. CompleteEnv runs before app init to
+             keep completion latency low, but a nest re-exec would still pay the process-start
+             cost (cheap for the Rust binary, but note the known ~300-500ms python boot overhead
+             must NOT be on this path -- completion must stay in the pure-rust
+             nest-cli/nest-runtime layer).
+license:     MIT OR Apache-2.0 (dual-licensed)

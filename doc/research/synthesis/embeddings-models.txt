@@ -1,0 +1,364 @@
+================================================================================================
+synthesis :: embeddings-models
+embedding and representation models (text + image, including tiny/static)
+================================================================================================
+
+state of the art and concrete nest recommendations for this category.
+
+summary:     The embeddings-models corpus splits cleanly into two layers for nest, which only consumes float
+             outputs (never runs inference): (1) a build-side production layer (CLIP,
+             BERT/WordPiece, sentence-transformers, BGE-M3, Qwen3-Embedding, Model2Vec, SetFit,
+             rust-sbert, rust-bert, word2vec, GloVe) that pins the post-encoder convention and
+             ships cheap deterministic encoders; and (2) a storage/scoring layer that is the
+             real prize for the 'compress more than everyone' north star. The collective state
+             of the art is converging on one contract that nest already half-implements: produce
+             L2-normalized unit vectors so cosine == dot product (CLIP, word2vec, all ST
+             models), then aggressively compress the embeddings section along FOUR orthogonal,
+             multiplicative axes -- value precision (f16/int8, already in nest), dimensionality
+             (Matryoshka truncate-then-renormalize: Qwen3/BGE/ST), sub-byte vector quantization
+             (fastText product quantization, ~8x), and representation sparsity (SPLADE/BGE-M3
+             learned-sparse, ~99% zeros, zstd-friendly) -- with quality guarded by exactly
+             nest's existing pattern: a lossy form for candidate generation plus a mandatory
+             exact-cosine rerank that makes the returned score honest. nest's int8 'tiny' preset
+             (0.283 ratio, recall@10 0.992) is mid-pack; PQ + MRL + sparse stack
+             multiplicatively below it toward ~0.10-0.14. The biggest correctness gap
+             (word-segmented BM25 that collapses on CJK/Thai) is fixed for free at the tokenizer
+             layer (BERT CJK basic-tokenizer) and superseded at the index layer (SPLADE/BGE
+             learned-sparse on subword ids). The model-production gap (300-500ms python boot,
+             torch dependency) is closed by Model2Vec static distillation, a sub-30MB
+             lookup-table encoder with an official MIT Rust port, giving sovereign offline
+             re-embedding. Everything maps to additive-only changes: new encoding IDs in the
+             free 4-255 range, new optional sections at 0x09+, and new manifest/search_contract
+             fields, with zero NEST_FORMAT_VERSION bump.
+
+state of the art
+------------------------------------------------------------------------------------------------
+Convergent contract across the field: encoders emit L2-normalized vectors on the unit
+hypersphere so cosine(a,b) == dot(a,b) (CLIP's logit_scale temperature, word2vec
+normalize-at-load, every sentence-transformers Normalize module, Qwen3/BGE
+truncate-then-renormalize). This single convention -- which nest must PIN in search_contract as
+'normalize=l2' -- is the precondition that makes everything downstream cheap: pure SIMD dot
+product with no per-query sqrt/div, and near-lossless int8 because every component lies in a
+bounded [-1,1] with one symmetric per-vector scale. On top of that base, four independent
+compression axes have matured: (A) VALUE PRECISION -- f16 (2x) and int8 (4x), both validated as
+~lossless on normalized+PCA-whitened vectors (Model2Vec, sentence-transformers); nest already
+ships these. (B) DIMENSIONALITY -- Matryoshka Representation Learning front-loads information so
+vec[:d] is independently valid after renormalize; Qwen reports 4096->1024 keeps ~95% recall at
+75% storage cut, ST reports 1024->256 at 0.6% drop; a pure deterministic prefix slice,
+multiplicative with (A). (C) SUB-BYTE QUANTIZATION -- fastText product quantization (k=256
+subvector k-means -> 1-byte codes, dsub=2 -> 1 byte per 2 dims = 8x base, norm decoupled,
+asymmetric LUT scoring with no decode on the hot path) plus binary 1-bit quantization
+(sign-threshold + popcount-Hamming, 32x, ST asymmetric rescore recovers ~96% recall). (D)
+SPARSITY -- SPLADE (TEI) and BGE-M3 learned-sparse emit vocab-sized ~99%-zero vectors stored as
+CSR (sorted term-id deltas + int8/f16 weights), an order of magnitude smaller than dense f32,
+scored by integer merge-join, and zstd-compressible because they are off the float hot path. The
+unifying retrieval discipline is compress-then-rescore: the lossy/sparse/ANN form does candidate
+generation only, then a higher-fidelity rerank produces the final score (CLIP /rank, ST
+asymmetric rescore, BGE weighted fusion, TEI cross-encoder) -- structurally identical to nest's
+mandatory exact-cosine rerank after hnsw/bm25 RRF, which validates nest's design and means nest
+can adopt ALL of these as candidate generators without weakening its 'returned score is real
+cosine' guarantee. On the production side, the trend is away from heavy torch towards portable
+artifacts: a model is 'an ONNX graph + a vocab' (clip-as-service) or, more radically, 'a [vocab
+x dim] static lookup table' (Model2Vec: tokenize + gather + mean-pool, no forward pass, ~500x
+faster CPU, 8-30MB, PCA-whitened + SIF/Zipf-weighted, int8-quantizable, with an official Rust
+port needing only safetensors + tokenizers). Multilingual quality (the PT-BR/CJK/Thai concern)
+is solved at two layers: BERT's CJK-aware basic tokenizer (insert boundaries around Han
+codepoints, NFD accent strip, punctuation isolation) fixes lexical tokenization, and
+M-CLIP/XLM-R/LaBSE text towers plus SPLADE/BGE subword sparsity fix it semantically.
+
+top transferable innovations
+------------------------------------------------------------------------------------------------
+1. Product Quantization with asymmetric LUT scoring (fastText.zip): subvector k-means (k=256 ->
+   1-byte codes, dsub=2) stores 1 byte per 2 dims (~8x base, ~16x vs f32) with norm decoupled;
+   query builds a per-subvector lookup table once, then each candidate is dim/dsub byte-indexed
+   loads + f32 adds with NO float decode on the hot path -- a perfect fit for nest's
+   score-off-mmap SIMD model and the single highest-leverage embedding-compression steal.
+   Demonstrated 250x model shrink (427MB->1.7MB) with negligible loss.
+2. Matryoshka Representation Learning truncate-then-renormalize (Qwen3-Embedding, BGE-M3,
+   sentence-transformers): embedding dimensionality becomes a near-lossless deterministic
+   compression knob (slice prefix, L2-renormalize) that is multiplicative with int8/f16/PQ and
+   also shrinks the HNSW index. 256-of-1024 at int8 = ~16x vs f32-1024. A pure deterministic
+   slice, so byte-identical builds hold.
+3. Compress-then-rescore as the universal search contract (sentence-transformers binary/int8,
+   CLIP /rank, BGE fusion, TEI cross-encoder): store a lossy/sparse form for cheap candidate
+   generation, rerank survivors at higher fidelity so the FINAL score is honest. This is nest's
+   existing mandatory exact-cosine rerank generalized to the CODEC layer -- it is the ONLY safe
+   way to compress embeddings while keeping 'returned score is real cosine', and it licenses
+   adopting PQ, binary, and sparse all as candidate generators.
+4. Learned sparse vectors (SPLADE in TEI, lexical_weights in BGE-M3): a vocab-sized ~99%-zero
+   vector of (token_id, weight) pairs that is a semantic, language-agnostic, drop-in upgrade
+   over BM25 tf-idf, stored as CSR (delta-coded ascending term ids + int8/f16 weights),
+   zstd-compressed (off the float hot path), and scored by integer merge-join. Simultaneously
+   shrinks the lexical index AND fixes nest's CJK/Thai BM25 gap with subword ids.
+5. Model2Vec static distillation (MinishLab): collapse a sentence-transformer into a [vocab x
+   dim] lookup table so encoding = tokenize + gather + mean-pool (no forward pass), PCA-whitened
+   + SIF/Zipf-weighted offline, int8-quantizable, 8-30MB, ~500x faster CPU, dataset-free,
+   deterministic, with an official MIT Rust port (safetensors + tokenizers). Gives nest a
+   sovereign offline single-file embedder that kills the 300-500ms python boot and the torch
+   dependency.
+6. L2-normalize as a pinned build-time invariant (CLIP, word2vec, all ST Normalize heads): store
+   embeddings pre-normalized so the SIMD dot equals true cosine with zero per-query sqrt/div,
+   AND normalize-before-quantize tightens the int8 scale range to lift recall at the same byte
+   cost. The precondition that makes every other compression axis safe to validate against a
+   stable ground truth.
+7. Binary quantization with popcount-Hamming first stage (sentence-transformers): sign-threshold
+   normalized f32 to 1 bit/dim (32x), packbits, retrieve by XOR + popcount (~2 CPU cycles, a
+   tiny AVX2 popcnt / NEON vcnt kernel), then asymmetric rescore against int8/f32 recovers ~96%
+   recall. The cheapest possible first-stage candidate gate, fully inside nest's SIMD
+   dispatcher.
+8. BERT CJK-aware basic tokenizer + WordPiece greedy-longest-match: a data-only, model-free,
+   deterministic pure function (insert boundaries around Han/CJK codepoint ranges, NFD accent
+   strip, punctuation isolation, then greedy ## subword match over an ordered vocab) that fixes
+   nest's named CJK/Thai BM25 degradation with ZERO bm25 codec change -- terms stay UTF-8
+   length-prefixed alphabetical, section 0x08 byte-identical.
+9. PCA-whitening before quantization (Model2Vec, sentence-transformers): decorrelate/normalize
+   the embedding space offline (a build-time matrix multiply) so int8/binary/PQ lose ~nothing;
+   ~2.8% gain even at full dim. A pure build-side conditioning pass that strengthens every nest
+   codec at the same byte cost.
+10. Contrastive distillation to a smaller-dimension student (SetFit, BGE self-distillation):
+   re-embed a corpus into a lower-dim space (768->256) whose neighbor ordering is preserved,
+   attacking the float COUNT (not just width) -- the one axis zstd/int8 cannot touch --
+   multiplicative with int8, guarded by exact rerank. A 'nano' preset below tiny.
+
+nest recommendations
+------------------------------------------------------------------------------------------------
+* Add Matryoshka dimension-truncation as a build-time codec: nest-python slices each f32 vector
+  to a chosen mrl_dim prefix and re-L2-normalizes before writing; store full_dim + mrl_dim in
+  the embeddings section header and mirror into search_contract. Runtime needs only honor the
+  smaller per-vector stride from the manifest -- existing AVX2/NEON/scalar kernels and the int8
+  view run unchanged on the shorter row. Exact rerank stays true cosine because vectors are
+  renormalized on the prefix.
+    where:  build: nest-python embedding path (truncate+renormalize); format: new manifest field
+            full_dim/mrl_dim + crates/nest-format/src/sections/contract.rs SearchContract (add
+            mrl_dim, full_dim as optional fields); runtime: crates/nest-runtime/src/simd/mod.rs
+            already strides by dim, no kernel change; nest-cli stats surfaces the size/recall
+            tradeoff.
+    impact: high
+    effort: low
+    from:   https://github.com/QwenLM/Qwen3-Embedding, https://github.com/FlagOpen/FlagEmbedding,
+            https://github.com/UKPLab/sentence-transformers
+
+* Add encoding=4 'pq' (product quantization) as a new embeddings codec in the free 4-255
+  additive range, sibling to int8.rs. On-disk layout mirrors int8.rs prefix conventions: u32
+  payload_version, u32 dsub, seeded-k-means codebook (m_subspaces*256*dsub f32 centroids),
+  per-vector scalar norm (reuse int8 norm machinery), then n*(dim/dsub) u8 codes. Runtime SIMD
+  dispatcher builds the asymmetric query LUT (query dotted vs mmapped codebook via existing dot
+  kernels) once per query, scores each candidate as dim/dsub byte-indexed adds off mmap, then
+  feeds the mandatory exact-cosine rerank -- PQ is only the ANN coarse filter, never the final
+  score. Enables a 'nano' preset (~0.14 ratio) below tiny. k-means MUST be seeded in the python
+  builder for byte-identical builds.
+    where:  format: crates/nest-format/src/encoding/pq.rs (new) registered in encoding/mod.rs and
+            writer/encoding_choice.rs, encoding id 4 in layout/mod.rs; runtime:
+            crates/nest-runtime/src/simd/ new PQ scoring path +
+            crates/nest-runtime/src/search.rs candidate feed into existing rerank; build: seeded
+            k-means + optional greedy coverage pruning in nest-python.
+    impact: high
+    effort: high
+    from:   https://github.com/facebookresearch/fastText
+
+* Add an optional learned-sparse index section at 0x09 (reserved range, additive) storing
+  per-chunk ascending (token_id:u32 delta-varint, weight:int8/f16) CSR arrays; zstd the section
+  (it is scored by integer merge-join, NOT a SIMD dot off mmap, so zstd is safe here unlike
+  embeddings). Generalize the existing Bm25Index into a SparseIndex whose postings hold learned
+  weights; s_lex = sum w_q*w_d via merge-join replaces tf-idf BM25 while reusing deterministic
+  alphabetical/ascending ordering and the existing reciprocal-rank fusion. nest-python computes
+  SPLADE/BGE-M3 lexical_weights at build time; rust does only integer merge-join at serve time
+  (stays offline). Candidate generation only; exact-cosine rerank stays ground truth. Replaces
+  the word-segmented BM25 (fixes CJK/Thai) AND shrinks the lexical index.
+    where:  format: new section 0x09 in layout/mod.rs + crates/nest-format/src/sections/ (CSR codec,
+            zstd-eligible); runtime: crates/nest-runtime/src/bm25/ generalized to SparseIndex
+            (index.rs, codec.rs) reusing fusion.rs RRF; build: nest-python
+            SPLADE/lexical_weights step; search_contract gains a fusion descriptor.
+    impact: high
+    effort: high
+    from:   https://github.com/huggingface/text-embeddings-inference,
+            https://github.com/FlagOpen/FlagEmbedding
+
+* Pin 'normalize=l2' as a checked invariant in search_contract and document/enforce
+  L2-normalized embeddings: nest-python L2-normalizes (and for int8, normalizes BEFORE
+  quantizing to tighten the per-vector scale range). Runtime reads normalize=l2 and runs a pure
+  dot product with zero per-query sqrt/div; the exact rerank becomes a bare FMA scan. This is
+  the precondition that makes int8/PQ/binary/MRL all safe and validates the 0.992 recall claim
+  against a stable ground truth.
+    where:  format: crates/nest-format/src/sections/contract.rs (normalize already a field --
+            enforce/cross-check at open in reader); build: nest-python normalize-then-quantize
+            ordering; runtime: crates/nest-runtime/src/simd/mod.rs and search.rs drop per-query
+            norm when normalize=l2.
+    impact: high
+    effort: low
+    from:   https://github.com/openai/CLIP, https://github.com/tmikolov/word2vec,
+            https://github.com/UKPLab/sentence-transformers,
+            https://github.com/cpcdoy/rust-sbert
+
+* Replace the word-split tokenizer with a BERT-style two-stage pipeline: a basic-tokenizer pass
+  (lowercase, NFD accent strip already partial for PT-BR, punctuation isolation, insert
+  boundaries around CJK/Han codepoint ranges U+4E00-9FFF etc and Thai so ideographic/spaceless
+  scripts segment per-char) plus an optional greedy-longest-match WordPiece over a small frozen
+  vocab. The on-disk BM25 codec needs ZERO change -- terms stay UTF-8 length-prefixed sorted
+  alphabetical, section 0x08 byte-identical, determinism preserved. Clean-room reimplement the
+  algorithm + CJK ranges (not vocab.txt).
+    where:  runtime: crates/nest-runtime/src/bm25/tokenize.rs (rewrite, currently 28 lines
+            word-split-on-non-alphanumeric); optional frozen vocab as a new additive section in
+            0x09+ range if WordPiece is shipped.
+    impact: medium
+    effort: medium
+    from:   https://github.com/google-research/bert
+
+* Ship a Model2Vec static-embed build mode in nest-python: distill/load a [vocab x dim] lookup
+  table (PCA-whitened + SIF/Zipf-weighted baked offline, int8-quantizable, 8-30MB), encode via
+  tokenize + gather + mean-pool with no forward pass. Dataset-free, ~500x cheaper CPU, fully
+  deterministic (no GPU/transformer nondeterminism) -- directly serving the reproducible-build
+  guarantee. Optionally vendor model2vec-rs (MIT, safetensors + tokenizers only) into a runtime
+  feature so nest can re-embed query text and edited chunks natively offline, closing the
+  300-500ms search-text python boot and giving sovereign single-file embedding with no
+  transformer download.
+    where:  build: nest-python static-embed mode + model fingerprint in provenance; optional runtime:
+            query/edit re-embed path (model2vec-rs deps) gated behind a feature so the small
+            core stays lean; static matrix could ship as an optional dictionary section for
+            on-device re-embed.
+    impact: high
+    effort: medium
+    from:   https://github.com/MinishLab/model2vec, https://github.com/huggingface/setfit
+
+* Add a build-time PCA-whitening pass before int8/PQ/binary packing in nest-python, storing the
+  (deterministic) PCA rotation in provenance so dequant is reproducible. PCA
+  decorrelates/normalizes the space (~2.8% quality gain even at full dim per Model2Vec) so
+  scalar/sub-byte quantization loses ~nothing -- lifting the int8 'tiny' codec quality at the
+  SAME byte cost and de-risking the push to PQ/binary.
+    where:  build: nest-python whitening pass (numpy, build-side only) before
+            crates/nest-format/src/encoding int8/pq packing; provenance records the rotation +
+            int8 per-vector scale machinery for byte-identical dequant.
+    impact: medium
+    effort: medium
+    from:   https://github.com/MinishLab/model2vec, https://github.com/UKPLab/sentence-transformers
+
+* Add a binary (1-bit) shadow codec as a new reserved encoding id for first-stage candidate
+  generation: sign-threshold normalized f32 -> 1 bit/dim, packbits (1024d -> 128 bytes, 32x),
+  retrieve by XOR + popcount-Hamming (a tiny AVX2 popcnt / NEON vcnt / u64::count_ones scalar
+  kernel in the SIMD dispatcher), then rerank survivors with the already-mmapped int8/f32
+  vectors. Recovers ~96% recall via asymmetric rescore; never touches Python; the binary form is
+  candidate-gen only so 'score is real cosine' holds.
+    where:  format: new encoding id in 4-255 range, packbits shadow alongside embeddings; runtime:
+            crates/nest-runtime/src/simd/ popcount-Hamming kernel +
+            crates/nest-runtime/src/search.rs two-fidelity candidate gather then rerank.
+    impact: medium
+    effort: high
+    from:   https://github.com/UKPLab/sentence-transformers
+
+* Steal GloVe's external-memory sorted-run + min-heap k-way-merge-with-accumulation for building
+  large index sections (bm25/sparse postings, future graph edges) on a minimal-RAM budget:
+  repr(C) little-endian fixed-width POD posting records {u32 term_id, u32 doc_id, f32 weight},
+  sorted into runs flushed to temp files, combined by a min-heap merge that accumulates
+  duplicate-key weights in one streaming pass. Alphabetical/sorted term order maps directly onto
+  the sorted-merge ordering so nest determinism falls out for free; any RNG (e.g. external
+  Fisher-Yates if ever needed) must be seeded. Frequency-rank id remapping clusters dense
+  postings at small ids -> better zstd ratio on index sections.
+    where:  format/build: crates/nest-format/src/writer/ build path, e.g. external_merge.rs
+            (single-responsibility, <300 lines); benefits bm25/sparse postings and any future
+            graph-search edge section.
+    impact: medium
+    effort: medium
+    from:   https://github.com/stanfordnlp/GloVe
+
+* Add CLIP/M-CLIP image+text shared-space support as the route to the 'fast image similarity'
+  north star with ZERO new codec: export a ViT-B/32 (and M-CLIP XLM-R/LaBSE multilingual text
+  tower for PT-BR) to ONNX, run it CPU-only in nest-python; L2-normalized 512-d image embeddings
+  land in the SAME embeddings section and are scored by the existing SIMD dot dispatcher
+  identically to text. Optionally store CLIP's logit_scale temperature scalar in provenance
+  (additive, content_hash-safe) for a calibrated logit scoring mode in search_contract. Fully
+  additive: no format bump, only embeddings + provenance model fingerprint.
+    where:  build: nest-python ONNX CPU encode path (CLIP/M-CLIP) + temperature/model fingerprint in
+            provenance; runtime: crates/nest-runtime/src/simd/ scores image vectors with no
+            per-modality branch; search_contract optional logit_scale*cosine mode.
+    impact: medium
+    effort: high
+    from:   https://github.com/openai/CLIP, https://github.com/jina-ai/clip-as-service
+
+compression wins
+------------------------------------------------------------------------------------------------
+  - Product quantization (encoding=4, dsub=2, k=256) stores 1 byte per 2 dims = ~8x over raw f32
+    and ~2x over the current int8 codec, scored off mmap via asymmetric LUT with no float decode
+    and guarded by exact rerank -- the single biggest lever to push embeddings (the largest,
+    non-zstd-compressible section) toward a ~0.14 ratio and beat int8's 0.283 tiny preset.
+    fastText.zip evidence: 427MB->1.7MB (250x) at negligible loss.
+  - Matryoshka dimension truncation is multiplicative with value-precision: 256-of-1024 prefix
+    (4x on dims) at int8 (4x on width) = ~16x smaller embeddings than f32-1024, a pure
+    deterministic prefix slice with ~0.6-5% recall cost, also shrinking the HNSW index footprint
+    since graph vectors are shorter. The one compression axis (float COUNT) that zstd/f16/int8
+    cannot touch.
+  - Learned-sparse (SPLADE/BGE) CSR sections are ~99% zeros: stored as delta-varint ascending
+    term ids + int8/f16 weights then zstd'd (safe because off the SIMD hot path), they carry
+    semantic keyword search in an order of magnitude fewer bytes than dense f32 or a raw text
+    index -- a text-dominant corpus can ship retrieval quality near dense at a fraction of the
+    bytes, advancing compress-and-still-search.
+  - Binary 1-bit quantization is 32x on the embeddings section (1024d -> 128 bytes) as a
+    first-stage candidate gate; asymmetric rescore against the int8/f32 vectors recovers ~96%
+    recall, so the 32x form is used only for candidate generation and the final score stays real
+    cosine.
+  - PCA-whitening + L2-normalization BEFORE quantization is a free quality multiplier: it
+    conditions the space so int8/binary/PQ lose ~nothing (Model2Vec reaches 25% of original size
+    with no measurable loss; ~2.8% gain even at full dim), letting nest push to lower-bit
+    packing at the SAME byte cost and lifting recall at the 0.283 tiny ratio.
+  - Contrastive distillation to a smaller-dimension student (768->256) attacks the float COUNT
+    directly and composes multiplicatively with int8 (~3x on top of ~4x), plausibly pushing a
+    'nano' preset below the current 0.283 tiny ratio, with the exact-cosine rerank guarding
+    recall against the lossier embedder.
+  - Codebook + residual via topic/IVF centroids (Top2Vec geometry): store K centroids +
+    per-chunk topic_id (1-2 bytes) + small residual, exploiting redundancy ACROSS chunks;
+    reordering chunks by topic_id also places similar embeddings adjacent, improving
+    byte-locality and zstd ratio on the zstd-eligible sections (chunks_canonical, provenance).
+    Auto-generated label terms double as a zstd custom dictionary seed for chunks_canonical.
+  - Frequency-rank id remapping (GloVe/word2vec/Model2Vec Zipf) on bm25/sparse postings clusters
+    dense entries at small ids, directly improving zstd entropy coding on the non-embedding
+    index sections at zero quality cost.
+
+watch-outs (conflict with nest constraints)
+------------------------------------------------------------------------------------------------
+  - NEVER zstd the embeddings section: it is scored directly from mmap on the SIMD hot path, so
+    any whole-section entropy coding breaks score-off-disk. PQ/binary/MRL/int8 are fine because
+    they are FIXED-stride codecs read by stride, not stream-decompressed. Sparse/CSR sections
+    (0x09) and centroid/topic sections ARE zstd-eligible precisely because they are scored by
+    merge-join, not a float dot off mmap -- keep that boundary sharp.
+  - Do NOT vendor torch/libtorch (rust-sbert tch-rs, rust-bert) or candle/ONNX-Runtime servers
+    into the small rust core: these are hundreds-of-MB native deps that violate
+    single-file/offline/small-core. Inference stays build-side in nest-python; the runtime only
+    consumes floats. The ONLY runtime-embeddable encoder is Model2Vec (model2vec-rs: safetensors
+    + tokenizers, MIT), and even that should be a gated feature, not core.
+  - k-means (PQ codebook), PCA rotation, HDBSCAN/UMAP clustering, and any sampling shuffle are
+    nondeterministic by default and will break byte-identical builds. PQ k-means and topic
+    clustering MUST be seeded; UMAP/HDBSCAN (Numba/SciPy, fragile, non-deterministic) must stay
+    python build-side and never enter the rust runtime -- use seeded k-means or fixed-threshold
+    greedy cosine agglomeration for any in-runtime clustering. GloVe's default rand_long()
+    shuffle must be reseeded if adapted.
+  - Adopting a learned subword/WordPiece/SPLADE vocab changes the BM25/sparse term space, so
+    determinism requires the vocab be FROZEN and its fingerprint recorded in
+    provenance/search_contract; the greedy-match algorithm and CJK ranges are clean-room
+    reimplementable, but a shipped vocab.txt artifact bloats the single file and is
+    training-produced -- prefer the model-free CJK basic tokenizer as the must-have and treat
+    WordPiece/SPLADE vocab as optional.
+  - Honor the additive-only v1 constraint precisely: PQ/binary go in encoding ids 4-255 (4 is
+    the next free), sparse/topic/splade go in section ids 0x09+; new manifest/search_contract
+    fields are fine, but do NOT change the meaning of any existing field (mrl_dim/full_dim must
+    be additive optional, not a redefinition of dim) or you force a true v2 NEST_FORMAT_VERSION
+    bump.
+  - Keep every new rust module single-responsibility and <=300 lines (333 hard cap): PQ codec,
+    popcount-Hamming kernel, SparseIndex, external_merge, and CJK tokenizer each need their own
+    file; do not fold PQ scoring into the existing simd/mod.rs (already ~144 lines) past the
+    cap.
+  - ColBERT late-interaction (BGE-M3 multi-vector MaxSim) is O(N_q*N_d*dim) and storage-heavy
+    (per-token vectors) -- use it only as an optional rerank-only signal if ever, NEVER as a
+    candidate generator or a default, to keep the runtime light; the practical hybrid is dense +
+    learned-sparse.
+  - Never weaken the mandatory exact-cosine rerank: PQ, binary, sparse, and distilled-student
+    vectors are ALL lossy and must remain candidate generators only. The returned score must
+    always be real cosine recomputed against the highest-fidelity stored vectors, or nest loses
+    its 'score is real cosine' guarantee.
+  - logit_scale temperature scaling (CLIP) and weighted-sum fusion (BGE) introduce calibration
+    scalars that, if folded into the stored/returned score, would make scores model-dependent
+    and break cross-encoding score stability -- keep them as an OPTIONAL self-describing scoring
+    mode in search_contract, never the default, so the default returned score stays plain
+    cosine.
+  - Image/CLIP support must not introduce a per-modality SIMD branch or a separate image codec:
+    only L2-normalized 512-d vectors in the shared embeddings section qualify (they
+    cosine-search identically to text). Anything requiring a distinct distance or layout would
+    fork the hot path and violate the minimal-format goal.

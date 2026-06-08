@@ -1,0 +1,67 @@
+================================================================================================
+weaviate/Verba
+category: rag-orchestration   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Verba ("The Golden RAGtriever") is a modular Python RAG orchestrator over Weaviate, built around
+             swappable Manager stages (Reader/Chunker/Embedder/Retriever/Generator) whose
+             retrieval-path innovations (WindowRetriever neighbor expansion, document-level
+             score grouping, Weaviate semantic answer cache, format-aware chunkers) are
+             orchestration logic layered on a remote vector DB.
+innovation:  WindowRetriever: after a top-k hybrid (vector + BM25) search, every chunk whose score clears a
+             configurable threshold (1-100) is expanded to its N neighboring chunks fetched by
+             contiguous chunk index within the same parent document, then chunks are grouped per
+             document and re-scored at the document level. This decouples embedding/retrieval
+             granularity (small, precise chunks) from generation granularity (wide, coherent
+             context) with zero extra index storage, since neighbors are addressed by
+             deterministic positional id rather than re-searched.
+techniques:
+  - WindowRetriever: positional neighbor-chunk expansion by chunk index within a document, gated
+    by a score threshold and window-size N
+  - document-level score aggregation: group retrieved chunks by parent document and compute a
+    doc score to rank/merge fragmented hits
+  - hybrid search via Weaviate: parallel dense-vector + BM25 sparse search fused by Reciprocal
+    Rank Fusion (RRF)
+  - semantic answer cache: embed both query and generated answer, serve cached answers on
+    cosine-similar repeat queries (skip retrieval+generation)
+  - format-aware chunkers: Markdown/HTML/Code/JSON/Recursive/Semantic/Sentence/Token splitters
+    preserving structural boundaries vs blind fixed-size splits
+  - spaCy-driven token and sentence segmentation as chunk-unit primitives
+  - SemanticChunker: group adjacent sentences by embedding similarity into variable-length
+    coherent chunks
+  - Manager/component plug-in registry: each pipeline stage is a swappable interface selected by
+    config
+nest steals: nest-runtime search path: add a 'window expansion' post-step in crates/nest-runtime/src/search
+             after the exact-cosine rerank. nest already has zero-cost ingredients: chunk_ids
+             (deterministic, ordered) + chunks_original_spans (byte span per chunk) + provenance
+             (parent-doc grouping). Implement: for each reranked hit above a configurable
+             threshold, materialize chunk_ids[i-w .. i+w] from the same provenance source by id
+             adjacency, dedup, and merge their original_spans into one contiguous citation range
+             so nest://content_hash/chunk_id citations widen to a coherent passage with no
+             re-search. NO format change (additive, reads existing FROZEN sections), determinism
+             preserved (seeded order). Document-level aggregation maps to a new nest-cli flag
+             (search --group-by-doc) over provenance. The format-aware chunkers +
+             SemanticChunker belong in nest-python (builder writing chunks_canonical +
+             chunks_original_spans): boundary-aware markdown/code/json chunking improves recall
+             AND compression. The Weaviate semantic-answer-cache is the one piece nest must NOT
+             steal: it needs online state and a network DB, violating
+             offline/single-file/no-socket constraints.
+compression: Indirect but real, via two levers. (1) Decoupling retrieval granularity from context granularity
+             (WindowRetriever) lets nest embed/store smaller, more uniform chunks that quantize
+             (int8) and dedup/zstd more predictably, shrinking embeddings + chunks_canonical,
+             while window expansion restores context at query time for free from chunk_ids
+             adjacency. (2) Structure-aware chunkers produce boundary-aligned chunks_canonical
+             that zstd-compress better (more repeated structural tokens, fewer mid-token splits)
+             and reduce chunks_original_spans fragmentation. Neither adds a new on-disk section;
+             both reuse existing FROZEN sections, advancing 'compress more than everyone'
+             without format risk.
+perf:        WindowRetriever expansion is O(hits * window) id lookups plus span merges, no extra vector math,
+             so it adds negligible cost on nest's mmap hot path and stays off the SIMD
+             dot-product loop. nest's known ~300-500ms search-text python boot overhead is
+             unrelated. Verba itself is pure-Python orchestration with no SIMD/quantization of
+             its own; all vector math, RRF fusion, and HNSW live inside Weaviate (Go), so there
+             is no kernel or codec to vendor, only the retrieval-flow algorithm to reimplement
+             in Rust.
+license:     BSD-3-Clause

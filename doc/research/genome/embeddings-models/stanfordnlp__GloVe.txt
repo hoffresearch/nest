@@ -1,0 +1,73 @@
+================================================================================================
+stanfordnlp/GloVe
+category: embeddings-models   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        GloVe is a log-bilinear word-embedding model trained on a global word-word cooccurrence matrix,
+             shipped as a 4-stage C toolchain (vocab_count -> cooccur -> shuffle -> glove) whose
+             real engineering value is its external-memory sparse-matrix pipeline that
+             sorts/merges/shuffles billions of records on a tiny RAM budget.
+innovation:  External-memory construction of a giant sparse keyed dataset: fixed-size POD records (CREC =
+             {int word1; int word2; real val}) are streamed to disk in sorted runs, then
+             combined with a min-heap k-way merge that ACCUMULATES values for duplicate
+             (word1,word2) keys during the merge pass, so deduplication/aggregation costs
+             nothing extra and peak RAM is bounded by a single overflow buffer regardless of
+             total data size. The same fixed-record discipline enables a two-phase external
+             Fisher-Yates shuffle. This is the canonical recipe for building large derived index
+             sections on a resource-constrained machine.
+techniques:
+  - CREC fixed-size POD record {int word1; int word2; float val} written via raw
+    fwrite(sizeof(CREC)) with no per-record framing -- pure densely-packed binary array
+  - Hybrid dense/sparse storage: a dense bigram_table indexed by lookup[w1-1]+w2-2 for frequent
+    pairs (product of frequency ranks < max_product), sparse overflow buffer cr[] for the long
+    tail
+  - Overflow-to-disk: when cr[] hits overflow_threshold, qsort by (word1,word2) and flush a
+    sorted run to a temp file, bounding peak RAM
+  - k-way merge of sorted temp files via a min-heap priority queue (merge_files), emitting
+    globally ordered records and accumulating val for equal keys in one streaming pass
+    (merge_write)
+  - Frequency-rank remapping: words encoded as integer ranks (most frequent = small id) so the
+    hot dense region is the small-id corner -- an implicit Zipf-aware layout
+  - AdaGrad per-parameter adaptive LR with gradient clipping over a flat W array of
+    vocab*(dim+1) floats (dim + 1 bias), context vectors offset by vocab*(dim+1)
+  - Weighting function f(x) = (x/x_max)^alpha for x<x_max else 1, alpha=0.75, x_max=100 --
+    sublinear down-weighting of rare cooccurrences
+  - Two-phase external Fisher-Yates shuffle: shuffle within array_size (2e6) record chunks to
+    temp files, then merge-shuffle ~array_size/num records from each chunk; budget set by
+    -memory
+nest steals: Steal the external-memory sparse pipeline into nest-format's writer/build path (NOT the
+             embedding model -- nest already produces embeddings from a real model). Concretely:
+             (1) when building the optional bm25_index (0x08) inverted postings and any future
+             graph-search edge section, use GloVe's CREC pattern -- a repr(C), little-endian,
+             fixed-width POD posting/edge record {u32 term_id; u32 doc_id; f32 weight} written
+             as a packed array, sorted into runs, then combined with a min-heap k-way merge that
+             accumulates duplicate keys in one pass. This builds indexes for corpora larger than
+             RAM on a minimal-budget machine while preserving determinism (alphabetical/sorted
+             term order maps directly onto GloVe's sorted-merge ordering, so determinism falls
+             out for free). (2) Adopt frequency-rank id remapping so dense postings cluster at
+             small ids, improving zstd ratio on the non-embedding index sections (encoding
+             already covers 0x07/0x08). (3) Reuse the two-phase external Fisher-Yates only if a
+             build step ever needs shuffled sampling order, with a seeded RNG to honor
+             deterministic builds. Each module stays under the 300-line cap as a
+             single-responsibility unit (e.g. nest-format/src/build/external_merge.rs). The
+             model/AdaGrad/weighting math is reference-only.
+compression: Indirect but real. GloVe itself does NOT compress (raw f32 vectors, unframed binary; released
+             vectors are large uncompressed files). Its relevance to nest's
+             compress-more-than-everyone north star is the BUILD side: the sorted-run +
+             k-way-merge-with-accumulation pattern is how you construct large index sections
+             (bm25 postings, graph edges) deterministically on a tiny RAM budget, and
+             frequency-rank id remapping makes those non-embedding sections more compressible by
+             zstd (small clustered ids -> better entropy coding). It does not help embedding
+             compression (nest already uses float16/int8 there).
+perf:        Pure sequential disk IO with fixed-size records: no parsing, fwrite/fread of sizeof(CREC)
+             blocks, trivially mmappable and vectorizable. Min-heap merge is O(N log k) for k
+             temp files. Peak RAM bounded by the overflow_threshold/array_size buffer, set
+             explicitly by -memory. CREC is 12 bytes (2x int32 + float32) -- nest should mirror
+             with a repr(C) packed 12-byte record. The dense bigram_table avoids hashing for the
+             hot Zipfian corner. No SIMD in GloVe's IO path; the AdaGrad inner loop is scalar
+             over dim. Determinism caveat: GloVe's shuffle uses rand_long() (not reproducibly
+             seeded by default), so any nest adaptation must seed the RNG to honor the
+             deterministic-build constraint.
+license:     Apache License 2.0

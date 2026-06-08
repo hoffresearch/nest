@@ -1,0 +1,119 @@
+================================================================================================
+genome :: graph-db (index)
+graph databases, engines, and traversal
+================================================================================================
+
+one file per project in this folder. open the one you need.
+
+[HIGH     ] neo4j__neo4j.txt                   A GPLv3 Java graph database whose storage engine
+                                               stores nodes/relationships/properties as
+                                               fixed-size records (legacy Record format) or
+                                               hardware-page-aligned 128B/8KB co-located blocks
+                                               (Block format), with a multi-root generational B+
+                                               tree (GBPTree) for dense overflow and a CSR
+                                               in-memory graph (GDS) that compresses adjacency
+                                               lists via sort + delta + variable-byte, or
+                                               optionally block-based bit-packing ("integer
+                                               packing").
+[HIGH     ] neo4j__graph-data-science.txt      A JVM graph-analytics library whose core asset is
+                                               an immutable, in-memory Compressed-Sparse-Row
+                                               (CSR) graph store that compresses each node's
+                                               adjacency list with sort -> delta ->
+                                               variable-length (VarLong) byte encoding, plus an
+                                               optional block-based integer bit-packing strategy
+                                               ("PackedAdjacencyList") tuned for branch-light,
+                                               cache-local decompression during traversal.
+[HIGH     ] dgraph-io__dgraph.txt              A distributed GraphQL/DQL graph database storing
+                                               each predicate as a sorted posting list of 64-bit
+                                               node UIDs, encoded as serialized roaring bitmaps
+                                               (sroar) whose in-memory byte layout equals the
+                                               on-disk layout, persisted in a WiscKey-style
+                                               LSM+value-log KV store (Badger).
+[HIGH     ] arangodb__arangodb.txt             ArangoDB is a multi-model (document + graph +
+                                               search) database whose on-disk currency is
+                                               VelocyPack (VPack): a single-type-byte,
+                                               self-describing binary format with trailing
+                                               offset-index tables that allow zero-copy
+                                               O(1)/O(log n) random access into sub-documents
+                                               without parsing the whole value, layered on a
+                                               RocksDB LSM store.
+[HIGH     ] memgraph__memgraph.txt             In-memory C++ property-graph engine using
+                                               lock-free concurrent skip lists for
+                                               vertices/edges, delta-chain MVCC (Hekaton-style
+                                               snapshot isolation), full-snapshot + WAL
+                                               durability with a section-offset binary file
+                                               format, and a USearch/HNSW vector index using a
+                                               single-store reference pattern.
+[HIGH     ] vesoft-inc__nebula.txt             NebulaGraph is a distributed C++ property-graph
+                                               database that translates graph operations into
+                                               RocksDB key-value scans using a custom
+                                               prefix-locality key encoding where a vertex and
+                                               its out-edges share a sorted key prefix, plus
+                                               bidirectional (out/in) edge materialization and
+                                               fixed-offset schema-versioned property values.
+[HIGH     ] kuzudb__kuzu.txt                   Kuzu is an embedded, single-file columnar graph
+                                               DBMS (Cypher, ACID, archived Oct 2025) that
+                                               stores nodes as Parquet-style compressed node
+                                               groups and relationships/HNSW topology as
+                                               bit-packed disk-resident CSR adjacency lists,
+                                               with a native NaviX HNSW vector index that runs
+                                               SIMD distance kernels directly on buffer-manager
+                                               pages.
+[HIGH     ] FalkorDB__FalkorDB.txt             A property-graph database built on Redis modules
+                                               that represents every relationship type as a
+                                               GraphBLAS sparse adjacency matrix and executes
+                                               openCypher traversals as sparse linear algebra
+                                               (matrix multiply / masked semirings) rather than
+                                               pointer-chasing adjacency lists.
+[HIGH     ] surrealdb__surrealdb.txt           SurrealDB is a Rust multi-model
+                                               (document/graph/vector/full-text) database that
+                                               layers SurrealQL over pluggable sorted KV
+                                               backends (RocksDB/SurrealKV/TiKV/FDB), built on
+                                               two reusable in-house encoding crates: `revision`
+                                               (revision-tolerant binary serialization for
+                                               schema evolution) and `storekey`
+                                               (order-preserving lexicographic key encoding).
+[HIGH     ] alibaba__GraphScope.txt            A distributed property-graph compute stack
+                                               (GAE/GIE/GLE on the vineyard zero-copy in-memory
+                                               store) whose most transferable artifact is
+                                               GraphAr: a chunked, columnar, CSR/CSC-semantic
+                                               on-disk graph format that delta-encodes adjacency
+                                               to reach ~27% of naive plain+offset storage.
+[HIGH     ] blazegraph__database.txt           Blazegraph (formerly bigdata) is a Java
+                                               RDF/SPARQL graph database built on a
+                                               key-range-partitioned B+Tree over a single-file
+                                               journal (RWStore), where every triple/quad is
+                                               materialized into multiple sorted "covering"
+                                               statement indexes (SPO/POS/OSP) whose
+                                               unsigned-byte[] keys are compressed at the page
+                                               level with front-coding and order-preserving
+                                               canonical Huffman raba coders.
+[MEDIUM   ] JanusGraph__janusgraph.txt         A distributed graph database that maps an
+                                               adjacency-list graph onto any BigTable-model
+                                               store (Cassandra/HBase/Bigtable), serializing
+                                               each incident edge as one sorted cell whose bytes
+                                               are sort-key-ordered and shrunk with
+                                               variable-length integer encoding plus
+                                               delta-encoded neighbor ids.
+[MEDIUM   ] TuGraph-family__tugraph-db.txt     A C++ high-performance property-graph database
+                                               (Ant Group, LDBC SNB #1) that builds a graph
+                                               storage layer on top of LMDB's memory-mapped
+                                               B+tree, packing CSR-like adjacency topology and
+                                               compact-encoded properties into single key-value
+                                               pairs with an adaptive mixed/split mapping
+                                               scheme.
+[MEDIUM   ] typedb__typedb.txt                 A Rust-rewritten (3.0) typed-hypergraph database
+                                               that flattens an n-ary entity/relation/attribute
+                                               model with inheritance onto RocksDB's LSM
+                                               key-value engine using fixed-prefix,
+                                               type-grouped, sort-order-preserving key
+                                               encodings.
+[MEDIUM   ] apache__tinkerpop.txt              Apache TinkerPop is a vendor-neutral graph
+                                               computing framework whose core transferable
+                                               assets are the Gremlin traversal language
+                                               compiled to language-agnostic bytecode optimized
+                                               by rewrite strategies, and GraphBinary, a compact
+                                               self-describing length-prefixed type-coded binary
+                                               serialization for graph elements (vertices,
+                                               edges, paths, properties) that round-trips
+                                               deterministically without an external schema.

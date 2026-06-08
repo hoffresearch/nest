@@ -1,0 +1,66 @@
+================================================================================================
+OpenNMT/Tokenizer
+category: tokenizers   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A fast C++ (with Python pyonmttok bindings) reversible tokenization library that combines
+             Unicode-aware pre-segmentation with BPE/SentencePiece subword encoding, reversible
+             joiner/spacer markup, and vocabulary-restricted recursive OOV splitting.
+innovation:  Fully reversible, lossless tokenization: every segmentation decision (joins, spaces, case,
+             script changes) is encoded as in-band modifier characters (joiner U+FFED, spacer
+             U+2581, case markups, protected-region brackets) so the original text reconstructs
+             byte-exactly from the token stream. This separates a reversible surface encoding
+             from the compression model, exactly the property nest needs for a tokenizer-backed
+             compression codec.
+techniques:
+  - BPE merge table as two hash maps: _codes (concatenated pair string -> merge rank/priority,
+    lower rank applied earlier) for O(1) priority lookup, and _codes_reverse (pair -> its two
+    constituent tokens) to undo merges
+  - Greedy min-rank merge loop: precompute scores for all adjacent pairs (rank or INT_MAX),
+    repeatedly merge lowest-rank pair, incrementally update only the two neighbor scores, stop
+    when best_score==INT_MAX
+  - Vocabulary-restricted recursive_split: OOV tokens decomposed by reversing BPE merges via
+    _codes_reverse until every piece is in-vocab or atomic, giving a deterministic bounded token
+    vocabulary
+  - Reversible joiner/spacer in-band markup (U+FFED joiner, U+2581 spacer) for lossless
+    detokenization without storing original spans separately
+  - case_feature / case_markup: factor casing out as a separate channel (C/L/U/M/N tags or soft
+    uppercase-region markers) so the subword model sees lowercase only, shrinking effective
+    vocab
+  - Protected sequences (U+FF9F brackets) and placeholders that bypass tokenization entirely for
+    exact passthrough of opaque spans
+  - Unicode-type pre-segmentation (aggressive mode) via ICU: split on script/character-type
+    change and digit boundaries, deterministic and language-aware
+  - BPE-dropout: stochastically skip merges during training for subword regularization
+nest steals: Adapt the reversible-encoding plus BPE-merge-table pattern into nest-format as a new additive
+             encoding id (in the reserved 4-255 space) for the chunks_canonical(text) section:
+             ship a frozen deterministic BPE merge table (two flat little-endian arrays
+             mirroring _codes and _codes_reverse, repr(C)) plus a token-id stream, replacing
+             raw/zstd text bytes with subword token ids that zstd then compresses better
+             (smaller alphabet, repeated merges). The reversible joiner/spacer markup is the key
+             piece: it lets nest reconstruct exact canonical text from token ids, preserving
+             content_hash stability and chunks_original_spans round-tripping. The
+             vocabulary-restricted recursive_split gives a deterministic, seed-free, bounded
+             token vocabulary satisfying nest's determinism constraint. Separately,
+             case_feature/case_markup factoring is stealable for nest-runtime bm25::Bm25Index
+             reversible case normalization, and the Unicode-type/script-change pre-segmenter is
+             a concrete fix for the known bm25 CJK/Thai word-segmentation gap. Keep C++/ICU out:
+             reimplement the merge loop in safe Rust (no panic, typed thiserror) in a
+             sub-300-line module under crates/nest-format/src/encoding/.
+compression: Directly relevant. Subword tokenization is an entropy-reduction front-end: replacing UTF-8 byte
+             runs with token ids over a small learned vocabulary shrinks the symbol alphabet and
+             exposes long repeated merges, so a downstream zstd pass on token ids compresses
+             text notably better than zstd on raw bytes, while reversible markup keeps it
+             lossless and content_hash-stable. The vocabulary cap bounds dictionary size for
+             tiny-preset goals. This is a complementary codec layer ahead of nest's existing
+             zstd path for the text sections only (never embeddings).
+perf:        C++11 core with ICU for Unicode; encoding is O(chars x merges) per word with no word->subword
+             cache (computed fresh per request, so a Rust port should add a word-keyed LRU
+             cache). Hash-map lookups O(1); merge loop updates neighbor scores incrementally
+             rather than recomputing all pairs. Single-threaded per token; Python overhead
+             amortized via the pyonmttok C extension. No SIMD in the tokenizer hot path (branchy
+             string work), so nest gains nothing for its SIMD dot-product path here, only for
+             the build-time text codec.
+license:     MIT

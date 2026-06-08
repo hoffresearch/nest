@@ -1,0 +1,29 @@
+================================================================================================
+genome :: data-pipeline (index)
+ML data lakes, dataset tooling, embedding benchmarks
+================================================================================================
+
+one file per project in this folder. open the one you need.
+
+[HIGH     ] activeloopai__deeplake.txt         Deep Lake is a columnar "tensor storage format"
+                                               data lake that stores ML data as chunked,
+                                               natively-compressed arrays and keeps a separate,
+                                               run-length-encoded triplet of index maps
+                                               (ChunkIdEncoder, BytePositionsEncoder,
+                                               ShapeEncoder) mapping each sample index to its
+                                               chunk, byte range, and shape without loading the
+                                               bulk payload.
+[MEDIUM   ] rom1504__img2dataset.txt           A multiprocess/multithreaded downloader that
+                                               turns billion-scale image-URL lists into sharded
+                                               WebDataset tar files paired 1:1 with lightweight
+                                               columnar parquet sidecars and order-aligned
+                                               embedding .npy arrays, all addressed by a
+                                               deterministic positional composite key.
+[MEDIUM   ] embeddings-benchmark__mteb.txt     MTEB is a Python embedding/retrieval evaluation
+                                               harness that standardizes datasets
+                                               (corpus/queries/relevant_docs/top_ranked), runs
+                                               chunked top-k similarity search over multiple
+                                               metrics, scores with pytrec_eval (nDCG@k, MRR@k,
+                                               Recall@k, MAP), and persists results as
+                                               content-addressed per-(model,revision,task) JSON
+                                               in a tiered remote/disk/in-memory cache.

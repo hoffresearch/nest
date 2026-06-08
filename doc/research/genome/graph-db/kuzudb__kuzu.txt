@@ -1,0 +1,70 @@
+================================================================================================
+kuzudb/kuzu
+category: graph-db   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Kuzu is an embedded, single-file columnar graph DBMS (Cypher, ACID, archived Oct 2025) that
+             stores nodes as Parquet-style compressed node groups and relationships/HNSW
+             topology as bit-packed disk-resident CSR adjacency lists, with a native NaviX HNSW
+             vector index that runs SIMD distance kernels directly on buffer-manager pages.
+innovation:  Lossless floating-point compression (ALP - Adaptive Lossless floating-Point) makes it viable to
+             compress embedding-grade float arrays WITHOUT giving up exact, in-place SIMD
+             scoring: ALP maps doubles/floats that originated as decimals to integers via two
+             multiplications then bit-packs to the minimum bit width (ALPRD splits the bit
+             pattern into a dictionary-coded left part + bit-packed right part), all in
+             1024-value vectors using auto-vectorizing scalar code. This breaks nest's current
+             hard assumption that "embeddings can never be compressed because they are scored
+             straight from mmap."
+techniques:
+  - ALP / ALPRD lossless float compression: doubles->int via 2 multiplications + bitpack to min
+    bits, or split bitwise into dict-coded left part + bitpacked right part, in 1024-value
+    vectors (FastLanes-style auto-vectorized scalar kernels)
+  - Per-column-chunk adaptive codec selection driven by node-group min/max zone maps (constant,
+    RLE, integer bitpacking with chosen bit width, string dictionary, ALP for floats)
+  - Integer bitpacking with per-chunk bit-width chosen from observed value range
+    (INT8/16/32/64), incl. bitpacked InternalIDs and var-list offsets
+  - Disk-based CSR adjacency lists with automatic bit compression, packing multiple adjacency
+    lists into a single 4KB page for cache efficiency
+  - NaviX two-level HNSW: small upper layer (GU) pinned in memory, large lower layer (GL) stored
+    as on-disk CSR relationship table, vectors stored separately via buffer manager
+  - Zero-copy in-buffer-manager distance computation: SIMD (SimSIMD) kernels run directly on
+    page bytes with no copy, ~1.6x latency win
+  - Predicate-agnostic filtered ANN via node semimasks + adaptive-local heuristic picking
+    onehop-s/directed/blind per candidate using local selectivity sigma_l
+  - In-memory metadata file mapping (node-group id, column name) -> compressed column-chunk
+    location
+nest steals: Three concrete steals. (1) nest-format encoding codec: add ALP/ALPRD as a new RESERVED encoding
+             id (4-255 space, additive within v1) for the embeddings section, plus per-section
+             adaptive codec choice driven by min/max stats. This is the big unlock: lossless f32
+             embedding compression that still decodes to exact bits, so the search contract's
+             exact-cosine-rerank stays byte-true while shrinking the largest section. Decode
+             must be a tiny auto-vectorizing scalar kernel to stay
+             single-file/offline/deterministic. (2) nest-format hnsw_index(0x07): store HNSW
+             neighbor lists as bit-packed CSR (offsets + min-bit-width neighbor ids) instead of
+             fixed-width arrays, and bitpack the var-length offset array - cuts the index
+             section size, directly improving the 'tiny' preset's 0.283 ratio. (3) nest-runtime
+             simd dispatcher + search: formalize the zero-copy 'distance on mmap bytes, never
+             copy' discipline nest already relies on, and if ALP lands, fuse on-the-fly ALP
+             decode + AVX2/NEON dot-product per 1024-lane block so embeddings decompress
+             in-register on the hot path instead of being materialized. The adaptive-local
+             semimask heuristic is a reference design for a future filtered/graph search path.
+compression: Directly central. ALP is the single most relevant external idea found: it is the
+             state-of-the-art lossless float codec (beats Gorilla/Chimp/Patas/Elf and
+             matches/beats Zstd while being far faster) and it specifically targets FLOAT/DOUBLE
+             arrays - nest's embeddings, the section nest currently refuses to compress and the
+             dominant byte cost of every container. Landing ALP-decode-then-SIMD-score lets nest
+             compress its biggest section losslessly without breaking exact in-place scoring,
+             advancing the 'compress more than everyone' north star past today's int8/f16 (which
+             are LOSSY) by adding a LOSSLESS float path. Bit-packed CSR further shrinks the
+             hnsw_index section the 'tiny' preset already ships.
+perf:        ALP decodes via scalar code that auto-vectorizes (FastLanes blocks of 1024) - fast enough for a
+             query hot path, unlike Gorilla/Chimp. NaviX zero-copy in-buffer distance compute
+             gave ~1.6x latency improvement vs copying; uses SimSIMD for SIMD distance kernels.
+             HNSW lower layer GL ~7.8GB vs upper GU ~200MB on Wikipedia dataset (upper stays
+             resident). Disk-based ANN costs ~2 buffer-manager lookups per adjacency access (vs
+             DiskANN co-locating vector+neighbors in one page) - a tradeoff nest could avoid by
+             co-locating. Vectors up to 1024 dims; efs tunes recall (~95% target). Multiple
+             bit-packed adjacency lists per 4KB page improve cache locality.
+license:     MIT License

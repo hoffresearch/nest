@@ -1,0 +1,65 @@
+================================================================================================
+weaviate/weaviate-helm
+category: bindings-cli   |   steal priority: LOW
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Helm chart (Go-templated Kubernetes YAML) that deploys the Weaviate vector DB as a
+             StatefulSet, driven by a single layered values.yaml whose uniform per-module schema
+             (enabled/repo/tag/registry/inferenceUrl/envconfig/resources) is compiled into
+             ConfigMaps, Secrets, and an aggregated ENABLE_MODULES env var.
+innovation:  The single-source-of-truth declarative config compiler: one flat values.yaml with a strictly
+             uniform per-feature block schema, where every optional capability is a
+             self-describing record carrying its own enable flag, version pin (tag), and
+             key/value envconfig, and a helper layer (_helpers.tpl) deterministically folds the
+             set of enabled blocks into one aggregated activation list (ENABLE_MODULES) plus
+             generated secrets. The config schema IS the feature manifest; toggling a boolean
+             adds/removes a whole subsystem with zero imperative wiring.
+techniques:
+  - Uniform per-feature config record schema: every optional subsystem
+    (module/backup/offload/auth) shares identical fields {enabled, tag, registry, repo,
+    envconfig, resources}, so the parser/validator is written once and reused for all features
+  - Deterministic aggregation fold: enabled blocks are collected and emitted as one comma-joined
+    activation string (ENABLE_MODULES) in declaration order, a reproducible reduce over the
+    config set
+  - Version pinning by 'tag' on every component with a documented warning that unpinned tags
+    break reproducibility on chart upgrade
+  - Dual-source config: inline 'env'/'envconfig' values vs 'envSecrets' references, with a fixed
+    precedence rule (env overrides static blocks)
+  - inferenceUrl indirection: a capability is satisfied locally (deploy a pod) OR by pointing at
+    an external endpoint, selected by one field without changing the rest of the schema
+  - enabled:false short-circuit: nested settings under a disabled block are ignored entirely,
+    keeping config trees inert until activated
+  - PVC naming as a pure function of {storage.name, replica-index} for stable predictable
+    on-disk identity
+  - Pinned distribution channel: chart published to a static GitHub Pages Helm repo, versioned
+    releases tied to git tags
+nest steals: Adapt the uniform-config-record + deterministic-fold pattern to nest-cli and the nest-format
+             manifest. (1) nest-cli: replace ad-hoc preset flags with a single declarative build
+             profile (TOML/YAML) where each section/codec is a uniform record {enabled,
+             encoding, params} mirroring presets exact/compressed/tiny/hybrid; a helper folds
+             enabled records into the section table the writer emits, so adding
+             hnsw_index(0x07)/bm25_index(0x08) is one boolean, never imperative wiring -- an
+             additive-format-friendly config surface nest currently lacks. (2) nest-format
+             manifest: formalize the manifest as the single source of truth (each section a
+             self-describing record carrying its encoding id + per-section checksum) that a
+             deterministic fold turns into physical layout, reinforcing reproducible
+             byte-identical builds. (3) nest-python maturin/PyPI gap: copy
+             version-pinning-by-tag discipline and the static-repo distribution model (GitHub
+             Pages Helm repo == a pinned wheel index) so profiles record exact model fingerprint
+             + codec versions, guaranteeing same-input => same-file. (4) inferenceUrl
+             indirection maps to nest's local-vs-external embedding source: one field selects
+             'embed locally' vs 'ingest precomputed embeddings' without schema change.
+compression: Essentially none directly. This repo contains zero compression, quantization, entropy-coding,
+             graph-layout, or SIMD content -- it is pure Kubernetes deployment YAML. The only
+             oblique relevance to the compress-more-than-everyone north star is meta: a clean
+             declarative build-profile schema (uniform codec records folded deterministically
+             into the section table) makes it cheaper to add and combine new codecs/presets in
+             nest-cli and keeps reproducible builds honest, indirectly accelerating compression
+             experimentation. It does not move the compression ratio itself.
+perf:        Not applicable -- no runtime/data-plane code; Helm is build-time template rendering. The only
+             perf-adjacent design choice is StatefulSet podManagementPolicy=Parallel (all pods
+             start simultaneously for Raft bootstrap), which is irrelevant to nest's offline
+             single-file no-socket model.
+license:     BSD-3-Clause (matches the main Weaviate project)

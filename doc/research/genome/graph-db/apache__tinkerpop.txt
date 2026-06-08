@@ -1,0 +1,78 @@
+================================================================================================
+apache/tinkerpop
+category: graph-db   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Apache TinkerPop is a vendor-neutral graph computing framework whose core transferable assets
+             are the Gremlin traversal language compiled to language-agnostic bytecode optimized
+             by rewrite strategies, and GraphBinary, a compact self-describing length-prefixed
+             type-coded binary serialization for graph elements (vertices, edges, paths,
+             properties) that round-trips deterministically without an external schema.
+innovation:  Two separable ideas. (1) GraphBinary's wire model: every value is `{type_code:1
+             byte}{type_info}{value_flag:1 byte}{value}`, integers are fixed-width big-endian,
+             and strings/lists/maps/composites are length-prefixed (4-byte length, so each value
+             is capped at 2^32-1) so a reader can skip or materialize any value with zero schema
+             lookup. GraphBinary4 adds "TinkerPop Defined Types" carrying explicit per-field
+             numbers so new fields are additive and old readers skip unknown fields, plus a
+             single canonical null replacing per-field null flags. (2) Gremlin's bytecode-as-IR:
+             a query is lowered to a language-agnostic serializable instruction list, then a
+             pipeline of pure rewrite strategies (FilterRankingStrategy reorders filters
+             cheapest-first, IncidentToAdjacentStrategy fuses outE+inV into one adjacency step,
+             IdentityRemovalStrategy deletes no-ops) transforms the IR before it compiles to
+             executable steps -- optimization happens on a serializable IR, not on live objects.
+techniques:
+  - GraphBinary fully-qualified value layout {type_code}{type_info}{value_flag}{value} for
+    schema-free self-describing decode
+  - 4-byte length-prefixing of strings/lists/maps/composites (value capped at 2^32-1, full
+    object must be in memory to compute length)
+  - GraphBinary4 'TinkerPop Defined Types' with explicit per-field numbers: additive evolution,
+    old readers skip unknown fields, single canonical null
+  - Graph elements (Vertex/Edge/Path/VertexProperty) as nested composite typed values,
+    references-only (parent serialized as null) to avoid cycles
+  - IO test-suite-as-spec: golden byte files every serializer must round-trip read+write to
+    prove conformance
+  - Gremlin bytecode: query lowered to a language-agnostic serializable instruction-list IR
+  - Traversal strategy rewrite pipeline on the IR: FilterRankingStrategy,
+    IncidentToAdjacentStrategy (outE+inV fusion), IdentityRemovalStrategy
+  - Vertex-centric index pattern: outE().has(label).inV compiled to one VertexQuery against a
+    log(m) per-vertex edge index
+nest steals: Graph search is a stated nest north-star gap; TinkerPop gives two ready blueprints. (1) Add a
+             frozen graph section to nest-format (reserved section id 0x09+, additive within v1)
+             using GraphBinary4's per-field-number Defined-Type scheme as the encoding so
+             adjacency/node-attribute records evolve additively and old readers skip unknown
+             fields -- nest's additive-only rule expressed as a wire format. It pairs with
+             content_hash because GraphBinary's deterministic byte layout (fixed-width ints,
+             sortable map keys) gives reproducible byte-identical output. CRITICAL adaptation:
+             mandate little-endian unsigned (GraphBinary is big-endian, so adapt do not copy).
+             Adjacency lists as length-prefixed neighbor blocks are mmap-skippable and
+             zstd-friendly (topology is a non-embedding section so zstd is allowed), advancing
+             compression of whole databases/repos. (2) In nest-runtime add a small graph::plan
+             module (under the 300-line cap): represent a graph query as a tiny instruction list
+             and run deterministic rewrite strategies (filter-cheapest-first; fuse
+             edge-then-vertex hops into one adjacency scan) before executing against the mmapped
+             adjacency section. The IncidentToAdjacentStrategy fusion is the highest-value
+             steal: it turns two index hops into one sequential mmap scan, stays
+             offline/deterministic/never-panics. nest-cli gains a graph-search subcommand
+             mirroring search-ann. Skip Gremlin-the-language, Gremlin Server, and OLAP/Spark --
+             they violate the no-socket, small-core, offline constraints.
+compression: Indirect but real. GraphBinary's length-prefixed fixed-width schema-free layout is a denser
+             graph-topology encoding than JSON/GraphSON (TinkerPop docs note a significantly
+             smaller wire footprint), and because it carries no inline schema and orders fields
+             by number it is highly zstd-compressible -- directly serving the goal to compress
+             json/datasets/whole-databases more than everyone. The per-field-number additive
+             scheme also lets a graph section shrink over versions without a format bump. It
+             never touches embeddings (the hot SIMD path), so no conflict with the
+             never-compress-embeddings rule.
+perf:        GraphBinary trades streaming for size determinism: length must be known upfront so the full
+             object is serialized in memory to compute its 4-byte length, raising peak
+             serialization memory and capping any single value at 2^32-1 bytes (fine for nest's
+             Python-build/Rust-serve split since the heavy build side is Python). Decode is
+             allocation-friendly: length prefixes let the reader pre-size buffers and validate
+             bounds, and unknown field numbers are skipped by length without parsing -- ideal
+             for mmap. On traversal, TinkerPop benchmarks show strategy application (the
+             optimizer) costs ~5-6x bytecode construction, so the rewrite pass is the expensive
+             phase; keep nest's strategy set tiny and run it once at plan time, not
+             per-traverser, to respect the boot-overhead budget.
+license:     Apache License 2.0

@@ -1,0 +1,73 @@
+================================================================================================
+nmslib/hnswlib
+category: ann-index   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Header-only C++ implementation of HNSW (Hierarchical Navigable Small World) graphs with a flat
+             byte-packed single-allocation graph layout, runtime-dispatched SIMD distance
+             kernels (SSE/AVX/AVX512), and incremental insert/update/delete with deleted-slot
+             reuse.
+innovation:  The level-0 graph is stored as ONE contiguous flat byte array where each node is a fixed-stride
+             record interleaving [linklist | vector | label] (size_data_per_element_ = maxM0*4 +
+             4 + data_size + sizeof(label)), so a neighbor lookup, a vector fetch, and a label
+             read are all a single base+offset index into mmap-able memory with zero pointer
+             chasing -- the antithesis of nest's current Vec<Vec<u32>> adjacency. Combined with
+             a reusable per-query visited-list pool (epoch-tagged array reset by bumping a
+             generation tag instead of clearing) this gives allocation-free graph traversal.
+techniques:
+  - Flat single-malloc level-0 layout: fixed-stride record per node = [maxM0*tableint links +
+    linklistsizeint count][data_size vector bytes][labeltype], offsets offsetLevel0_=0 /
+    offsetData_=size_links_level0_ / label_offset_ computed once
+  - Separate linkLists_ char** for upper layers (sparse: only allocated when getRandomLevel>0,
+    size_links_per_element_=maxM*4+4 per level), keeping the hot level-0 array dense
+  - VisitedListPool: epoch-tagged visited array (visited_array_tag bumped per query, full reset
+    only on overflow) eliminates per-query HashSet allocation and clearing
+  - Runtime SIMD dispatch by CPU capability AND dim divisibility: InnerProductSIMD16Ext (AVX512
+    _mm512_fmadd_ps + _mm512_reduce_add_ps / AVX _mm256_fmadd_ps / SSE) plus *ExtResiduals
+    variants that SIMD the aligned prefix then scalar-tail the remainder
+  - Exponential level assignment: level = floor(-ln(U)*mult_), mult_=1/ln(M); deterministic if
+    RNG seeded
+  - Neighbor selection heuristic (Algorithm 4 / getNeighborsByHeuristic2): keep a candidate only
+    if it is closer to query than to any already-selected neighbor (diversity prune), not just
+    top-M nearest
+  - In-place deletion via DELETE_MARK bit in the linklistsizeint, plus allow_replace_deleted to
+    reclaim slots without realloc
+  - writeBinaryPOD serialization: fixed header (offsets, max_elements, cur_count, stride,
+    maxlevel, enterpoint, M, mult_, ef_construction) then raw level-0 block then per-node
+    variable upper-layer linklists
+nest steals: Target nest-runtime/src/ann (codec.rs + search.rs + mod.rs) and nest-format section 0x07. Three
+             concrete steals: (1) Replace the Vec<Vec<u32>> Node adjacency and variable codec
+             with a flat fixed-stride level-0 byte block (count:u32 + maxM0 neighbor u32s) plus
+             a separate sparse upper-layer block, so the 0x07 payload becomes directly
+             mmap-traversable -- read neighbor ids as &[u32] slices off mmap with zero
+             decode/alloc, matching nest's score-off-disk philosophy and shrinking the index by
+             dropping per-Vec capacity overhead. This is an ADDITIVE bump of
+             HNSW_PAYLOAD_VERSION inside 0x07 (allowed; section payload version moves, not
+             NEST_FORMAT_VERSION). (2) Adopt the VisitedListPool epoch-tag trick in search.rs to
+             kill the per-query HashSet<u32> in layer_search (replace with a reusable
+             Vec<u16>+generation counter) -- pure latency win, stays deterministic. (3) Route
+             greedy_search/layer_search/cosine_dist through nest's existing simd dispatcher
+             (avx2.rs/neon.rs) instead of the scalar dot loop, since vectors are L2-normalized
+             so distance is 1-dot -- reuses the kernel already on the rerank hot path. Also
+             steal getNeighborsByHeuristic2 to replace the _simple top-m selection (mod.rs
+             already flags this as planned Phase 2) for higher recall at fixed M, letting the
+             tiny preset lower M (fewer neighbor ids per node = smaller index) while holding
+             recall@10. CAUTION: do NOT copy hnswlib's habit of interleaving the raw vector into
+             the graph record -- nest embeddings live in the separate scored-off-mmap section;
+             steal the layout for graph ids only.
+compression: Indirect but real. The flat byte-packed graph removes Rust Vec<Vec> overhead (each inner Vec
+             carries 24B ptr/len/cap plus heap slack) and lets 0x07 store neighbor lists as raw
+             little-endian u32 blocks the zstd codec (non-embedding sections) compresses well;
+             the heuristic neighbor selection raises recall per edge, so the tiny preset can
+             lower M (fewer u32 neighbor ids per node = smaller index) without losing recall --
+             directly serving smallest-container-at-fixed-recall@10.
+perf:        VisitedListPool avoids malloc/free and cache-cold HashSet rehash per query (nest currently
+             allocates a fresh HashSet<u32> every layer_search). SIMD16Ext processes 16
+             floats/iter with FMA and one horizontal reduce; *ExtResiduals lets non-16-multiple
+             dims still hit SIMD on the aligned prefix. Flat level-0 array is cache/prefetch
+             friendly: neighbor count and ids sit in one region, mmap pages fault in linearly.
+             Graph is dtype-independent (links are u32 regardless of f16/i8 embeddings),
+             matching nest building the graph on an f32 snapshot.
+license:     Apache-2.0

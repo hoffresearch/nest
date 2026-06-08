@@ -1,0 +1,59 @@
+================================================================================================
+viniciuszani/portuguese-fake-news-classifiers
+category: factcheck-datasets   |   steal priority: LOW
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Poetry/Makefile-orchestrated PT-BR fake-news ML benchmark that converts the Fake.Br and
+             FakeTrue.Br corpora into Parquet, then trains/tunes logreg+TF-IDF, MLP+TF-IDF,
+             BiLSTM, and BERTimbau (Portuguese BERT) classifiers via Optuna with
+             HuggingFace-published artifacts.
+innovation:  Deterministic, length-debiasing "size-normalized pair truncation": for each aligned true/fake
+             news pair, the longer document is truncated by word count to exactly match the
+             shorter one, so a model cannot cheat on document length as a proxy signal. This is
+             a reproducible corpus transform that yields a fairer, smaller, paired dataset -
+             applicable as a deterministic preprocessing/normalization step for nest's demo
+             corpus.
+techniques:
+  - Size-normalized truncation: per true/fake pair, truncate longer text to shorter text's word
+    count (deterministic length-debiasing)
+  - 25-field per-article linguistic/stylometric metadata schema: POS counts (verbs, nouns,
+    adjectives, modal verbs, pronoun persons), pausality, char/sentence/word averages,
+    spelling-error %, emotiveness, diversity
+  - Parquet conversion of raw CSV/txt corpora as a single columnar prep step (make data_prep)
+  - TF-IDF n-gram vectorization with tunable ngram_upper/min_df/max_df sparse text features
+  - BERTimbau (Portuguese BERT) contextual embeddings as strong baseline; HuggingFace artifact
+    publishing for reproducible model identity
+  - Optuna study-based hyperparameter search persisted to a SQL backend (replayable trials)
+  - Aligned true/fake corpus design (Fake.Br: 2000+2000 paired articles) enabling paired
+    evaluation
+nest steals: Two concrete steals. (1) In nest-python's demo-corpus builder (the PT-BR fake-news dataset that
+             ships with nest), add an optional deterministic "pair-normalize" preprocessing pass
+             mirroring size_normalized_texts: word-count-truncate aligned pairs before chunking.
+             nest builds are already deterministic (same chunks + model fingerprint =>
+             byte-identical file), so this transform is reproducible and shrinks the corpus,
+             improving the demo's compression ratio honestly without touching the FROZEN format.
+             (2) The 25-field stylometric metadata schema is an ideal payload for a future
+             "truth-features" sidecar: encode it as a fixed repr(C), little-endian, per-chunk
+             struct array stored inside the existing provenance section (no new section id,
+             stays additive within v1). These are cheap-to-compute, int/float-quantizable
+             features (int8/float16 codecs already exist) giving nest a sovereign credibility
+             signal co-located with each chunk and citable via nest://content_hash/chunk_id.
+             Neither touches nest-runtime's hot path or the exact-cosine search contract.
+compression: Indirect. Size-normalized truncation is a lossy-but-deterministic corpus transform that
+             legitimately reduces demo-corpus bytes (and embedding count), improving nest's
+             headline size ratio on its shipped PT-BR fake-news dataset. The stylometric
+             features are quantization-friendly (int8/float16) but are additive metadata, not a
+             general entropy coder, so they add bytes rather than remove them. No new codec,
+             graph layout, or SIMD kernel here that advances the "compress more than everyone"
+             north star.
+perf:        Pure Python/sklearn/PyTorch training pipeline; no SIMD, no custom on-disk format, no compression
+             codec. BERTimbau inference is the throughput bottleneck. Parquet (likely
+             Snappy/zstd column compression) is the only storage-efficiency mechanism. Nothing
+             performance-relevant transfers to nest's mmap+SIMD runtime; the value is entirely
+             in the corpus-prep and metadata-schema layer.
+license:     Repository license not confirmed from README; underlying Fake.Br corpus is research-released and
+             FACTCK.BR is MIT. Treat the classifiers repo license as unknown/unverified before
+             vendoring any code; the size-normalization and metadata schema are method ideas
+             (not copyrightable) safe to reimplement.

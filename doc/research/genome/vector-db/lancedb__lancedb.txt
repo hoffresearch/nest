@@ -1,0 +1,81 @@
+================================================================================================
+lancedb/lancedb (built on lancedb/lance)
+category: vector-db   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        LanceDB is a disk-based, zero-copy embedded vector database built on the Lance columnar file
+             format, which uses adaptive per-buffer structural+compressive encodings
+             (miniblock/fullzip, FSST, bit-packing, RLE, byte-stream-split) and decomposes every
+             vector index into the three composable parts IVF clustering + sub-index (FLAT/HNSW)
+             + quantization (PQ/SQ/RaBitQ) with residual encoding and an uncompressed-vector
+             refine rerank.
+innovation:  The single most transferable idea is Lance's per-buffer compression cascade with a
+             transparent-vs-opaque encoding distinction: each column buffer is independently
+             probed through an ordered decision (constant -> dictionary -> bitpack -> RLE ->
+             FSST -> byte-stream-split -> general zstd/lz4 -> raw), and encodings are tagged
+             transparent (a single value is extractable at a known offset without decoding
+             neighbors, e.g. bitpack/FSST/dict) vs opaque (zstd block, needs full decompress).
+             This transparency tag is exactly what lets nest pick aggressive entropy coders for
+             cold sections while keeping the embeddings hot path random-accessible from mmap.
+techniques:
+  - Compression cascade: ordered per-buffer selector
+    constant->dict->bitpack->RLE->FSST->byte-stream-split->general(zstd/lz4)->flat, chosen by
+    cheap stats (cardinality budget num_values/2, dict-size-ratio<=0.8, RLE
+    run_count/num_values<0.5, FSST when max_len>=5 and total>=32KB)
+  - Transparent vs opaque encoding taxonomy: transparent (bitpack, FSST, dictionary, flat)
+    supports O(1) random access to a single value at known offset/length; opaque (zstd/lz4
+    block) forbids it
+  - Byte-stream-split (BSS): de-interleave f32/f64 by byte position so each plane has lower
+    entropy, then general-compress; entropy-auto-detected, the key trick for compressing float
+    embeddings
+  - FSST (Fast Static Symbol Table): one symbol table per page, substring->1-byte-code,
+    transparent string compression for chunks_canonical text
+  - Miniblock structural layout for narrow types: ~4-8KiB power-of-two chunks, 8-byte aligned,
+    tiny metadata (24-41 bytes/chunk) tuned to control random-access read amplification
+  - Fullzip structural layout for large values (>=256B, embeddings/blobs): control-word + size +
+    value zipped into one buffer with a u64 repetition index for O(1) row access on scans
+  - Vector index decomposition IVF x sub-index x quantization with PQ residual encoding
+    (quantize vector-minus-centroid) and transposed __pq_code uint8 codes
+  - refine_factor rerank: ANN/quantized search returns candidates, then re-scores against
+    uncompressed full-precision vectors -- identical contract to nest's mandatory exact-cosine
+    rerank
+nest steals: Three concrete steals. (1) In nest-format/encoding, add a byte-stream-split codec for the
+             embeddings section before the int8/f16 step: de-interleave f32 by byte plane (4
+             planes) so high-order exponent bytes RLE/zstd-compress hugely; but since nest
+             scores embeddings directly from mmap on the hot path, expose it ONLY as a new
+             RESERVED encoding id (4-255 space) used for a cold/archival frozen-embeddings
+             variant, never the scored path -- this respects the
+             never-compress-scored-embeddings rule while still cutting file size. (2) In
+             nest-format/encoding for chunks_canonical(text), add FSST as a transparent codec id
+             so text stays single-value random-accessible for citations
+             (nest://content_hash/chunk_id must reopen an exact span) -- FSST gives ~2x over raw
+             while preserving the O(1) span access that block-zstd destroys; directly advances
+             compress-more-than-everyone on the text section. (3) Borrow the
+             transparent-vs-opaque tag as a one-bit manifest field per section/encoding so
+             nest-runtime knows whether a section permits zero-copy span extraction vs needs a
+             decode buffer -- formalizes the constraint nest enforces by convention. The
+             PQ-residual + transposed-codes scheme is a future hnsw_index(0x07) upgrade path
+             (add a quantized-storage sibling), and Lance's refine_factor validates nest's
+             exact-rerank contract as prior art.
+compression: Directly central to the compress-more-than-everyone north star. Byte-stream-split + general
+             compression is the standard high-ratio trick for float embedding archives and is
+             missing from nest's encoding set (nest has raw/zstd/f16/int8 but no byte-plane
+             split). FSST gives transparent text compression that, unlike nest's current
+             section-level zstd, preserves the O(1) citation-span access nest's
+             content_hash/chunk_id citations require. The transparent-vs-opaque taxonomy is the
+             conceptual framework nest needs to safely add aggressive codecs without breaking
+             the mmap hot path.
+perf:        Disk-first design: Lance is reportedly the only vector DB where all vector indexes are
+             disk-resident, read zero-copy via the columnar format; embeddings and PQ codes are
+             mmapped/paged, not RAM-loaded. Miniblock targets 4-8KiB chunks to bound read
+             amplification; an LRU search cache preloads page locations, encodings, miniblock
+             metadata, dictionaries, and repetition index, amortizing init cost over reader
+             lifetime. BSS and entropy auto-detection add encode-time cost but are
+             statistics-driven. PQ training (k-means) is noted as slow and memory-intensive -- a
+             caution for nest deterministic builds (k-means seeding must be fixed for
+             byte-identical reproducibility). f32 BSS miniblock caps at 1024 values/chunk, f64
+             at 512, aligning with SIMD batch sizes; the uncompressed-vector refine step keeps
+             returned scores exact like nest's rerank.
+license:     Apache-2.0 (both lancedb/lancedb and lancedb/lance)

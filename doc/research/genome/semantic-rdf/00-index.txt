@@ -1,0 +1,58 @@
+================================================================================================
+genome :: semantic-rdf (index)
+RDF triple stores, semantic web, graph query languages
+================================================================================================
+
+one file per project in this folder. open the one you need.
+
+[HIGH     ] apache__jena.txt                   Apache Jena is a Java RDF/SPARQL framework whose
+                                               TDB2 store persists triples as three permuted
+                                               B+tree indexes (SPO/POS/OSP, six for quads) over
+                                               8-byte NodeIds resolved through a dictionary node
+                                               table, with scalar values inlined directly into
+                                               the NodeId to skip the dictionary entirely.
+[HIGH     ] eclipse-rdf4j__rdf4j.txt           A Java RDF quad store whose embedded backends
+                                               (NativeStore B-tree, LMDB store) split storage
+                                               into a value dictionary mapping every RDF term to
+                                               a compact integer ID plus B-tree/B+tree
+                                               permutation indexes (spoc, posc, ospc) that store
+                                               only those IDs, with the LMDB store adding an
+                                               order-preserving variable-length integer (Varint)
+                                               codec for the IDs.
+[HIGH     ] oxigraph__oxigraph.txt             A Rust embedded RDF triple/quad store and SPARQL
+                                               engine that encodes every term as a 17-byte
+                                               fixed-width (type-byte + 16-byte value) record,
+                                               inlining small strings and all XSD numeric/date
+                                               literals as native bytes while hashing only large
+                                               strings via SipHash-2-4-128 into an id2str side
+                                               table, so the six SPOG-permuted RocksDB indexes
+                                               never store raw strings.
+[HIGH     ] terminusdb__terminusdb.txt         A Git-for-data document/graph database whose Rust
+                                               storage core (terminus-store) stores RDF triples
+                                               as immutable, content-addressed delta layers
+                                               built from HDT-derived succinct data structures
+                                               (front-coded string dictionaries, bit-packed
+                                               integer arrays, and rank/select bit vectors over
+                                               adjacency lists), reaching ~13 bytes per triple.
+[HIGH     ] terminusdb__terminusdb-store.txt   A tokio-backed immutable triple store whose
+                                               entire on-disk format is built from succinct data
+                                               structures (front-coded dictionaries,
+                                               minimum-bit-width packed integer arrays, and
+                                               two-level rank/select bit indexes) queried
+                                               directly from mmapped bytes with no decompression
+                                               step, reaching ~13.6 bytes/triple on 17B-triple
+                                               graphs.
+[MEDIUM   ] RDFLib__rdflib.txt                 A pure-Python RDF toolkit whose in-memory Store
+                                               indexes triples in three redundant permutation
+                                               dictionaries (SPO/POS/OSP) plus context maps, and
+                                               evaluates SPARQL 1.1 via an algebra of lazy
+                                               nested-loop joins with dynamic most-bound-first
+                                               triple-pattern reordering.
+[LOW      ] opencypher__openCypher.txt         openCypher is the open specification of the
+                                               Cypher property-graph query language -- an
+                                               XML-sourced grammar that generates
+                                               ANTLR4/EBNF/railroad artifacts, plus a
+                                               Cucumber-based Technology Compatibility Kit that
+                                               defines engine conformance via
+                                               canonically-serialized, order-aware query result
+                                               tables.

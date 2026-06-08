@@ -1,0 +1,73 @@
+================================================================================================
+manticoresoftware/manticoresearch (+ manticoresoftware/columnar, the MCL library)
+category: fulltext-search   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A C++ full-text + columnar search engine whose Manticore Columnar Library (MCL) compresses
+             attributes with per-block adaptive encoding (const / table-dictionary /
+             delta+bitpack / generic) plus min-max zone maps and a PGM learned secondary index,
+             while full-text postings use VLN (variable-length number) delta encoding and the
+             docstore stores original text in LZ4-compressed fixed-size blocks.
+innovation:  Per-block adaptive codec selection: data is cut into fixed-size blocks (a few hundred to ~1024
+             rows) and for EACH block independently the encoder picks the cheapest scheme from a
+             small menu - const (1 value when all equal), table/dictionary (store a <256-entry
+             value table + small indices when low cardinality), delta+bitpack (FastPFOR-style:
+             subtract a base, bitpack residuals to minimal bit-width), or generic raw fallback -
+             and writes a tiny per-block min-max header so a scan can skip the whole compressed
+             block without decoding when the filter range cannot match. This decouples
+             compression choice from the global column and lets locally-uniform regions collapse
+             to near-zero bytes while keeping random block access O(1).
+techniques:
+  - Per-block adaptive encoding menu: const, table/dictionary (<256 uniques), delta+bitpack,
+    generic raw - chosen independently per block by cost
+  - Dictionary/table encoding: store value table once + minimal-width index per row when block
+    cardinality is low
+  - Delta + FastPFOR-style binary bitpacking: subtract base/min, pack residuals to
+    ceil(log2(max-min)) bits, SIMD-friendly (SSE4.2)
+  - Min-max zone maps per block enabling skip-without-decode (analyzers reject blocks on range
+    filters)
+  - VLN (varint) delta encoding of doc-ids and positions in inverted postings (.spd doclists,
+    .spp hitlists)
+  - PGM-index (Piecewise Geometric Model): learned piecewise-linear key->position index,
+    dominates B-tree space by orders of magnitude
+  - Docstore: original text in fixed-size (default 16KB) blocks, LZ4 / LZ4HC compressed,
+    decoded-block LRU cache, tunable block size trades ratio vs latency
+  - Cost-based codec selection driven by cheap precomputed block statistics (min, max, distinct
+    count)
+nest steals: Two concrete steals. (1) nest-format encoding layer (crates/nest-format/src/encoding +
+             sections): add a per-block adaptive codec for non-embedding sections, especially
+             bm25_index(0x08) postings and chunk_ids/spans, as a NEW additive encoding id in the
+             reserved 4-255 range. Cut each section's integer streams into fixed blocks; per
+             block pick const / dict(<256 uniques) / delta+zigzag+bitpack / raw by a
+             deterministic cost compare; prepend a small repr(C) little-endian block header
+             (scheme tag, base, bit-width, min, max). Beats whole-section zstd on structured
+             integer columns (doc-ids, term freqs, span offsets) and stays deterministic
+             (alphabetical term order already yields sorted, delta-friendly streams). (2)
+             nest-runtime bm25 + search path (crates/nest-runtime/src/bm25, search): use
+             per-block min-max zone maps to skip entire posting blocks during candidate
+             gathering before the mandatory exact-cosine rerank, cutting decode work on
+             selective queries with zero recall change. Keep embeddings exempt (scored directly
+             from mmap), matching Manticore's rule that columnar stream-compression is wrong for
+             hot random-access data. PGM-index is a reference idea for a future deterministic
+             seekable offset map over chunk_ids/term dictionary if a 0x09+ section is ever spent
+             on it.
+compression: Directly central. Per-block adaptive encoding (const/dict/delta-bitpack) is exactly the
+             'compress more than everyone' lever for nest's structured integer sections: it
+             exploits local uniformity a single global zstd pass misses, and const/dict blocks
+             collapse low-entropy regions to a handful of bytes. The min-max zone map is a free
+             compression-adjacent win (skip decode). FastPFOR bitpacking gives
+             near-entropy-minimal integer storage with SIMD decode, matching nest's AVX2/NEON
+             dispatcher philosophy.
+perf:        MCL requires SSE>=4.2; delta/bitpack codecs are SIMD binary-packing (FastPFOR family, same
+             lineage Lucene adopted) decoding ~128 ints per vectorized pass. Block skipping via
+             min-max avoids decompressing whole blocks - the dominant cost saver on selective
+             scans. Docstore default 16KB LZ4 blocks with a daemon-wide 16MB decoded-block
+             cache; bigger blocks raise ratio, smaller blocks lower random-access latency (a
+             tunable nest can mirror per preset). Empty-instance footprint ~40MB RSS; columnar
+             keeps only tiny per-block metadata resident, serving the rest from filesystem cache
+             rather than mmap-resident pages.
+license:     GPL-3.0 (manticoresearch daemon); MCL columnar library is Apache-2.0; FastPFOR Apache-2.0;
+             PGM-index Apache-2.0. Reimplement the published/Apache-licensed techniques rather
+             than copying GPL daemon code to keep nest licensing clean.

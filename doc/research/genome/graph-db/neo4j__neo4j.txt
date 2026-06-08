@@ -1,0 +1,71 @@
+================================================================================================
+neo4j/neo4j
+category: graph-db   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A GPLv3 Java graph database whose storage engine stores nodes/relationships/properties as
+             fixed-size records (legacy Record format) or hardware-page-aligned 128B/8KB
+             co-located blocks (Block format), with a multi-root generational B+ tree (GBPTree)
+             for dense overflow and a CSR in-memory graph (GDS) that compresses adjacency lists
+             via sort + delta + variable-byte, or optionally block-based bit-packing ("integer
+             packing").
+innovation:  The adjacency-list compression pipeline for graph edges: sort target node IDs ascending,
+             delta-encode consecutive IDs into small gaps, then bit-pack those gaps in
+             fixed-size BLOCKS where each block uses only as many bits as its largest value
+             needs ("integer packing") -- this decompresses faster than per-value varint
+             (branchless, SIMD-friendly, cache-local) while compressing at least as well. The
+             deeper principle: choosing bit width per-block by the local maximum beats both a
+             global encoding and per-value continuation-bit varints on the speed/ratio Pareto
+             front.
+techniques:
+  - sort + delta-encode adjacency targets so neighbor IDs become small monotone gaps before any
+    entropy step
+  - variable-byte (varint) encoding: 7 data bits + 1 continuation bit per byte (the slow
+    baseline)
+  - integer packing: block-of-N values bit-packed to ceil(log2(max_in_block)) bits, branchless
+    unpack for cache locality
+  - GBPTree: multi-root generational copy-on-write B+ tree giving lock-free readers via
+    generation pointers (one root per dense node)
+  - Block format co-location: node + labels + ~6-7 properties + first ~5 relationships packed
+    into one 128B/8KB block aligned to NVMe/OS page size to cut IOPS and cache misses
+  - inline short-string/short-array storage to avoid out-of-line block-store pointer chasing
+  - CSR layout: offsets (HugeLongArray) + degrees (HugeIntArray) + compressed-target byte arrays
+    as a flat columnar adjacency representation
+nest steals: Add an optional section to nest-format (a reserved 0x09+ section id, additive within v1) named
+             e.g. graph_adjacency, encoding a CSR: a u64 offsets array + per-node degree + a
+             packed-targets blob where chunk-to-chunk edges (citation links, semantic-neighbor
+             graph, hnsw neighbor lists) are stored sort+delta+block-bit-packed. nest-runtime
+             gains a graph traversal path beside ann::HnswIndex (e.g. graph::CsrIndex) that
+             mmaps offsets and unpacks blocks branchlessly, reusing the SIMD dispatcher pattern.
+             Critically, the SAME block-bit-packing codec belongs in nest-format/encoding as a
+             new integer-stream codec (encoding id in the reserved 4-255 space) to losslessly
+             shrink the existing chunk_ids and chunks_original_spans sections (monotone u64
+             offsets/spans are ideal delta+pack candidates) and to compress neighbor-id lists
+             inside hnsw_index(0x07) -- advancing the compress-more-than-everyone goal without
+             touching embeddings on the hot path. Determinism holds: sort gives canonical order,
+             block size is fixed, no entropy-coder dictionary state. Keep the codec file under
+             300 loc, repr(C), LE-unsigned, thiserror-typed.
+compression: Directly on-mission. Delta+block-bit-packing is the canonical lossless codec for monotone
+             integer streams, which nest already has in abundance: chunk_ids,
+             chunks_original_spans (byte offset/length pairs), and HNSW neighbor lists. These
+             are currently raw or zstd'd; a dedicated sort/delta/packed integer codec beats zstd
+             on structured monotone integers at far lower decode cost, and unlike zstd it can
+             decode a single value by block off mmap without inflating the whole stream. It also
+             enables compressed on-disk graph search (a stated north-star feature) via CSR
+             rather than a heavyweight adjacency structure, advancing both compression and
+             graph-search goals with one codec.
+perf:        Block bit-packing (integer packing) decodes strictly faster than continuation-bit varint because
+             it is branchless and cache-local (one block = one tight loop, no per-byte
+             continuation test) at equal-or-better ratio; Neo4j reports it always wins on decode
+             and usually on ratio. Block format reports ~40% faster traversal fully in-memory
+             and ~70% when only 1/3 fits, via co-location plus 8KB NVMe/OS-page alignment
+             cutting IOPS. Caution: Block format can use MORE disk than the tightly packed
+             Record format due to padding/headers, so for size-first nest adopt the
+             co-location/alignment idea selectively and take primarily the integer codec.
+license:     GPLv3 (Community Edition); Enterprise features commercial. GPL is incompatible with nest's
+             likely-permissive licensing, so learn-from-only: do not vendor neo4j source. The
+             sort+delta+block-bit-packing technique is a public algorithm (also in Lucene
+             PForDelta, Roaring, StreamVByte, FastPFOR) and can be cleanly reimplemented from
+             spec.

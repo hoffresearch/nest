@@ -1,0 +1,63 @@
+================================================================================================
+sfu-discourse-lab/MisInfoText
+category: factcheck-datasets   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A curated corpus-of-corpora that scrapes fact-checking sites (Snopes, BuzzFeed, PolitiFact,
+             Emergent) and stores each article as a row carrying the original news text, the
+             checked claim, the source URL, the fact-checker's native veracity rating, and a
+             hand-normalized truth label projected onto a common ordinal scale.
+innovation:  A dual-label veracity normalization schema preserving both original and normalized truth labels
+             per record.
+techniques:
+  - Per-record dual labels: original_label (verbatim fact-checker string) + normalized_label
+    (mapped ordinal), so the projection is lossless w.r.t. provenance
+  - Heterogeneous-scale unification: collapse 2/4/5/6-way fact-checker taxonomies onto one
+    canonical ordinal {false, mostly-false, mixture, mostly-true, true} with optional binary
+    {fake, real} reduction
+  - Provenance triple per row: source fact-checker id + original article URL + checked claim
+    string, enabling reopen/re-verification
+  - Out-of-scale rating handling: non-veracity Snopes ratings (Outdated, Miscaptioned, Satire)
+    routed to explicit side categories rather than forced onto the truth axis
+  - Two-stage curation: automatic scraper crawl then manual annotator alignment verification of
+    claim<->article<->label (Figure Eight crowd platform for larger sets)
+  - CSV-as-interchange: flat columns (claim, text, url, original_label, normalized_label) zipped
+    per collection
+nest steals: nest-format: add an OPTIONAL truth/veracity metadata section (reserve a v1-additive section id
+             in the 0x09+ space) that attaches, per chunk_id, a small fixed record
+             {source_id:u16 LE, original_label_idx:u8, normalized_ordinal:u8 (0..=4
+             false..true), claim_chunk_ref, source_url provenance ref}. All integers
+             little-endian unsigned, repr(C), deterministic. Store the source-label <-> ordinal
+             mapping table once in the provenance/manifest section so normalization is
+             reproducible and byte-stable (same mapping => same bytes). This pairs cleanly with
+             the existing chunks_canonical/chunks_original_spans split: original_label is the
+             "original span," normalized_ordinal is the "canonical" derived value. nest-runtime:
+             expose a label filter/facet on the search path (post-rerank predicate on
+             normalized_ordinal, e.g. return only false<=1 claims) and let cite emit
+             nest://content_hash/chunk_id pointing at the exact checked claim. nest-cli: extend
+             stats to histogram the ordinal distribution. Compression relevance: the ordinal is
+             a u8 (or 3 bits) and source_id is small-cardinality, so the truth column is a
+             textbook target for the int8/zstd path already in nest -- dictionary-encode source
+             labels and bit-pack the 5-level ordinal, turning verbose fact-checker strings
+             ("Pants on Fire!") into ~3 bits while keeping the verbatim string recoverable via
+             the mapping table; this is real per-section compression on the PT-BR fake-news demo
+             corpus nest already ships.
+compression: Direct: veracity labels are low-cardinality categoricals. The dual-label idea lets nest store a
+             verbose source string once in a manifest mapping table, then represent each row's
+             truth value as a 3-bit ordinal + small source_id, bit-packed and zstd'd on the
+             non-embedding path. Verbose label text collapses to a few bits per chunk while
+             staying losslessly recoverable, a clean win for the demo corpus and for the broader
+             "compress datasets" north star.
+perf:        No runtime/codec engineering here -- this is a data resource, not a system. Volumes are tiny by
+             nest standards (largest published collections ~1.3k-12.8k rows; CSV-zipped). No
+             SIMD, no on-disk binary format, no index. The only perf-relevant fact is that the
+             truth column is extremely low entropy (<=6 distinct values), so it costs near-zero
+             space under nest's existing int8/zstd encodings and adds negligible scoring cost as
+             a post-rerank facet predicate.
+license:     Not clearly stated in README; datasets aggregate third-party fact-checker content
+             (Snopes/PolitiFact/BuzzFeed/Emergent) under their respective terms plus
+             academic-citation requests (Asr & Taboada 2019, Big Data & Society). Treat as
+             reference/citation-ware, not a vendorable code license -- do not bundle the data,
+             only adopt the schema idea.

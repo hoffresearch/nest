@@ -1,0 +1,82 @@
+================================================================================================
+TusKANNy/kannolo (core codec engine in companion crate TusKANNy/vectorium)
+category: ann-index   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A modular Rust (edition 2024, nightly portable-SIMD) HNSW + Product-Quantization ANN library
+             whose real value for nest lives in its `vectorium` codec crate: a SIMD Stream-VByte
+             sparse encoder with recursive-graph-bisection component reordering, an 8-bit PQ
+             with SoA distance-table ADC, and cache-blocked batch-6 distance kernels.
+innovation:  Compression is a codec trait, not an index feature: every vector encoder (PlainDense f32/f16,
+             ScalarDense int8, ProductQuantizer 8-bit, DotVByteFixedU8 sparse) implements one
+             VectorEncoder/QueryEvaluator interface so the same HNSW graph walks raw, quantized,
+             or VByte-packed bytes interchangeably, and the graph is always BUILT on
+             full-precision vectors while only the stored payload is compressed (why they beat
+             Faiss up to 11x: quantization never pollutes graph topology, only storage size).
+             The single most transferable trick is DotVByteFixedU8: sparse vectors are
+             component-delta-gap + Stream-VByte byte-packed (1 control bit/element = 1 vs 2
+             bytes) over u64 words, values are int8 fixed-point, AND component indices are first
+             remapped by a recursive graph bisection permutation learned offline so co-occurring
+             terms get adjacent ids, shrinking the d-gaps VByte then encodes near-optimally.
+techniques:
+  - DotVByteFixedU8 sparse codec: sort components, delta-gap, Stream-VByte (1 control bit/elem =
+    1 vs 2 bytes) packed into u64 words, int8 fixed-point values aligned at the tail for SIMD
+    gather; decode via 256-entry compile-time swizzle mask LUT + simd_prefix_sum
+  - Recursive graph bisection (rgbisect crate) learns a component->id permutation offline so
+    frequently co-occurring dimensions become adjacent, minimizing VByte d-gaps; inverse
+    permutation restores original ids on decode
+  - 8-bit Product Quantization: M subspaces (M%4==0), KSUB=256 centroids/subspace, 1 byte/code;
+    per-subspace seedable k-means (25 iters, 10% sampling above 1M vecs); centroids stored SoA
+    [M*dsub*KSUB] so the distance-table build auto-vectorizes
+  - ADC asymmetric distance: precompute per-query distance table [KSUB*M] once, then score each
+    code with 4 independent f32 accumulators over chunks_exact(4) via get_unchecked LUT gathers
+    (4-way ILP)
+  - Two-level PQ (coarse IVF u32 id + residual PQ codes + optional f16 residual norm) for
+    ColBERT MaxSim, blocked [coarse_ids][pq_codes][norms] layout, const-generic Q unrolled SAXPY
+    kernel
+  - Cache-aware batch-6 distance kernels (dense dot/L2 and dense-sparse) with 6 independent
+    accumulators plus explicit prefetch_with_range during the graph beam search to hide memory
+    latency
+  - CSR graph storage: flat neighbors:Box<[u32]> + offsets:Box<[usize]> compact form vs
+    fixed-degree Optioned<u32> padded array for the growable builder, with optional
+    local->external id mapping
+  - fast-math algebraic_add/algebraic_mul intrinsics + std::simd gather/swizzle, and scalar code
+    that auto-vectorizes by construction (SoA layouts, register-resident accumulators,
+    single-write tiling)
+nest steals: Three additive grafts, all within format v1. (1) nest-format/src/encoding.rs: add a new encoding
+             id for a `vbyte` codec (delta-gap + Stream-VByte + int8) ported from
+             DotVByteFixedU8, applied to bm25_index(0x08) term postings and the chunk_ids
+             section that nest already zstd-compresses; it never touches embeddings, honoring
+             the 'never compress embeddings' rule. (2) nest-python build step +
+             nest-runtime/src/bm25: add deterministic recursive-graph-bisection term reordering
+             (alphabetical tie-break keeps builds byte-identical), store the term-id permutation
+             in the bm25_index header, apply the inverse map at query time so postings d-gaps
+             shrink before vbyte/zstd. (3) nest-runtime/src/simd + ann::HnswIndex: adopt the PQ
+             ADC distance-table + batch-6 + prefetch pattern and add 8-bit PQ as a fourth
+             embedding encoding (raw/f16/int8/pq). Because nest mandates an exact-cosine rerank,
+             PQ is used ONLY for the ANN candidate shortlist while exact f32/f16 cosine still
+             produces the returned score - exactly kannolo's build-on-full-precision philosophy
+             - so PQ recall loss is fully masked and the size ratio drops far below the current
+             tiny preset.
+compression: Directly on-mission. The DotVByte+RGB sparse codec is a textbook 'compress more than everyone'
+             technique for BM25 postings and any inverted/sparse section; 8-bit PQ behind nest's
+             mandatory exact rerank lets nest store embeddings at ~M bytes/vector (e.g. 4-16
+             bytes vs 1536 f32) for the ANN shortlist while still returning real cosine,
+             slashing the size ratio below the current tiny preset (0.283) without breaking the
+             recall guarantee. Both compress only non-embedding sections or ANN-only payloads,
+             leaving the directly-mmap-scored f32/f16 embeddings untouched on the hot path.
+perf:        Beats Faiss up to 11.1x on HNSW build by building the graph on full-precision vectors, not
+             quantized ones. Kernels lean on portable std::simd (nightly), fast-math
+             algebraic_add/mul, SoA centroid layout for auto-vectorized table builds, batch-6
+             ILP with explicit prefetch, and 256-entry compile-time swizzle mask LUTs; PQ table
+             build keeps 8 partial accumulators in registers across all dsub passes (single
+             write per slot); ADC scoring uses 4-way unrolled get_unchecked LUT gathers. CAVEAT:
+             requires Rust NIGHTLY (portable_simd, gen blocks) - nest targets stable edition
+             2024, so nest must reimplement the codec on stable using its existing
+             AVX2/NEON/scalar dispatcher rather than std::simd. Graph uses u32 neighbor ids (max
+             u32::MAX-1 nodes); CSR offsets are usize.
+license:     MIT (both kannolo and vectorium) - clean for vendoring/porting. The recursive bisection pulls in
+             the rgbisect / enhanced-graph-bisection crate; verify that crate's license before
+             vendoring that specific piece.

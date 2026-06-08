@@ -1,0 +1,350 @@
+================================================================================================
+synthesis :: compression-general
+general-purpose byte compression and entropy coding
+================================================================================================
+
+state of the art and concrete nest recommendations for this category.
+
+summary:     nest already vendors zstd but runs its weakest config: every non-embedding section is compressed
+             cold at a hardcoded level 19 (crates/nest-format/src/encoding/zstd_codec.rs
+             DEFAULT_ZSTD_LEVEL=19, zstd::encode_all with no dictionary, no LDM, no params
+             struct), and the encoding choice is preset-driven not measured
+             (writer/payload.rs::maybe_zstd is a binary raw-vs-zstd switch). The collective
+             state of the art across these 12 repos points to three concrete, high-leverage,
+             fully-sovereign-compatible moves for nest's actual payload shape (thousands of
+             short, mutually-similar PT-BR chunks plus small structured metadata): (1) TRAINED
+             SHARED DICTIONARIES (zstd ZDICT/COVER, echoed by brotli's static dictionary, zlib
+             deflateSetDictionary, klauspost, c-blosc2 superchunk dict) -- the single biggest
+             unrealized ratio win, attacking the per-section entropy-table + cold-start
+             redundancy that level-19-no-dict pays on every blob; deterministic because ZDICT is
+             a pure function of sorted samples and content_hash is over DECODED bytes so it
+             stays stable. (2) BYTE-SHUFFLE/BYTEDELTA PRE-CODEC (c-blosc2) -- a near-memcpy SIMD
+             transpose in front of zstd that turns the near-constant high bytes of nest's u64
+             span offsets (sections/spans.rs) and the contiguous f32 int8-scale array
+             (encoding/int8.rs) into long runs, a pure ratio multiplier (Blosc shows 3.9x->5.9x
+             on float arrays) with zero new dependency and no format break. (3) COST-DRIVEN
+             ENCODING SELECTION (libdeflate's measure-bits-out, klauspost block-type-by-cost) --
+             trial-encode each section and keep the smallest, replacing nest's preset-only
+             choice. The entropy-coder family (FSE/tANS, Huff0 from FiniteStateEntropy,
+             klauspost separable primitives, libdeflate two-level Huffman table) is the
+             longer-horizon path to a sovereign in-house entropy floor below generic zstd,
+             especially over delta-coded BM25 postings (0x08) and HNSW adjacency (0x07).
+             snappy/lz4/zstdmt contribute FORMAT discipline rather than ratio:
+             skippable/unskippable extension bits and self-describing skippable-frame chunk
+             headers that make nest's reserved 0x09+ sections forward-compatible and large
+             sections seekable/parallel-decodable for citation reopen. 500xCompressor is a pure
+             reference (lossy neural, 8B-LLM at decode time) and the canonical reason semantic
+             compression stays OUT of the frozen offline v1. Every recommendation respects the
+             hard rules: embeddings stay raw/f16/int8 scored from mmap (shuffle and dict NEVER
+             touch the hot float path), encoding ids 4-255 and section ids 0x09+ are additive
+             within v1, no NEST_FORMAT_VERSION bump, no panics (typed thiserror), repr(C)/LE,
+             <=300 loc per file.
+
+state of the art
+------------------------------------------------------------------------------------------------
+The field has converged on a clean separation of concerns that maps directly onto nest. (1)
+DECORRELATION/MODELING is split from ENTROPY CODING: c-blosc2 proves the cheapest ratio gains
+come from a SIMD byte-transform stage (shuffle/bitshuffle/bytedelta) that merely presents
+better-conditioned bytes to an unchanged downstream coder; klauspost and zstd factor entropy
+into reusable primitives (FSE/tANS + Huff0). (2) tANS (FSE) is the modern entropy floor --
+near-arithmetic accuracy at single-LUT-lookup speed, with Huff0 (4 interleaved bitstreams for
+ILP) for literals; this is the zstd/klauspost back-end and the libdeflate two-level packed-table
++ branchless-refill decoder is its fast deterministic decode form. (3) TRAINED SHARED
+DICTIONARIES are the decisive lever for the many-small-similar-records regime that nest IS: zstd
+ZDICT/COVER, brotli's 13.5k-word static dictionary + 121 transforms, zlib deflateSetDictionary,
+and c-blosc2's superchunk dict all attack cold-start and inter-record redundancy that per-blob
+compression cannot touch. (4) FORMAT DISCIPLINE is standardized: self-describing frames with
+skippable-magic ranges (zstd 0x184D2A5x, snappy reserved skippable/unskippable partitioning,
+zstdmt 12-16 byte chunk headers) give additive forward-compatibility and per-chunk
+seekability/parallelism, and resolve-once functable dispatch (zlib-ng) decouples algorithm from
+microarchitecture. (5) ENCODING CHOICE is measured, not heuristic: libdeflate iterates LZ
+parsing on real post-entropy bit cost to a fixpoint and selects block types by measured size --
+'compress once, serve many' fits nest's deterministic offline build exactly. At the extreme,
+500xCompressor's neural KV-cache compression marks the boundary nest will NOT cross: lossy,
+LLM-at-decode, non-deterministic, the antithesis of offline/single-file/byte-exact. nest sits in
+the sweet spot to exploit (1)+(3)+(5) immediately on its non-embedding sections with zero
+hot-path risk, and to grow (2) into a sovereign in-house entropy stage over its
+postings/adjacency residuals.
+
+top transferable innovations
+------------------------------------------------------------------------------------------------
+1. Trained shared zstd dictionary (ZDICT/COVER greedy frequent-segment selection + pre-baked
+   FSE/Huffman tables + seed repeat-offsets): build ONE deterministic dictionary at build time
+   over nest's many short similar chunks so each tiny blob compresses against shared
+   cross-record statistics instead of re-transmitting its own entropy tables and re-discovering
+   shared strings cold. Highest-leverage zstd feature for nest's exact workload; confirmed by
+   brotli static dict, zlib deflateSetDictionary, klauspost, c-blosc2.
+2. Byte-shuffle + bytedelta pre-codec (c-blosc2): SIMD strided transpose grouping byte-position
+   k of every fixed-size element into contiguous planes so near-constant high-order bytes of
+   numeric arrays form long runs zstd crushes, optionally deltaed per plane. Cheapest known
+   ratio multiplier on top of an existing entropy coder (3.86x->5.86x on Blosc's float32/ERA5),
+   near-memcpy speed, build-time only.
+3. Cost-driven encoding selection (libdeflate iterate-on-measured-bits; klauspost/zlib
+   block-type-by-cost): pick the section encoding by actual measured output size, not a static
+   preset rule. One-pass analog: trial-encode each non-embedding section under candidate
+   codecs/params and keep the smallest; the chosen encoding id is just recorded per-section in
+   the manifest, fully additive.
+4. FSE/tANS table-based ANS entropy coder (Cyan4973/FiniteStateEntropy, klauspost fse, zstd
+   back-end): single state-transition LUT lookup per symbol hitting within a fraction of a
+   percent of Shannon entropy on skewed streams where Huffman loses up to ~1 bit/symbol. The
+   sovereign in-house entropy floor for delta-coded BM25 postings, HNSW neighbor lists, and term
+   dictionaries, dependency-free and deterministic (table build is a pure function of the
+   histogram).
+5. Huff0 + libdeflate two-level Huffman decode table with packed-u32 entries and branchless
+   64-bit bit-buffer refill: a tiny, fast, deterministic, no-C-dependency entropy decoder that
+   runs straight off mmap (one table read + shift per symbol, 4 interleaved bitstreams for ILP).
+   The reference design for any future nest-native entropy section decoder under the no-panic /
+   LE / mmap constraints.
+6. LZ77 repeat-offset cache + LDM (zstd): 3-most-recent-offset cache so periodic/structured data
+   spends ~1 offset code, and long-distance matching over a large window (up to 2GB) catching
+   far-apart duplicates -- the engine extension that scales nest toward the north-star
+   whole-repo / whole-database / parquet payloads where cross-file duplication dominates.
+7. Skippable/unskippable extension discipline + self-describing skippable-frame chunk header
+   (snappy reserved-id partitioning, zstd 0x184D2A5x magics, zstdmt 12-16 byte per-chunk header
+   with compressed+uncompressed size hints): the canonical way an additive format lets old
+   readers skip unknown OPTIONAL extensions while erroring cleanly on unknown REQUIRED ones, and
+   the blueprint for seekable per-chunk random-access decode (citation reopen) + exact
+   output-buffer pre-allocation without inflating a whole section.
+8. Pure-Rust byte-aligned LZ77 fallback codec (snappy tag-byte stream / lz4 token+LSIC varint):
+   an entropy-coder-free, allocation-light, GB/s-class block format whose decoder is table-free
+   and branch-light. Two uses for nest: a zero-C-dependency sovereign fallback when everything
+   is vendored into one binary, and the only realistic path to compressing surfaces zstd is
+   banned from (per-citation text materialize, a future just-in-time lz4 block over int8
+   embeddings decoded into scratch before the SIMD kernel).
+9. Functable dispatch pattern (zlib-ng resolve-once struct of fn pointers; CRC32-C via carryless
+   multiply): generalize nest's existing SimdBackend OnceLock in nest-runtime/src/simd/mod.rs
+   into a small functable so new kernels (f16 convert, i8 widen, shuffle/un-delta, future
+   bitpacked decoder) register one entry each instead of growing match arms, keeping each
+   simd/*.rs under the 300-line cap; CRC32-C as a fast non-crypto hash for dedup/identity probes
+   that precede compression.
+
+nest recommendations
+------------------------------------------------------------------------------------------------
+* Add a trained shared-dictionary zstd codec. New encoding/zstd_dict.rs exposing
+  zstd_encode_with_dict / zstd_decode_with_dict (zstd crate's dictionary API), a new
+  SECTION_ENCODING_ZSTD_DICT id (next free in reserved 4-255, additive within v1), and a new
+  additive section id 0x09 (SECTION_DICTIONARY) that stores the single dictionary blob. Train
+  ONE deterministic dictionary in nest-python at build time over chunks_canonical (and
+  optionally spans/provenance/bm25 terms), feeding samples in canonical/alphabetical order so
+  ZDICT is a pure function (deterministic + reproducible). Compress every text/json section
+  against it.
+    where:  crates/nest-format/src/encoding/zstd_dict.rs (new, <300 loc) + register id in layout/mod.rs
+            (SECTION_ENCODING_ZSTD_DICT, SECTION_DICTIONARY=0x09 in OPTIONAL_SECTIONS) + wire
+            decode arm in encoding/mod.rs::decode_payload + emit in
+            writer/payload.rs::maybe_zstd / encoding_choice.rs; training entry on the python
+            build_fn side
+    impact: Highest single ratio win for nest's actual payload shape (thousands of short,
+            vocabulary-overlapping PT-BR chunks). Should push the 'tiny' preset's
+            non-embedding/text bytes meaningfully below the current 0.283 overall ratio.
+            content_hash stays stable (it hashes DECODED canonical bytes; dict affects physical
+            encoding only), section checksum still hashes physical bytes, embeddings untouched.
+    effort: medium
+    from:   https://github.com/facebook/zstd, https://github.com/google/brotli,
+            https://github.com/madler/zlib, https://github.com/klauspost/compress,
+            https://github.com/Blosc/c-blosc2
+
+* Insert a byte-shuffle (+ optional bytedelta) pre-codec in front of zstd as a new additive
+  encoding id (shuffle+zstd). Strided transpose of section bytes by a typesize recorded in the
+  manifest, applied ONLY to cold numeric sections, reversed in decode_payload before
+  zstd_decode. Targets: chunks_original_spans (u64 byte_start/byte_end whose high bytes are
+  near-constant -> long runs) and the int8 per-vector scale array (n contiguous f32 LE scales,
+  the classic shuffle case).
+    where:  crates/nest-format/src/encoding/shuffle.rs + bytedelta.rs (new, pure deterministic, no-panic,
+            each <300 loc) + new SECTION_ENCODING_SHUF_ZSTD id in layout/mod.rs + decode arm in
+            encoding/mod.rs + gate strictly to non-hot-path sections in
+            writer/encoding_choice.rs; typesize stored in manifest per section
+    impact: Pure ratio multiplier on structured numeric payloads with zero new dependency and no format
+            break (Blosc shows 3.9x->5.9x on float arrays). CRITICAL: must NOT touch the
+            embeddings body (shuffle destroys the row-contiguous layout the AVX2/NEON
+            dot-product reads from mmap) -- gate by section id. Build-time + cold-decode cost
+            only.
+    effort: medium
+    from:   https://github.com/Blosc/c-blosc2
+
+* Make encoding selection cost-driven instead of preset-driven. For each non-embedding section,
+  trial-encode under the candidate codecs (raw / zstd / zstd+dict / shuffle+zstd) and keep the
+  smallest measured output; record the chosen encoding id per-section in the manifest. One-pass
+  analog of libdeflate's block-type-by-measured-cost.
+    where:  crates/nest-format/src/writer/encoding_choice.rs (turn the SectionEncoding enum from a fixed
+            preset into a chooser) + writer/payload.rs::maybe_zstd generalized to
+            try-all-pick-min
+    impact: Guarantees each section gets its best available encoding without hand-tuning per preset; never
+            regresses (raw is always a candidate). Fully additive, deterministic (smallest size
+            is a total order, ties broken by lowest encoding id). Modest absolute bytes but
+            compounds with the dict and shuffle wins.
+    effort: low
+    from:   https://github.com/ebiggers/libdeflate, https://github.com/klauspost/compress,
+            https://github.com/madler/zlib
+
+* Add ZstdParams knobs (level + enable_long_distance_matching + window_log) replacing the
+  hardcoded level-19. Set per preset: tiny -> level 22 + LDM for large whole-database/whole-repo
+  payloads; keep current behavior for small sections. LDM catches far-apart cross-file
+  duplication the normal match-finder misses.
+    where:  crates/nest-format/src/encoding/zstd_codec.rs (ZstdParams struct, replace encode_all(bytes,19)
+            with the param path via the zstd crate's compressor) + threaded through
+            writer/encoding_choice.rs presets
+    impact: Directly serves the north-star whole-repo/whole-database/parquet payloads where LDM + max level
+            dominate; cheap one-time build cost, decode speed roughly level-independent. No
+            format change (still SECTION_ENCODING_ZSTD bytes).
+    effort: low
+    from:   https://github.com/facebook/zstd
+
+* Vendor a pure-Rust FSE/tANS + Huff0 entropy codec for skewed integer/token streams, registered
+  as new additive encoding ids, applied to delta-coded BM25 postings (0x08) and HNSW neighbor
+  lists (0x07) and term dictionaries -- never to embeddings. Share the
+  spread/normalize/table-build core between encode and decode; FSEU16 variant for 16-bit
+  tokenized terms. Use libdeflate's two-level decode table + packed-u32 entries + branchless
+  64-bit refill for a tiny mmap-friendly decoder.
+    where:  crates/nest-format/src/encoding/fse.rs + huff0.rs (new, <300 loc each, shared table core) + new
+            SECTION_ENCODING_FSE id in layout/mod.rs + decode arm in encoding/mod.rs;
+            encode-side delta + entropy in nest-runtime/src/bm25/codec.rs and ann/codec.rs
+    impact: A sovereign in-house entropy floor below generic zstd on skewed residuals (tANS within a
+            fraction of a percent of Shannon entropy where Huffman loses up to ~1 bit/symbol).
+            Table build is a pure function of the histogram -> byte-identical/deterministic,
+            content_hash and reproducible builds preserved. Larger surface, so lower priority
+            than dict+shuffle.
+    effort: high
+    from:   https://github.com/Cyan4973/FiniteStateEntropy, https://github.com/klauspost/compress,
+            https://github.com/ebiggers/libdeflate, https://github.com/facebook/zstd
+
+* Formalize a skippable-optional vs unskippable-required bit on section entries so a future v1
+  file with an unknown OPTIONAL section (e.g. a new graph index, audio/video payload) still
+  validates and serves on an older runtime, while unknown REQUIRED sections error cleanly via
+  NestError -- extending the additive guarantee without a v2 bump. Mirror zstd's 0x184D2A5x
+  skippable-magic pattern and snappy's reserved-range partitioning.
+    where:  crates/nest-format/src/layout/section_entry.rs (a flags field on SectionEntry) + reader/parse.rs
+            + reader/validate.rs (skip-or-error logic) + manifest capabilities
+    impact: Protects the additive-only guarantee as the format grows toward repos/audio/video/parquet; an
+            older binary keeps working against newer optional extensions. Pure format-hardening,
+            no ratio impact, but load-bearing for the north-star expansion of payload types.
+    effort: medium
+    from:   https://github.com/google/snappy, https://github.com/facebook/zstd,
+            https://github.com/mcmilk/zstdmt
+
+* Chunk large compressed sections into independently-decodable sub-blocks with a self-describing
+  12-16 byte header (skippable-frame style: magic + compressed-size + uncompressed-size hint),
+  so a single chunk decodes for nest://content_hash/chunk_id citation reopen without inflating
+  the whole section, materialize() pre-allocates exactly (no realloc), and large text sections
+  can decode in parallel via rayon. Pair with the shared dictionary so small-chunk random access
+  does not cost ratio.
+    where:  crates/nest-format/src/encoding/ (sub-block framing inside the existing zstd/dict encoding id,
+            no new section id, no version bump) + nest-runtime/src/materialize.rs (per-chunk
+            decode + parallel path)
+    impact: Unlocks O(1) citation reopen and parallel materialize at scale without breaking
+            single-file/offline/deterministic (fixed chunk size + fixed params -> deterministic
+            byte layout -> stable per-section physical SHA-256). Slight ratio cost per chunk
+            window-reset, recovered by the shared dict. Use rayon/crossbeam, NOT zstdmt's
+            two-mutex pool.
+    effort: medium
+    from:   https://github.com/mcmilk/zstdmt, https://github.com/google/snappy,
+            https://github.com/klauspost/compress
+
+* Add a GB/s-class byte-aligned LZ77 codec (lz4/snappy block format: token + LSIC/varint length
+  extension + 2-byte LE offset, wildcopy decode) as a new additive encoding id, as the first
+  compressor nest can legally apply to hot-path-adjacent surfaces zstd is banned from:
+  per-citation text materialize (always-compressed text without per-query latency) and, longer
+  term, an lz4-framed transparent layer over int8 embeddings decoded into a small scratch buffer
+  just-in-time before the SIMD dot product. Also reuse the LSIC add-255 varint for nest's own
+  section-length/manifest varints.
+    where:  crates/nest-format/src/encoding/lz4_block.rs (new, <300 loc, panic-free) + new
+            SECTION_ENCODING_LZ4 id in layout/mod.rs + decode in encoding/mod.rs; just-in-time
+            embeddings decode path would sit in nest-runtime/src/search.rs scratch buffer before
+            simd/mod.rs::score_int8_section
+    impact: Does NOT beat zstd on cold ratio (lz4 loses), so not the headline lever -- its value is widening
+            the SET of compressible bytes to surfaces with a tight decode budget, and a
+            zero-C-dependency sovereign fallback for one-binary vendoring. Embeddings-over-lz4
+            is speculative and must prove it does not regress the AVX2/NEON kernel latency.
+    effort: high
+    from:   https://github.com/lz4/lz4, https://github.com/google/snappy
+
+* Generalize the SimdBackend OnceLock into a functable-style struct of fn pointers
+  (resolve-once, indirect-call-forever) so new kernels register one entry each, and add CRC32-C
+  via carryless multiply (PCLMULQDQ on x86_64, PMULL on aarch64) behind it as a fast NON-crypto
+  hash for dedup keys / section identity probes that precede compression. The four SHA-256
+  surfaces stay cryptographic and unchanged.
+    where:  crates/nest-runtime/src/simd/mod.rs (functable struct replacing the BACKEND OnceLock + per-fn
+            match arms) + a new simd/crc32c.rs kernel; keep each simd/*.rs under 300 loc as
+            kernels multiply (shuffle/un-delta, f16 convert, i8 widen all become entries)
+    impact: Engineering scaffolding only (no ratio win): keeps the SIMD layer under the file-size cap as
+            shuffle/un-delta/entropy kernels arrive, and speeds dedup/identity work before
+            compression. CRC-as-hash must never be confused with the SHA-256 integrity contract.
+    effort: low
+    from:   https://github.com/zlib-ng/zlib-ng, https://github.com/facebook/zstd
+
+compression wins
+------------------------------------------------------------------------------------------------
+  - Trained shared zstd dictionary over chunks_canonical (and spans/provenance/bm25 terms) --
+    the single biggest unrealized win for nest's thousands-of-short-similar-chunks shape; kills
+    per-section entropy-table + cold-start redundancy that level-19-no-dict pays on every blob;
+    expected to push the tiny preset's text bytes below today's 0.283 ratio while keeping
+    content_hash stable.
+  - Byte-shuffle + bytedelta in front of zstd on chunks_original_spans (near-constant high bytes
+    of u64 offsets -> long runs) and the int8 scale array (contiguous f32 LE) -- pure multiplier
+    on structured numeric sections, zero new dependency, Blosc-measured 3.9x->5.9x headroom on
+    float arrays.
+  - Cost-driven per-section encoding selection (trial-encode, keep smallest measured output) --
+    guarantees each section's best available codec/params without hand-tuning, never regresses
+    since raw is always a candidate, deterministic by smallest-size total order.
+  - zstd level 22 + long-distance-matching for the north-star large payloads (whole-repo /
+    whole-database / parquet) -- LDM catches far-apart cross-file duplication the 64KB-window
+    match-finder misses, at one-time build cost with level-independent decode speed.
+  - In-house FSE/tANS over delta-coded BM25 postings (0x08), HNSW adjacency (0x07), and term
+    dictionaries -- within a fraction of a percent of Shannon entropy on skewed residuals where
+    Huffman loses up to ~1 bit/symbol and where zstd's generic stage carries unnecessary
+    container/table overhead; a sovereign entropy floor below generic zstd.
+  - Repeat-offset cache awareness for periodic/structured metadata (chunk_ids, spans deltas) --
+    structured data spends ~1 offset code instead of a full offset, compounding with shuffle on
+    the same arrays.
+  - Shared-dictionary + per-chunk framing together -- recover the small-chunk ratio loss from
+    seekable chunking so citation-reopen random access costs no ratio.
+
+watch-outs (conflict with nest constraints)
+------------------------------------------------------------------------------------------------
+  - NEVER apply shuffle/bytedelta/dictionary/zstd to the embeddings BODY scored from mmap on the
+    hot path. Shuffle destroys the row-contiguous layout AVX2/NEON dot-products read; any
+    entropy/dict stage breaks 'scored directly from mmap'. Gate every transform strictly by
+    section id in writer/encoding_choice.rs. Embeddings stay raw/f16/int8 forever in v1. (Only
+    the int8 SCALE array -- not the i8 bodies -- is a safe shuffle target.)
+  - Dictionary training must be a pure deterministic function: feed ZDICT samples in
+    canonical/alphabetical order and seed any randomized step, or reproducible builds (same
+    chunks + same model fingerprint => byte-identical file) break. Same for FSE/tANS: table
+    build must be a pure function of the histogram. Verify byte-identical output across two
+    builds before shipping.
+  - content_hash is over DECODED canonical bytes and section checksums are over PHYSICAL bytes
+    -- confirm a dict-compressed or shuffled section yields the SAME content_hash as raw (it
+    does only if decode is exact and lossless). bytedelta/shuffle must round-trip bit-exactly;
+    trunc_prec (lossy mantissa zeroing) is explicitly OUT of any required/content-hashed
+    section.
+  - All new codecs are additive within v1: encoding ids in reserved 4-255, section ids in
+    reserved 0x09+, and do NOT bump NEST_FORMAT_VERSION (that is only for a true v2 where an
+    existing field changes meaning). Adding the dictionary section must not enter content_hash
+    (keep it OPTIONAL, hash over the canonical six only) so citations survive.
+  - Do NOT add a DEFLATE/zlib/zlib-ng codec or a Snappy/lz4 codec to beat zstd on cold ratio --
+    they all LOSE to zstd-19 on text. Their value is structural (fallback, hot-path-adjacent
+    surfaces, format discipline), not headline ratio. lz4-over-int8-embeddings is speculative
+    and must prove no AVX2/NEON latency regression before it ships.
+  - 500xCompressor and any neural/semantic compression is incompatible with the frozen offline
+    v1: it needs an 8B-LLM forward pass at decode time, breaks determinism (float GPU kernels),
+    offline/single-file/small-core, and cannot losslessly reconstruct bytes for
+    nest://content_hash/chunk_id reopen. Keep it OUT; cite it only as the reason semantic
+    compression is excluded.
+  - No panics in library code -- every new codec (shuffle, bytedelta, fse, huff0, lz4_block,
+    zstd_dict) returns typed thiserror NestError on malformed/oversized input; reject unknown
+    encoding ids cleanly (decode_payload already does for unknown ids). lz4 wildcopy needs
+    output over-allocation slack -- handle bounds without UB.
+  - File hygiene: <=300 lines per rust source file (333 hard cap), single-responsibility. Split
+    shuffle/bytedelta/fse/huff0/lz4 into separate modules and share table/spread cores between
+    encode and decode to stay under the cap as the encoding/ directory grows from 4 files to
+    many.
+  - zstdmt's two-mutex worker pool is the WRONG concurrency model for Rust -- steal only the
+    on-disk skippable-frame chunk format, implement parallel decode with rayon/crossbeam.
+    CRC32-C as a hash is non-cryptographic and must never be conflated with the four SHA-256
+    integrity surfaces.
+  - Per-chunk framing and multithreaded chunking slightly HURT ratio (each chunk resets the
+    codec window/dictionary). Only chunk LARGE sections, and always pair chunking with the
+    shared trained dictionary so small-chunk random access stops costing ratio; keep small
+    metadata sections as single frames.
+  - Runtime is offline by construction -- none of these codecs may open a socket or fetch
+    anything; dictionaries live INSIDE the container, trained at build time in python, decoded
+    from mmap in rust. All zstd/dict/shuffle cost is amortized one-time at build/cold-decode and
+    must stay off the SIMD scoring hot path.

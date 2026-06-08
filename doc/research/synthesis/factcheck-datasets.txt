@@ -1,0 +1,243 @@
+================================================================================================
+synthesis :: factcheck-datasets
+fact-checking / misinformation resources and datasets (nest demo domain + truth features)
+================================================================================================
+
+state of the art and concrete nest recommendations for this category.
+
+summary:     This category contributes zero codec/SIMD/on-disk machinery to nest's "compress more than
+             everyone" north star; every repo is either a dataset or a pure-Python LLM/sklearn
+             framework. Its real value is domain modeling for the demo corpus and a credible
+             "truth feature" narrative, plus three structural-compression levers
+             (dedup-by-reference, near-duplicate clustering, low-cardinality enum
+             dictionary-coding) that attack corpus cardinality before the codec runs. The
+             collective state of the art is a converged "claim -> evidence -> stance/verdict ->
+             justification" pipeline with a normalizable veracity axis (FEVER 3-way
+             SUPPORTS/REFUTES/NEI; ClaimReview ratingValue/bestRating in [0,1]; dual
+             original+normalized labels). Critically, nest's provenance section (0x05) is
+             already a schema-free per-build JSON blob
+             (crates/nest-format/src/sections/provenance.rs) threaded straight from Python
+             (build_fn.rs), so nearly all "truth feature" work is additive metadata + a
+             post-rerank facet in search.rs materialize_hits - NO new section id, NO
+             NEST_FORMAT_VERSION bump. Most extracts over-reach by proposing reserved sections
+             0x09+; for v1 that is unnecessary except for true graph topology. The one genuinely
+             structured Rust opportunity is TabFact's typed-operator DSL (deterministic symbolic
+             table verification), but it is a large new subsystem and should stay roadmap-only.
+
+state of the art
+------------------------------------------------------------------------------------------------
+The field has converged on a four-stage pipeline (claim detection/check-worthiness -> evidence
+retrieval -> verdict prediction -> justification) over a normalizable veracity axis. Three
+labeling schemes dominate and interconvert: FEVER 3-way SUPPORTS/REFUTES/NOT-ENOUGH-INFO (NEI =
+explicit abstention); Factcheck-GPT/OpenFactCheck stance vocabularies (CP/PS/RE/IR collapsible
+to 3-way, or True/False/Unknown ternary); and schema.org ClaimReview's numeric
+ratingValue/bestRating giving a source-agnostic [0,1] truth score, with MisInfoText's dual-label
+idea (keep verbatim original_label AND a normalized ordinal {false..true}) making the projection
+lossless. Evidence is granularity-typed (sentence/document/table/multi-hop chain/conversation)
+and bound to spans (Wikipedia sentence ids), directly analogous to nest://content_hash/chunk_id.
+Two divergent verification paradigms: (a) retrieve-then-verify with neural similarity + LLM
+stance (FactCheck-GPT, OpenFactCheck - but these are online/LLM-bound, violating nest's
+offline-by-construction rule), and (b) TabFact's deterministic symbolic execution - compile NL
+statements into a closed ~60-op typed DSL with trigger-word gating and memoized beam search,
+where the program's boolean OUTPUT is the verdict (fully reproducible, explainable, no learned
+score). On the data-engineering side: FakeNewsNet's dehydration (ship manifest +
+content-addressed object pool, hydrate on demand) and GNN-FakeNews's two-plane split (integer
+graph topology via COO+partition-index vs float feature matrices, different codecs each) are the
+transferable storage patterns. PT-BR demo sources (Fake.br, FakeRecogna, FACTCK.BR, FakeTrue.Br)
+ship aligned/length-debiased corpora with 8-25 field metadata schemas.
+
+top transferable innovations
+------------------------------------------------------------------------------------------------
+1. ClaimReview ratingValue/bestRating normalized [0,1] verdict (FACTCK.BR)
+2. Dual original+normalized ordinal label, lossless projection (MisInfoText)
+3. Dedup-by-reference + dehydrated manifest mode (FakeNewsNet)
+4. Build-time near-duplicate clustering to cut embedding count (UglyFeed)
+5. Two-plane integer-topology vs float-feature codec split (GNN-FakeNews)
+6. TabFact typed-operator DSL, boolean output IS the verdict (TabFact)
+7. Atomic-claim -> evidence -> stance -> verdict record schema (FactCheck-GPT)
+8. Deterministic size-normalization pair truncation (Fake.br)
+9. Register-by-name pipeline-as-data in search_contract (OpenFactCheck)
+10. Aligned multi-source PT-BR corpora with enum-heavy metadata (FakeRecogna)
+
+nest recommendations
+------------------------------------------------------------------------------------------------
+* Define a documented per-chunk truth record carried INSIDE the existing schema-free provenance
+  JSON blob: {chunk_id, verdict_ordinal:u8 (0=false..4=true, with an explicit NEI/unverified
+  sentinel), rating_value:u16, best_rating:u16, source_id:u16, label_dict_id:u8}, plus a
+  once-stored source_label<->ordinal mapping table. No new section id, no NEST_FORMAT_VERSION
+  bump - provenance (0x05) already decodes arbitrary JSON and is threaded from Python untouched.
+    where:  crates/nest-format/src/sections/provenance.rs (document the convention only; encoder already
+            accepts any serde_json::Value) and crates/nest-python/src/build_fn.rs (provenance
+            dict already passed through, lines 89-96)
+    impact: high
+    effort: low
+    from:   https://github.com/jghm-f/FACTCK.BR, https://github.com/sfu-discourse-lab/MisInfoText,
+            https://github.com/yuxiaw/Factcheck-GPT
+
+* Add an optional post-rerank verdict facet/predicate to the search path: after the mandatory
+  exact cosine rerank, filter or boost hits by verdict_ordinal (e.g. return only
+  verdict<=mostly-false). Must run STRICTLY after rerank so the returned score stays real cosine
+  and the search contract is untouched; verdict comes from the decoded provenance map, an O(1)
+  enum compare per hit.
+    where:  crates/nest-runtime/src/search.rs materialize_hits (lines 229-256) - add an optional predicate
+            over a per-index verdict slice loaded at open time; surface as a flag in
+            crates/nest-cli/src/cmd/search.rs and search_ann.rs
+    impact: medium
+    effort: low
+    from:   https://github.com/sfu-discourse-lab/MisInfoText, https://github.com/yuxiaw/OpenFactCheck
+
+* Extend the cite subcommand to print the truth record + normalized verdict + evidence citations
+  alongside the byte span, so nest://content_hash/chunk_id returns BOTH the exact span AND its
+  agency verdict deterministically. Add a parallel `verify` alias if cite's output gets crowded.
+    where:  crates/nest-cli/src/cmd/cite.rs (after line 60, decode provenance and print verdict fields;
+            already decodes chunk_ids/canonical/spans)
+    impact: medium
+    effort: low
+    from:   https://github.com/jghm-f/FACTCK.BR, https://github.com/yuxiaw/Factcheck-GPT
+
+* Add a pure-Python ingester layer that maps fact-check sources into the truth-record provenance
+  shape: ClaimReview JSON-LD (ratingValue/bestRating -> normalized [0,1]), FakeRecogna XLSX
+  (8-col), Fake.br/FakeTrue.Br (25-field stylometry + length-normalized pairs), FACTCK.BR TSV.
+  Computes verdict_ordinal + normalized score deterministically at build time; no model, no
+  network - fully offline.
+    where:  python/ demo-corpus builder (the PT-BR ingestion scripts) feeding the provenance kwarg of
+            nest_python build()
+    impact: high
+    effort: medium
+    from:   https://github.com/jghm-f/FACTCK.BR, https://github.com/Gabriel-Lino-Garcia/FakeRecogna,
+            https://github.com/roneysco/Fake.br-Corpus,
+            https://github.com/viniciuszani/portuguese-fake-news-classifiers
+
+* Build-time near-duplicate dedup pass: before embedding, cluster chunks by cosine +
+  agglomerative threshold (reuse the HnswIndex neighbor graph to avoid UglyFeed's O(n^2)
+  dense-matrix blowup), keep one canonical chunk per cluster, record collapsed members +
+  cohesion score as provenance. Fewer chunks = fewer embeddings = the dominant byte cost removed
+  at source. Deterministic if linkage + sorted tie-break are fixed (matches reproducible-build
+  rule).
+    where:  python/ build pipeline as an optional pre-pass before nest_python build(); cohesion metadata
+            into provenance. Reuses crates/nest-runtime ann::HnswIndex for neighbor candidates
+            instead of a dense matrix
+    impact: high
+    effort: medium
+    from:   https://github.com/fabriziosalmi/UglyFeed, https://github.com/KaiDMML/FakeNewsNet
+
+* Deterministic size-normalization corpus transform for the demo: for each aligned true/fake
+  pair, word-count-truncate the longer doc to the shorter's length before chunking. Legitimately
+  shrinks demo bytes + embedding count and debiases length-as-label leakage; reproducible
+  because nest builds are byte-deterministic given identical chunks.
+    where:  python/ demo-corpus prep (before chunking, feeds build()); document as the canonical PT-BR demo
+            transform
+    impact: low
+    effort: low
+    from:   https://github.com/roneysco/Fake.br-Corpus,
+            https://github.com/viniciuszani/portuguese-fake-news-classifiers
+
+* ROADMAP ONLY (reserved section id 0x09+, no v1 bump): two-plane graph topology section for
+  propagation/evidence graphs - integer COO edge list (delta+varint+zstd) + a node->graph
+  partition index, stored separately from float features which stay on the existing embedding
+  path. This is the concrete data layout for the mission's planned graph search and multi-hop
+  evidence chains. Out of scope for v1; only the additive section-id reservation is in play now.
+    where:  crates/nest-format/src/layout/mod.rs (reserve a SECTION_GRAPH_EDGES = 0x09 constant +
+            OPTIONAL_SECTIONS entry, additive, excluded from content_hash); future
+            crates/nest-runtime graph module
+    impact: medium
+    effort: high
+    from:   safe-graph/GNN-FakeNews, https://github.com/KaiDMML/FakeNewsNet,
+            https://github.com/Cartus/Automated-Fact-Checking-Resources
+
+* ROADMAP ONLY: a structured-query / symbolic verification path beside cosine/hnsw/bm25 - a
+  small Rust enum of TabFact-style typed ops (filter_eq, greater, count, argmax, within,
+  before/after) over a future tabular/parquet section, with a trigger-word->op-id dictionary and
+  memoized seeded beam search. The boolean program output is a real, citable verdict, turning
+  retrieval into explainable verification. Split ops/exec/search files to stay <=300 loc, typed
+  thiserror, no panic. Large subsystem - defer past v1 core.
+    where:  crates/nest-runtime new structured-query module (ops.rs/exec.rs/search.rs); op-code table +
+            trigger-word map as an additive section 0x0A+ in nest-format
+    impact: medium
+    effort: high
+    from:   https://github.com/wenhuchen/Table-Fact-Checking
+
+* ROADMAP ONLY: a dehydrated/manifest mode where a .nest stores stable external source refs (id
+  + url) instead of inlining heavy payloads, deterministically re-hydrating chunks on demand.
+  Combined with content_hash dedup-by-reference, this is the lever for 'compress whole
+  datasets/repos more than everyone' without bloating the container or touching the embedding
+  hot path. Needs an additive RESERVED section for source refs.
+    where:  crates/nest-format/src/layout/mod.rs (reserve a source-refs section id) + python builder
+            hydration logic; sits beside the dedup pass
+    impact: medium
+    effort: high
+    from:   https://github.com/KaiDMML/FakeNewsNet
+
+compression wins
+------------------------------------------------------------------------------------------------
+  - Low-cardinality verdict/category enums are textbook dictionary-coding wins: store the
+    verbose source label string once in a manifest mapping table, then represent each chunk's
+    truth value as a 3-bit/u8 normalized ordinal + small source_id, bit-packed and zstd'd on the
+    existing non-embedding path. 'Pants on Fire!' -> ~3 bits, losslessly recoverable. Class (2
+    values), Category (6 values), ~10 agencies all collapse to near-zero bytes (MisInfoText,
+    FACTCK.BR, FakeRecogna).
+  - Build-time near-duplicate dedup (agglomerative/ANN-neighbor clustering) attacks corpus
+    CARDINALITY - fewer chunks means fewer per-chunk f32/f16/int8 embedding vectors, which are
+    the single largest byte cost. This is orthogonal to and multiplicative with the per-section
+    codecs (zstd/f16/int8), and is the highest-leverage compression idea in the category
+    (UglyFeed, FakeNewsNet).
+  - Dedup-by-reference: deduplicate identical canonical spans before zstd and emit pointer
+    indices in chunk_ids, storing each duplicate span once - exactly the same principle as
+    nest's content_hash dedup, applied at chunk granularity (FakeNewsNet).
+  - ClaimReview ratingValue/bestRating as two u16 LE + the derived [0,1] score stored implicitly
+    via the mapping table: a compact domain-specific encoding that replaces free-text rating
+    labels (FACTCK.BR).
+  - Two-plane integer-vs-float split for graph topology: COO edge lists are sorted, low-entropy
+    id streams that compress brutally with delta+varint+zstd, kept on the non-embedding path
+    while float features stay raw-mmap on the hot path. Right codec for the right statistics
+    (GNN-FakeNews).
+  - Deterministic size-normalization (truncate longer pair member to shorter's word count)
+    legitimately reduces demo-corpus bytes AND embedding count while debiasing length-as-label,
+    without touching the FROZEN format (Fake.br).
+  - Closed operator vocabulary + trigger-word dictionary (if the symbolic-query path is ever
+    built) is a tiny fixed symbol table that zstd-compresses near-perfectly; command-string-hash
+    memoization is structural subexpression dedup, the same dedup principle as content_hash
+    (TabFact).
+
+watch-outs (conflict with nest constraints)
+------------------------------------------------------------------------------------------------
+  - Most extracts reflexively propose a NEW section id (0x09+) for truth metadata. This is
+    unnecessary and risks scope creep: provenance (0x05) is already a schema-free per-build JSON
+    blob (provenance.rs only enforces 'parses as JSON') threaded straight from Python
+    (build_fn.rs lines 89-96). Carry verdict records THERE for v1 - no new section, no
+    NEST_FORMAT_VERSION bump. Reserve 0x09+ only for genuine graph topology / structured-op
+    tables, which are roadmap.
+  - FactCheck-GPT, OpenFactCheck and FactCheck-GPT's retrieval are online/LLM-bound (GPT-3.5 per
+    claim, Google/Serper search per claim). nest is offline-by-construction and NEVER opens a
+    socket - adopt only the static data SCHEMA, computed once at build time; never replicate the
+    live retrieval/LLM calls. The 'BM25-over-offline-Wikipedia' tier merely validates nest's
+    existing bm25_index(0x08).
+  - Per-chunk verdict provenance must NOT live in the canonical six sections that feed
+    content_hash, or every label re-annotation would invalidate all citations. Carry it in the
+    schema-free provenance blob (which IS one of the canonical six but whose meaning is
+    unchanged) being careful that adding fields stays byte-stable and deterministic, OR in a
+    future OPTIONAL section explicitly excluded from content_hash. Confirm whichever path keeps
+    citations stable across re-labeling.
+  - Any verdict facet/filter MUST run strictly AFTER the mandatory exact cosine rerank in
+    materialize_hits - the returned score must remain real cosine, never a verdict-weighted
+    proxy. Do not let a 'boost by verdict' knob leak into the score the search contract
+    guarantees.
+  - UglyFeed's clustering is AGPL-3.0 (copyleft) and materializes a dense O(n^2) cosine/distance
+    matrix that walls at a few thousand docs - reimplement the algorithm cleanly (do not vendor)
+    AND swap the dense matrix for nest's existing HnswIndex neighbor graph to avoid quadratic
+    blowup on whole-database corpora.
+  - Dataset LICENSING is the real ship-blocker: FEVER/FEVEROUS/TabFact are Wikipedia-derived CC
+    BY-SA (share-alike); UPFD (GNN-FakeNews) and FakeNewsNet payloads are academic-only / not
+    redistributable (Twitter ToS); FakeRecogna, Fake.br, MisInfoText have no clear OSS license.
+    Vendor the loader/schema PATTERNS, not the raw corpora, and license-vet every dataset
+    individually before shipping it in a .nest demo container. FACTCK.BR (MIT),
+    Factcheck-GPT/OpenFactCheck (Apache-2.0), Automated-Fact-Checking-Resources (MIT) are the
+    safe schema sources.
+  - The bm25 tokenizer is word-segmented (confirmed in bm25/tokenize.rs: splits on
+    non-alphanumerics) and degrades on CJK/Thai - fine for the PT-BR demo (it handles ã/ç/õ via
+    char iteration) but do not over-invest a multilingual fact-check narrative on top of it
+    without addressing the known tokenizer gap first.
+  - The TabFact symbolic DSL and the graph-topology section are genuinely valuable but are LARGE
+    new subsystems (multiple Rust files, new section ids, beam-search engine). They conflict
+    with the small-core / <=300-loc-per-file / minimal-budget reality of a solo author - keep
+    them firmly roadmap-only and ship the additive provenance truth-feature + dedup wins first.

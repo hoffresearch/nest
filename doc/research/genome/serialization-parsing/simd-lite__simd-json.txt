@@ -1,0 +1,70 @@
+================================================================================================
+simd-lite/simd-json
+category: serialization-parsing   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Rust port of simdjson that parses JSON at multi-GB/s by splitting parsing into a SIMD stage1
+             (branchless structural-character indexing over 64-byte chunks) and a stage2 that
+             walks that index to emit a flat u64 "tape", with zero-copy BorrowedValue
+             referencing the input buffer.
+innovation:  Two-stage parsing: stage1 uses SIMD to classify every byte in bulk (whitespace/structural via
+             pshufb lookup tables) and resolves string interiors with a branchless prefix-XOR
+             quote mask computed by carry-less multiply (PCLMULQDQ / vmull_p64) of the quote-bit
+             vector against all-ones, then ANDs the complement to drop in-string structurals.
+             The result is a dense index of "where things are" so stage2 is near-branchless and
+             data-driven. The transferable kernel: turn a per-byte stateful scan
+             (classification, region-membership, delimiter finding) into a wide bitmask
+             computation, carrying one parity bit between chunks.
+techniques:
+  - prefix-XOR quote masking via carry-less multiply (PCLMULQDQ on x86, vmull_p64 on NEON) of
+    the quote-bit vector by all-ones, carrying 1 parity bit across 64-byte chunks
+  - pshufb/shuffle as a 16-entry lookup table to classify bytes into whitespace vs structural
+    ({}[]:,) categories in parallel, producing bitmasks
+  - branchless masking: AND(structural_mask, NOT(in_string_mask)) to exclude delimiters inside
+    strings with no branches
+  - flat u64 tape: a single Vec where each element packs a type tag in high bits + offset/length
+    payload; the tree is indices into one contiguous buffer (no pointer chasing, mmap-friendly)
+  - BorrowedValue zero-copy: string and key slices reference the input buffer directly instead
+    of allocating per-token
+  - SWAR 8-digits-at-a-time number parsing via one 64-bit multiply-add chain behind a feature
+    flag
+  - SIMD UTF-8 validation fused into the scan pass instead of a separate post-pass
+  - runtime CPU feature detection selecting AVX2/SSE4.2/NEON/simd128/scalar fallback at dispatch
+    time
+nest steals: Three concrete steals. (1) bm25 tokenizer at nest-runtime/src/bm25/tokenize.rs is today a scalar
+             per-char loop (is_alphanumeric + to_lowercase) which is the documented CJK/Thai gap
+             and slow on big corpora; adapt simd-json's stage1 byte-classification to build a
+             word-boundary bitmask (ASCII alnum vs separator) over UTF-8 bytes for fast Latin
+             chunk-splitting with a scalar fallback for non-ASCII codepoints, wired through the
+             existing dispatcher in nest-runtime/src/simd/{avx2,neon,scalar}.rs that already
+             does AVX2/NEON/scalar selection. (2) The flat-tape idea maps onto a future
+             structured-data ingest path (json/yaml/parquet on the north-star roadmap): store
+             parsed docs as a contiguous repr(C) u64 tape (tag-in-high-bits + LE offset/length)
+             as a new RESERVED section id (0x09+) in nest-format/src/sections, giving mmap-able,
+             pointer-free, zero-copy reopen aligned with content_hash determinism. (3)
+             BorrowedValue zero-copy discipline reinforces the chunks_original_spans model and
+             the materialize path in nest-runtime/src/materialize.rs (parse-by-reference into
+             the mmap, never materialize eagerly). The prefix-XOR carry-less-multiply parity
+             trick is also a reusable region-detection kernel for future CSV/JSONL delimiter
+             scanning in the SIMD crate.
+compression: Indirect to raw ratio: simd-json is a speed play, not a compressor, so it does not shrink bytes
+             directly. But it unlocks the north-star "compress AND serve json/yaml/parquet" goal
+             by providing a fast, deterministic, mmap-friendly, pointer-free on-disk parse
+             representation (the flat u64 tape) that can be zstd-compressed as a non-embedding
+             section while remaining cheaply re-scannable. It also accelerates the bm25
+             build/query hot path (a known throughput gap), serving the light/cheap pillar even
+             though it does not move the size ratio.
+perf:        simdjson family hits multi-GB/s on commodity x86; stage1 processes 64 input bytes per iteration
+             as bitmasks. PCLMULQDQ is high-latency (~6 cycles on Skylake) but
+             reciprocal-throughput ~1, so simd-json hides it by scheduling independent work
+             after it - relevant if nest adopts the carry-less-multiply trick. pshufb
+             classification and prefix-XOR are the throughput wins; SWAR number parsing avoids
+             per-digit branches. The flat-Vec tape avoids per-node heap allocs and pointer
+             chasing, matching the cache/mmap profile nest wants. nest constraints: gate any
+             carry-less-multiply behind runtime detection with a scalar fallback (mirrors nest's
+             existing avx2/neon/scalar dispatcher) and keep all on-disk tape integers
+             little-endian.
+license:     Apache-2.0 / MIT dual (Rust ecosystem standard; upstream simdjson is Apache-2.0). Compatible for
+             vendoring or learning into nest.

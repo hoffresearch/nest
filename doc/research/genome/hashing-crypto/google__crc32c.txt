@@ -1,0 +1,66 @@
+================================================================================================
+google/crc32c
+category: hashing-crypto   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A small C++ library computing CRC32C (Castagnoli/iSCSI polynomial 0x1EDC6F41) with a
+             runtime-dispatched tiered backend: hardware SSE4.2 CRC32 intrinsics on x86_64,
+             ARMv8 CRC32 intrinsics on aarch64, and a portable slicing-by-4 (16 bytes/iteration)
+             software fallback.
+innovation:  The runtime CPU-feature dispatch pattern: a single Extend() entry point picks the best
+             implementation once via lazily-initialized static bools (CanUseSse42 /
+             CanUseArm64Crc32 set from CPUID/getauxval), so the same binary runs an accelerated
+             kernel where the silicon supports it and silently degrades to a portable scalar
+             kernel everywhere else, with byte-identical output across all three paths.
+techniques:
+  - CRC32C with the Castagnoli polynomial 0x1EDC6F41 (reflected), distinct from zip/zlib CRC32
+    0x04C11DB7
+  - Three-way parallel hardware CRC: maintains 3 independent _mm_crc32_u64 accumulators over
+    disjoint blocks, then folds them with precomputed kBlockNSkipTable lookup tables (XOR of
+    polynomial-skip constants) instead of PCLMULQDQ
+  - Hierarchical block sizes (Block0/1/2 nested loops) so the skip-table combine cost is
+    amortized and cache/prefetch friendly
+  - Portable slicing-by-4: 4 stride tables (kStrideExtensionTable0..3) plus a byte table, 256 x
+    u32 each (~4KB), 16 bytes/loop iteration
+  - ReadUint32LE little-endian reads for deterministic, endianness-stable results regardless of
+    host architecture
+  - Software prefetch (RequestPrefetch at a fixed kPrefetchHorizon) on large buffers;
+    byte-by-byte head handling for unaligned starts
+  - Incremental Extend(crc, buf, len) API enabling streaming/chunked checksums that compose
+    across calls
+  - Lazy one-time static-init feature detection to avoid per-call dispatch overhead
+nest steals: Two concrete uses. (1) nest-runtime SIMD dispatcher: nest already ships an AVX2/NEON/scalar
+             dot-product dispatcher; crc32c's lazy-static CanUseX pattern is the exact template
+             for a single clean cfg(target_arch)+is_x86_feature_detected!/std::arch aarch64
+             runtime selector that guarantees byte-identical scalar fallback (critical for
+             nest's determinism guarantee). (2) nest-format hashing.rs (the 4 SHA-256 integrity
+             surfaces, ~4.9k loc core): add an OPTIONAL fast integrity tier. SHA-256 is overkill
+             and slow for the per-section physical-byte checksum on the validate/inspect hot
+             path; a hardware CRC32C gives a cheap detect-corruption-fast pre-check (run CRC32C
+             first during `nest validate`, only fall through to SHA-256 if you need
+             cryptographic strength or it mismatches). Because format v1 is additive-only, this
+             fits as a new reserved encoding/metadata field, not a version bump. The
+             slicing-by-4 portable kernel is also a ready-made deterministic scalar reference
+             for nest's never-panic, repr(C), little-endian, <=300-line-file constraints (the
+             whole CRC32C core is small enough to vendor as one file). For nest's North Star
+             (compress-more-than-everyone), CRC32C itself does not compress, but a fast checksum
+             lets every codec (zstd/f16/int8) verify decode integrity per chunk almost for free,
+             enabling more aggressive lossy quantization with cheap corruption detection.
+compression: Indirect. CRC32C does not reduce bytes, so it is orthogonal to the compress-more-than-everyone
+             goal. Its value is enabling: a near-free hardware integrity check per chunk/section
+             lets nest push harder on lossy/aggressive codecs (int8, f16, future entropy coders)
+             while still cheaply detecting decode corruption, and the runtime-dispatch +
+             deterministic-scalar-fallback pattern directly hardens nest's existing SIMD compute
+             paths.
+perf:        Hardware SSE4.2 path: 3-way interleaved _mm_crc32_u64 hides the ~3-cycle latency / 1-per-cycle
+             throughput of the crc32 instruction, reaching multiple bytes/cycle; combine done by
+             table XOR (no PCLMULQDQ dependency, so it works even on hypervisors that hide the
+             CLMUL CPUID bit). ARMv8 path uses native __crc32c intrinsics. Portable slicing-by-4
+             does 16 B/iter from ~4KB of L1-resident tables with software prefetch. All three
+             are streaming/incremental and allocation-free. Note: google explicitly recommends
+             HighwayHash for NEW file formats over CRC32C, so use CRC32C only as a fast
+             non-cryptographic detect-corruption layer, not as nest's primary content-addressing
+             hash (keep SHA-256 content_hash as the stable identity).
+license:     BSD-3-Clause (Google), code originally derived from LevelDB

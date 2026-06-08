@@ -1,0 +1,310 @@
+================================================================================================
+synthesis :: rag-orchestration
+RAG, agent, LLM orchestration, and memory systems
+================================================================================================
+
+state of the art and concrete nest recommendations for this category.
+
+summary:     Across 18 RAG/agent/memory repos, almost none ship a compression codec or on-disk vector format
+             worth vendoring directly (most delegate storage to Postgres/Qdrant/LanceDB/Weaviate
+             and are pure orchestration Python). The genuinely transferable value clusters in
+             three layers. (1) Embedding-codec frontier (Weaviate recipes, RAGFlow/Infinity,
+             semtools, supermemory): Rotational Quantization (seeded Fast Walsh-Hadamard rotate
+             -> int8) makes a 4x int8 codec near-lossless at ~99% recall; LVQ (mean-center then
+             per-vector residual quant) lets the HNSW graph traverse on compressed codes so the
+             full-f32 RAM snapshot disappears; PQ/BQ chart the path to 8-32x; Matryoshka (MRL)
+             prefix truncation turns embedding dimensionality into a model-backed lossy knob
+             that stacks multiplicatively with quantization and is what the hot SIMD loop
+             actually reads. All four fit nest's existing mandatory exact-cosine rerank, which
+             IS the rescoring step every one of these codecs requires. (2) Structural dedup /
+             versioning data-model (langchain record-manager, langgraph version-keyed blobs,
+             FalkorDB CSC matrices, neo4j lexical graph): content-hash dedup of repeated
+             chunks+embeddings, append-only version maps that reference unchanged content-hashed
+             blobs instead of recopying, and CSR/CSC integer adjacency overlays that add graph
+             search and let you drop chunk-overlap text redundancy. These advance the 'compress
+             whole repos/databases' north star structurally. (3) Zero-byte retrieval-quality
+             wins (llama_index auto-merge hierarchy, langroid rank_to_periphery + RRF
+             generalization, Verba/langroid window expansion, dify/neo4j weighted fusion):
+             coarse context reconstructed from existing spans at ~9 bytes/edge with no parent
+             text stored. nest is already AHEAD of every repo here on storage (it is the only
+             one with f16/int8/zstd/mmap-SIMD and a true content_hash). The single biggest
+             near-term steal is Rotational Quantization, a self-contained additive upgrade to
+             crates/nest-format/src/encoding/int8.rs that keeps encoding=3 and needs no
+             format-version bump.
+
+state of the art
+------------------------------------------------------------------------------------------------
+The category's collective state of the art for a sovereign embedded engine is: (a) embeddings
+stored quantized but always paired with an exact rescoring pass over higher-precision vectors
+for the final-k candidates -- nest already enforces this as a format invariant
+(rerank_policy=exact, score_subset), which is stronger than most repos' ANN-proxy scores. (b)
+The best quantizers gaussianize or decorrelate before scalar quantization: Weaviate's Rotational
+Quantization (3-round blocked FWHT + sign flips, O(D log D), ~7us at 1536-dim) gives ~99%
+recall@10 at 4x where naive max-abs int8 (exactly nest's current int8.rs) degrades on
+outlier-heavy dims; Infinity's LVQ mean-centers then per-vector-scales the residual so NN
+ordering is preserved on the compressed codes, letting HNSW build/traverse without any
+full-precision copy. (c) Matryoshka embeddings make dimensionality a graceful lossy axis
+(3072->256 prefix + L2-renorm), enabling coarse(truncated)-to-fine(full) two-pass search that
+multiplies with quantization. (d) Structural dedup is treated as a first-class compressor:
+version-keyed content-addressed blobs (langgraph), content-hash record managers (langchain), and
+CSC sparse graph matrices (FalkorDB) store edit history and relationships by reference, not by
+copy. (e) Retrieval granularity is decoupled from storage granularity: only leaf chunks are
+embedded, coarse context is reconstructed on read from a tiny parent-child edge table or
+positional neighbor ids (llama_index AutoMerging, Verba/langroid windowing, neo4j NEXT_CHUNK),
+spending ~9 bytes/edge and zero embedding rows. (f) Offline static embedders (model2vec/POTION:
+per-token vector table + mean-pool, no matmul/GPU/network, byte-deterministic) make the
+embedding step itself sovereign and the model a few-MB int8+zstd table instead of multi-GB
+weights. Fusion has converged on RRF k=60 (which nest already has) with
+weighted-sum/linear-alpha as deterministic tunable alternatives.
+
+top transferable innovations
+------------------------------------------------------------------------------------------------
+1. Rotational Quantization (Weaviate): seeded Fast Walsh-Hadamard rotation gaussianizes the
+   vector so one 8-bit interval fits all dims -> ~99% recall@10 at 4x, near-drop-in upgrade to
+   nest's naive max-abs int8 codec, recall recovered by the already-mandatory exact rerank.
+2. LVQ two-stage residual quant (Infinity/RAGFlow): subtract global corpus mean, per-vector
+   scale the residual; HNSW builds and traverses on the int8 codes alone, eliminating nest's
+   wasteful full-f32 `vectors: Vec<f32>` RAM snapshot in ann/mod.rs while preserving NN order.
+3. Matryoshka (MRL) prefix truncation (supermemory): importance-ordered dims mean a 256-d prefix
+   is just the first K contiguous floats already on disk; coarse(prefix)-to-fine(full) two-pass
+   search stacks multiplicatively with int8 (~48x fewer bytes touched in pass 1) and maps
+   exactly onto nest's ANN-then-exact-rerank contract.
+4. Version-keyed content-addressed blob dedup (langgraph): store edit history by referencing
+   unchanged content-hashed chunk/embedding blobs via a small version map instead of recopying
+   -> structural cross-snapshot dedup, the core primitive for real-time edit + whole-repo
+   ingestion without breaking the frozen single-file guarantee.
+5. Content-hash record manager (langchain): per-chunk content_hash + source_id manifest enables
+   skip-if-present dedup and incremental re-embed of only changed chunks; nest already computes
+   content_hash so this is near-zero marginal cost and collapses repeated boilerplate (and its
+   fp32 embeddings) to one physical copy referenced by many spans.
+6. PQ / Binary Quantization (Weaviate recipes, semtools IVF-PQ): 8-16x (PQ, codebook + 1
+   byte/segment) and 32x (BQ, 1 bit/dim, Hamming MaxSim via popcnt/vcnt already in nest's SIMD
+   dispatcher) compressors as new reserved encoding ids, both ranking-preserving under nest's
+   exact rerank.
+7. CSC/CSR typed sparse adjacency + lexical graph (FalkorDB, neo4j-graphrag): O(edges) integer
+   overlay (src/dst u32 + edge_type u8, sorted, zstd-friendly) adds graph search and lets nest
+   drop chunk-overlap text by reconstructing neighbor context from NEXT_CHUNK edges.
+8. Auto-merge hierarchy (llama_index): parent-child edge table where parent text is
+   reconstructed from children's existing chunks_original_spans -> multi-resolution retrieval at
+   ~9 bytes/edge and zero extra text/embedding bytes.
+9. model2vec/POTION static embedder (semtools): vocab x 256 token-vector table + mean-pool gives
+   a byte-deterministic, GPU-free, network-free embedding backend; the table ships as int8+zstd,
+   making nest's embedding step itself sovereign and reproducible.
+10. rank_to_periphery + window expansion (langroid, Verba): pure-integer deterministic
+   post-rerank reorder (anti lost-in-middle) and positional neighbor-chunk expansion from
+   existing chunk_ids/spans -- zero-storage retrieval-quality wins on the returned chunk list.
+
+nest recommendations
+------------------------------------------------------------------------------------------------
+* Upgrade the int8 codec to Rotational Quantization: add a seeded Fast Walsh-Hadamard rotation
+  helper, apply it at build time before quantization, store the rotation seed (and per-section
+  min/max interval) in the int8 payload header via a new scale_kind, rotate the query with the
+  same seed at search time, then let the existing exact rerank recover recall.
+    where:  crates/nest-format/src/encoding/int8.rs (new scale_kind=1 + rotation seed in the 8-byte prefix;
+            bump INT8_PAYLOAD_VERSION, NOT NEST_FORMAT_VERSION, stays encoding=3); a new
+            ~80-line fwht helper in nest-format/src/encoding/; query-side rotation in
+            crates/nest-runtime/src/search.rs validate_query/score paths; rerank already present
+            via score_subset.
+    impact: Pushes the tiny preset's recall from degrading toward ~0.99 at the SAME 4x footprint; makes int8
+            the safe default and unlocks going below the 0.283 size ratio. Highest
+            value-per-line in the whole category.
+    effort: medium
+    from:   https://github.com/weaviate/recipes
+
+* Make the HNSW graph traverse on int8/LVQ codes and delete the full-f32 vectors snapshot. Store
+  a single global f32 mean[dim] prefix + per-vector scale + i8 residual; build and search the
+  graph using the existing dot_f32_i8 SIMD kernel instead of the f32 copy.
+    where:  crates/nest-runtime/src/ann/mod.rs (drop `vectors: Vec<f32>`), ann/build.rs + ann/search.rs
+            (traverse on codes), and nest-runtime/src/materialize.rs (mean-centered decode);
+            pairs with an int8_lvq variant in nest-format/src/encoding/int8.rs.
+    impact: Removes the ~n*dim*4 byte RAM snapshot the runtime currently holds beyond mmap (called out as a
+            cost in ann/mod.rs), shrinking memory for the tiny/hybrid presets while recall stays
+            intact via exact rerank.
+    effort: high
+    from:   https://github.com/infiniflow/ragflow
+
+* Add an optional chunk_dedup manifest section: a sorted array of {content_hash -> source_id,
+  original_span_ref} so a future `nest update`/`nest merge` re-embeds ONLY chunks whose hash is
+  absent, copies embeddings/spans for unchanged hashes byte-for-byte from the old mmap, and
+  collapses identical chunks across documents to one physical chunk+embedding referenced by many
+  spans.
+    where:  crates/nest-format/src/sections/ (new RESERVED section id 0x09, additive, own SHA-256 surface,
+            sorted for byte-identical output); builder logic in
+            crates/nest-python/src/build_fn.rs; new nest-cli subcommand.
+    impact: Cross-file content-hash dedup collapses repeated boilerplate AND its fp32 embeddings (the
+            largest section) when packing whole repos/datasets -- the biggest structural
+            compression lever for the north star; also enables incremental edit.
+    effort: high
+    from:   https://github.com/langchain-ai/langchain, https://github.com/Mintplex-Labs/anything-llm,
+            https://github.com/FalkorDB/GraphRAG-SDK
+
+* Add a Matryoshka-aware prefix layout to the embeddings section: record mrl_prefix_dims in the
+  manifest extra map and, because importance-ordered dims are already contiguous on disk, run
+  pass-1 SIMD scoring over the truncated K-dim prefix (L2-renormalized) to gather candidates,
+  then reuse the mandatory exact-cosine rerank over full-dim vectors.
+    where:  manifest `extra` field in crates/nest-format/src/manifest/mod.rs (additive, no version bump);
+            two-pass path in crates/nest-runtime/src/search.rs alongside score_subset; store a
+            per-prefix L2-renorm scale or renormalize at score time for honest cosine.
+    impact: Cuts hot-loop bytes-touched per candidate ~6-48x (e.g. 256-d int8 prefix vs 3072-d f32)
+            improving BOTH size and throughput, stacking multiplicatively with int8/RQ; requires
+            an MRL-trained model but is pure additive and deterministic.
+    effort: medium
+    from:   https://github.com/supermemoryai/supermemory
+
+* Add a graph_edges section: a deterministic CSR/CSC adjacency over chunk_ids (src u32, dst u32,
+  edge_type u8: 0=NEXT_CHUNK,1=FROM_DOCUMENT,2=ENTITY_LINK), sorted by (src,edge_type,dst), plus
+  a bounded-BFS search-graph path that seeds from exact-cosine top-k, expands over edges, and
+  re-runs exact cosine rerank on the expanded set.
+    where:  crates/nest-format/src/sections/ (RESERVED section id 0x09+, own SHA-256); a ~150-line mmap
+            graph::Adjacency reader + search-graph path in crates/nest-runtime/src/; 9th
+            nest-cli subcommand; entity extraction stays python-side in nest-python.
+    impact: Adds the north-star 'graph search' pillar with an O(edges) integer overlay that is highly
+            zstd-compressible, and lets nest drop chunk_overlap redundancy from chunks_canonical
+            by recovering neighbor context from NEXT_CHUNK edges.
+    effort: high
+    from:   https://github.com/neo4j/neo4j-graphrag-python, https://github.com/FalkorDB/GraphRAG-SDK
+
+* Add a chunk_hierarchy section (child_chunk_id u32 -> parent_chunk_id u32, level u8 +
+  per-parent child-count) and a post-rerank auto-merge pass: count retrieved leaves per parent
+  and, above a deterministic majority threshold, swap them for the parent before materialize
+  resolves spans. Parent text is NOT stored -- it is reconstructed by concatenating children's
+  chunks_original_spans.
+    where:  crates/nest-format/src/sections/ (RESERVED 0x09+); auto-merge pass in
+            crates/nest-runtime/src/search.rs after rerank, before materialize_hits;
+            hierarchical chunker in crates/nest-python.
+    impact: Multi-resolution retrieval at ~9 bytes/edge and zero extra text/embedding bytes; only leaf
+            chunks get embedding rows so the hot mmap-scored section stays minimal. Pure
+            recall-context-per-byte win.
+    effort: medium
+    from:   https://github.com/run-llama/llama_index
+
+* Generalize RRF to a rank-only sum over N>=2 lists with c exposed in search_contract, add a
+  deterministic weighted-sum/linear-alpha fusion mode (final = w_vec*exact_cosine +
+  w_kw*normalized_bm25, min-max normalized), and add a pure-integer rank_to_periphery final
+  reorder (odds + reversed evens) plus positional window expansion from chunk_ids/spans.
+    where:  crates/nest-runtime/src/bm25/fusion.rs (generalize rrf_union, add weighted_sum_union);
+            search_contract field in crates/nest-format/src/sections/contract.rs;
+            rank_to_periphery + window expansion in crates/nest-runtime/src/search.rs /
+            materialize (reads existing FROZEN sections only).
+    impact: Zero added bytes, all deterministic and panic-free, well under the 300-line cap; improves
+            downstream LLM answer quality and lets a future third (fuzzy/CJK) signal drop into
+            the hybrid path without touching the codec.
+    effort: low
+    from:   https://github.com/langroid/langroid, https://github.com/langgenius/dify,
+            https://github.com/weaviate/Verba, https://github.com/neo4j/neo4j-graphrag-python
+
+* Vendor a model2vec/POTION-style static embedder as an offline, deterministic, zero-dependency
+  embedding backend in nest-python: a potion token-vector table (vocab x 256, shipped int8+zstd)
+  where embedding = tokenize + gather + mean-pool, and provenance.model_hash becomes the table's
+  SHA-256.
+    where:  crates/nest-python (or a tiny nest-runtime helper module under the 300-line cap); table can ship
+            as a separate nest-encoded asset; wires into the existing
+            model_hash/model_fingerprint provenance fields.
+    impact: Makes the embedding step itself sovereign and byte-reproducible (no PyTorch/GPU/network),
+            replacing a multi-GB neural model with a few-MB lookup table -- directly serves the
+            offline/deterministic mission and shrinks the toolchain footprint. Caveat: CJK/Thai
+            tokenization quality depends on the underlying sentencepiece.
+    effort: high
+    from:   https://github.com/run-llama/semtools
+
+* Add a deterministic on-disk embedding cache in the nest-python builder keyed by
+  SHA-256(canonical_chunk_text) prefixed by model_fingerprint namespace, so rebuilds and
+  cross-corpus dedup never re-embed identical text and aggressive re-encoding experiments
+  (int8/RQ/PQ) become cheap to iterate.
+    where:  crates/nest-python/src/build_fn.rs (a sidecar cache, NOT in the frozen container); reuses
+            provenance model_hash as the namespace.
+    impact: Build-time/operational only (saves recompute, not bytes), but it is what makes the whole
+            quantization-codec roadmap above cheap to A/B; preserves byte-identical output since
+            cache hits return the same f32 vectors.
+    effort: low
+    from:   https://github.com/langchain-ai/langchain, https://github.com/Mintplex-Labs/anything-llm
+
+* Roadmap PQ and Binary Quantization as new reserved embedding encoding ids (4-255 range): PQ =
+  split D into segments, 256-centroid seeded k-means codebook per segment, 1 byte/segment with
+  ADC lookup tables (~8-16x); BQ = 1 bit/dim sign, Hamming prefilter via popcnt(x86)/vcnt(NEON)
+  already in the SIMD dispatcher, then exact rerank (~32x).
+    where:  crates/nest-format/src/encoding/ (new pq.rs / bq.rs, new SECTION_ENCODING_* ids 4 and 5,
+            additive within v1); SIMD Hamming kernel in crates/nest-runtime/src/simd/; both
+            gated behind nest's existing mandatory exact rerank.
+    impact: Charts the path well past the tiny preset's 0.283 ratio toward 8-32x embedding compression while
+            keeping real-cosine ground truth -- the deepest compression lever for 'compress more
+            than everyone'.
+    effort: high
+    from:   https://github.com/weaviate/recipes, https://github.com/run-llama/semtools,
+            https://github.com/infiniflow/ragflow
+
+compression wins
+------------------------------------------------------------------------------------------------
+  - Rotational Quantization makes the existing int8/4x path near-lossless (~99% recall@10) by
+    adding only a deterministic O(D log D) FWHT rotation + a few header bytes -- same footprint,
+    far better recall, so int8 becomes the default and the 0.283 tiny ratio can drop further.
+  - LVQ lets the HNSW graph traverse on int8 codes, deleting the runtime's full-f32 `vectors:
+    Vec<f32>` snapshot (n*dim*4 bytes of RAM beyond mmap) at equal recall.
+  - PQ (~8-16x) and BQ (~32x, 1 bit/dim, ranking-preserving via Hamming MaxSim) as new reserved
+    encoding ids push the embeddings section -- nest's largest and the only never-zstd'd section
+    -- far below int8, all safe under the mandatory exact rerank.
+  - Matryoshka prefix truncation (3072->256 ~12x) stacks multiplicatively with int8/RQ (4x) and
+    BQ, and the smaller prefix is what the hot SIMD loop actually reads, improving size AND
+    throughput simultaneously.
+  - Content-hash dedup collapses repeated/boilerplate chunks AND their fp32 embeddings to one
+    physical copy referenced by many spans -- the biggest structural lever when packing whole
+    repos/datasets/databases into one container.
+  - Version-keyed content-addressed blob dedup stores edit/version history by referencing
+    unchanged hashed blobs instead of recopying, so a new corpus version is mostly free;
+    composes with zstd/int8 by deduping before encoding the delta.
+  - CSC/CSR sparse adjacency stores a whole relationship graph in O(edges) (monotone indices
+    arrays, delta+varint+zstd friendly) instead of O(nodes^2) edge-list-of-strings, carrying
+    graphs in kilobytes.
+  - Hierarchy/lexical-graph edge tables (~9 bytes/edge) plus NEXT_CHUNK neighbor reconstruction
+    let nest drop chunk_overlap text from chunks_canonical and rebuild context on read --
+    multi-resolution retrieval for near-zero extra bytes.
+  - Structure-aware and semantic chunkers (markdown/code/json/AST boundaries) produce more
+    self-similar, boundary-aligned chunks_canonical that zstd compresses better and reduce span
+    fragmentation.
+  - MegaParse-style canonicalize-before-hash (normalize PDF/DOCX/parquet to deterministic
+    markdown before chunking) exposes far more cross-document redundancy for zstd and
+    strengthens the content_hash stability guarantee -- a precondition for compressing
+    heterogeneous formats at all.
+
+watch-outs (conflict with nest constraints)
+------------------------------------------------------------------------------------------------
+  - REJECT the loopback-NFSv3 path in smfs and Weaviate/Verba's semantic answer cache -- both
+    bind a socket / need online state and would violate nest's offline-by-construction,
+    no-socket guarantee. A read-only FUSE mount in a SEPARATE nest-fuse crate (kept out of
+    nest-runtime) is acceptable since FUSE opens no network socket.
+  - REJECT every network/GPU dependency: MegaParse vision-LLM table reconstruction, Cohere/Jina
+    rerankers, OpenAI/gpt-4o calls, hosted Supermemory, FalkorDB/Redis engine. Only the
+    ALGORITHMS (budget trimming, chunk indexing, fusion math, CSC traversal) are stealable,
+    never the runtimes.
+  - Do NOT vendor SuiteSparse:GraphBLAS (heavy C dep, threading) or FalkorDB engine
+    (SSPL-licensed, not vendorable) -- a minimal pure-Rust CSC matvec (tens of lines) covers
+    k-hop traversal without the dependency. Skip its MVCC/mpsc machinery entirely; nest is
+    frozen read-only single-process mmap.
+  - Adopt langgraph's CWE-502 lesson as a hard rule: nest must NEVER deserialize arbitrary types
+    from a container. Keep fixed section decoders + typed thiserror only; any new section
+    (dedup/graph/hierarchy/tensor) must be a strict repr(C) LE decoder, never a
+    constructor-style deserializer.
+  - All new codecs (RQ rotation, LVQ mean, PQ k-means, BQ) MUST be seeded/deterministic so same
+    input => byte-identical file. PQ/RQ k-means and any sampling must use a seeded RNG like the
+    existing seeded HNSW; otherwise the reproducible-build contract breaks.
+  - Matryoshka requires an MRL-trained model AND per-prefix L2-renormalization of the truncated
+    slice -- skipping the renorm silently corrupts cosine. Bake renorm into the writer or
+    materialize path; do not ship MRL search without it.
+  - Keep additive-only discipline: new sections must use reserved ids 0x09+, new encodings ids
+    4-255, and must NOT enter content_hash (optional sections are excluded by design so
+    citations stay stable). Only bump NEST_FORMAT_VERSION for a true v2 where an existing field
+    changes meaning; codec changes use payload-version bumps like INT8_PAYLOAD_VERSION.
+  - Respect the file-hygiene cap: every new module (fwht, pq, bq, graph adjacency, hierarchy,
+    fusion variants) must stay <=300 lines (333 hard cap), single-responsibility -- split
+    codec/reader/search as the existing ann/ and bm25/ modules do.
+  - model2vec/jieba/tree-sitter tokenizers carry large dictionaries or model files -- pick a
+    small-footprint, offline, deterministic segmenter or the sovereign/reproducible guarantee
+    and the tiny-footprint mission regress. The known CJK/Thai BM25 gap is real but must be
+    fixed without a multi-MB dictionary download.
+  - NEVER general-compress (zstd/lz4) the embeddings section -- it is scored directly from mmap
+    on the hot path; this is the opposite of Jina/DocArray's outer-codec approach and is a core
+    nest invariant. Embedding size reduction must come from quantization/dim-reduction
+    (RQ/PQ/BQ/MRL), never entropy coding of the live dense bytes.
+  - Build-time embedding cache and any incremental-edit staging must live in a sidecar /
+    nest-python, NOT mutate the frozen container in place; flush edits via a deterministic
+    rebuild so byte-identical reproducibility holds.

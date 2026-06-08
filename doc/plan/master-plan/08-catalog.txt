@@ -1,0 +1,335 @@
+==============================================================================================
+nest pillar :: catalog mode: reference huge corpora without inlining
+layer: nest
+==============================================================================================
+
+a design doc. the executable steps are in ../tasks/.
+
+thesis
+----------------------------------------------------------------------------------------------
+a .nest in catalog mode is the same sovereign single-file substrate (embeddings + index +
+graph + text + citations), but for chunks whose ORIGINAL source bytes are too large to inline
+(a whole webarchive, hundreds of GB of books, giant parquet/warc/sql dumps) it stores only a
+content-hash REFERENCE to those bytes instead of the bytes themselves. the .nest stays small,
+mmap-able, and queryable with zero query-engine spin-up (no duckdb/spark/parquet reader boot),
+and citations stay provably valid across the reference boundary because the citation identity
+(content_hash over the DECODED canonical six) NEVER depends on whether original bytes live
+inside the file or in an external blob store. the design is purely additive within frozen v1:
+one new optional section (blob_refs, 0x11) + one new optional sidecar blobstore file format +
+a manifest `storage_mode` flag + a thin cite/verify path that resolves a reference by its own
+content-hash. self-contained mode is the default and unchanged; catalog mode is a build-time
+choice that swaps inlined original-source bytes for verifiable references. the canonical
+extracted text, embeddings, index and graph are ALWAYS inlined (that is what makes search work
+off mmap with no external dependency); only the heavy ORIGINAL artifacts (the raw pdf/parquet
+row group/warc record/image) move out-of-line. this is the antidote to "keep re-running
+queries on a 300gb monolith": forge extracts once, nest holds the compact searchable
+substrate, and the monolith becomes a cold, content-addressed, optional blob the citation can
+reopen by exact byte span when (and only when) a human or agent asks to see the source.
+
+format impact
+----------------------------------------------------------------------------------------------
+all additive within frozen v1, no NEST_FORMAT_VERSION bump. new optional section id
+SECTION_BLOB_REFS=0x11 (next after the reserved 0x09-0x10 block; reserve it as a named
+constant in layout/mod.rs alongside the existing reserved set, EXCLUDED from
+CANONICAL_SECTIONS so it never enters content_hash and never invalidates a nest:// citation).
+new manifest fields storage_mode:string and capabilities.supports_catalog:bool (additive serde
+fields with defaults; old readers that lack the field treat absent as self_contained, and a
+self_contained file is byte-identical to today's output so golden/v01_compat tests stay
+green). a SPANS payload-version bump (CHUNKS_ORIGINAL_SPANS payload version 1->2) adds an
+optional per-span blob_ref_index column and reinterprets byte_start/byte_end as blob-relative
+when storage_mode=catalog; old readers reject the unknown payload version and fail closed,
+exactly the additive contract. a NEW reserved content-hash ALGORITHM id space for blob
+references (algo=0 sha256 over decoded original bytes; reserve algo=1 blake3 for huge-blob
+streaming addressing per the deferred v2 lane) carried inside the blob_refs payload, NOT
+touching the v1 content_hash field. the sidecar .nestpack is a SEPARATE file format (own
+4-byte magic b"NPAK", own header/footer/sha256 directory) so it cannot collide with or alter
+the .nest layout. crucially: content_hash (the citation anchor) is unchanged in BOTH modes
+because it hashes the decoded canonical six, and the canonical six (chunk_ids,
+chunks_canonical TEXT, spans, embeddings, provenance, search_contract) are present and
+identical whether or not original blobs are inlined.
+
+architecture changes
+----------------------------------------------------------------------------------------------
+nest-format: new optional section SECTION_BLOB_REFS=0x11 (additive, excluded from
+content_hash) with its own encode/decode module crates/nest-format/src/sections/blob_refs.rs
+(a columnar table: per distinct original source, a content-hash digest + algorithm-id +
+decoded_length + a uri-hint string pool, intpack-coded offsets, reusing the spans source_uri
+dedup pattern). new manifest field `storage_mode` ("self_contained" | "catalog") + capability
+`supports_catalog` in crates/nest-format/src/manifest, validated so catalog mode requires
+blob_refs present and self_contained forbids it. spans gain an additive "blob-relative"
+interpretation: in catalog mode chunks_original_spans byte_start/byte_end are offsets into the
+REFERENCED blob (identified via a new blob_ref_index column) rather than an inlined source;
+this is recorded by storage_mode and a new payload-version bump on the spans section, never a
+NEST_FORMAT_VERSION bump. new tiny standalone sidecar format crates/nest-format/src/blobstore/
+(a .nestpack container: header + sorted content-hash directory + concatenated blobs,
+mmap-able, integrity per-blob; NOT a query engine, just a content-addressed bag) with reader
+(mmap) + writer modules, each <=300 lines. nest-runtime: a blob resolver
+crates/nest-runtime/src/blobref.rs that, given a content-hash + byte span, locates bytes
+across an ordered list of resolvers (inlined chunks_canonical is always present for the
+canonical TEXT; original-source bytes resolve through: explicit --blobstore sidecar, a local
+content-addressed cache dir, or absent -> typed "blob unavailable, citation still verifiable"
+result). nest-cli: extend `nest cite` to resolve across the reference boundary and report
+whether original bytes were reachable; extend `nest validate` with a catalog-aware integrity
+pass; new subcommand `nest pack`/`nest blobs` to build/inspect the sidecar blobstore (stays
+within the existing 8->small-N subcommand budget as one verb with subactions). nest-python:
+build_fn gains a storage_mode + blob-recipe argument so the python builder (the Forge side)
+can emit references instead of inlined originals and optionally write the sidecar.
+
+ux
+----------------------------------------------------------------------------------------------
+cli verbs stay lowercase and few. `nest build ... --mode catalog --blobstore corpus.nestpack`
+(default mode self_contained, so existing users see no change). `nest cite file.nest
+nest://<content_hash>/<chunk_id>` works in both modes and ALWAYS prints text + content_hash +
+source span; in catalog mode it adds three lines: blob_ref (content-hash of the original),
+blob_status (inlined | sidecar | cache | unavailable), and original_bytes (printed only if a
+resolver reached them, else "run with --blobstore <path> to reopen original"). progressive
+disclosure: the citation is fully trustworthy with the .nest alone (text + hash verify
+offline, no blob needed); the heavy original is an opt-in second hop. `nest validate
+file.nest` gains a catalog summary (n referenced blobs, total referenced bytes, how many
+reachable via the supplied --blobstore) so an operator sees "this 40mb .nest references 312gb
+of originals, 312gb reachable" at a glance. accessibility/graph-first audience: catalog mode
+is what makes the whole-webarchive / whole-osint-dump case feel like one calm searchable index
+instead of a giant scary monolith, and it pairs with the Lens graph viz (a referenced blob is
+a node you can expand on demand, not data you must hold in RAM). the framing line for docs and
+readme: "mmap + index, no query engine. forge extracts once; nest serves the compact
+substrate; the monolith stays cold and content-addressed; the citation reopens the exact
+original span only when you ask."
+
+phase placement
+----------------------------------------------------------------------------------------------
+a new consolidated catalog phase, sequenced AFTER phase 0 guardrails and the phase 1 free
+integer/string wins (it reuses the intpack codec from task #10 and the spans source_uri dedup
++ offset tables from task #12), and BEFORE or alongside phase 3 dedup. concretely: catalog-1
+(blob_refs section + storage_mode + cite/validate, MEDIUM priority, depends-on task #08 codec
+registry + task #10 intpack + task #12 spans) lands in the "later" column next to the graph
+work since both are the redesign's first-class pillars; catalog-2 (the .nestpack sidecar
+blobstore + resolver + cache dir) follows immediately; catalog-3 (build-time content-hash
+dedup of identical referenced blobs, sharing the dedup_map machinery from task #18) folds into
+phase 3. priority: catalog-1 is the wedge enabler for the osint-data-lake vertical, so
+MEDIUM-HIGH within later; do not start before phase 0 (the embeddings_fp rerank gate and codec
+registry) is merged, because catalog mode must not perturb the deterministic-build or
+content_hash invariants those tasks harden.
+
+draws from
+----------------------------------------------------------------------------------------------
+NixOS/nix, ipfs/kubo, lancedb/lance, activeloopai/deeplake, duckdb/duckdb,
+tigerbeetle/tigerbeetle, jvm-repo-rebuild/reproducible-central, google/flatbuffers,
+BurntSushi/fst
+
+proposed tasks
+----------------------------------------------------------------------------------------------
+* catalog-1: SECTION_BLOB_REFS=0x11 + storage_mode manifest flag + catalog-aware cite/validate
+    goal:   make a .nest reference original source bytes by content-hash instead of inlining them, so a
+            giant corpus becomes searchable from a small .nest while every nest:// citation
+            stays provably valid across the reference boundary. additive within frozen v1, no
+            NEST_FORMAT_VERSION bump.
+    owns:   crates/nest-format/src/sections/blob_refs.rs, crates/nest-format/src/sections/mod.rs,
+            crates/nest-format/src/layout/mod.rs, crates/nest-format/src/manifest/mod.rs,
+            crates/nest-format/src/manifest/validate.rs, crates/nest-cli/src/cmd/cite.rs,
+            crates/nest-cli/src/cmd/validate.rs
+      - reserve SECTION_BLOB_REFS=0x11 in layout/mod.rs as a named constant directly after
+        SECTION_REPRO_MANIFEST=0x10; leave it OUT of CANONICAL_SECTIONS and (for now) OUT of
+        OPTIONAL_SECTIONS until this feature ships its decoder, matching the existing
+        reserved-id discipline; add the test arm to
+        reserved_additive_ids_are_in_range_and_distinct
+      - add crates/nest-format/src/sections/blob_refs.rs (<=300 lines, typed thiserror via
+        Cursor like spans.rs): a columnar payload with the 12-byte version+count prefix,
+        holding per distinct referenced source a record of (algorithm_id:u8, digest_len:u8,
+        digest bytes, decoded_length:u64, uri_hint via write_lp_str into a deduped string
+        pool); reuse the source_uri-dedup + intpack offset-table pattern from task #12 so it
+        is small and O(1)-indexable off mmap. algorithm_id=0 means sha256 over the decoded
+        original-source bytes; reserve 1=blake3 (not yet emitted)
+      - add manifest field storage_mode:String (default "self_contained") and
+        capabilities.supports_catalog:bool (default false) as additive serde fields; absent on
+        disk -> self_contained so old files and golden fixtures are byte-identical. add
+        ALLOWED_STORAGE_MODES + a SUPPORTED_STORAGE_MODE const in manifest/validate.rs
+      - in manifest/validate.rs enforce: storage_mode==catalog REQUIRES
+        capabilities.supports_catalog && a blob_refs section advertised;
+        storage_mode==self_contained FORBIDS blob_refs; reject unknown storage_mode with a
+        typed NestError; keep supports_citations==true mandatory in BOTH modes (catalog never
+        weakens citation guarantees)
+      - bump CHUNKS_ORIGINAL_SPANS payload version 1->2 in spans.rs: v2 adds an optional
+        per-span blob_ref_index:u32 column AND documents that byte_start/byte_end are
+        interpreted as offsets into the referenced blob when storage_mode=catalog. keep v1
+        decode for self_contained; old readers reject v2 (UnsupportedSectionVersion) and fail
+        closed. CRITICAL: this must NOT change the DECODED bytes used for content_hash in
+        self_contained mode, so self_contained keeps emitting v1 spans byte-identically
+      - extend nest-cli cite.rs so resolution works in both modes: always print text +
+        content_hash + chunk_id + source span (verifiable from the .nest alone, no blob
+        needed); when storage_mode=catalog, additionally decode blob_refs, look up this
+        chunk's referenced blob, and print blob_ref (its content-hash), blob_status
+        (inlined|unavailable for now; sidecar/cache added in catalog-2), and a hint line
+        telling the user how to reopen the original. the content_hash mismatch guard stays
+        first and unchanged
+      - extend nest-cli validate.rs with a catalog summary: number of referenced blobs, total
+        referenced decoded_length, and a note that originals are out-of-line (reachability is
+        computed in catalog-2 once the resolver exists). self_contained files print nothing
+        new
+      - wire blob_refs encode into crates/nest-format/src/writer/build.rs ONLY when
+        storage_mode=catalog (gate behind the manifest flag; self_contained build path is
+        untouched and byte-identical). add it to the section emission list with
+        SECTION_ENCODING_RAW or intpack, sorted by id like the others
+      - add a roundtrip test for blob_refs (encode==decode), a content_hash-equality test
+        proving that a self_contained .nest and a catalog .nest built from the SAME canonical
+        text/embeddings have the SAME content_hash (the citation anchor crosses the reference
+        boundary unchanged), and a negative test that a catalog manifest without blob_refs is
+        rejected
+    risk:   if blob_refs or the spans v2 reinterpretation ever leaks into the content_hash preimage, every
+            catalog citation diverges from its self_contained twin and the cross-mode
+            citation-stability promise breaks. mitigate by keeping blob_refs out of
+            CANONICAL_SECTIONS and asserting cross-mode content_hash equality in a test; never
+            let storage_mode change the decoded canonical-six bytes.
+
+* catalog-2: .nestpack sidecar content-addressed blobstore + runtime blob resolver + cache dir
+    goal:   give catalog-mode .nest files an optional, mmap-able, content-addressed sidecar (.nestpack)
+            that holds the heavy original bytes, plus a runtime resolver that reopens an exact
+            original byte span by content-hash from sidecar OR local cache OR reports
+            unavailable, all offline and with no query engine. this is what lets a 40mb .nest
+            reopen the exact source span out of a 300gb cold blob bag on demand.
+    owns:   crates/nest-format/src/blobstore/mod.rs, crates/nest-format/src/blobstore/reader.rs,
+            crates/nest-format/src/blobstore/writer.rs, crates/nest-runtime/src/blobref.rs,
+            crates/nest-cli/src/cmd/blobs.rs, crates/nest-cli/src/cmd/mod.rs
+      - design the .nestpack container in crates/nest-format/src/blobstore/ as a SEPARATE
+        little-endian repr(C) format (own magic b"NPAK", own version, NOT a .nest):
+        [header][sorted content-hash directory of (digest, offset, length)][concatenated
+        blobs][footer sha256 over body]. keep reader.rs and writer.rs each <=300 lines,
+        single-responsibility, typed thiserror, never panic on truncated/adversarial bytes
+        (mirror the negative_* test discipline)
+      - blobstore/reader.rs: mmap-open the sidecar, binary-search the sorted digest directory
+        (FST/flatbuffers-style O(log n) off mmap, no full load), return the byte slice for a
+        (content_hash, byte_start, byte_end) span, verifying the blob's own digest before
+        returning so a corrupted/wrong sidecar cannot forge a citation
+      - blobstore/writer.rs: deterministic build from a list of (content_hash, bytes) sorted
+        ascending by digest (canonical order = reproducible byte-identical sidecar), dedup
+        identical digests to one stored copy (Kubo raw-leaves / Nix store-optimise lesson),
+        pad/align for mmap. no compression in v1 of the sidecar (originals are
+        already-compressed pdf/parquet/zip mostly); reserve a per-blob encoding byte for later
+      - add crates/nest-runtime/src/blobref.rs: a resolver that takes a blob_refs entry + span
+        and tries an ORDERED resolver chain: (1) inlined (n/a for originals in catalog mode,
+        present only for canonical text), (2) explicit --blobstore sidecar path, (3) a local
+        content-addressed cache dir (e.g. $XDG_CACHE_HOME/nest/blobs/<algo>/<hex>), (4) absent
+        -> typed BlobUnavailable result (NOT an error; the citation is still verifiable).
+        pure, offline, no socket
+      - extend nest-cli cite.rs (coordinate with catalog-1 owner; this task may add a resolver
+        call behind a feature-gated helper to avoid edit conflicts) so blob_status becomes one
+        of inlined|sidecar|cache|unavailable and original_bytes is printed when reachable;
+        verify the resolved bytes hash to the referenced content_hash before printing
+      - add `nest blobs` subcommand (cmd/blobs.rs + register in cmd/mod.rs): subactions to
+        build a .nestpack from a directory of originals, list its directory, and verify it;
+        keep it ONE new verb to respect the small-cli budget
+      - extend nest validate's catalog summary (from catalog-1) to compute reachability when
+        --blobstore is supplied: how many referenced blobs resolve and verify, total reachable
+        bytes
+      - tests: deterministic .nestpack build (two builds byte-identical), resolver returns
+        exact span bytes and verifies digest, BlobUnavailable is a clean typed result not a
+        panic, and an end-to-end test: build a catalog .nest + sidecar, cite a chunk, confirm
+        it reopens the exact original byte span and the digest matches
+    risk:   a sidecar is a second file, which threatens the single-file sovereignty promise. mitigate by
+            making the sidecar strictly OPTIONAL and the .nest fully functional (search +
+            verifiable citations) without it; the sidecar only adds original-byte reopen.
+            second risk: nondeterministic sidecar (HashMap iteration / unsorted digests)
+            breaks reproducible builds; enforce ascending-digest canonical order + a two-build
+            equality test. do NOT let the resolver open a socket or pull a remote object store
+            (offline by construction).
+
+* catalog-3: build-time blob dedup + parquet/warc row-range references + python build wiring +
+  docs
+    goal:   make catalog mode practical for the real data shapes (giant parquet, warc webarchives, osint
+            zip/sql dumps): reference original bytes at sub-file granularity (a parquet row
+            group, a warc record, a zip member) by content-hash + byte range, dedup identical
+            referenced blobs across the corpus, and expose the whole mode through the python
+            builder so Forge can emit it. ship the docs that position catalog mode as the
+            duckdb/parquet-monolith antidote.
+    owns:   crates/nest-python/src/build_fn.rs, crates/nest-format/src/sections/blob_refs_dedup.rs,
+            doc/plan/master-plan/05-catalog.txt,
+            doc/plan/tasks/later/28-catalog-mode-blob-refs.txt
+      - extend blob_refs records (additively, payload-version-aware) to allow a sub-file
+        range: keep the blob content-hash addressing the WHOLE original artifact, and let
+        chunks_original_spans v2 byte_start/byte_end address a range WITHIN it (parquet row
+        group, warc record, zip member, pdf page object). document that the canonical
+        determinism anchor is still the extracted canonical text, never the raw parquet/warc
+        bytes
+      - add crates/nest-format/src/sections/blob_refs_dedup.rs (<=300 lines): at build time,
+        collapse identical referenced content-hashes to one blob_refs entry with a u32
+        back-ref per span (reuse the dedup_map=0x0B machinery / task #18 pattern), so a corpus
+        that references the same original file from many chunks stores ONE reference. dedup
+        operates on content-hash equality, deterministic first-seen-by-sorted-digest ordering
+      - wire crates/nest-python/src/build_fn.rs: add storage_mode + a blob-recipe argument so
+        the python builder (Forge) passes, per chunk, the original artifact's content-hash +
+        uri-hint + optional (row_group/record/member, byte_start, byte_end) instead of
+        inlining the bytes; optionally emit the .nestpack via the catalog-2 writer. keep
+        self_contained the default so existing python callers are unaffected
+      - write doc/plan/master-plan/05-catalog.txt (lowercase, no emoji, no em-dash, matching
+        parts 0-4 voice): the storage_mode switch, the reference boundary, how
+        content_hash/citations stay valid across it, the .nestpack sidecar, the resolver
+        chain, and the explicit positioning vs duckdb/parquet/osint monoliths (mmap + index,
+        extract-once, no query-engine spin-up)
+      - write the self-contained work-order doc/plan/tasks/later/28-catalog-mode-blob-refs.txt
+        in the established format (status, goal, depends-on task #08/#10/#12/#18,
+        READ-COMPLETE-FILES, OWNS-code-files, STEPS checkboxes, NEST RULES, DONE-WHEN gate,
+        RESULT size/recall fill-in, MERGE) so the catalog tasks render straight into the
+        kanban; add the catalog cards to doc/plan/kanban.txt
+      - measure on a real shape: build a catalog .nest over a multi-GB parquet/warc sample,
+        record the .nest size vs the original corpus size (the headline ratio: e.g. 40mb index
+        over 300gb referenced) and confirm recall@10 is identical to a self_contained build
+        over the same canonical text (catalog mode must not move recall, only where original
+        bytes live)
+      - tests: blob dedup collapses identical references deterministically, sub-file range
+        citations reopen the exact parquet-row-group/warc-record byte span via the resolver,
+        and a self_contained-vs-catalog content_hash-equality test over the same canonical
+        inputs
+    risk:   scope creep toward becoming a query engine: catalog mode must stay 'mmap + index +
+            content-addressed reference', NOT a parquet/warc reader embedded in the rust core.
+            mitigate by keeping ALL format parsing (parquet/warc/zip range extraction) in the
+            python Forge side; the rust core only stores content-hash + byte-range references
+            and reopens raw byte spans. second risk: sub-file ranges that drift if the
+            original is re-encoded; mitigate by addressing the WHOLE original by content-hash
+            (so any change to the original is detected) and treating the range as advisory
+            within that verified blob.
+
+risks
+----------------------------------------------------------------------------------------------
+  - the reference boundary is the single point where citation trust could leak: if
+    storage_mode ever changes the decoded canonical-six bytes (e.g. spans v2 reinterpretation
+    bleeding into self_contained, or blob_refs sneaking into content_hash), a catalog citation
+    stops matching its self_contained twin. the whole design hangs on content_hash being
+    computed identically in both modes; this must be asserted by a cross-mode equality test,
+    not just documented.
+  - the sidecar .nestpack is a second file and erodes the single-file sovereignty story if it
+    becomes mandatory. it must stay strictly optional: search and verifiable citations work
+    from the .nest alone; the sidecar only enables reopening ORIGINAL bytes. messaging and
+    validation must make 'citation verifiable, original unavailable' a first-class,
+    non-alarming state.
+  - determinism: blob dedup ordering, the .nestpack digest directory, and the spans v2 column
+    must all be canonically sorted/seeded or reproducible builds break. easy to regress via
+    HashMap iteration order.
+  - scope creep into a query engine: the temptation to parse parquet/warc inside the rust core
+    to resolve sub-file ranges would violate the small-sovereign-core discipline. all heavy
+    format parsing stays in the python Forge side; the core stores and reopens byte ranges by
+    content-hash only.
+  - an old runtime opening a catalog .nest: it must fail closed cleanly (unknown spans payload
+    version, unknown storage_mode), never silently serve catalog spans as if they were
+    inlined. the additive contract (fail-closed on unknown ids/versions) already gives this,
+    but the spans v2 bump must be tested against a v1-only reader path.
+
+open questions
+----------------------------------------------------------------------------------------------
+  - should the local cache dir resolver be in-scope for v1 of catalog mode, or is
+    --blobstore-only simpler and more sovereign? a cache dir adds a non-single-file moving
+    part; the sidecar alone may be the cleaner default with cache as a later opt-in.
+  - blob reference granularity: address only whole original files by content-hash (simplest,
+    most robust to re-encoding) versus sub-file ranges (parquet row group / warc record) which
+    are far more useful for giant single-file dumps but more fragile. catalog-3 proposes
+    whole-blob content-hash + advisory range; is that the right tradeoff or should sub-file
+    ranges get their own verified sub-digest?
+  - should catalog mode reuse SECTION_DEDUP_MAP=0x0B for blob dedup or get its own table
+    inside blob_refs? reuse is DRY but couples two features; a dedicated column in blob_refs
+    may be cleaner and keep the dedup task independent.
+  - does the sidecar warrant the deferred blake3/merkle v2 (algo=1) for streaming
+    addressability of huge blobs that cannot be hashed in one pass, or is
+    sha256-over-decoded-bytes (algo=0) sufficient for v1 catalog mode? the format already
+    reserves a blob-ref algorithm id space for this.
+  - go-to-market sequencing: catalog mode is the enabler for the sovereign-osint-data-lake
+    vertical (giant bizarre monoliths -> compact searchable graph that stays on the machine).
+    if osint is NOT the chosen flagship, does catalog mode still earn its phase slot before
+    graph, or does it ride behind the flagship's needs?

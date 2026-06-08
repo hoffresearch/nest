@@ -1,0 +1,74 @@
+================================================================================================
+spotify/annoy
+category: ann-index   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A C++/Python random-projection-forest ANN index whose entire forest lives in one contiguous,
+             headerless, raw-float32 blob that is mmapped read-only and shared across processes
+             with zero deserialization.
+innovation:  The index IS the file: a flat array of fixed-size `Node` structs (`_s = offsetof(Node, v) +
+             _f*sizeof(T)` bytes each) packed contiguously, so loading is just mmap + pointer
+             arithmetic `(Node*)((uint8_t*)_nodes + _s*i)` with NO header, NO footer metadata,
+             and NO parse step. Node count is recovered as `file_size / _s`; tree roots are
+             recovered by scanning backward from EOF and collecting nodes whose `n_descendants
+             == m` (the max). One union'd struct overloads three roles via a single discriminant
+             (`n_descendants`): leaf (==1, vector in v[]), compact internal node (2..=_K, child
+             item-ids packed where v[] would be), or split node (>_K, hyperplane normal in v[]).
+             A zero-copy, query-immediately, structurally-self-describing on-disk format.
+techniques:
+  - Random projection forest: n_trees independent trees, each split is the hyperplane
+    equidistant from two sampled points (two_means, 200 refinement iterations) -- build-once,
+    static, no graph mutation
+  - Headerless contiguous blob: n_nodes = file_size/_s, roots found by backward EOF scan for max
+    n_descendants, roots copied into a trailing segment at build end
+  - Single union'd Node struct discriminated by n_descendants: leaf(1)/compact-internal(<=_K ids
+    inline)/split(hyperplane in v[]); _K=(_s-offsetof(Node,children))/sizeof(S)
+  - search_k runtime knob (default n*n_trees) over a std::priority_queue keyed by margin()
+    (signed distance to split plane) -- one parameter trades recall for latency at query time,
+    index unchanged
+  - Hand-written SIMD distance kernels: AVX _mm256_mul_ps/_mm256_add_ps + hsum256_ps_avx; AVX512
+    _mm512_fmadd_ps + _mm512_reduce_add_ps; Manhattan/Euclidean use _mm256_andnot_ps for abs
+  - Angular metric stores L2-normalized vectors so cosine becomes sqrt(2-2cos); DotProduct
+    metric reduced to cosine space via an extra dot_factor dimension per node
+  - Hamming metric packs bits into 64-bit words and uses popcount primitives -- a compact
+    binary-quantization candidate path
+  - prefault flag: eager full read vs lazy on-demand page-faulting of the mmap, tuning
+    cold-start latency vs RAM for partial scans
+nest steals: nest-format: adopt Annoy's discriminant-only headerless self-description for ANN sub-blocks. The
+             lesson is that an ANN section body can be a single flat array of fixed-stride
+             records where structure is recovered by arithmetic (count = byte_len/stride) plus a
+             trailing roots segment, eliminating per-node offset tables -- directly shrinks the
+             optional hnsw_index(0x07) footprint and keeps it mmap-zero-copy. nest-runtime:
+             Annoy's static build-once forest is a compelling SECOND ann backend beside
+             ann::HnswIndex, exposed as a RESERVED section id (>=0x09, additive, no
+             NEST_FORMAT_VERSION bump) and a search-ann variant; a seeded KISS-style RNG
+             (mirroring nest's existing deterministic hnsw seeding) makes the forest
+             byte-identical across builds, satisfying reproducibility, and trees compress far
+             better under zstd than HNSW graphs since they have no back-edges. The single
+             search_k knob maps onto nest's mandatory exact-cosine rerank: the forest
+             over-fetches cheap candidates, nest reranks with SIMD dot products off mmap, so ann
+             stays a pure candidate generator and the returned score is real cosine. Annoy's
+             Hamming/popcount path is the primitive for a future int1/binary embedding encoding
+             feeding the ann candidate stage (never the exact ground truth).
+compression: Indirect but real. Annoy does ZERO embedding compression (raw float32, no entropy coder, no
+             quantization), so it is not a codec to copy. Its value to
+             compress-more-than-everyone is structural: (1) headerless self-describing
+             flat-array layout removes offset/index metadata so an ANN section is near-pure
+             payload that zstd compresses cleanly; (2) static projection trees have no
+             bidirectional edges (unlike HNSW), so they entropy-code much smaller; (3) the
+             Hamming/popcount path is a concrete template for binary/1-bit embedding
+             quantization, the most aggressive lever for shrinking embeddings -- but since nest
+             scores embeddings directly from mmap, such a codec would feed only the ann
+             candidate stage, never the exact-cosine ground truth.
+perf:        Hand-rolled AVX/AVX512 kernels (_mm256_add_ps + hsum256_ps_avx; _mm512_fmadd_ps +
+             _mm512_reduce_add_ps) match nest's existing SIMD dispatcher design; Annoy has
+             AVX/AVX512 but NO NEON, so nest's aarch64 NEON path is already ahead. mmap with
+             optional prefault (eager for hot indexes, lazy page-fault for low-RAM/partial
+             scans) is a tunable nest could expose. Memory-minimal by design (Spotify: 5M x
+             40-dim shared as one blob across processes); build is multi-threaded
+             (ThreadedBuildPolicy, seed = base_seed + thread_idx) but query is a single
+             cache-friendly pointer walk. No deserialization cost: load() is mmap + a backward
+             EOF root scan, so query-immediately after load.
+license:     Apache-2.0

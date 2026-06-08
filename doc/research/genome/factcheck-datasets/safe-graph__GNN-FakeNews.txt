@@ -1,0 +1,60 @@
+================================================================================================
+safe-graph/GNN-FakeNews
+category: factcheck-datasets   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A collection of GNN fake-news detectors (GCNFN, BiGCN, GNN-CL, UPFD-GCN/GAT/SAGE) shipping the
+             UPFD dataset: tree-structured Twitter retweet-propagation graphs (politifact 314
+             graphs / gossipcop 5,464 graphs) classified fake/real, with node features stored as
+             scipy CSR sparse .npz matrices and topology as a single global COO edge list.
+innovation:  Decouple the corpus into two orthogonal on-disk planes that compress with different codecs: (1)
+             a single global COO edge list (A.txt) plus a node-to-graph-id index that
+             reconstructs thousands of small graphs from one flat integer array, and (2)
+             high-dimensional node-feature matrices stored as scipy CSR sparse .npz
+             (sp.load_npz) so mostly-zero rows cost near nothing on disk while staying
+             densifiable on demand. The propagation graph itself IS the truth signal:
+             who-retweeted-whom structure is a fact-checking feature, separable from textual
+             content.
+techniques:
+  - UPFD propagation tree: root=news node, leaves=retweeting users, edge u->v iff v retweeted
+    news from u; framed as fake/real graph classification
+  - Global COO edge list (A.txt, comma-separated long pairs) coalesced once, with
+    node_graph_id.npy partitioning one flat node array into N subgraphs
+  - scipy CSR sparse .npz (sp.load_npz + .todense()) for node-feature matrices
+    new_{feature}_feature.npz
+  - Four interchangeable feature encoders keyed by name: profile=10d, spacy word2vec=300d,
+    bert(bert-as-service)=768d, content=300+10=310d
+  - Index-array train/val/test splits (train_idx/val_idx/test_idx.npy) referencing graph ids,
+    not copies of data
+  - Separation of integer topology plane (RLE/delta/varint friendly) from float feature plane
+    (quantizable) as independent codec targets
+nest steals: Two moves. (1) Demo/truth corpus: ingest UPFD via nest-python as a demo dataset beside the PT-BR
+             fake-news sets -- each propagation graph becomes one provenance-tagged record; the
+             310d content vectors map onto nest-format embeddings (preset tiny: int8+zstd+hnsw),
+             and nest://content_hash/chunk_id reopens the exact news node. Real benchmark for
+             'compress AND serve datasets' serving the factcheck-datasets + truth-features
+             domain. (2) Reserve a future additive section (id 0x09+, RESERVED in v1, no version
+             bump) for graph topology: store edges as a global delta+varint COO array plus a
+             node_graph_id partition index, mirroring A.txt/node_graph_id.npy -- topology
+             integers go through the non-embedding zstd path while embeddings stay raw-mmap on
+             the hot path. That two-plane split (integer topology codec vs float feature codec)
+             is the pattern to steal into nest-runtime's planned graph search.
+compression: Medium-high. Transferable insight is the two-plane decomposition: integer graph topology (COO +
+             partition index) and float feature matrices are statistically different and want
+             different codecs -- topology compresses brutally with delta+varint+zstd (sorted,
+             low-entropy ids), features quantize/sparsify well (CSR for sparse profile rows,
+             int8 for dense embeddings). The CSR-.npz nonzero-only trick is a free win for any
+             sparse feature section. Their global-edge-list-plus-id-index is exactly how nest
+             should pack many small graphs into one flat deterministic byte run.
+perf:        Datasets are small (gossipcop ~314k nodes/309k edges total; politifact ~41k/41k) and graphs are
+             shallow ego-trees averaging 58-131 nodes, so topology fits in mmap and traversal is
+             bounded. Feature matrices drive size: 768d bert dense per node dominates, which is
+             why CSR sparse storage + on-demand densify matters; for nest, int8 on the 310d
+             content vectors is the right call. Recent analyses note features are often linearly
+             separable by class, so aggressive quantization should preserve discriminative
+             power.
+license:     Academic use only (dataset); code Apache-2.0 (safe-graph org). Raw data via Google Drive
+             (~1.2GB), redistribution restricted -- vendor the loader/format pattern, not the
+             raw corpus.

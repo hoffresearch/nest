@@ -1,0 +1,66 @@
+================================================================================================
+konjoai/vectro
+category: ann-index   |   steal priority: MUST
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Mojo-first (with a Rust `squish_quant` extension, MIT-licensed) embedding-compression + HNSW
+             library offering 7 quantization codecs (INT8, NF4, PQ, Binary, RQ, learned
+             autoencoder, kurtosis-routed AutoQuantize) wrapped in a self-describing VQZ
+             container with optional ZSTD/zlib second-pass.
+innovation:  A "codec menu + rerank" architecture: store embeddings in one of several aggressive lossy
+             quantizations (down to 1-bit binary at 32x), use cheap quantized-space distances
+             (Hamming XOR+POPCOUNT, PQ asymmetric distance via precomputed lookup tables) as a
+             coarse prefilter, then recover real accuracy with an exact rerank pass. The two
+             highest-leverage codecs for nest are NF4 (8x, fixed
+             information-theoretically-optimal 16-level codebook so it stays deterministic) and
+             Binary+ADC PQ (16-32x), both layered UNDER a generic ZSTD second pass.
+techniques:
+  - NF4: 4-bit normal-float with a fixed 16-value codebook at equiprobable N(0,1) quantiles
+    (-1.0,-0.6962,...,0,...,0.723,1.0), per-block absmax scale, two codes packed per byte,
+    decoded via a branchless decision tree
+  - PQ with ADC (asymmetric distance computation): 96 subspaces x 256 centroids = 96
+    bytes/768-dim vec (32x); query distances precomputed into a 96x256 lookup table then summed
+    per candidate
+  - Binary 1-bit packing: sign(v) -> 8 dims/byte, Hamming distance via XOR+POPCOUNT (>=50M
+    vec/s), used as coarse prefilter then exact-rerank to recover ~0.95 recall@10
+  - Residual Quantization: 3-pass cascade where each pass quantizes the residual of the
+    previous, ~0.98 cosine at 10x
+  - NF4-mixed / outlier-aware: outlier dims stored as FP16, remaining dims as NF4
+  - Kurtosis-routed AutoQuantize: pick codec (INT8/NF4/PQ/Binary) from per-tensor data
+    statistics to hit a target_cosine/target_compression
+  - VQZ container: 64-byte header (magic, version, blake2b checksum) + optional ZSTD/zlib
+    second-pass OVER the already-quantized payload (INT8 4x then ZSTD ~1.6x ~= 6.4x)
+  - assume_normalized fast path + fused single-pass NEON/AVX2 kernel: skip absmax scan for
+    L2-normalized embeddings (~1.4x), eliminate the second L2 traffic pass for d<=4096
+nest steals: nest-format: add NF4 as encoding id 4 (PQ as id 5, binary as id 6) to nest-format's encoding
+             codec set, applied ONLY to the embeddings section. Today nest stops at int8 (0.283
+             ratio, tiny preset); NF4 at 8x and PQ at 32x would push past competitors on the
+             embedding bytes, the dominant payload. NF4's codebook is a FIXED constant table, so
+             encode/decode stays byte-deterministic and additive (ids 4-255 reserved-in-v1, no
+             NEST_FORMAT_VERSION bump). nest-runtime: vectro proves embeddings can be scored in
+             quantized space without full dequant -- add a binary-Hamming or PQ-ADC prefilter in
+             nest-runtime's simd dispatcher to cut candidates cheaply, slotting UNDER nest's
+             mandatory exact-cosine rerank (rerank already guarantees the returned score is real
+             cosine, so a lossy prefilter changes recall, never the contract). The fused
+             single-pass / assume_normalized trick directly optimizes the existing AVX2/NEON
+             kernels. Boundary to re-examine: nest's rule 'never zstd the embeddings (scored off
+             mmap on the hot path)' -- vectro's ADC/Hamming path scores the QUANTIZED bytes
+             directly, so a quantized-but-not-zstd'd embeddings section keeps mmap-direct
+             scoring while still hitting 8-32x.
+compression: Directly central. Embeddings are nest's largest section; nest tops out at int8 (4x) while vectro
+             ships NF4 (8x), PQ (32x), Binary (32x), RQ (10x), then stacks a generic ZSTD second
+             pass (~6.4x compound for INT8 alone). Adopting NF4+PQ as embedding codecs is the
+             single biggest lever to 'compress data more than everyone.' Codebooks are
+             fixed/deterministic and the lossy distortion is absorbed by nest's mandatory exact
+             rerank, so extreme compression is nearly free against the recall contract.
+perf:        Claimed INT8 ~12M vec/s (Mojo SIMD, d=768, '4.85x FAISS'); Python/NumPy fallback ~167-210K
+             vec/s; Binary Hamming >=50M vec/s; VQZ save/load >=2GB/s. SIMD: NEON 32-wide
+             unroll, AVX2 fused kernels, AVX-512-VNNI/SME2 stubbed, Apple AMX/Accelerate
+             (vDSP_vsmsa) for d>=256, Rayon block-coarsening BLOCK=64 rows/task. Numbers are
+             author marketing claims, unverified; the Hamming >=50M figure is plausible
+             (XOR+POPCOUNT) and most relevant to a nest prefilter. Accuracy/size: INT8 4x
+             cos>=0.9999, NF4 8x cos>=0.985, PQ-96 32x cos>=0.95, Binary 32x ~0.80 cos but
+             >=0.95 recall@10 with rerank.
+license:     MIT

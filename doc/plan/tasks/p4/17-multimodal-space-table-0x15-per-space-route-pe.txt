@@ -1,0 +1,107 @@
+==============================================================================================
+TASK #17 :: multimodal: SPACE_TABLE(0x15) + per-space route + per-space quant + cli/python
+phase: phase 4 (post-gate)   layer: nest
+status:  [ ] todo    [ ] doing    [ ] done
+==============================================================================================
+
+self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
+files listed before coding. do not summarize, do not skip. add a [ ] if something
+is missing. never skip silently.
+
+--- goal ---
+land the one genuinely new format capability (named embedding spaces) on the
+already-refactored score_subset handle, ship the pattern-lover instrument as the third
+vertical, extend compress-and-serve to structured docs, and only now evaluate the single
+justified v2.
+
+--- depends on ---
+  previous phase merged  + the FLAGSHIP-PROVEN GATE
+
+--- READ THESE COMPLETE FILES FIRST ---
+[ ] doc/research/synthesis/vector-db.txt
+[ ] doc/research/genome/embeddings-models/openai__CLIP.txt
+[ ] crates/nest-runtime/src/simd/mod.rs
+[ ] crates/nest-runtime/src/search.rs
+[ ] doc/plan/master-plan/02-format.txt
+[ ] doc/plan/master-plan/03-roadmap.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and the current code you will change:)
+[ ] crates/nest-format/src/sections/spaces/
+[ ] crates/nest-runtime/src/spaces/
+[ ] crates/nest-cli/src/cmd/spaces.rs
+[ ] crates/nest-python/src/spaces_fn.rs
+[ ] python/forge/spaces.py
+
+--- OWNS THESE CODE FILES (no parallel task edits them) ---
+  crates/nest-format/src/sections/spaces/
+  crates/nest-runtime/src/spaces/
+  crates/nest-cli/src/cmd/spaces.rs
+  crates/nest-python/src/spaces_fn.rs
+  python/forge/spaces.py
+
+--- STEPS (check each) ---
+[ ] reserve SPACE_TABLE=0x15, space slabs 0x20-0x2F, space fp 0x30-0x3F (already pre-claimed
+    in phase 0); SpaceDescriptor + row_index_map; v1-only reader still serves text search
+    (negative test)
+[ ] runtime SpaceView reusing the EXISTING simd kernels; search_space + search_cross feeding
+    the SAME score_subset rerank handle (already refactored in phase 0 and already covered by
+    the parameterized honesty test) per space; carry the materialize-leak fix per space; each
+    space slab 64-byte aligned
+[ ] per-space quant presets, each sub-int8 space requires its own fp source (writer-time
+    error) and reports NET-OF-FP ratio; nest spaces subcommand + --space flag + python
+    spaces()
+
+--- draws from ---
+vector-db/qdrant__qdrant, vector-db/weaviate__weaviate, ann-index/unum-cloud__USearch,
+vector-quantization/gaoj0017__RaBitQ
+
+--- watch out ---
+  any reader path that assumes embeddings(0x04) is the only space could mis-score; the
+  score_subset handle and the parameterized honesty test already exist from phase 0, so this
+  lands on a proven gate. keep space[0]=text authoritative; each space slab 64-byte aligned or
+  aligned simd loads break.
+
+--- NEST RULES (check each) ---
+[ ] edition 2024; never panic in lib (typed thiserror). FORGE heavy/non-deterministic work
+    stays OUT of the sovereign crates/ workspace.
+[ ] format v1 FROZEN + ADDITIVE: no NEST_FORMAT_VERSION bump. use reserved encoding ids 4-9 /
+    section ids 0x09+.
+[ ] content_hash over DECODED bytes: codecs decode byte-identically so nest:// citations stay
+    stable.
+[ ] never zstd/dedup/shuffle the embeddings section (mmap SIMD hot path); only fixed-stride
+    quantization there.
+[ ] deterministic: the .nest build anchor is canonical extracted text + model fingerprint,
+    verify byte-identical across two builds.
+[ ] <=300 lines per rust src file; docs lowercase, no emoji, no em-dash. feature branch off
+    main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace ; cargo test --workspace (+ roundtrip+content_hash test
+    for new codecs)
+[ ] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if format/runtime/python changed ; ./scripts/release_check.sh
+    passes
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ____  after: ____
+  recall@10   before: ____  after: ____
+
+--- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
+update only what THIS task actually changed; check each:
+[ ] doc/arc/arc.md     architecture inventory + contract (boundaries/sections/data-flow/runtime)
+[ ] doc/arc/arc.yaml   machine architecture map (MUST move with arc.md, same commit)
+[ ] doc/arc/arc.mmd    mermaid build/query flow (if the flow changed)
+[ ] README.md          overview / cli / presets / highlights (if a user-visible surface changed)
+[ ] doc/usage.md       the how-to (if a command, flag, preset, or workflow changed)
+[ ] AGENTS.md          build/test cmds, conventions, gotchas, known gaps (if any changed)
+[ ] Cargo.toml         workspace version / deps / new crate (if crates or deps changed)
+[ ] pyproject.toml     python tooling / deps / targets (if the python surface changed)
+[ ] rustfmt.toml       only if a formatting rule must change (rare)
+the arc trio (arc.md + arc.yaml + arc.mmd) moves TOGETHER in the same commit when
+architecture / boundaries / data-flow / contracts / storage / runtime change.
+
+--- MERGE ---
+[ ] commit on branch feat/p4-17-multimodal-space-table-0x15-per-space-route-pe
+[ ] gate green -> merge, mark done in plan/kanban.txt

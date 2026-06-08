@@ -1,0 +1,60 @@
+================================================================================================
+supermemoryai/opensearch-ai
+category: rag-orchestration   |   steal priority: LOW
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A ~80-line TypeScript/Next.js edge-runtime "personalized Perplexity" that fuses Brave/Bing web
+             results with user-scoped memories pulled from the hosted Supermemory engine and
+             streams them through gpt-4o-mini; the real retrieval IP lives in Supermemory (a
+             vector-graph memory engine), not in this thin client.
+innovation:  The orchestration treats personalization as a single namespace-scoped memory search whose
+             results are returned at the SMALLEST SUFFICIENT GRANULARITY via a fallback ladder
+             (summary > title > concatenated chunks), rather than always shipping raw chunks.
+             Memory is extracted facts with temporal supersession (isLatest flag) instead of
+             stateless verbatim RAG chunks.
+techniques:
+  - containerTags: per-tenant namespace partitioning of a single shared store (scope =
+    [user.email, 'opensearch']) so one index serves many isolated views without separate files
+  - Summary-first retrieval fallback ladder: return mem.summary ?? mem.title ??
+    chunks.join('\n') -- pick the most compressed representation that still answers, instead of
+    always returning raw spans
+  - isLatest temporal-supersession flag in the memory graph: contradictions resolved by
+    timestamp/update-pattern so stale facts are deprioritized while history is preserved (not
+    deleted)
+  - Memory-vs-RAG: ingest-time fact extraction into a 'facts-on-facts' vector-graph with
+    ontology-aware edges, vs storing verbatim chunks (note: academic counterpoint says
+    extraction discards the verbatim substrate, capping recall ~20pts below a verbatim ceiling)
+  - Hybrid retrieval: parallel dense-vector + keyword/BM25-style lexical match, merged then
+    context-aware reranked with temporal filtering, all under ~400ms
+  - Two-tier user profile: stable static facts + dynamic episodic context, assembled at query
+    time (~50ms) and injected as a compact system-prompt preamble
+  - Edge-runtime stateless orchestration: no session/state in the app layer because the memory
+    store is the durable state primitive
+nest steals: nest-format: add OPTIONAL additive per-chunk summary section (id 0x09+, no field-meaning change
+             so still v1) feeding nest-runtime materialize a compressed representative.
+             nest-runtime: implement summary>canonical>raw fallback ladder in
+             search/materialize; add deterministic version/isLatest u32 in provenance to
+             collapse superseded duplicate chunks at build time before encoding (shrinks
+             tiny/compressed presets); layer a deterministic provenance-timestamp 'temporal
+             rerank' boost ON TOP of the mandatory exact-cosine rerank (cosine stays ground
+             truth). containerTags -> optional per-chunk tag set in provenance for multi-tenant
+             filtering inside one .nest file, exposed as nest-cli search --tag.
+compression: Indirect but real. The one transferable compression idea is the summary-first granularity
+             ladder: storing and serving a small synopsis per chunk lets nest return a
+             representative far smaller than the canonical span (good for context packing and
+             citation previews), and build-time supersession/dedup of contradicting facts
+             removes redundant chunks before encoding, directly improving size ratios of the
+             tiny/compressed presets. Everything else (knowledge graph, fact extraction, hosted
+             reranker) is orchestration-layer and orthogonal to nest's byte-level codec goals;
+             nest's exact-cosine-rerank guarantee is actually stronger than supermemory's
+             ANN-proxy scores.
+perf:        Client is Vercel edge-runtime, streaming via Vercel AI SDK; no local compute. Supermemory engine
+             reports profile assembly ~50ms, full hybrid+rerank+temporal-filter retrieval
+             <400ms, with no caller-configured embedding infra. Benchmarks (vendor-reported):
+             85.4% LongMemEval-S, #1 LoCoMo P@1 59.7%, #1 ConvoMem; an arXiv counterpoint
+             measured ~65.4% citing the verbatim-discard weakness of extraction-first memory. No
+             SIMD/quantization relevance -- all heavy lifting is remote and opaque.
+license:     MIT (opensearch-ai repo); Supermemory engine is a hosted closed/proprietary API behind the
+             client

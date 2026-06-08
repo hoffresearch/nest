@@ -1,0 +1,65 @@
+================================================================================================
+ebiggers/libdeflate
+category: compression-general   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A heavily optimized MIT-licensed C library for DEFLATE/zlib/gzip that beats stock zlib ~2x on
+             both compress and decompress by combining a minimum-cost-path ("near-optimal")
+             parser at high levels with a two-level Huffman decode table and a 64-bit branchless
+             bit-buffer refill on the decode side.
+innovation:  Entropy-cost-driven optimal parsing: model the LZ choice as a shortest-path DAG over byte
+             positions where each literal/match edge is weighted by its actual Huffman codeword
+             length in fractional bits, then iterate (parse -> rebuild Huffman -> recompute
+             costs -> reparse) until the bit cost converges. The encoder optimizes for the real
+             post-entropy size, not a greedy length heuristic. The single transferable idea:
+             pick encodings by measured bits-out, iterated to a fixpoint, rather than by a
+             static rule.
+techniques:
+  - Near-optimal parser: min-cost-path over a DAG of literal/match edges, cost = Huffman
+    codeword length scaled by BIT_COST=16 for fractional-bit accounting
+  - Iterative cost refinement: parse->count freqs->rebuild Huffman->recompute symbol
+    costs->reparse, stop when improvement < threshold; unused symbols default to
+    LITERAL/LENGTH_NOSTAT_BITS=13, OFFSET_NOSTAT_BITS=10
+  - Two-level Huffman decode table: main table indexed by N bits (LITLEN_TABLEBITS=11, OFFSET=8,
+    PRECODE=7), long codewords escape to on-demand subtables via a HUFFDEC_SUBTABLE_POINTER
+    entry
+  - Packed decode-table entry: one u32 holds literal value / length-base / offset-base plus
+    'remaining codeword length + extra bits' in low bits, so decode is one table read + shift,
+    branch-free
+  - 64-bit branchless bit-buffer refill: bitbuf |= get_unaligned_leword(in) << (bitsleft&7),
+    advance pointer/bitcount by arithmetic with no per-symbol branch
+  - Block-type selection by measured cost: emit each block as cheapest of dynamic-Huffman /
+    static-Huffman / stored, comparing final bit costs incl precode overhead
+  - Entropy-divergence block splitting: accumulate 10-category symbol observations every 512
+    positions, cut a block when running stats diverge (SOFT_MAX_BLOCK_LENGTH=300000)
+  - bt_matchfinder (binary trees, one candidate per length) for the optimal parser vs
+    hc_matchfinder (hash chains) for greedy/lazy levels
+nest steals: Two concrete steals into crates/nest-format/src/encoding and writer/encoding_choice.rs. (1) Make
+             encoding_choice.rs cost-driven instead of preset-driven: for each non-embedding
+             section (chunks_canonical text, provenance/search_contract JSON), trial-encode
+             under candidate codecs and pick the smallest measured output (a one-pass analog of
+             libdeflate block-type-by-cost selection). Fits the additive format: no new section
+             ids, the chosen encoding id is just recorded per-section in the manifest. (2) Add a
+             new entropy codec under a reserved encoding id 4+ (additive within v1) for the text
+             section: a deterministic canonical-Huffman/DEFLATE-style coder whose static decode
+             table uses the two-level layout and packed-u32 entries above, giving a tiny
+             dependency-free Rust decoder for the runtime mmap path. The iterative measured-bits
+             idea also seeds a future token-codebook builder for chunks_canonical (choose
+             codebook by measured bits to a fixpoint) where extreme text gains live. Keep
+             embeddings off this path: they stay raw/f16/int8 scored from mmap as today.
+compression: Directly on the north star (compress more than everyone). The iterate-on-measured-bits parser is
+             the principled route to squeezing text/json sections harder than single-shot zstd.
+             The two-level decode table + packed entries + branchless refill is a blueprint for
+             a small, fast, deterministic in-house entropy decoder running off mmap with no C
+             dependency, preserving offline/single-file/no-hot-path-alloc guarantees.
+perf:        ~2x zlib on x86_64/ARM at default level 6 both directions. Decode speed from a 64-bit bitbuffer
+             refilled rarely via branchless unaligned word loads, single-read packed table
+             entries, and a BMI2-compiled decode variant selected at runtime. Compression cost
+             scales hard at top levels: experimental level 13 saves only ~0.134% over level 12
+             on Silesia but runs ~56x slower -> 'compress once, serve many', perfect for nest's
+             deterministic offline build step, not real-time edits. Runtime CPU feature
+             detection, no compile flags. No streaming: tuned for chunks < ~1MB, matching nest's
+             per-section/per-chunk granularity.
+license:     MIT (maintainer states no relevant patents)
