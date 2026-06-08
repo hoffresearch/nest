@@ -93,6 +93,48 @@ pub(crate) fn build_graph_payload(
     Ok(Some(payload))
 }
 
+/// lBuild the meta_index (0x17) payload from a Python dict of label columns:
+/// `{field_name: [value_or_none; n_chunks]}`. each list must have exactly `n`
+/// entries (value per chunk, in build order); `None`/`""` means the chunk has
+/// no value for that field. returns `None` when the dict is absent or carries
+/// no usable column, so a build without metadata stays byte-identical. NO
+/// market-specific rule: the field names are whatever the caller passed.
+pub(crate) fn build_meta_payload(
+    meta: Option<&Bound<PyDict>>,
+    n: usize,
+) -> PyResult<Option<Vec<u8>>> {
+    let Some(meta) = meta else {
+        return Ok(None);
+    };
+    let mut columns: Vec<(String, Vec<Option<String>>)> = Vec::with_capacity(meta.len());
+    for (key, val) in meta.iter() {
+        let name: String = key
+            .extract()
+            .map_err(|_| PyValueError::new_err("meta_index keys must be str field names"))?;
+        let values: Vec<Option<String>> = val.extract().map_err(|_| {
+            PyValueError::new_err(format!(
+                "meta_index['{}'] must be a list of (str | None)",
+                name
+            ))
+        })?;
+        if values.len() != n {
+            return Err(PyValueError::new_err(format!(
+                "meta_index['{}'] has {} values but the build has {} chunks",
+                name,
+                values.len(),
+                n
+            )));
+        }
+        columns.push((name, values));
+    }
+    if columns.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(
+        nest_runtime::meta::MetaIndex::build(&columns).to_bytes(),
+    ))
+}
+
 pub(crate) fn parse_chunks(chunks: &Bound<PyList>) -> PyResult<Vec<nest_format::ChunkInput>> {
     use nest_format::ChunkInput;
     let mut out: Vec<ChunkInput> = Vec::with_capacity(chunks.len());

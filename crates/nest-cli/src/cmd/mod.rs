@@ -8,6 +8,7 @@ pub mod inspect;
 pub mod retrieve;
 pub mod search;
 pub mod search_ann;
+pub mod search_filtered;
 pub mod search_graph;
 pub mod search_text;
 pub mod stats;

@@ -15,9 +15,11 @@ pub mod error;
 pub mod graph;
 mod inspect;
 mod materialize;
+pub mod meta;
 mod mmap_file;
 mod rerank;
-mod search;
+pub(crate) mod search;
+mod search_filtered;
 pub mod simd;
 
 pub use error::RuntimeError;
@@ -134,6 +136,23 @@ impl SearchExplain {
     pub(crate) fn exact(n: usize, src: RerankSourceKind) -> Self {
         Self {
             route: "exact",
+            exact_candidates: n,
+            ann_candidates: 0,
+            bm25_candidates: 0,
+            graph_candidates: 0,
+            fusion_mode: "none",
+            rerank_source: src,
+            recall_estimate: 1.0,
+        }
+    }
+
+    /// lthe filtered-exact path: exact cosine over the chunks matching a
+    /// (field, value) meta_index posting. recall=1.0 WITHIN the filter (the
+    /// candidate set IS the whole matching subset), no fusion. `n` is the
+    /// subset size the rerank scored.
+    pub(crate) fn filtered(n: usize, src: RerankSourceKind) -> Self {
+        Self {
+            route: "filtered",
             exact_candidates: n,
             ann_candidates: 0,
             bm25_candidates: 0,
