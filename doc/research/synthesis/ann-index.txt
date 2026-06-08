@@ -1,0 +1,295 @@
+================================================================================================
+synthesis :: ann-index
+approximate nearest neighbor indexes and libraries
+================================================================================================
+
+state of the art and concrete nest recommendations for this category.
+
+summary:     The ann-index field has converged on one dominant pattern that nest is architecturally primed to
+             exploit: aggressive lossy vector quantization (down to 1 bit/dim) used purely as a
+             candidate generator, paired with an exact rerank that recovers real distances. Nest
+             already enforces that exact-cosine rerank in search_ann/search_hybrid (search.rs:
+             idx.search -> score_subset -> sort), so the "risky" part of extreme quantization
+             (lossy scores) is already neutralized. That makes the embeddings section -- nest's
+             largest, currently floored at int8/4x because it must be SIMD-scored from mmap --
+             the single highest-leverage compression target in the whole project. The state of
+             the art splits cleanly: (a) CODECS for the embeddings bytes (RaBitQ 1-bit with an
+             unbiased estimator and zero codebook; TurboQuant 2/4-bit data-oblivious
+             quantization scored in the compressed domain; PQ4/OPQ trained product quantization;
+             NF4 fixed-codebook 4-bit) and (b) GRAPH-LAYOUT efficiency for the HNSW section 0x07
+             (flat fixed-stride mmap-able records, uint40 neighbor ids, generational visited
+             sets, Algorithm-4 diversity pruning to lower M). Nest's current HNSW uses
+             Vec<Vec<u32>> adjacency, a fresh HashSet per layer_search, the _simple top-m
+             selection, and a scalar cosine_dist loop that bypasses its own AVX2/NEON dispatcher
+             -- all of which the surveyed libraries fix. The clear ranking for nest:
+             RaBitQ-style 1-bit codec first (deterministic, error-bounded, popcount-cheap, 8x
+             over int8), then route HNSW through the existing SIMD dispatcher + generational
+             visited + Algorithm-4 (correctness/latency/recall with zero format risk), then a
+             flat fixed-stride 0x07 layout with uint40 ids, then PQ/OPQ as a higher-accuracy mid
+             tier. Three watch-outs dominate: never vendor nightly portable_simd
+             (kannolo/turbovec) or unmaintained packed_simd (hora) against nest's stable
+             edition-2024; never adopt LMDB/serde/bincode persistence
+             (arroy/hora/instant-distance) against the single-file frozen repr(C) constraint;
+             and keep every new codec deterministic by seeding rotations/k-means from the model
+             fingerprint and using stable tie-breaks so builds stay byte-identical.
+
+state of the art
+------------------------------------------------------------------------------------------------
+The category has settled on "compress hard, score in the compressed domain, rerank exact."
+Embedding codecs now reach 1 bit/dimension: RaBitQ (VSAG/Knowhere, SIGMOD 2024) random-rotates a
+centroid-centered unit vector, takes sign bits, and recovers an UNBIASED inner-product estimate
+with O(1/sqrt(D)) error using only AND+popcount over a 4-bit-decomposed query, needing zero
+codebook training and storing only ~2 f32 scalars/vector -- the rare 1-bit scheme with a real
+theoretical error bound (exactly what a deterministic, sovereign DB needs). TurboQuant
+(turbovec) makes the rotation data-oblivious so quantizer boundaries are a pure function of
+(dim, bits): no k-means, no per-corpus artifact, fully deterministic by construction, scored via
+FastScan nibble-LUT SIMD. FAISS PQ4 FastScan packs 4-bit product-quantization codes in
+interleaved 32-vector blocks and evaluates distances with register-resident pshufb/vqtbl
+shuffles (no RAM lookups), reaching ~280k QPS WITH rerank; OPQ/Hadamard rotations decorrelate
+dimensions to raise recall per byte. NF4 (vectro) is a fixed 16-level normal-float codebook
+(deterministic, 8x). On the graph side, hnswlib/USearch/instant-distance/rust-cv converge on a
+FLAT fixed-stride single-allocation layout (one base+offset index, zero pointer-chasing,
+mmap-able), uint40 (5-byte) neighbor ids to cut the dominant edge cost ~37.5%,
+generational/epoch-tagged visited sets to kill per-query HashSet allocation, and the
+Malkov-Yashunin Algorithm-4 diversity-pruning heuristic that raises recall at fixed degree --
+letting M drop (smaller index) without losing recall, which compounds beautifully with a
+mandatory exact rerank. Annoy/arroy show random-projection forests compress far better under a
+generic second-pass entropy coder than HNSW (no back-edges), and a headerless self-describing
+flat-array layout (count = byte_len/stride) eliminates offset tables. kannolo/vectorium add the
+orthogonal lesson that index quality must be built on FULL-PRECISION vectors while only stored
+payload is quantized (why they beat FAISS up to 11x on build), plus Stream-VByte +
+recursive-graph-bisection reordering for sparse/BM25 postings. Universal contract across the
+strong libraries: the compressed code drives candidate generation only; an exact pass produces
+the returned score.
+
+top transferable innovations
+------------------------------------------------------------------------------------------------
+1. RaBitQ 1-bit quantization with an unbiased, error-bounded (O(1/sqrt(D))) estimator scored by
+   AND+popcount and NO codebook -- 8x over nest's int8, 32x over f32, deterministic via a seeded
+   rotation, and its lossy nature is fully absorbed by nest's already-mandatory exact-cosine
+   rerank. The single highest-value steal (VSAG, Knowhere).
+2. Build the ANN graph on full-precision f32 while storing a quantized payload -- quantization
+   never pollutes graph topology, only size. Nest already snapshots f32 into HnswIndex.vectors
+   via attach_vectors, so it gets this for free and can quantize the embeddings section
+   arbitrarily hard without degrading recall (kannolo/vectorium).
+3. Route HNSW traversal through the existing AVX2/NEON/scalar dispatcher instead of the scalar
+   cosine_dist loop in ann/mod.rs, and replace the per-query HashSet<u32> in layer_search with a
+   generational visited buffer (Vec<u8>+epoch tag) -- pure latency win, zero format change,
+   stays deterministic (hnswlib VisitedListPool, instant-distance Visited, USearch SIMD).
+4. TurboQuant data-oblivious quantization: rotation+quantizer boundaries are a pure function of
+   (dim, bits) so nothing per-corpus is stored and builds are byte-identical by construction --
+   a determinism-native path to 2/4-bit codes scored in the compressed domain (turbovec).
+5. Flat fixed-stride single-allocation graph layout with uint40 (5-byte LE) neighbor ids --
+   makes section 0x07 directly mmap-traversable as &[u8] with zero decode/alloc and shrinks the
+   edge arrays ~37.5% vs u64 / drops Vec<Vec> overhead vs nest's current adjacency (hnswlib,
+   USearch, instant-distance, rust-cv).
+6. Malkov-Yashunin Algorithm-4 diversity neighbor selection (keep a candidate only if it is
+   closer to the query than to any already-chosen neighbor) -- nest's mod.rs already flags this
+   as planned Phase 2; it raises recall at fixed M, so the tiny/nano presets can LOWER M and
+   shrink the index without losing recall@10 (instant-distance, hnswlib, rust-cv).
+7. PQ4 FastScan: 4-bit product-quantization codes in interleaved 32-vector blocks scored by
+   register-resident pshufb/vqtbl shuffle LUTs (no RAM lookups), ~280k QPS with rerank -- a
+   higher-accuracy mid tier between int8 and 1-bit (FAISS).
+8. Hamming/binary navigation: pack sign bits 64 dims/u64 and traverse the HNSW graph on
+   XOR+popcount instead of float cosine, ~order-of-magnitude cheaper per hop, recall recovered
+   by exact rerank (rust-cv hnsw, USearch b1x8, vectro Binary).
+9. Stream-VByte (delta-gap, 1 control-bit/elem) + recursive-graph-bisection term reordering for
+   BM25/sparse postings -- compresses the 0x08 inverted index well below raw u32 pairs while
+   staying deterministic via alphabetical tie-break (kannolo/vectorium).
+10. Budget-driven codec inversion: solve codec+params from a target .nest size or recall floor
+   (PQ cost = m+8 bytes/vec; compression = 4*dim/(pq+8)) instead of fixed presets, turning
+   'compress more than everyone' into an optimization (autofaiss).
+
+nest recommendations
+------------------------------------------------------------------------------------------------
+* Add a RaBitQ-style 1-bit embedding codec as a new additive encoding id (e.g. 4 = 'rabitq')
+  with a corresponding manifest dtype. Store: u32 payload_version, a seeded rotation descriptor
+  (seed derived from the model fingerprint -- store the seed, regenerate the rotation, or use a
+  structured Hadamard rotate to avoid persisting a dense matrix), a shared centroid block,
+  packed D sign bits row-major, plus the ~2 f32 side scalars per vector for the unbiased
+  estimator. Score candidates via a new AND+popcount kernel, then feed the EXISTING exact-cosine
+  rerank unchanged so the returned score stays real cosine.
+    where:  crates/nest-format/src/encoding/rabitq.rs (mirror int8.rs: versioned prefix + per-vector side
+            data + packed codes); register the id in encoding/mod.rs decode_payload +
+            expected_embeddings_size; add the variant to writer/encoding_choice.rs
+            EmbeddingDType and layout/mod.rs (SECTION_ENCODING_RABITQ=4). New kernel
+            crates/nest-runtime/src/simd/popcount.rs dispatched from simd/mod.rs; wire a new
+            DType arm in mmap_file.rs + search.rs score_all/score_subset (candidate gen on
+            codes, rerank on materialized f32/f16).
+    impact: Highest. 8x smaller embeddings than int8, 32x vs f32, on nest's largest section -- pushes the
+            tiny preset (0.283) toward a sub-0.1 'atom'/'micro' preset. Error-bounded and
+            deterministic, so recall@10 stays near-lossless behind the mandatory rerank.
+            Directly serves the north star.
+    effort: high
+    from:   antgroup/vsag (RaBitQ), zilliztech/knowhere (RaBitQ + refine_k rerank), konjoai/vectro (Binary
+            path)
+
+* Route HNSW traversal (greedy_search, layer_search, cosine_dist) through nest's existing simd
+  dispatcher (vectors are L2-normalized so distance = 1 - dot, the kernel already on the rerank
+  hot path), and replace the per-query HashSet<u32> in layer_search with a reusable generational
+  visited buffer (Vec<u8> + u8/u16 generation counter, O(1) reset by bumping the tag). Pool the
+  candidate/frontier heaps across queries.
+    where:  crates/nest-runtime/src/ann/mod.rs (cosine_dist -> simd::dot_f32_*), ann/search.rs (HashSet ->
+            generational Visited; reuse heaps via a Searcher struct). No format change, no
+            determinism change.
+    impact: Pure latency/correctness win with zero format risk: kills per-query malloc + cache-cold HashSet
+            rehash and stops the ANN path from silently bypassing SIMD. Closes the gap where
+            exact rerank is SIMD but graph descent is scalar.
+    effort: low
+    from:   nmslib/hnswlib (VisitedListPool), djc/instant-distance (generational Visited),
+            unum-cloud/usearch (SIMD descent)
+
+* Implement the Malkov-Yashunin Algorithm-4 diversity neighbor selection (keep a candidate only
+  if it is closer to the query than to every already-selected neighbor) to replace the current
+  _simple top-m selection, which mod.rs already flags as planned Phase 2. Then lower DEFAULT_M
+  for the tiny/nano presets and lean on the heuristic + exact rerank to hold recall@10.
+    where:  crates/nest-runtime/src/ann/select_neighbors.rs (add the heuristic variant), ann/build.rs (call
+            it during insert). Determinism preserved with stable distance tie-breaks (by id).
+    impact: Higher recall per edge -> fewer neighbor ids/node -> smaller 0x07 index at equal recall.
+            Compounds with the flat-layout and the exact rerank: a direct lever on 'smallest
+            container at fixed recall@10'.
+    effort: medium
+    from:   djc/instant-distance (select_heuristic), nmslib/hnswlib (getNeighborsByHeuristic2), rust-cv/hnsw
+
+* Redesign the 0x07 HNSW payload from Vec<Vec<u32>>-style variable count+ids into a FLAT
+  fixed-stride layout: a small LE header (m, m_max0, entry, max_level, n) then a contiguous
+  level-0 block of fixed [count:u16, then m_max0 neighbor ids] records plus a sparse upper-layer
+  block, with u32::MAX as the empty-slot sentinel. Adopt uint40 (repr(C) [u8;5] LE) for neighbor
+  ids. Bump HNSW_PAYLOAD_VERSION only (NOT NEST_FORMAT_VERSION) since this is an internal
+  section payload change.
+    where:  crates/nest-runtime/src/ann/codec.rs (to_bytes/from_bytes -> fixed-stride read of neighbor ids
+            as offset slices off mmap), ann/mod.rs Node (fixed-width neighbor storage). Section
+            stays raw on the index hot path but the regular byte structure also zstd-compresses
+            better for tiny/hybrid presets (0x07 is NOT SIMD-scored, so it CAN be zstd'd unlike
+            embeddings).
+    impact: Drops per-Vec ptr/len/cap overhead, makes the graph mmap-zero-copy, and uint40 shrinks the
+            often-second-largest section ~37.5%. Smaller index across all hnsw presets.
+    effort: medium
+    from:   unum-cloud/usearch (flat tape + uint40), nmslib/hnswlib (flat single-malloc level-0),
+            djc/instant-distance (fixed-arity nodes), spotify/annoy (headerless
+            count=len/stride)
+
+* Add an 8-bit Product Quantization codec (with optional OPQ/Hadamard pre-rotation) as a
+  mid-accuracy tier between int8 and 1-bit. Store a small deterministic codebook (seeded
+  k-means, fixed Lloyd iterations, index-order tie-breaks) plus m-byte codes per vector. Use ADC
+  (precompute a per-query [m x 256] distance table once, sum m LUT gathers per candidate) for
+  candidate generation only; exact rerank still produces the returned score. Reimplement ADC on
+  nest's own AVX2/NEON/scalar dispatcher -- do NOT vendor packed_simd/portable_simd.
+    where:  crates/nest-format/src/encoding/pq.rs (codec + codebook, <=300 loc), kernel in
+            crates/nest-runtime/src/simd/pq.rs (ADC table build + 4-way-ILP accumulate). New
+            encoding id (e.g. 5) + dtype, wired like int8 through encoding_choice.rs and
+            search.rs.
+    impact: 16-32x on embeddings at higher recall than 1-bit; gives a 'compressed-hybrid' tier and a
+            budget-tunable knob. Codebook is tiny vs the per-vector savings.
+    effort: high
+    from:   facebookresearch/faiss (PQ4 FastScan, OPQ), hora-search/hora (PQ/IVFPQ + ADC), criteo/autofaiss
+            (OPQ + budget inversion), TusKANNy/kannolo (8-bit PQ SoA ADC)
+
+* Add a Stream-VByte (delta-gap + 1 control-bit/elem) codec for the BM25 0x08 postings and apply
+  deterministic recursive-graph-bisection term reordering before encoding, storing the term-id
+  permutation in the bm25 header and inverting at query time. Keeps the 'never compress
+  embeddings' rule intact -- this only touches the sparse index. Optionally stack the existing
+  zstd second pass.
+    where:  crates/nest-format/src/encoding/vbyte.rs (codec), crates/nest-runtime/src/bm25/codec.rs
+            (currently writes raw u32 doc/tf pairs sorted alphabetically -> delta-gap + vbyte),
+            bm25/index.rs + a nest-python build step for the RGB permutation (alphabetical
+            tie-break keeps builds byte-identical).
+    impact: Meaningfully shrinks the BM25 section for hybrid/tiny presets without touching the recall
+            contract or the embedding hot path. Reordering minimizes d-gaps so vbyte/zstd
+            compress near-optimally.
+    effort: medium
+    from:   TusKANNy/kannolo + vectorium (DotVByteFixedU8 + rgbisect)
+
+* Add a binary/Hamming HNSW navigation mode: pack embedding sign bits 64 dims/u64 as a
+  navigation-only side array, traverse the existing graph on XOR+popcount instead of float
+  cosine, then exact-rerank the candidate set on the materialized f32/f16. This is navigation
+  compression (cheaper hops, smaller in-RAM nav vectors) distinct from the stored embedding
+  codec.
+    where:  crates/nest-runtime/src/ann (build.rs/search.rs traverse on Hamming via simd/popcount.rs),
+            reusing the kernel from the RaBitQ recommendation. Optional: store the 1-bit nav
+            codes in 0x07 or derive on open from the embeddings.
+    impact: ~order-of-magnitude cheaper graph hops (12 u64 popcounts vs 768 FMAs for a 768-d vector) and a
+            smaller navigation footprint; recall recovered by rerank. Enables a 'nano' preset
+            (binary nav + f16 rerank).
+    effort: medium
+    from:   rust-cv/hnsw (Hamming traversal, hamming-heap), unum-cloud/usearch (b1x8), meilisearch/arroy
+            (sign-bit + popcount)
+
+* Add a budget->codec inversion in the nest-python builder: user passes a target .nest size
+  ratio or a recall floor and the builder deterministically solves dtype/codec + HNSW M/ef
+  parameters (PQ: m from 4*dim/(m+8) >= target ratio; nlist heuristics; binary-search ef_search
+  to a recall floor measured against exact). Replaces or augments the fixed
+  exact/compressed/tiny/hybrid presets.
+    where:  crates/nest-python/src/build_fn.rs (param solver feeding writer/encoding_choice.rs), validated
+            against the exact search() ground truth already in nest-runtime/src/search.rs.
+    impact: Turns 'compress more than everyone' from fixed presets into a solvable optimization; lets users
+            dial size vs recall directly. Determinism preserved since the solve is a pure
+            function of corpus stats + seeds.
+    effort: medium
+    from:   criteo/autofaiss (PQ-budget inversion, nlist=4*sqrt(N), binary-search ef tuner)
+
+compression wins
+------------------------------------------------------------------------------------------------
+  - RaBitQ 1-bit embedding codec: 8x smaller than nest's current int8 floor and 32x vs f32 on
+    the largest section, with an unbiased error bound and a popcount hot path -- the clearest
+    single path past the tiny preset's 0.283 ratio toward sub-0.1. Lossiness is free against the
+    recall contract because nest already mandates exact-cosine rerank.
+  - PQ8/OPQ mid tier: 16-32x on embeddings (m=32 on a 768-d vector is ~96x raw, ~24x vs int8)
+    via tiny shared codebooks + m-byte codes, scored by ADC for candidate gen and exact-reranked
+    -- a higher-recall option than 1-bit for a 'compressed-hybrid' preset.
+  - TurboQuant 2/4-bit data-oblivious codec: 16x at 2-bit (6144B f32 -> 384B for d=1536), scored
+    directly in the compressed domain off mmap, with NOTHING per-corpus stored so builds stay
+    byte-identical -- breaks the 'cannot compress the mmap-scored embeddings' wall without
+    adding a stateful trained artifact.
+  - uint40 neighbor ids + flat fixed-stride 0x07 layout: ~37.5% off the HNSW edge arrays plus
+    elimination of Vec<Vec> ptr/len/cap overhead; the regular byte structure also
+    zstd-compresses better (0x07 is not on the SIMD hot path), shrinking tiny/hybrid further.
+  - Algorithm-4 diversity neighbor selection lets the tiny/nano presets LOWER M (fewer
+    u32/uint40 ids per node) at equal recall@10 -- a compression win that costs only build-time
+    CPU and rides entirely on the existing exact rerank.
+  - Stream-VByte + recursive-graph-bisection on BM25 0x08 postings: replaces raw u32 doc/tf
+    pairs with delta-gap byte-packed postings whose d-gaps are minimized by term reordering --
+    shrinks the hybrid preset's lexical index, and the existing zstd second pass compounds it,
+    all without touching embeddings or the recall contract.
+  - Binary/Hamming navigation vectors (1-bit, 64 dims/u64) as a navigation-only side
+    representation: shrinks the in-RAM nav footprint ~32x vs the f32 snapshot and makes graph
+    hops popcount-cheap, enabling a 'nano' preset (binary nav + f16/RaBitQ rerank embeddings).
+
+watch-outs (conflict with nest constraints)
+------------------------------------------------------------------------------------------------
+  - NIGHTLY-ONLY SIMD: kannolo/vectorium use std::simd (portable_simd) and gen blocks; hora uses
+    packed_simd_2 (unmaintained, nightly-only). Both break nest's stable Rust edition-2024
+    build. Reimplement every kernel (PQ ADC, popcount, FastScan) on nest's existing
+    AVX2/NEON/scalar dispatcher; vendor the ALGORITHM, never the SIMD layer.
+  - EXTERNAL STORAGE ENGINES: arroy is built on LMDB (heed), hora/instant-distance use
+    serde+bincode blobs. These violate nest's single-file frozen-format and
+    offline-by-construction constraints. Keep every structure as repr(C) little-endian inside
+    nest's own sections; do not pull in a KV store or a serde graph dump.
+  - DETERMINISM OF QUANTIZERS: any trained codec (PQ/OPQ k-means, RaBitQ/TurboQuant rotation)
+    must be a pure function of the model fingerprint -- fix the seed, Lloyd iteration count,
+    sampling, and use index-order/alphabetical tie-breaks, and store codebooks/seeds in a stable
+    order. Otherwise same chunks + same model no longer yields a byte-identical file (breaks
+    nest://content_hash citations and reproducibility).
+  - NEVER ZSTD THE EMBEDDINGS: USearch/hnswlib interleave the raw vector INTO the graph record,
+    and several libs lean on generic entropy coders over vectors. Nest's embeddings must stay
+    directly mmap-SIMD-scored, so any embedding shrink must be a quantization codec scored
+    in-place (RaBitQ/PQ/TurboQuant), never a zstd wrapper. Steal the FLAT GRAPH LAYOUT for
+    neighbor IDS ONLY -- keep embeddings in their own section.
+  - ARM NEON PARITY: FAISS PQ4 FastScan and several popcount/shuffle kernels are
+    AVX2/AVX512-tuned; AVX2 lacks VPOPCNTDQ (use the Mula nibble-LUT pshufb popcount) and the
+    256-bit FastScan needs the two-128-bit-NEON-registers trick (Matsui arXiv:2203.02505) to
+    match on aarch64. Nest treats NEON as first-class, so every new kernel needs a real NEON
+    path, not a scalar fallback that emulates vector registers (very slow).
+  - SCALAR FALLBACK MUST STAY SIMPLE: FAISS notes the block/interleaved FastScan layout is
+    pathological for scalar (it emulates vector registers in memory). Nest's scalar tier should
+    keep a plain unpacked PQ/popcount loop, not the SIMD block layout, so the scalar-fallback
+    target stays correct and not catastrophically slow.
+  - 300-LINE FILE CAP / SINGLE RESPONSIBILITY: each new codec and kernel must split cleanly
+    (codec in nest-format/src/encoding/<name>.rs, kernel in nest-runtime/src/simd/<name>.rs) to
+    respect the <=300 (333 hard cap) line rule and typed thiserror no-panic convention -- do not
+    port monolithic C++ index files wholesale.
+  - ADDITIVE-ONLY DISCIPLINE: new embedding codecs take RESERVED encoding ids 4-255 and new ANN
+    backends take section ids 0x09+; internal graph changes bump HNSW_PAYLOAD_VERSION only. Do
+    NOT bump NEST_FORMAT_VERSION (that is reserved for a true v2 where an existing field changes
+    meaning). A naive port that rewrites the header/footer would violate the FROZEN format
+    guarantee.

@@ -1,0 +1,75 @@
+================================================================================================
+blazegraph/database
+category: graph-db   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Blazegraph (formerly bigdata) is a Java RDF/SPARQL graph database built on a
+             key-range-partitioned B+Tree over a single-file journal (RWStore), where every
+             triple/quad is materialized into multiple sorted "covering" statement indexes
+             (SPO/POS/OSP) whose unsigned-byte[] keys are compressed at the page level with
+             front-coding and order-preserving canonical Huffman raba coders.
+innovation:  The "raba coder" page model: B+Tree leaves store keys as a logical sorted byte[][] and compress
+             it with FrontCodedRabaCoder using a ratio parameter -- every `ratio` keys one full
+             key is emitted, the rest store only (shared-prefix-length, suffix) -- AND the codec
+             is searchable in place (binary search over the periodic full keys, then linear scan
+             inside the bucket), so you decompress nothing to look up. A sibling
+             CanonicalHuffmanRabaCoder compresses while strictly preserving lexicographic order,
+             so even Huffman-coded keys remain range-scannable. This is order-preserving,
+             search-on-compressed, tunable-ratio prefix compression for sorted byte strings.
+techniques:
+  - Front coding with tunable ratio: every Nth sorted key stored in full, intervening keys as
+    (shared_prefix_len, suffix); binary-search the full keys then linear-scan the front-coded
+    bucket -- no full decompression to search
+  - Order-preserving canonical Huffman coder for byte[][] (CanonicalHuffmanRabaCoder) that keeps
+    lexicographic order of coded values, so range scans work on compressed keys
+  - Covering/clustered indexes: same triples materialized in multiple key orderings (SPO,POS,OSP
+    triples; 6 for quads, YARS-style) so every access pattern is a prefix range-scan with
+    locality
+  - Value inlining: small RDF values encoded directly INTO the statement-index key with
+    order-preserving encoding to skip dictionary indirection
+  - Two-way dictionary (TERM2ID forward, ID2TERM reverse) mapping terms to compact numeric
+    term-ids so statement keys are fixed-width integer tuples
+  - BLOBS index: large literals pulled into a separate hash-keyed index so dictionary index
+    stride stays small and cache-friendly
+  - RWStore fixed-size slot allocators + free-lists with small-slot optimization (~1024B), page
+    split when a leaf exceeds 8k after compression
+  - Unsigned big-endian byte[] keys so numeric/temporal order == lexicographic byte order, which
+    makes prefix range-scans and front coding correct
+nest steals: Adopt front-coded, search-on-compressed encoding for nest's sorted-string sections in
+             nest-format. (1) chunk_ids section: encode as a FrontCodedRabaCoder-style block --
+             sort the ids, store every Nth id in full plus (prefix_len:varint, suffix) for the
+             rest, plus a small offset table to binary-search the full keys. New encoding id in
+             the RESERVED 4-255 space (additive, no NEST_FORMAT_VERSION bump), applied to
+             chunk_ids only, never to embeddings (which stay raw/f16/int8 for mmap SIMD
+             scoring). (2) bm25_index(0x08): its term dictionary is already required to be
+             alphabetical for determinism -- ideal front-coding input, so the vocabulary shrinks
+             with zero loss and stays binary-searchable on compressed bytes (no decompress on
+             the search path, preserving offline-mmap discipline). The codec lives in
+             crates/nest-format/.../encoding as a deterministic pure function (sorted input =>
+             byte-identical output), respecting the <=300-line single-responsibility rule and
+             typed thiserror (never panic). Order-preserving canonical Huffman is a phase-2
+             entropy upgrade for the same dictionaries. The covering-index idea informs
+             nest-runtime: if nest adds graph search, materialize edge tuples in multiple sorted
+             orderings so traversals become prefix range-scans, not full scans.
+compression: Directly on the north star ("compress data more than everyone"). Front coding plus
+             order-preserving entropy coding gives large lossless reduction of sorted string
+             columns (chunk_ids, bm25 term dictionary) while keeping them searchable on the
+             compressed bytes -- nest compresses these harder than a generic zstd pass without
+             paying decompression on the hot search path. Textbook technique for the
+             sorted-identifier and sorted-vocabulary data nest carries, and it composes with
+             existing zstd (front-code first, then zstd the residual).
+perf:        Single-file journal mmap-friendly model parallels nest's mmap design. Front coding's key
+             property for nest is search-on-compressed: O(log) binary search over periodic full
+             keys + O(ratio) linear scan in a bucket touches a few hundred bytes, not a
+             decompressed buffer -- keeps the search path allocation-light and cache-resident.
+             The `ratio` knob is a direct compression-vs-lookup-latency dial. B+Tree pages split
+             past an 8k boundary after compression; RWStore small-slot ~1024B, branching factor
+             256 -- evidence ~1-8k compressed blocks are the cache/IO sweet spot, a useful
+             block-size hint for nest's encoded sections. No SIMD in the Java codec, so a Rust
+             prefix-compare kernel can beat it.
+license:     GPLv2 (SYSTAP historically offered a separate commercial license); Java codebase, Amazon
+             acquired SYSTAP in 2018 and the OSS project is effectively abandoned -- treat as
+             reference/learn, not vendor (GPL + Java rule out direct linking into nest's Rust
+             core).

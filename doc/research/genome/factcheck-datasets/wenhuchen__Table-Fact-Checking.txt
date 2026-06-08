@@ -1,0 +1,70 @@
+================================================================================================
+wenhuchen/Table-Fact-Checking
+category: factcheck-datasets   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        TabFact is a fact-verification dataset (118k statements over 16.5k Wikipedia tables,
+             ENTAILED/REFUTED) shipped with a Latent Program Algorithm (LPA) that compiles each
+             natural-language statement into a small typed DSL of ~60 table operations and
+             verifies it by symbolic execution via a memoized, trigger-word-gated beam search.
+innovation:  A closed, strongly-typed operator DSL (~60 ops over types
+             num/str/row/header_num/header_str/bool) where each operator carries a set of
+             natural-language "trigger words" plus POS-tag constraints; statement words gate
+             which operators are eligible (must_have / must_not_have sets), collapsing an
+             exponential program space into a tractable typed beam search whose intermediate
+             results are memoized by command-string hash. The verification answer is the
+             deterministic boolean OUTPUT of executing the synthesized program against the
+             table, not a learned similarity score.
+techniques:
+  - Typed program DSL: ~60 ops (count, filter_eq/greater/less[_eq], filter_str_eq fuzzy,
+    argmax/argmin, max/min/avg/sum, hop/str_hop/num_hop, all_eq/all_greater universal
+    quantifiers, within/not_within, before/after ordering, diff/add, and/or) each with a fixed
+    argument-type signature
+  - Trigger-word gating: every op maps to NL trigger words + POS tags (max/argmax keyed on
+    JJS/RBS superlatives, 'than any'); presence/absence builds must_have/must_not_have sets that
+    prune the candidate operator set before search
+  - Memoized beam search (dynamic_programming): hist[step] holds states; an op fires only when
+    typed argument slots are filled; results cached by command string via call() memoization;
+    saved_hash per step dedupes identical states
+  - Anytime termination: stop at >100 complete programs or 40s wall-clock; breadth-first so
+    shorter programs surface first
+  - Entity linking via #xxx;row,col# span notation: longest-text-span match of statement
+    mentions to cells/headers, pandas-dtype-driven num/str typing, separate string vs number
+    memory pools (mem_str/mem_num, head_str/head_num)
+  - Horizontal vs vertical table linearization (preprocess_BERT --scan) turning a 2D table into
+    a token sequence for the Table-BERT baseline
+  - Deterministic symbolic execution: the program's boolean output IS the verdict, fully
+    reproducible and explainable
+nest steals: Adapt the typed-operator DSL + trigger-word gating into nest-runtime as a structured-query path
+             beside cosine/hnsw/bm25, operating over the canonical text section and a future
+             tabular/parquet section. (1) Define a small Rust enum of typed ops (filter_eq,
+             greater, count, argmax, within, before/after) as a #[repr(C)] op-code table
+             persisted as an OPTIONAL additive section (reserved id 0x09+) holding precomputed
+             trigger-word->op-id maps and a per-chunk column type map (num/str), keeping the
+             format additive and deterministic. (2) Implement the memoized beam search in
+             nest-runtime as a no-panic, seeded, deterministic synthesizer (typed thiserror
+             errors, files split ops/exec/search to stay <=300 loc) so a query like 'no team
+             scored more than 3 goals' compiles to all_less(filter..) and returns a real boolean
+             verdict citable via nest://content_hash/chunk_id, turning the PT-BR fake-news demo
+             corpus into an explainable verifier rather than pure retrieval. (3) The
+             trigger-word->op gating plus POS/type constraints is a compact lossless index of
+             query semantics that complements bm25; the closed op set is a fixed dictionary that
+             zstd-compresses well in a non-embedding section.
+compression: Indirect. No novel byte-level codec, but two ideas help nest's compress-more goal: (a) a CLOSED
+             operator vocabulary + trigger-word dictionary is a tiny fixed symbol table that
+             zstd-compresses near-perfectly in a non-embedding section, so storing verification
+             programs costs almost nothing; (b) command-string-hash memoization is structural
+             dedup of repeated subexpressions, the same principle behind nest's content_hash
+             dedup. The real value is feature breadth (deterministic structured truth-checking
+             over tables), not raw ratio.
+perf:        LPA is pure-Python beam search bounded to depth ~6, beam width 5-7, capped at 100 programs / 40s
+             per statement; single-threaded, no SIMD. In Rust on nest's mmap path it would be
+             far faster: the search is branch-heavy integer/string work, not float dot-products,
+             so it does NOT compete for the SIMD hot path and runs lazily only when a query is
+             structured. Memory: two small per-statement pools (strings, numbers) plus a
+             per-step state hash set; fits the offline single-binary model trivially.
+license:     Code released on GitHub by Wen-hu Chen et al. (UCSB); repo historically carries a
+             permissive/research license (verify the exact LICENSE file before vendoring).
+             Dataset built from Wikipedia tables, so CC BY-SA upstream considerations apply.

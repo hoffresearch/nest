@@ -1,0 +1,102 @@
+==============================================================================================
+TASK #08 :: flagship retrieve() + ask + cite (tier-1 only) + SearchExplain
+phase: phase 1   layer: lens
+status:  [ ] todo    [ ] doing    [ ] done
+==============================================================================================
+
+self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
+files listed before coding. do not summarize, do not skip. add a [ ] if something
+is missing. never skip silently.
+
+--- goal ---
+ship ratio at near-zero risk on cold metadata sections, land the chunk-to-chunk csr (named
+graph-search + reclaims chunk_overlap), and stand up the agent-native flagship (ask + cite +
+retrieve()) on phase 0-1. this is the first thing a stranger can pip-install and trust.
+
+--- depends on ---
+  previous phase merged
+
+--- READ THESE COMPLETE FILES FIRST ---
+[ ] doc/research/synthesis/bindings-cli.txt
+[ ] doc/research/synthesis/rag-orchestration.txt
+[ ] crates/nest-cli/src/cmd/cite.rs
+[ ] crates/nest-runtime/src/search.rs
+[ ] doc/plan/master-plan/09-lens.txt
+[ ] doc/plan/master-plan/03-roadmap.txt
+[ ] doc/plan/master-plan/04-risks-quickwins.txt
+
+  (and the current code you will change:)
+[ ] crates/nest-cli/src/cmd/ask.rs
+[ ] crates/nest-cli/src/cmd/retrieve.rs
+[ ] crates/nest-python/src/retrieve_fn.rs
+[ ] python/forge/retrieve.py
+
+--- OWNS THESE CODE FILES (no parallel task edits them) ---
+  crates/nest-cli/src/cmd/ask.rs
+  crates/nest-cli/src/cmd/retrieve.rs
+  crates/nest-python/src/retrieve_fn.rs
+  python/forge/retrieve.py
+
+--- STEPS (check each) ---
+[ ] ship TWO user-facing verbs ask + cite over the existing engine; keep the existing 8
+    subcommands as-is under the hood (DEFER verb-collapse, the nest dev namespace, and the
+    nest-profile crate - they are churn with no user value pre-users)
+[ ] add the additive SearchExplain field on SearchResult; --disclose explain on ask prints the
+    rerank-source honesty line (real cosine vs real cosine at stored precision)
+[ ] retrieve() verb + python retrieve(): agent-shaped cited spans where the returned score IS
+    the exact-cosine rerank value; cite is TIER-1 ONLY (returns stored canonical text +
+    verifying hashes, exactly what cite.rs does today); the flagship work-order MUST NOT claim
+    original-byte reopen; one-gif demo on the phase-0 demo corpus
+
+--- draws from ---
+clap-rs/clap, langchain-ai/langchain, supermemoryai/supermemory, PyO3/pyo3
+
+--- watch out ---
+  the flagship is a lie if retrieve ever returns a candidate-generator score instead of the
+  exact rerank value (the phase-0 test guards this) OR if cite claims to reopen original bytes
+  (it returns stored canonical text today; original-byte reopen is net-new and belongs to
+  catalog, not the flagship).
+
+--- NEST RULES (check each) ---
+[ ] edition 2024; never panic in lib (typed thiserror). FORGE heavy/non-deterministic work
+    stays OUT of the sovereign crates/ workspace.
+[ ] format v1 FROZEN + ADDITIVE: no NEST_FORMAT_VERSION bump. use reserved encoding ids 4-9 /
+    section ids 0x09+.
+[ ] content_hash over DECODED bytes: codecs decode byte-identically so nest:// citations stay
+    stable.
+[ ] never zstd/dedup/shuffle the embeddings section (mmap SIMD hot path); only fixed-stride
+    quantization there.
+[ ] deterministic: the .nest build anchor is canonical extracted text + model fingerprint,
+    verify byte-identical across two builds.
+[ ] <=300 lines per rust src file; docs lowercase, no emoji, no em-dash. feature branch off
+    main.
+
+--- DONE WHEN (all green) ---
+[ ] cargo build --release --workspace ; cargo test --workspace (+ roundtrip+content_hash test
+    for new codecs)
+[ ] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
+[ ] rebuild python/_nest.so if format/runtime/python changed ; ./scripts/release_check.sh
+    passes
+[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+
+--- RESULT (fill in) ---
+  size ratio  before: ____  after: ____
+  recall@10   before: ____  after: ____
+
+--- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
+update only what THIS task actually changed; check each:
+[ ] doc/arc/arc.md     architecture inventory + contract (boundaries/sections/data-flow/runtime)
+[ ] doc/arc/arc.yaml   machine architecture map (MUST move with arc.md, same commit)
+[ ] doc/arc/arc.mmd    mermaid build/query flow (if the flow changed)
+[ ] README.md          overview / cli / presets / highlights (if a user-visible surface changed)
+[ ] doc/usage.md       the how-to (if a command, flag, preset, or workflow changed)
+[ ] AGENTS.md          build/test cmds, conventions, gotchas, known gaps (if any changed)
+[ ] Cargo.toml         workspace version / deps / new crate (if crates or deps changed)
+[ ] pyproject.toml     python tooling / deps / targets (if the python surface changed)
+[ ] rustfmt.toml       only if a formatting rule must change (rare)
+the arc trio (arc.md + arc.yaml + arc.mmd) moves TOGETHER in the same commit when
+architecture / boundaries / data-flow / contracts / storage / runtime change.
+
+--- MERGE ---
+[ ] commit on branch feat/p1-08-flagship-retrieve-ask-cite-tier-1-only-searche
+[ ] gate green -> merge, mark done in plan/kanban.txt

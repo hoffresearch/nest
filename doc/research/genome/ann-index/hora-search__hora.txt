@@ -1,0 +1,76 @@
+================================================================================================
+hora-search/hora
+category: ann-index   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A pure-Rust, dependency-light (no BLAS) ANN library implementing HNSW, SSG,
+             Random-Projection-Tree, and Product-Quantization/IVFPQ indexes over a generic
+             ANNIndex<E,T> trait, with packed_simd distance kernels and serde+bincode dump/load
+             persistence.
+innovation:  Product Quantization (PQ) with an Inverted-File coarse partition (IVFPQ) used as a lossy vector
+             codec: split each D-dim vector into n_sub subvectors, k-means-train a codebook of
+             2^sub_bits centroids per subvector, and store each vector as n_sub small codes
+             (e.g. 8 bits each) instead of D floats. This compresses embeddings ~8-32x while
+             supporting Asymmetric Distance Computation (ADC): the query stays full-precision
+             and distances to all centroids are precomputed into a lookup table, so scoring a
+             stored code is just n_sub table lookups + adds. IVF adds a residual-quantization
+             layer (each cluster PQ-encodes the residual to its coarse centroid) to cut
+             quantization error.
+techniques:
+  - Product Quantization: vector split into n_sub subvectors, codebook = 1<<sub_bits centroids
+    per subquantizer trained by k-means over _train_epoch iterations; code width
+    _sub_bytes=(sub_bits+7)/8
+  - IVFPQ residual quantization: _n_kmeans_center coarse centroids, _ivflist: Vec<Vec<usize>>
+    inverted lists, per-cluster PQIndex encoding the residual (_residual=coarse center),
+    _search_n_center probes
+  - Asymmetric Distance Computation via precomputed query-to-centroid distance tables
+    (get_distance_from_vec_range): full-precision query vs quantized codes
+  - Codes stored as packed Vec<u8> (_code_bytes=sub_bytes*n_sub); centroids as Vec<Vec<Vec<E>>>
+    shaped [n_sub][n_center][sub_dim]
+  - SerializableIndex trait with dump(path)/load(path) over serde derive + bincode 1.3 binary
+    format
+  - Generic ANNIndex<E,T> trait separating element/distance type E from external id type T;
+    Metric enum {Dot, Euclidean, Manhattan, Cosine}
+  - packed_simd_2 0.3.6 vectorized distance kernels with a BruteForce SIMD baseline and no BLAS
+    dependency
+  - build->dump offline-codec pipeline (k-means via rand 0.8) usable deterministically if seeded
+nest steals: Adopt PQ/IVFPQ as a new embedding ENCODING in nest-format (reserve a new encoding id in the
+             additive 4-255 range, e.g. pq8), parallel to the existing int8 codec in
+             crates/nest-format/src/encoding. The embeddings section stores a small trained
+             codebook (n_sub x 2^bits x sub_dim f32 centroids) plus one n_sub-byte code per
+             chunk, replacing the D f32/f16/int8 vectors. This is the biggest single lever for
+             the 'compress more than everyone' north star: PQ8 on a 384-d MiniLM embedding is
+             ~48 codes/vector vs 384 f32 (32x) or 384 int8 (8x), pushing the tiny preset below
+             its current 0.283 size ratio. To honor nest's HARD search contract, do NOT score PQ
+             codes as the final answer: use PQ as a fast ANN candidate generator in nest-runtime
+             (ann::PqIndex alongside HnswIndex, with ADC lookup tables built per query), then
+             run the MANDATORY exact-cosine rerank on decoded/materialized vectors so the
+             returned score is real cosine, never an ANN proxy. Two shapes: (a) PQ-compressed
+             storage with decode-then-rerank, or (b) PQ as an HNSW companion/replacement
+             candidate stage. Determinism is met by seeding k-means and fixing centroid
+             tie-breaks in index order (mirrors nest's deterministic-hnsw and alphabetical-bm25
+             rules). Reimplement ADC on nest's own AVX2/NEON/scalar SIMD dispatcher (do NOT
+             vendor packed_simd: it is nightly-only/unmaintained and breaks edition-2024
+             stable). Keep the codec in a <=300-line single-responsibility file; bincode/serde
+             persistence is discarded in favor of nest's frozen repr(C) little-endian layout.
+             The ANNIndex/SerializableIndex trait shape and Metric enum are reference-grade for
+             the nest-runtime ann module API.
+compression: Directly central. PQ/IVFPQ is THE classic lossy vector-compression scheme (8-32x over f32) and
+             the most promising path beyond nest's current int8 (8x) embedding quantization.
+             Highest-leverage technique for compressing the embeddings section specifically,
+             with a well-understood recall/size tradeoff and IVF residual coding to recover
+             accuracy.
+perf:        Pure Rust, no BLAS. packed_simd_2 0.3.6 kernels, but packed_simd is unmaintained/nightly-only
+             and incompatible with nest's edition-2024 stable build, so reimplement ADC on
+             nest's own dispatcher. ADC makes per-vector scoring O(n_sub) table lookups instead
+             of O(D) float multiplies, so PQ search is smaller AND faster than brute-force f32
+             at scale; the lookup table is built once per query and IVF _search_n_center bounds
+             candidates scanned. Codes are contiguous u8: mmap-friendly, cache-dense, scannable
+             straight off disk in nest's score-from-mmap design (only the rerank stage needs
+             decoded f32). The bincode/serde persistence layer is not reusable, but the
+             codebook+codes data model maps cleanly onto a nest section.
+license:     Apache-2.0 (permissive). Safe to study and reimplement the PQ/IVFPQ algorithm and the
+             ANNIndex/SerializableIndex API shape; the bincode 1.3 / serde / packed_simd_2
+             dependencies are NOT vendored.

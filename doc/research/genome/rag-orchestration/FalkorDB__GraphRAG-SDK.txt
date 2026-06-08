@@ -1,0 +1,62 @@
+================================================================================================
+FalkorDB/GraphRAG-SDK
+category: rag-orchestration   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A Python GraphRAG orchestration SDK that does schema-guided LLM entity/relation extraction into
+             a FalkorDB knowledge graph (a Redis module whose engine stores every relation type
+             as a GraphBLAS sparse adjacency matrix and executes Cypher traversals as sparse
+             linear algebra), then answers via multi-path retrieval (vector + full-text +
+             text-to-Cypher + relationship expansion) merged by ranked fusion and a final local
+             cosine rerank.
+innovation:  Represent the graph as typed sparse adjacency matrices (CSC) and turn graph traversal into
+             sparse matrix multiplication.
+techniques:
+  - Typed sparse adjacency matrices: one CSC (compressed-sparse-column) matrix per relation type
+    + one type-agnostic global adjacency matrix; node labels as diagonal identity matrices
+  - Traversal as semiring matrix multiplication (GraphBLAS): k-hop reachability = matrix power,
+    pattern join = A * B * transpose(A); planner compiles Cypher to a matrix expression
+  - 3D sparse tensor (src x dst x edge_id) so a cell holds either a single relationship-id
+    scalar or a vector of edge-ids for parallel multi-edges between the same pair
+  - Copy-on-write versioned/delta matrix: writes accumulate in a delta overlay, flushed/fused
+    into the base matrix in batch; enables MVCC snapshot isolation (concurrent reads on
+    snapshots, writes serialized through a single mpsc channel)
+  - Schema-guided / ontology-constrained extraction: a small ontology (3-7 node types, 5-15
+    relations) bounds open-world LLM extraction into a closed, queryable schema
+  - Multi-path hybrid retrieval with ranked result merging: vector cosine + DB full-text +
+    text-to-Cypher + relationship expansion, candidates fused then reranked
+  - Local cosine rerank as the final, non-LLM scoring stage so the returned score is true
+    cosine, decoupled from expensive model calls
+  - Incremental graph sync: SHA-256 per-document change detection driving idempotent
+    apply_changes(added/modified/deleted) via graph merge instead of full rebuild, with MENTIONS
+    edges linking entities back to source chunks for provenance
+nest steals: See above: section 0x09 graph_adjacency (CSC, per-type matrices) in nest-format; pure-Rust
+             deterministic SpMV/SpGEMM k-hop traversal in nest-runtime reusing the SIMD
+             dispatcher; expose as a search path fused into the existing RRF + mandatory
+             exact-cosine-rerank contract; new nest-cli subcommand (e.g. search-graph) and pyo3
+             binding. Avoids vendoring GraphBLAS/Redis; preserves
+             offline/single-file/deterministic/additive-format constraints and <300 LOC/file.
+compression: High and direct. CSC/CSR sparse-matrix storage IS a compression scheme for graphs: storing only
+             nonzeros as (indptr,indices) is O(edges) not O(nodes^2), and for a sparse relation
+             graph this is dramatically smaller than an edge-list-of-strings. Combined with
+             nest's existing zstd codec on non-embedding sections, the indices arrays (monotone
+             within each column) are highly delta+varint+zstd compressible, letting nest carry a
+             whole relationship graph in kilobytes and advance the 'compress AND serve
+             graphs/databases/repos' mission. The delta-matrix/copy-on-write idea also hints at
+             how nest could later support real-time edit without rewriting the frozen base
+             (overlay deltas), another north-star goal.
+perf:        SpMV/SpGEMM over CSC is bandwidth-bound and extremely cache-friendly vs pointer-chasing; the
+             same memory-locality argument nest already uses for mmap'd SIMD dot products
+             applies to CSC column dot products, so the existing AVX2/NEON dispatcher can be
+             reused for boolean/weighted SpMV. FalkorDB's full GraphBLAS (SuiteSparse) is a
+             large C dependency and offline-hostile (Redis module); nest should NOT vendor it --
+             a minimal pure-Rust CSC matvec (tens of lines) covers k-hop traversal without the
+             dependency, threading, or MVCC machinery. MVCC/mpsc write serialization is
+             irrelevant to nest's frozen, read-only, single-process mmap model and should be
+             skipped.
+license:     GraphRAG-SDK is MIT (FalkorDB org). FalkorDB engine core is dual-licensed Server Side Public
+             License (SSPL) / commercial -- engine NOT vendorable; only the algorithmic ideas
+             (CSC, traversal-as-matmul) are free to reimplement. SuiteSparse:GraphBLAS is
+             Apache-2.0 but a heavy C dep to avoid.

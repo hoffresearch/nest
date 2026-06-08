@@ -1,0 +1,35 @@
+================================================================================================
+genome :: content-addressed (index)
+content-addressed, reproducible, and distributed storage
+================================================================================================
+
+one file per project in this folder. open the one you need.
+
+[HIGH     ] ipfs__kubo.txt                     Kubo is the reference Go implementation of IPFS:
+                                               a content-addressed distributed store that chunks
+                                               files, wraps them in a UnixFS Merkle DAG of
+                                               hash-linked blocks (each block addressed by a CID
+                                               = multibase + multicodec + multihash), and
+                                               deduplicates at the block level via a
+                                               multihash-indexed blockstore.
+[HIGH     ] NixOS__nix.txt                     A purely-functional package manager whose store
+                                               is a content-addressed object graph: artifacts
+                                               are identified by SHA-256 hashes of a canonical,
+                                               metadata-stripped serialization (NAR) plus a
+                                               structured "fingerprint" string, enabling
+                                               deterministic builds and distributed substitution
+                                               from untrusted binary caches.
+[HIGH     ] NixOS__nixpkgs.txt                 Nix is a content-addressed package store whose
+                                               substrate is NAR (Nix Archive): a fully
+                                               deterministic, metadata-stripped, length-prefixed
+                                               binary serialization of filesystem trees, hashed
+                                               with SHA-256 and truncated to a 160-bit
+                                               nix-base32 digest to form immutable, reproducible
+                                               content-addressed store paths and derivations.
+[MEDIUM   ] jvm-repo-rebuild__reproducible-central.txt A crowd-sourced verification corpus that
+                                               rebuilds Maven Central artifacts inside pinned
+                                               Docker/JDK environments and proves byte-for-byte
+                                               reproducibility by comparing SHA-512 fingerprints
+                                               of every output file against the published
+                                               artifact, recording the verdict in declarative
+                                               .buildspec/.buildcompare/.buildinfo text files.

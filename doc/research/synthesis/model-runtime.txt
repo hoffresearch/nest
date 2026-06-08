@@ -1,0 +1,247 @@
+================================================================================================
+synthesis :: model-runtime
+inference runtimes and tensor libraries for on-device embedding
+================================================================================================
+
+state of the art and concrete nest recommendations for this category.
+
+summary:     Across onnxruntime/MLAS, onnx, and ggml the field has converged on one decisive technique for
+             shrinking on-device embeddings: block-wise (group-wise) sub-byte weight
+             quantization with a small per-block scale, packed in a self-contained repr(C)
+             layout and dequantized fused-inline during the SIMD dot product so dequantized
+             values never materialize in RAM. ggml's K-quants (Q4_K: 256-value super-blocks,
+             fp16 d/dmin masters + 6-bit double-quantized sub-block scales + 4-bit quants = 4.5
+             bpw) and onnx's MX microscaling (32-elem blocks, shared FLOAT8E8M0 power-of-two
+             exponent + int4 mantissa) are the two reference designs; MLAS SQNBitGemm is the
+             reference fused dequant+dot kernel. This category is nest's single biggest
+             unexploited lever, because embeddings are the one section banned from zstd (they
+             are scored directly from mmap on the hot path), so the only way to shrink them is
+             better quantization. nest is unusually well-positioned: its int8.rs payload ALREADY
+             carries a scale_kind field (currently only 0 = per-vector), encoding ids 4-255 are
+             reserved inside frozen v1, and search.rs already runs a mandatory exact-cosine
+             rerank that absorbs quantization error so an int4 candidate stage keeps
+             ground-truth scores. The one real blocker is an internal detail: mmap_file.rs
+             materializes EVERY dtype to a full n*dim*4 f32 buffer whenever an HNSW index is
+             present (materialize.rs), so today's int8 already loses its in-place-scoring
+             advantage for tiny/hybrid presets, and a 4-bit codec inherits and worsens that
+             problem unless the ANN distance path is taught to read packed blocks directly.
+
+state of the art
+------------------------------------------------------------------------------------------------
+The de-facto standard for compact on-device embeddings is fixed-size block (group) quantization
+with a small per-block scale, three design points along a bpw/quality curve: (1) symmetric int8
+with one scale per 32-element block (ggml block_q8_0, ~8.5 bpw) as the safe, recall-preserving
+baseline; (2) int4 with a per-block scale, either an fp16 scale (MLAS MatMulNBits, ~4.25 bpw at
+block 64) or a shared power-of-two E8M0 exponent (onnx MX, ~4.25 bpw at block 32), as the sweet
+spot, where block scaling recovers the recall that flat per-vector int4 loses; (3) hierarchical
+double-quantization (ggml Q4_K, 4.5 bpw) which adds a second quantization level (6-bit sub-block
+scales relative to fp16 super-block masters) to track both global and local dynamic range across
+256 values; and (4) codebook/i-quant schemes (IQ2_XXS, ~2 bpw) for the aggressive frontier. The
+universal implementation pattern is: self-contained repr(C) little-endian block records,
+SIMD-aligned, two int4 nibbles packed per byte, dequantized fused-inline inside the dot-product
+SIMD pass (MLAS SQNBitGemm) across a runtime CPU-feature dispatch ladder (scalar -> NEON/dotprod
+-> AVX2+FMA+F16C -> AVX512-VNNI, with VNNI's vpdpbusd doing 4 int8 MACs/lane). Block size trades
+footprint vs accuracy: smaller block = more scales = bigger but more accurate, with 32-128 the
+consensus sweet spot and fp16 scales keeping overhead near 0.25 bits/dim at block 64. A hard
+structural constraint from ggml: K-quants require the quantized dimension be a multiple of 256
+(768, 1024 fine; 384 not), so a block-32 fallback (q8_0/q4 block-32) is mandatory for off-size
+models. Accuracy-recovery calibration (GPTQ/HQQ/imatrix) is the one part nest should NOT copy
+wholesale: it depends on a calibration corpus and breaks determinism; plain RTN
+max-abs-per-block is reproducible and, behind nest's mandatory exact-cosine rerank, sufficient.
+
+top transferable innovations
+------------------------------------------------------------------------------------------------
+1. ggml Q4_K hierarchical double-quantization: 256-value super-blocks each carry two fp16
+   masters (d, dmin) and eight 32-value sub-blocks whose own scale/min are 6-bit ints relative
+   to the masters, reaching 4.5 bpw vs nest's current 8 bpw int8 while a self-contained repr(C)
+   record stays dequantizable in isolation off mmap. The key insight is spending metadata bits
+   hierarchically so per-sub-block precision is nearly free amortized across 256 values.
+2. MLAS SQNBitGemm fused dequant+dot: nibble-unpack + per-block-scale + multiply-accumulate
+   happen in one SIMD pass so dequantized weights never hit memory, keeping the matmul
+   memory-bandwidth bound. This is exactly the kernel shape nest's simd/mod.rs dispatcher needs
+   for a 4-bit path, and it is what makes block-quant cheaper than it looks on the hot path.
+3. onnx MX microscaling (E8M0 shared block exponent): a 32-element block shares one 8-bit
+   power-of-two exponent, so dequant is a single exponent add/shift per block (no fp16
+   multiply), the cheapest possible block-scale to fuse into a NEON/AVX2 dot kernel before f32
+   accumulation. Near-int8 quality at int4 size.
+4. Block-wise scaling as the fix for int8's per-vector-outlier loss: MLAS/ggml both show one
+   scale per K-block (16/32/64) instead of per whole vector kills the single-outlier problem
+   that crushes per-vector resolution. This retrofits onto nest's EXISTING int8 path as
+   scale_kind=1 to recover accuracy at the same or near-same size, independent of any int4 work.
+5. ggml block_q8_0 (one fp16 scale per 32 dims): the lowest-risk concrete artifact, a drop-in
+   higher-quality, smaller-scale-overhead replacement for nest's per-vector-f32-scale int8 (4
+   bytes/vector of scale -> 2 bytes/32 dims), shippable as scale_kind=1 with minimal new kernel
+   surface.
+6. ggml i-quants (IQ2_XXS, ~2.06 bpw): vector codewords indexed into a shared lookup grid so
+   weights cost log2(grid) bits, not raw bits, the longer-term path to push well below 4 bpw, at
+   the cost of a shipped codebook and a gather in the kernel.
+7. onnx size_threshold gate: only spill tensors above a threshold to block-quant; small sections
+   keep flat layout. Cheap idea to steal into writer/encoding_choice.rs so tiny corpora don't
+   pay block-scale overhead.
+8. Deterministic round-to-nearest-even max-abs-per-block quantization: a pure function of input
+   with no seed, so block-quant preserves nest's byte-identical reproducibility guarantee for
+   free (unlike GPTQ/imatrix calibration which depends on a calibration set).
+9. GGUF/ONNX page-and-SIMD-aligned block layout: every block/tensor starts on a 32-byte (GGUF) /
+   4KB (ONNX) boundary for zero-copy mmap. nest's 64-byte SECTION_ALIGNMENT already satisfies
+   this; the lesson is to keep super-blocks an integer multiple of the SIMD load width and the
+   section aligned so the first block does too.
+10. ml_dtypes / hand-rolled nibble packing: int4/fp8 have no native numpy or Rust dtype, so all
+   three projects hand-roll two's-complement nibble pack/unpack, confirming nest must own this
+   in Rust and split pack/unpack out of the kernel file to stay under the 300-line cap.
+
+nest recommendations
+------------------------------------------------------------------------------------------------
+* Add block-wise int8 as scale_kind=1 in the EXISTING int8 codec (one fp16 scale per 32-dim
+  block, ggml block_q8_0 shape), reusing the float16 codec for the scale. Lowest-risk first
+  step: recovers recall int8 loses to per-vector outliers and shrinks scale overhead from 4
+  bytes/vector to 2 bytes/32 dims, with NO new encoding id and NO format-version bump.
+    where:  crates/nest-format/src/encoding/int8.rs: branch on the already-present scale_kind field (add
+            INT8_SCALE_KIND_BLOCK32=1 next to INT8_SCALE_KIND_PER_VECTOR=0); layout [u32
+            ver][u32 scale_kind=1][f16 scales: n*(dim/32)][i8 bodies]. Int8EmbeddingsView gains
+            block_scale(i, block); parse() currently rejects kind!=0 so old readers stay safe.
+            Runtime: simd/mod.rs score_int8_section and search.rs score_all/score_subset Int8
+            arm apply per-block scale.
+    impact: high
+    effort: low
+    from:   ggml block_q8_0, MLAS block-wise weight quantization, onnx MX block scaling
+
+* Add an int4 block-scaled embeddings codec as RESERVED encoding id SECTION_ENCODING_INT4=4 +
+  new dtype string 'int4_b64', modeled on int8.rs: split each dim-length row into 64-elem
+  blocks, one f16 scale per block (reuse float16 codec), bit-pack two int4 codes per byte in
+  block-contiguous [n, dim/64, 32] layout. ~4.25 bpw vs int8's 8, roughly halves the dominant
+  section. Additive within frozen v1; the exact-cosine rerank keeps returned scores real cosine
+  even though int4 drives candidates.
+    where:  New file crates/nest-format/src/encoding/int4.rs (split pack/unpack from kernel to stay under
+            300 lines); wire into encoding/mod.rs (export + decode_payload passthrough since
+            int4 bytes ARE canonical) and expected_embeddings_size; add SECTION_ENCODING_INT4=4
+            to layout/mod.rs; add EmbeddingDType::Int4 in writer/encoding_choice.rs and
+            DType::Int4 in runtime mmap_file.rs.
+    impact: high
+    effort: high
+    from:   MLAS MatMulNBits / SQNBitGemm, onnx int4 nibble packing, ggml Q4_0 4-bit nibbles
+
+* Add a fused dequant+dot SIMD kernel (dot_f32_i4) beside avx2/neon/scalar that streams nibbles,
+  applies the per-block f16 scale, accumulates cosine in f32 in one pass, never expanding the
+  row to f32 in RAM (the SQNBitGemm pattern). Add score_int4_section and a DType::Int4 arm to
+  score_all/score_subset.
+    where:  crates/nest-runtime/src/simd/{avx2,neon,scalar}.rs (new dot_f32_i4 fn each, mirroring
+            dot_f32_i8); simd/mod.rs new dispatch fn + score_int4_section;
+            crates/nest-runtime/src/search.rs add the Int4 match arms. Keep nibble unpack
+            helpers in a small simd/pack.rs to respect the 300-line cap.
+    impact: high
+    effort: high
+    from:   MLAS SQNBitGemm fused kernel, ggml AVX2/NEON dequant-and-dot, AVX512-VNNI vpdpbusd
+
+* Fix the materialize-to-f32 leak so block-quant actually pays off for tiny/hybrid. Today
+  mmap_file.rs::open materializes the WHOLE embeddings section to an n*dim*4 f32 buffer
+  (materialize.rs) whenever an HNSW section is present, to feed the ANN graph. A 4-bit codec
+  would be expanded to f32 in RAM, defeating compression on exactly the preset (tiny =
+  int8+hnsw) that needs it most. Teach the ANN distance path to score against packed blocks via
+  the new fused kernel (or at minimum keep f16, not f32, as the materialized form).
+    where:  crates/nest-runtime/src/materialize.rs and crates/nest-runtime/src/ann/{search.rs,mod.rs}
+            (HnswIndex::attach_vectors / distance fn); have the graph hold a borrowed packed
+            view + scale table and call the simd fused dot instead of holding a dense f32 Vec.
+            Also shrinks resident RAM for the existing int8 tiny preset.
+    impact: high
+    effort: high
+    from:   ggml block-local self-contained random access off mmap, MLAS memory-bandwidth-bound fused matmul
+
+* Ship a 'nano' preset (int4 block-64 embeddings + zstd text + hnsw) targeting a size ratio well
+  below tiny's 0.283, since embeddings are the dominant incompressible bytes. Gate on dim being
+  block-compatible (multiple of 64; a future Q4_K-256 variant needs multiple of 256) and fall
+  back to block-32 int8 otherwise, matching ggml's K-quant dimension constraint.
+    where:  Preset selection lives above the format crate (nest-python build path / CLI). Wire
+            EmbeddingDType::Int4 through writer/encoding_choice.rs and the manifest dtype
+            string; document the preset and recall@10 where tiny (0.283) is documented. Add a
+            writer-side guard that rejects/falls-back when dim % block != 0.
+    impact: high
+    effort: medium
+    from:   nest tiny preset (0.283), ggml K-quant dim-multiple-of-256 constraint, ggml block-32 fallback
+
+* Steal onnx's size_threshold gate: only apply block-quant overhead to embeddings sections above
+  a byte threshold; tiny corpora keep flat float16/int8 so a handful of vectors don't pay
+  per-block scale metadata. Keep per-section SHA-256 discipline (mirrors ONNX per-tensor
+  checksum) untouched.
+    where:  crates/nest-format/src/writer/encoding_choice.rs (or writer/payload.rs where embedding dtype is
+            chosen): add a min-bytes gate before selecting Int4/block-int8.
+    impact: low
+    effort: low
+    from:   onnx external-data size_threshold gate
+
+* Defer i-quant / codebook (IQ2_XXS ~2 bpw) and any GPTQ/imatrix calibration. They are the
+  frontier but (a) imatrix needs a calibration corpus and breaks byte-identical determinism, and
+  (b) i-quants ship a lookup grid and add a gather to the hot kernel. Record as a v2-era
+  research line, NOT a near-term graft; plain RTN max-abs-per-block int4 already lands the
+  biggest win deterministically.
+    where:  Roadmap note only (kdb/research synthesis). If ever pursued, the codebook would be a new
+            reserved encoding id with the grid embedded in the embeddings payload prefix;
+            determinism would require shipping the exact grid, not deriving it from data.
+    impact: medium
+    effort: high
+    from:   ggml i-quants IQ2_XXS, GPTQ/HQQ/imatrix calibration
+
+compression wins
+------------------------------------------------------------------------------------------------
+  - Block-scaled int4 embeddings at block 64 = ~4.25 bpw (4 bits + ~0.25 bits/dim for the f16
+    scale) vs the current int8's 8 bpw, roughly HALVES nest's largest incompressible section and
+    is the single biggest available lever on 'compress more than everyone', since embeddings are
+    banned from zstd. On a 768-dim corpus that is ~3072 -> ~1632 bytes/vector for the embeddings
+    body+scales.
+  - A 'nano' preset (int4 block-64 + zstd text + hnsw) should push the total file size ratio
+    meaningfully below tiny's 0.283, because the embeddings section dominates total bytes and is
+    exactly what int4 targets; the mandatory exact-cosine rerank is expected to hold recall@10
+    near tiny's 0.992.
+  - Block-scaled int8 (scale_kind=1, block 32) shrinks scale overhead from 4 bytes per vector to
+    2 bytes per 32 dims while ALSO recovering recall lost to per-vector outliers, a free
+    accuracy+size win on the existing int8/tiny path with no new encoding id and no format bump.
+  - ggml Q4_K (256-dim super-blocks, fp16 d/dmin + 6-bit sub-block scales + 4-bit quants = 4.5
+    bpw) is the higher-quality variant for 768/1024-dim models (3x256, 4x256), trading ~0.25 bpw
+    over flat int4 for noticeably better local-dynamic-range tracking, a strong second codec
+    once the int4 path exists.
+  - Longer term, i-quant codebooks (IQ2_XXS ~2.06 bpw) could quarter embeddings vs int8, but
+    only behind a shipped grid and gather kernel; flagged as frontier, not near-term.
+  - Reusing the existing float16 codec for the per-block scales means scale storage costs no new
+    code and stays deterministic, so the compression win comes with near-zero new format
+    surface.
+
+watch-outs (conflict with nest constraints)
+------------------------------------------------------------------------------------------------
+  - DETERMINISM: do NOT copy GPTQ/HQQ/imatrix calibration, they depend on a calibration corpus
+    and would break nest's byte-identical 'same chunks + same model fingerprint => identical
+    file' guarantee. Stick to pure round-to-nearest-even max-abs-per-block (a deterministic
+    function of input, no seed), which preserves reproducibility for free.
+  - IN-PLACE SCORING LEAK (already present): mmap_file.rs::open + materialize.rs expand EVERY
+    dtype, including int8, to a full n*dim*4 f32 buffer whenever an HNSW section exists, to feed
+    the ANN graph. Shipping int4 without fixing this means the codec halves DISK size but
+    tiny/hybrid presets still hold a dense f32 copy in RAM, contradicting the 'scored directly
+    from mmap, no decompress-to-heap' invariant. The ANN distance path must score packed blocks
+    (or at least keep f16) before int4 delivers its promise.
+  - DIMENSION CONSTRAINTS: ggml K-quants require dim be a multiple of 256 and even simple int4
+    block-64 needs dim % 64 == 0. Demo/PT-BR models may use 384 or other off-sizes; the writer
+    MUST guard and fall back to block-32 int8 (or flat f16) rather than silently producing a
+    malformed/padded section.
+  - 300/333-LINE CAP + SINGLE RESPONSIBILITY: a fused dequant kernel plus nibble pack/unpack
+    plus a new codec will blow the line cap in one file. Split pack/unpack (encoding/int4.rs + a
+    tiny simd/pack.rs) from the dot kernels (avx2/neon/scalar.rs), exactly as ggml separates
+    quantize/dequantize/vec_dot.
+  - NEVER PANIC: all new parse paths (nibble unpack, block-count math, scale-table bounds,
+    dim%block checks) must return typed thiserror NestError/RuntimeError, never unwrap/panic,
+    mirroring Int8EmbeddingsView::parse size checks. Unchecked nibble indexing into an mmap'd
+    slice is a panic/UB risk on a malformed file.
+  - ADDITIVE-ONLY FROZEN V1: int4 must take a RESERVED encoding id in 4-255 and a NEW dtype
+    string; do NOT change the meaning of any existing field. scale_kind=1 on the int8 path is
+    safe because the field already exists and old readers reject unknown kinds (parse() guards
+    kind!=0). Bumping NEST_FORMAT_VERSION is reserved for true v2 only.
+  - OFFLINE/SINGLE-FILE: reject ONNX's external-data/sidecar model outright, nest's whole point
+    is one self-contained file; the only thing to steal there is the size_threshold gate idea,
+    not the byte-range-into-another-file mechanism. No codec may pull a codebook or scale table
+    from outside the .nest container.
+  - LITTLE-ENDIAN repr(C): block records (scales then nibbles) must be little-endian and the
+    section must stay 64-byte aligned so the first block lands on a SIMD boundary; keep
+    super-block size an integer multiple of the SIMD load width or the fused kernel will
+    mis-stride on the tail block.
+  - RERANK FIDELITY NUANCE: int4's low precision is only acceptable BECAUSE search.rs runs a
+    mandatory exact-cosine rerank over candidates, but that rerank reads the SAME int4 vectors,
+    so the 'real cosine' is real-cosine-of-the-quantized-vector, not of the original f32. For
+    exact ground truth a corpus needs an f32/f16 preset; document that nano trades a small
+    absolute-score fidelity for size, and keep exact/compressed as the recall-max options.

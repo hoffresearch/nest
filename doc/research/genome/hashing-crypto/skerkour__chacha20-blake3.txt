@@ -1,0 +1,73 @@
+================================================================================================
+skerkour/chacha20-blake3
+category: hashing-crypto   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A no_std Rust committing AEAD that derives ChaCha20 + BLAKE3-keyed-MAC subkeys from a 24-byte
+             nonce via one BLAKE3 XOF call, encrypts with a from-scratch SIMD-dispatched
+             ChaCha20, and authenticates Encrypt-then-MAC with a length-framed BLAKE3 keyed
+             hash.
+innovation:  Using BLAKE3 as a single multi-purpose primitive: one
+             new_keyed(master_key).update(nonce).finalize_xof() call streams out 72 bytes sliced
+             into an encryption key (0..32), an independent MAC key (32..64), and an 8-byte
+             cipher nonce (64..72) - so one tree-hash invocation does KDF, subkey separation,
+             and long-nonce absorption, and the same keyed BLAKE3 provides the MAC. This
+             collapses KDF + MAC + commitment into one fast, parallelizable, SIMD-scaling,
+             deterministic hash family.
+techniques:
+  - BLAKE3 XOF as KDF: new_keyed(key)||nonce -> finalize_xof().fill(72 bytes) sliced into
+    enc_key|mac_key|cipher_nonce, absorbing the over-long 24B nonce for free
+  - Encrypt-then-MAC committing AEAD: tag = BLAKE3.keyed(mac_key, aad || le64(aad.len) ||
+    ciphertext || le64(ct.len)) with explicit little-endian length framing to prevent
+    canonicalization/extension ambiguity
+  - Full key/context commitment via keyed-BLAKE3 over the whole context, defeating
+    partitioning-oracle attacks (unlike Poly1305/GCM); constant_time_eq_32 tag check, decrypt
+    only on match
+  - Compile-time + runtime SIMD dispatch ladder: aarch64 assumes NEON, wasm32 simd128 via
+    target_feature, x86_64 is_x86_feature_detected!(avx512f then avx2) under std, >=128-byte
+    threshold, scalar quarter_round fallback
+  - Stateful streaming stream-cipher: caches last_keystream_block + index so unaligned
+    successive xor_keystream calls equal one contiguous call (zero re-derivation)
+  - no_std-first crate factoring with granular std/alloc/zeroize features and
+    Zeroize/ZeroizeOnDrop on key material
+nest steals: Two distinct steals. (1) Hashing/KDF primitive swap in nest-format/src (the SHA-256 surfaces in
+             layout/header.rs, layout/section_entry.rs, layout/footer.rs, manifest/,
+             writer/build.rs, sections/chunk_ids.rs): adopt BLAKE3 as the integrity hash for the
+             four surfaces (header_checksum, per-section physical checksum, file_hash,
+             content_hash). BLAKE3 is 5-10x faster than SHA-256, internally SIMD-parallel (AVX2
+             on x86_64, NEON on aarch64 - matching nest's existing dispatch targets),
+             deterministic, and its keyed/derive_key modes give domain separation so the four
+             surfaces use distinct contexts and never collide. Speeds the deterministic-build
+             hot path and big-file content addressing. NOTE: changing the meaning of existing
+             hash fields is a true v2 (bump NEST_FORMAT_VERSION), not a v1 add. (2) The exact
+             ChaCha20-BLAKE3 AEAD is the blueprint for an optional encrypted-container codec as
+             a RESERVED encoding id (4-255, additive within v1) in nest-format/src/encoding:
+             wrap non-embedding section payloads in committing AEAD so a .nest file is
+             encrypted-at-rest while staying single-file, offline, no_std-friendly, and
+             deterministic given (key, fixed-nonce). The committing property binds ciphertext to
+             exactly one key, which is the right guarantee for content-addressed citations
+             (nest://content_hash/...).
+compression: Indirect but real. BLAKE3-as-hash is not a compressor, but it removes hashing from the
+             deterministic-build and content-addressing critical path (5-10x over SHA-256,
+             SIMD-parallel on the same AVX2/NEON targets nest already uses), so re-hashing large
+             compressed sections during build/validate stops being the bottleneck as nest scales
+             to whole datasets/repos/databases. BLAKE3 derive_key/keyed modes also give cheap
+             domain-separated subkeys for future per-section keying without extra primitives.
+             The AEAD codec is orthogonal to ratio but unlocks compress-then-encrypt single-file
+             containers. Net: enables the 'compress AND serve huge corpora' north star by making
+             integrity cheap, not by improving ratio.
+perf:        Author benchmarks (AMD EPYC 9R45): ChaCha20-BLAKE3 reaches 2,153 MB/s at 64KB and 3,297 MB/s at
+             1MB, beating XChaCha20-Poly1305 (~1,650 MB/s) and AES-256-GCM (~1,476 MB/s) on
+             large messages; loses on tiny 64B messages (103 vs 540 MB/s for AES-NI GCM) due to
+             fixed BLAKE3+KDF overhead. SIMD threshold is 128 bytes before any vector path.
+             BLAKE3 itself is internally SIMD (AVX-512/AVX2/NEON/SVE) and tree-parallel, so
+             throughput scales with SIMD width and multicore for very large inputs - directly
+             relevant to nest's large-file content_hash/file_hash. Stream cipher caches the last
+             keystream block so chunked unaligned writes cost no re-derivation.
+license:     Permissive MIT: the chacha and chacha20-blake3 crates declare license = "MIT" in Cargo.toml;
+             repo-root LICENSE.txt is an MIT-style permissive grant 'Copyright (c) 2025 Arcane
+             Services'. Safe to learn from with attribution. nest should depend on the upstream
+             blake3 crate (also permissive) rather than re-vendoring the from-scratch ChaCha;
+             only the construction/dispatch pattern is the reference.

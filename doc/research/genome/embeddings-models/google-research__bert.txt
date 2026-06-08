@@ -1,0 +1,63 @@
+================================================================================================
+google-research/bert
+category: embeddings-models   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        BERT is a bidirectional transformer encoder for contextual text embeddings, but its
+             independently-reusable artifact is the WordPiece tokenizer: a greedy
+             longest-match-first subword segmenter over an ordered string-to-id vocabulary,
+             fronted by a CJK-aware basic tokenizer.
+innovation:  Vocabulary-driven subword segmentation that is language-agnostic and OOV-robust: a fixed vocab
+             of word pieces (with a "##" continuation marker) plus a deterministic
+             greedy-longest-match loop turns any string, including unsegmented CJK/Thai, into a
+             stable bounded-size token set without a whitespace assumption and without ever
+             emitting an out-of-vocab token (worst case falls back to single chars / [UNK]). The
+             CJK pre-pass that inserts spaces around every Han codepoint makes ideographic
+             scripts tokenize per-character instead of collapsing into one giant token.
+techniques:
+  - WordPiece greedy longest-match-first: for each word, scan end index downward from full
+    length, take longest substring (## prefixed when start>0) present in vocab, advance start,
+    repeat; is_bad -> [UNK] if no prefix matches
+  - Vocab as OrderedDict / sequential id map (token string -> u32 id) giving O(1) lookups plus a
+    stable inverse id->token table
+  - ## continuation prefix preserves word-boundary info while sharing subword pieces across
+    words
+  - BasicTokenizer pre-pass: NFD accent stripping, control-char removal, whitespace
+    normalization, lowercasing, punctuation isolation (split both sides of every punct char)
+  - _tokenize_chinese_chars: insert spaces around CJK codepoints (U+4E00-9FFF, U+3400-4DBF,
+    extension blocks) so ideographs become single-char tokens despite absent whitespace
+  - max_input_chars_per_word guard (default 200) to bound worst-case segmentation cost
+  - Deterministic data-only design: entire tokenizer is a frozen vocab.txt plus a pure function,
+    no model weights needed to run it
+nest steals: Replace nest-runtime/src/bm25/tokenize.rs (currently a word-split-on-non-alphanumeric splitter
+             that, per nest's own known-gaps note, degrades on CJK/Thai because space-less
+             scripts collapse into one dropped/huge token) with a two-stage pipeline mirroring
+             BERT: (1) a basic-tokenizer pass that lowercases, NFD-strips accents (already
+             partial for PT-BR), isolates punctuation, and inserts boundaries around CJK
+             codepoint ranges so Han/Thai segment per-character; (2) an optional WordPiece-style
+             greedy-longest-match over a small frozen vocab. The on-disk BM25 codec
+             (bm25/codec.rs) needs ZERO format change: terms stay UTF-8 strings written
+             length-prefixed and sorted alphabetically, so determinism and the additive-format
+             constraint hold and section 0x08 layout is byte-identical. If a learned subword
+             vocab is later shipped, store it as a new additive optional section in the 0x09+
+             reserved range (or fold into search_contract) so the runtime stays offline and
+             builds stay reproducible. This unlocks correct multilingual lexical recall
+             (CJK/Thai/Korean) for the hybrid preset's BM25-via-RRF leg, closing a named gap
+             without touching the frozen header or the embedding hot path.
+compression: Indirect. WordPiece is a vocabulary-substitution scheme yielding fewer, shared subword units
+             than character or naive word tokenization, which shrinks the BM25 term dictionary
+             and postings (fewer unique terms, shared pieces) -- classic dictionary coding. But
+             it does not touch the embedding bytes that dominate .nest size, so it improves
+             multilingual search quality far more than the compress-more-than-everyone north
+             star. Treat the CJK-aware basic tokenizer as the must-have piece and WordPiece as a
+             quality/size win for the lexical index only.
+perf:        Pure CPU, allocation-light, single-pass per word; greedy match is O(word_len^2) worst case but
+             bounded by max_input_chars_per_word and dominated by hashmap lookups. No SIMD
+             needed; runs in the rust runtime with no socket/model dependency, preserving
+             offline-by-construction. Memory cost is the frozen vocab hashmap (tens of KB to a
+             few MB by vocab size), mmappable if stored as a section.
+license:     Apache-2.0 (code). Subword vocabs are training-produced, but the greedy-match algorithm and CJK
+             char-range logic are trivially reimplementable in clean-room Rust; only the
+             algorithm is adapted, not the vocab.txt artifact.

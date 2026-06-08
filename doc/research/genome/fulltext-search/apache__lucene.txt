@@ -1,0 +1,64 @@
+================================================================================================
+apache/lucene
+category: fulltext-search   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Java full-text search library whose default codec compresses inverted-index postings with
+             delta-coded, block-bit-packed integers (FOR/PForDelta over 128-doc blocks), stores
+             term dictionaries as a shared-prefix/suffix FST (now Trie), and accelerates top-k
+             BM25 with Block-Max WAND skipping over impact-block skip lists.
+innovation:  Sorted integer lists (doc ids, freqs) are never stored raw: they are delta-encoded then
+             bit-packed in fixed 128-value blocks using Frame-Of-Reference (FOR for docs,
+             Patched-FOR/PForDelta for freqs/positions), with a VInt/group-varint tail. This
+             single idea -- decompose a monotone integer column into delta + per-block
+             minimal-bit-width packing -- is the workhorse that shrinks postings 4-10x while
+             keeping SIMD-friendly fixed-width decode.
+techniques:
+  - Delta (gap) encoding of sorted doc-id postings before any packing
+  - FOR / PForDelta: 128-value blocks bit-packed with PackedInts at the minimal bitsPerValue,
+    with outliers patched separately
+  - byte-aligned bitsPerValue rounding (to 8/16/32) tuned by acceptableOverheadRatio for fast
+    random-access decode
+  - VInt / group-varint tail encoding for the sub-128 remainder of each postings list
+  - FST (minimal acyclic subsequential transducer, Mihov/Maurel) for term dict with BOTH prefix
+    and suffix sharing; recently a byte-keyed Trie in blocktree
+  - BlockTree / burst-trie term dict: in-memory FST/Trie index over on-disk variable-length term
+    blocks (25-48 terms) sharing a common prefix
+  - Block-Max WAND: per-block max impact (pruned (tf,dl) pairs) in hierarchical skip lists
+    (8/64/512/4096) to skip decoding whole blocks during top-k
+  - int8/int4 scalar quantization with per-vector confidence-interval calibration, two int4
+    values packed per byte
+nest steals: Target nest-runtime bm25/codec.rs and bm25/index.rs (the 0x08 section). Today to_bytes() writes
+             each posting as raw little-endian (u32 doc, u32 tf) -- 8 bytes/posting, zero
+             compression -- and search() does exhaustive-OR over every posting. Adapt three
+             layers additively: (1) replace per-term postings encoding with delta-coded doc ids
+             + deterministic bit-packing of 128-doc blocks at minimal byte-aligned bitsPerValue
+             plus a varint tail; tf gets its own bit-packed block. This is a pure encoding
+             change to section 0x08 (bump only BM25_PAYLOAD_VERSION, NOT NEST_FORMAT_VERSION,
+             since the section is optional/additive), cutting the bm25 section several-fold --
+             directly serving the compress-more-than-everyone north star and shrinking the
+             hybrid preset. (2) Replace the raw length-prefixed alphabetical term list with
+             shared-prefix front-coding (store common-prefix-len + suffix per term; already
+             alphabetical so deterministic) -- a small no-new-dependency win before a full FST.
+             (3) Add per-block max-impact metadata so search() does Block-Max WAND skipping
+             instead of exhaustive OR, cutting search-text latency; the mandatory exact-cosine
+             rerank in nest's search contract is unaffected since BMW only reorders/skips
+             candidate generation. All three preserve repr(C) little-endian, determinism
+             (alphabetical terms, seeded), and never-panic typed errors.
+compression: Directly central: postings delta+block-bitpacking is the canonical lossless compression for the
+             exact integer column nest currently stores raw (u32 doc, u32 tf) in section 0x08,
+             plus front-coding/FST for term strings. Both shrink bm25_index and the hybrid
+             preset with zero recall loss and zero new dependencies -- squarely the
+             compress-more-than-everyone mandate.
+perf:        FOR/PForDelta in 128-value blocks is SIMD-friendly: fixed-width packing lets a vectorized unpack
+             decode a whole block branch-free (Lucene uses its vector API); nest can decode with
+             scalar shifts now and add an AVX2/NEON unpack later via its existing simd
+             dispatcher. Byte-aligned bitsPerValue trades a few bits for faster random access --
+             relevant since nest mmaps and decodes on the hot path. Block-Max WAND cuts top-k
+             query time to ~10-20% of exhaustive OR in production reports but degrades faster as
+             k grows. int4 quantization halves int8 storage (8x vs f32) at ~30% slower scoring
+             when bit-packed.
+license:     Apache License 2.0 (permissive; format/algorithms free to clean-room reimplement in Rust, no
+             copyleft contamination)

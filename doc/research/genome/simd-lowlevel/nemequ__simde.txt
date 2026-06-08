@@ -1,0 +1,66 @@
+================================================================================================
+nemequ/simde (now github.com/simd-everywhere/simde)
+category: simd-lowlevel   |   steal priority: LOW
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Header-only C99 library that re-implements every native SIMD intrinsic
+             (SSE/AVX2/AVX-512/NEON/SVE/WASM128, thousands of functions) as a per-function
+             compile-time cascade -- native passthrough, then cross-ISA emulation, then compiler
+             vector builtins, then portable scalar fallback -- exposing the FULL native API
+             instead of a lowest-common-denominator abstraction.
+innovation:  The full-API per-function fallback cascade: each operation picks the fastest available
+             implementation at compile time (native intrinsic, then another ISA's intrinsics,
+             then __builtin_shufflevector/__builtin_convertvector, then plain C99), so one
+             source compiles everywhere with zero overhead where native support exists, and the
+             portable C99 fallback is written shuffle/convert-aware so the compiler
+             auto-vectorizes it (often beating naive scalar even on the wrong arch). The scalar
+             path is a first-class, correctness-checked sibling of the SIMD paths, not an
+             afterthought.
+techniques:
+  - Per-function implementation cascade (native -> cross-ISA -> compiler vector builtin ->
+    scalar C99) selected at compile time via ifdefs
+  - Cross-ISA emulation: implement SSE/AVX semantics with NEON ops and vice versa so one kernel
+    runs on x86 and aarch64
+  - Compiler vector extensions (__builtin_shufflevector, __builtin_convertvector, fixed-width
+    vector typedefs) as a portable layer below intrinsics, above scalar
+  - Auto-vectorization-friendly scalar fallbacks plus -fopenmp-simd / SIMDE_VECTORIZE pragmas to
+    hint loop vectorization without rewriting kernels
+  - Fixed-width types (int8_t/uint16_t) instead of ambiguous char/int for bit-identical results
+    across architectures (determinism)
+  - -DSIMDE_NO_NATIVE switch that forces the portable path purely for differential testing of
+    fallback vs native equivalence
+  - Reusable conversion primitives: f16<->f32 (F16C/fcvtl) and i8->i32 lane widening helpers
+    shared across kernels
+nest steals: Target crates/nest-runtime/src/simd/ (mod.rs + avx2.rs + neon.rs + scalar.rs). nest hand-writes
+             3 dtype kernels (f32, f16, i8) x up to 3 ISAs as near-duplicated functions plus a
+             OnceLock function-pointer dispatcher. Steal SIMDe's METHOD (not its C): (1) Make
+             scalar a verified equivalence-sibling -- add to simd/tests.rs a differential test
+             (the SIMDE_NO_NATIVE idea) asserting avx2/neon kernels equal the scalar kernel
+             within epsilon on random vectors, gated on the existing NEST_FORCE_SCALAR env; this
+             hardens the exact-cosine-is-ground-truth contract and the deterministic-build
+             guarantee. (2) Factor the f16->f32 and i8->i32 widening steps (currently inlined in
+             avx2.rs and neon.rs) into small shared inlined helpers so adding a new low-bit
+             embedding dtype (int4/bf16 for a smaller tiny-class preset) becomes one
+             widen-helper + one scalar reference, not a full new ISA matrix. Do NOT vendor SIMDe
+             (C vs nest's repr(C) Rust + std::arch); borrow the cascade discipline only. This
+             unlocks safe addition of lower-bit embedding quantization on the mmap hot path.
+compression: Indirect but real. SIMDe is a portability layer, not a compressor, so it does not shrink the
+             .nest file. Its value to the compress-more-than-everyone goal is enabling lower-bit
+             embedding quantization: the hot-path dot product must stay fast AND bit-exact for
+             any new on-disk dtype, and SIMDe's pattern (first-class scalar oracle +
+             auto-vectorizable fallback + factored widening primitives) is the testing/structure
+             discipline that lets nest safely add int4/bf16 embedding encodings (encoding ids
+             4-255 are reserved/additive in v1) and push the tiny preset below its current 0.283
+             size ratio without breaking deterministic builds or exact rerank.
+perf:        Native passthrough = zero overhead vs hand-written intrinsics (wrappers inline away). Key claim
+             to internalize: well-structured portable fallbacks auto-vectorize and beat naive
+             scalar even off-target because compilers won't turn a naive loop into PSHUFB/fcvtl
+             on their own -- so nest's scalar fallback should stay shape-friendly (fixed chunked
+             loops, fixed-width types) to keep vectorizing on non-AVX2/non-NEON targets (older
+             x86, RISC-V), where nest's dispatcher currently drops straight to scalar. -O3 and
+             -fopenmp-simd-equivalent hints maximize fallback throughput with no runtime
+             dependency.
+license:     MIT (SIMDe COPYING permissive license); safe to study and reimplement the pattern in Rust with
+             no copyleft obligation.

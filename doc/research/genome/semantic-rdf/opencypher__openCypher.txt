@@ -1,0 +1,50 @@
+================================================================================================
+opencypher/openCypher
+category: semantic-rdf   |   steal priority: LOW
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        openCypher is the open specification of the Cypher property-graph query language -- an
+             XML-sourced grammar that generates ANTLR4/EBNF/railroad artifacts, plus a
+             Cucumber-based Technology Compatibility Kit that defines engine conformance via
+             canonically-serialized, order-aware query result tables.
+innovation:  The TCK's canonical, encoding-independent result model: every query outcome (primitives, lists,
+             maps, nodes, relationships, paths) has a single deterministic string serialization
+             plus an explicit ordered-vs-unordered-set comparison semantics, so two conforming
+             engines are declared equivalent by comparing normalized outputs rather than
+             internal representations.
+techniques:
+  - TCK canonical result-table serialization: one normalized string form per value
+    (single-quoted strings, [v0,v1] lists, {k:v} maps, (:Label {p:v}) nodes, [:Type] rels)
+  - Explicit unordered-multiset vs ordered-sequence result comparison (ORDER BY + 'in order'
+    asserts sequence; otherwise set equality)
+  - Side-effect accounting as observable deltas only (nodes/rels/properties/labels
+    added/removed), transient state ignored
+  - Typed errors tagged with compile-vs-runtime phase (SyntaxError/SemanticError/TypeError
+    raised at parse|runtime)
+  - Single-source XML grammar deterministically generating ANTLR4 .g4 + ISO-14977 EBNF +
+    railroad diagrams via Java/XSLT, with --INCLUDE_LEGACY gating
+  - Reusable named deterministic fixture graphs (binary-tree-1/2) shared across conformance
+    scenarios
+nest steals: See detailed field; two adaptations -- a golden-file search-conformance harness (nest-cli/tests)
+             that machine-checks the search_contract (ann results rerank to identical
+             real-cosine top-k across exact/tiny/hybrid presets, proving query-layer determinism
+             the way content_hash proves storage-layer determinism), and a single-source
+             format-spec codegen pattern in nest-format so the FROZEN .nest layout and its
+             diataxis docs cannot drift. Both are test/codegen scaffolding only; the additive v1
+             format is untouched.
+compression: Essentially none. openCypher is a language specification (grammar + formal semantics +
+             conformance tests). It contains no entropy coder, quantization, columnar layout,
+             delta encoding, or any storage/compression machinery. The only tangential link is
+             that a Cypher-subset query AST could one day be the textual surface for nest's
+             aspirational graph-search feature, but that touches query ergonomics, not
+             byte-level compaction. For the north-star goal of compressing data more than
+             everyone, this repo offers nothing directly.
+perf:        No runtime performance characteristics relevant to nest: this is a build-time specification and
+             test corpus (Maven, Scala 2.12/2.13 cross-compile, Java/XSLT grammar generation,
+             Cucumber execution). No SIMD, no memory-mapped data, no hot-path concerns. Value is
+             entirely in determinism/conformance methodology, not throughput.
+license:     Apache License 2.0 (with an additional grant-of-rights / no-derivative-grammar-name clause per
+             the openCypher project terms). Permissive enough to learn from and adapt the
+             methodology; nest would only borrow ideas/conventions, not code or grammar.

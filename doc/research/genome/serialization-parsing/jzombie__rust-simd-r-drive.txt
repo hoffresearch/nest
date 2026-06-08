@@ -1,0 +1,72 @@
+================================================================================================
+jzombie/rust-simd-r-drive
+category: serialization-parsing   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A schema-less, append-only, single-file binary storage engine whose payloads are 64-byte-aligned
+             for cache/SIMD efficiency, indexed by an in-memory xxh3_64 -> offset map,
+             recoverable by a backward-linked metadata chain, and read fully zero-copy straight
+             off mmap.
+innovation:  The "metadata-after-payload backward-linked chain" on-disk layout: each entry stores its payload
+             first, then a trailing fixed metadata block (key_hash, prev_offset, crc32c).
+             Because every entry points back to the previous entry's tail, the whole keyspace
+             and index are reconstructible by scanning from EOF backward to byte 0, and any
+             torn/incomplete tail write is auto-discarded by stopping at the last unbroken link.
+             This gives crash-safe, index-free-on-disk recovery with a single sequential append
+             being the only write path, and 64-byte payload alignment so reads are zero-copy
+             reinterpretable as typed SIMD slices.
+techniques:
+  - 64-byte payload alignment via pad = (A - (prev_tail % A)) & (A-1), A=64, so every payload
+    start lands on a cacheline/SIMD boundary for safe &[u8]->&[f32] reinterpretation
+  - trailing metadata block per entry: 8B xxh3_64 key hash + 8B prev_offset (absolute tail of
+    prior entry) + 4B crc32c payload checksum, forming a backward-traversable linked chain
+  - index-free-on-disk: in-memory DashMap<u64,u64> (key_hash -> offset) rebuilt by backward
+    chain scan at open; newest-wins so updates/deletes are pure appends
+  - 1-byte tombstone (0x00 payload) plus same 20B metadata trailer for O(1) logical deletes
+    without rewriting
+  - torn-write recovery: load stops at last validly-linked+checksummed entry, truncating partial
+    tails automatically
+  - lock-free parallel reads off a shared Arc<Mmap>, Mutex/RwLock only guards remap-on-grow,
+    AtomicU64 tail pointer
+  - EntryHandle: zero-copy &[u8] view into the mmap region, optionally reinterpreted as Apache
+    Arrow arrays via arrow feature for columnar typed access
+  - explicit compaction replays newest-per-key into a fresh file to reclaim dead/tombstoned
+    space
+nest steals: Two concrete steals. (1) nest-format reader recovery: nest v1 has 4 SHA-256 surfaces and a
+             pre-footer body, but recovery from a truncated/partially-written container is a
+             weak spot for a single-file format. Adopt the backward "stop at last valid section"
+             scan as an additive validate mode in nest-format/src/reader (surfaced via nest-cli
+             `validate`): walk sections from the footer backward, verify each per-section
+             checksum, and report the last intact section boundary without trusting the
+             manifest. Additive (no format bump), hardens the offline single-file guarantee
+             against torn writes. (2) nest-format/src/layout + nest-runtime hot path: enforce
+             and verify 64-byte alignment on the embeddings section so the mmap'd f32/f16/int8
+             vectors can be reinterpreted as typed SIMD slices with zero bounds/alignment fixups
+             before AVX2/NEON dot products. nest scores embeddings directly from mmap and must
+             never zstd them; guaranteeing 64-byte payload alignment is the missing precondition
+             that lets the simd dispatcher do aligned loads (vmovaps vs vmovups) without a copy.
+             The pad formula pad=(64-(off%64))&63 drops straight into the writer's section
+             placement and stays deterministic/reproducible.
+compression: Indirect but real. The engine does NO compression (raw bytes, schema-less), so it does not
+             advance the "compress more than everyone" north star directly. Its compression
+             relevance is structural: 64-byte alignment plus zero-copy typed reinterpretation is
+             the precondition that lets you keep embeddings UNCOMPRESSED yet serve them at full
+             SIMD speed (validating nest's "never zstd embeddings" choice), and the append-only
+             newest-wins chain is a substrate for real-time edit (a north-star feature nest
+             lacks) without rewriting the whole container. The companion rust-llkv project
+             (Arrow columnar chunks over simd-r-drive EntryHandles) is the more
+             compression-relevant idea: column-oriented chunking enables per-column encodings
+             (dictionary, RLE, delta) which is where extreme compression of
+             json/parquet/datasets actually comes from.
+perf:        xxh3_64 key hashing uses SSE2 (default x86_64) / AVX2 / NEON; benchmark cited at ~1M random
+             8-byte seeks in well under 1s. crc32fast (CRC32C, hardware SSE4.2 crc32 instr) for
+             payload integrity, NOT SHA, much cheaper than nest's per-section SHA-256 but
+             non-cryptographic; nest must keep SHA for its citation/integrity surfaces, but
+             CRC32C is a candidate for a cheap fast-path liveness check during streaming edits.
+             Reads are lock-free off Arc<Mmap>; only file-growth remap takes a lock. simd_copy
+             accelerates the write-side memcpy into the append buffer. Datasets larger than RAM
+             via mmap paging.
+license:     Apache-2.0 (per crates.io publication of simd-r-drive); verify before vendoring, compatible with
+             permissive reuse.

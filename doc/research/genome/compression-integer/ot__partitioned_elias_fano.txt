@@ -1,0 +1,82 @@
+================================================================================================
+ot/partitioned_elias_fano
+category: compression-integer   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        Reference C++ implementation (Ottaviano & Venturini, SIGIR 2014) of Partitioned Elias-Fano: it
+             slices a monotone integer sequence into variable-length chunks chosen by a
+             linear-time approximate dynamic program, encoding each chunk with the cheapest of
+             plain Elias-Fano, an all-ones run, or a raw bitvector, giving near-optimal
+             compression with constant-time random access and nextGEQ.
+innovation:  Elias-Fano is quasi-optimal only when gaps are uniform; real posting lists and ID sequences are
+             bursty/clustered. The breakthrough is a two-level partition that adapts the
+             universe locally: cut the sorted sequence into chunks, store per-chunk endpoints
+             (upper bounds and value bases) at level 1, and at level 2 encode each chunk
+             independently against its OWN small local universe, picking per chunk the cheapest
+             representation (Elias-Fano, all-ones, or plain bitvector). Because EF size is
+             computed exactly per prefix (not estimated), the optimal-cost partition is found by
+             a DP recurrence that, via the Ferragina et al. (1+epsilon) pruning, runs in O(m log
+             m) time / O(m) space while staying within (1+epsilon) of the true optimum. Result:
+             strictly better-than-EF compression on clustered data with no loss of O(1) random
+             access or skip (nextGEQ) speed.
+techniques:
+  - Elias-Fano coding: split each value into floor(log(u/n)) low bits packed in a fixed-width
+    array, and high bits as a unary-gap bitvector; random access and nextGEQ via constant-time
+    broadword rank/select on the high-bits bitvector
+  - Two-level partitioned layout: level-1 sequence stores partition upper-bounds + base offsets
+    (themselves EF-coded); level-2 stores each chunk re-based to a small local universe
+  - Per-chunk codec selection: each chunk encoded as the cheapest of compact/strict Elias-Fano,
+    all_ones_sequence (consecutive-int run, ~0 bits), or a plain bitvector when the chunk
+    universe is dense
+  - optimal_partition.hpp: DP minimizing total encoded bits, made linear via Ferragina
+    (1+epsilon) approximation that prunes candidate cuts; EF cost evaluated EXACTLY in O(1) per
+    window, not estimated
+  - uniform_partitioned_sequence: cheaper fixed-size-partition variant (EF uniform) avoiding the
+    DP, trading a little size for build speed
+  - Constant-time select via precomputed in-word select tables + 64-bit popcount over the
+    high-bits bitvector (the succinct submodule), no SIMD required
+  - indexed_sequence dispatch: one sequence abstraction tagging which sub-codec each chunk used,
+    so decode is branch-on-tag
+  - FastPFor / block_codecs integration (PForDelta, varint, simdbp) as fixed-block comparison
+    baselines
+nest steals: Two distinct steals, both landing in nest-format encoding plus nest-runtime readers. (1) A new
+             ADDITIVE encoding id (in the reserved 4-255 range, no NEST_FORMAT_VERSION bump)
+             implementing partitioned Elias-Fano for monotone integer sections:
+             chunks_original_spans (sorted byte offsets) and especially the HNSW
+             adjacency/neighbor-id lists and BM25 posting lists inside
+             hnsw_index(0x07)/bm25_index(0x08). These are exactly the sorted/clustered ID
+             sequences EF was built for and are today raw or zstd; partitioned EF beats zstd on
+             bits-per-id while ADDING O(1) random access and nextGEQ that zstd cannot give (zstd
+             needs full-block decode). (2) The level-2 cheapest-of-three per-chunk selector plus
+             the exact-cost linear DP partitioner are a reusable codec-selection pattern:
+             nest-format/encoding can adopt a per-section/per-chunk pick-the-smallest tag scheme
+             (raw vs delta vs EF vs all-ones) chosen at build time, keeping decode a
+             deterministic branch-on-tag (preserves reproducible byte-identical builds since the
+             DP is deterministic for fixed epsilon). The select/rank broadword primitives belong
+             in nest-runtime as a small succinct module (repr(C), little-endian, no panic) so
+             EF-coded sections are searchable straight off mmap with no decompression on the hot
+             path, matching nest's existing score-from-mmap discipline. Keep each new file <=300
+             lines: a bitvector+select primitive file, an ef_chunk codec file, a partition-cost
+             file.
+compression: Directly on the north star. Posting lists and neighbor-id lists are a large,
+             currently-underexploited part of the hnsw_index and bm25_index sections;
+             partitioned EF is the state-of-the-art compression/query-time tradeoff for exactly
+             this data and gives random access WITHOUT decompression, which zstd structurally
+             cannot. It lets nest shrink index sections below zstd while making them directly
+             searchable from mmap, compressing more than everyone while preserving the
+             offline/single-file/deterministic guarantees.
+perf:        Plain EF uses ~2 + ceil(log(u/n)) bits per element and supports O(1) select / O(log) nextGEQ;
+             partitioned EF typically cuts 10-30% off plain EF on clustered TREC/ClueWeb posting
+             lists and reports the best compression-ratio/query-time frontier vs PForDelta,
+             varint, simdbp, and interpolative coding. Decode/skip is constant-time via
+             broadword popcount + in-word select tables on 64-bit words (no AVX/NEON needed, so
+             it ports cleanly to nest's scalar fallback and stays branch-predictable). Build
+             cost is dominated by the O(m log m) partition DP; the uniform-partition variant
+             builds faster with slightly worse ratio. Memory-map friendly: all structures are
+             flat bit-packed arrays addressable by offset, matching nest's mmap-and-score model.
+license:     Believed Apache-2.0 (same license as the successor project ds2i/PISA into which this code was
+             folded); confirm by reading the repo LICENSE before vendoring. README explicitly
+             states the code now lives in ds2i, so prefer porting concepts/algorithms over
+             copying C++ verbatim.

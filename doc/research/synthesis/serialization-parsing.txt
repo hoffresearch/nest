@@ -1,0 +1,310 @@
+================================================================================================
+synthesis :: serialization-parsing
+zero-copy serialization, fast JSON/CSV parsing, mmap-friendly layouts
+================================================================================================
+
+state of the art and concrete nest recommendations for this category.
+
+summary:     The seven repos cluster into two complementary disciplines nest must master to deliver its
+             "compress AND serve json/yaml/parquet/datasets" north star: (1) zero-copy/mmap
+             LAYOUT (serde borrowed-view codecs, FlatBuffers offset-tables + vtable dedup +
+             FlexBuffers min-width packing, rkyv archived-struct casts via mmap-sync,
+             simd-r-drive 64-byte alignment + backward-link recovery, csv2 lazy-offset cursors)
+             and (2) SIMD STRUCTURAL PARSING (simdjson/simd-json two-stage parse: branch-free
+             bitmask classification + prefix-XOR quote masking into a fixed-stride u64 tape).
+             Grounding against the actual code: nest already has the right bones -
+             decode_payload returns Cow (serde-style borrow vs copy), SECTION_ALIGNMENT=64 is
+             declared in layout/mod.rs, Int8EmbeddingsView borrows rows zero-copy, and the simd
+             dispatcher uses OnceLock+cpuid exactly like simdjson's runtime dispatch. The gaps
+             the extracts target are real and verifiable in-tree: chunk_ids stores 71-byte ASCII
+             "sha256:<64hex>" strings (sections/chunk_ids.rs) instead of 32 raw bytes;
+             chunk_ids/canonical/spans are sequential length-prefixed strings with NO offset
+             table so reaching chunk N is O(n) (sections/spans.rs, canonical.rs);
+             materialize_f32_vectors allocates n*dim*4 per call even though a borrowed int8 view
+             exists; and the bm25 tokenizer is a scalar per-char loop (bm25/tokenize.rs), the
+             documented CJK/Thai gap. The highest-value, lowest-risk steals are pure-data-layout
+             wins that move the size ratio with zero hot-path cost and respect the additive-only
+             v1 contract (new encoding ids 4-255, new section ids 0x09+, never re-meaning an
+             existing field). The tape/structural-index ideas are the strategic bridge to
+             ingesting and sub-citing structured documents, but they are bigger and should land
+             behind the layout wins.
+
+state of the art
+------------------------------------------------------------------------------------------------
+State of the art in serialization-parsing for an mmap-first embedded DB is a clean separation of
+"find the structure" from "interpret the values," with the structure stored once as a
+low-entropy, fixed-stride, position-independent offset table that is cheap to mmap, cheap to
+zstd, and supports O(1) random access. simdjson/simd-json define the parse frontier: a
+branch-free SIMD stage-1 classifies 64-byte chunks into structural/whitespace/quote bitmasks,
+resolves string interiors with a single prefix-XOR carry-less-multiply (parity bit carried
+across chunks), validates UTF-8 in the same pass at 2-6 GB/s, then emits a flat u64 tape
+(type-tag in high bits + offset/length payload, container links for O(1) skip) with strings in a
+separate length-prefixed blob; On-Demand defers per-field decode for 2-4x on partial reads. The
+layout frontier is set by FlatBuffers (vtable indirection with deduplicated vtables so N
+homogeneous rows cost one vtable; self-relative u32/u16 offsets making buffers
+position-independent and DAG-shareable; absent-field-as-default needs no presence bitmap) and
+FlexBuffers (per-value width tag narrowing every scalar to 8/16/32/64 bits + pooled
+strings/keys, often smaller than a typed format while keeping O(1) indexed access). serde sets
+the API frontier: an N+M data-model split with lifetime-parameterized Deserialize<'de> that
+returns &'de str/&[u8] borrowed straight out of the input, falling back to owned (Cow) only when
+escapes force it - monomorphized, no reflection, no intermediate Value tree. rkyv (via
+cloudflare mmap-sync) and simd-r-drive push the zero-copy-read extreme: cast repr(C) LE bytes to
+typed archived structs with no deserialize step, read in tens of nanoseconds, with 64-byte
+payload alignment so &[u8] reinterprets directly as SIMD &[f32]; mmap-sync adds a packed-u64
+{index|size|checksum} version word for wait-free RCU publish/swap, and simd-r-drive adds a
+backward-linked metadata chain for index-free, torn-write-safe recovery. csv2 shows the
+lazy-offset endpoint: the mmap'd buffer IS the data structure, cells are [start,end) spans
+computed at deref, unread columns cost nothing. The consensus lesson for nest: keep canonical
+text byte-exact (content_hash stability), store all derived structure as separate fixed-stride
+little-endian offset/tape arrays (low-entropy, zstd-friendly, mmap-scannable), decode by
+borrowed reference, and gate any SIMD kernel behind cpuid with a deterministic scalar fallback.
+
+top transferable innovations
+------------------------------------------------------------------------------------------------
+1. FlatBuffers/FlexBuffers compact integer encoding for cold metadata: store sha256 as 32 raw
+   bytes not 71-byte ASCII 'sha256:<64hex>' (~2.2x pre-zstd on chunk_ids), and
+   min-width/delta+varint pack offsets, lengths and provenance ints. Pure entropy reduction,
+   zero hot-path decode cost, fully deterministic - the single highest size/effort ratio in the
+   category.
+2. FlatBuffers uoffset offset-table layout for variable-length sections: prepend a u32 (or
+   width-narrowed) offset array to chunk_ids/canonical/spans so cite/materialize jumps to chunk
+   N in O(1) off the mapped page instead of the current O(n) sequential length-prefixed scan.
+   Compression-neutral but the structural enabler for serving compressed corpora and
+   nest://content_hash/chunk_id byte-span reopen.
+3. serde borrowed-view codec discipline (Deserialize<'de> / visit_borrowed_str / Cow): make the
+   section decode path return &'a [u8]/&'a str/&'a [f32] borrowed from mmap, copying only when
+   zstd forces it. nest already does this for embeddings via decode_payload->Cow; extend it to
+   text sections and kill the per-call n*dim*4 allocation in materialize_f32_vectors by
+   threading a reused scratch buffer (serde DeserializeSeed pattern).
+4. simdjson two-stage parse with a fixed-stride u64 tape + separate length-prefixed string blob:
+   the on-disk representation for ingested json/yaml as a new RESERVED section (0x09+).
+   Low-entropy offset arrays that zstd crushes, mmap-scannable, pointer-free, enabling
+   sub-document citation (nest://content_hash/chunk_id#json_pointer) without re-parsing on the
+   hot path.
+5. simdjson/simd-json branch-free SIMD byte classification + prefix-XOR parity scan as a
+   reusable region/delimiter kernel: powers a SIMD bm25 word-boundary tokenizer (fixing the
+   scalar per-char CJK/Thai gap in bm25/tokenize.rs) and future CSV/JSONL delimiter scanning,
+   wired through the existing avx2/neon/scalar dispatcher. Implement portable (no PCLMULQDQ
+   dependency) to stay deterministic.
+6. rkyv/mmap-sync archived-struct zero-copy reads: formalize nest's mmap-cast of repr(C) LE
+   structs (header, section table, hnsw/bm25 nodes) as typed views with no parse step,
+   tens-of-ns open. nest's repr(C)+LE invariants already match the archived-layout discipline.
+7. simd-r-drive 64-byte payload-alignment guarantee + verification on read: nest declares
+   SECTION_ALIGNMENT=64 but does not verify it on the embeddings section at open; verifying it
+   is the missing precondition for aligned SIMD loads (vmovaps vs vmovups) with zero copy/bounds
+   fixups on the dot-product hot path.
+8. simd-r-drive backward-linked 'stop at last valid section' recovery scan as an additive
+   nest-cli validate mode: walk sections from the footer backward, verify each per-section
+   SHA-256, report the last intact boundary without trusting the manifest - hardens the
+   single-file/offline guarantee against torn writes, no format bump.
+9. mmap-sync packed-u64 version word {index|size|checksum} + double-buffer RCU swap as the
+   substrate for nest's missing real-time edit/hot-reload: publish a rebuilt container and query
+   it wait-free while old mmap readers drain, implemented as an in-process atomic-swap sidecar
+   OUTSIDE the frozen format (never a socket).
+10. FlexBuffers/FlatBuffers self-relative offsets + structural dedup (shared
+   substrings/vtables): store a repeated source_uri in chunks_original_spans once and reference
+   it by offset (most spans share one source doc), and resolve absent optional provenance fields
+   to defaults instead of storing nulls.
+
+nest recommendations
+------------------------------------------------------------------------------------------------
+* Store chunk ids as 32 raw SHA-256 digest bytes instead of the 71-byte ASCII string 'sha256:<64
+  hex>'. Reconstruct the 'sha256:' prefix and hex on decode. This is an additive encoding change
+  to the chunk_ids section payload (or a new encoding id in the 4-255 reserved space), not a
+  format-version bump, and is a pure function of inputs so determinism/reproducibility hold.
+    where:  crates/nest-format/src/sections/chunk_ids.rs (encode_chunk_ids/decode_chunk_ids); add a
+            16/32-bit width tag in the 12-byte SECTION_PAYLOAD_PREFIX or a new
+            SECTION_ENCODING_* id in layout/mod.rs. content_hash in reader/decode.rs must hash
+            the canonical decoded representation so citations stay stable across the encoding
+            switch.
+    impact: ~2.2x reduction on chunk_ids section before zstd, plus removal of the redundant per-id 'sha256:'
+            prefix; direct entropy win toward 'compress more than everyone' on every corpus with
+            zero hot-path cost.
+    effort: low
+    from:   https://github.com/google/flatbuffers
+
+* Add a u32 (width-narrowed where possible) offset table at the head of variable-length sections
+  (chunk_ids, chunks_canonical, chunks_original_spans) so reaching chunk N is O(1) off the
+  mapped page instead of an O(n) sequential scan of length-prefixed strings. Offsets are
+  self-relative/section-local and little-endian; offset deltas are low-entropy and
+  zstd-friendly.
+    where:  crates/nest-format/src/sections/{chunk_ids,canonical,spans}.rs encode/decode; consumed by
+            crates/nest-runtime/src/materialize.rs and the cite path (nest-cli/src/cmd/cite.rs)
+            to jump directly to chunk N for nest://content_hash/chunk_id reopen.
+    impact: Unlocks O(1) random-access materialize/cite off compressed corpora (currently must decode
+            earlier chunks first); compression-neutral but a structural prerequisite for serving
+            large compressed datasets and sub-citation.
+    effort: medium
+    from:   https://github.com/google/flatbuffers, https://github.com/p-ranav/csv2
+
+* Eliminate the per-call n*dim*4 f32 allocation in the materialize/ANN path by threading a
+  reusable scratch out-buffer through dequant (serde DeserializeSeed-style state param), and
+  return borrowed &[f32]/&[i8] views where the dtype permits (raw f32 and int8 already borrow
+  via Int8EmbeddingsView; only zstd/f16 conversions need to own).
+    where:  crates/nest-runtime/src/materialize.rs (materialize_f32_vectors reallocates vec![0.0f32; n*dim]
+            every call) and crates/nest-format/src/encoding/int8.rs; mirror the encoding-driven
+            borrow-vs-copy already in nest-format/src/encoding/mod.rs decode_payload (Cow).
+    impact: Removes hot-path allocation on repeated search/ANN-build calls, serving the light/cheap pillar;
+            lets aggressive int8/f16 encodings cost zero runtime allocation, keeping the SIMD
+            dot-product loop reading lanes straight from mmap.
+    effort: low
+    from:   https://github.com/serde-rs/serde, https://github.com/cloudflare/mmap-sync
+
+* Replace the scalar per-char bm25 tokenizer with a SIMD word-boundary scanner: classify ASCII
+  alnum vs separator bytes into a bitmask over 64-byte chunks (simdjson stage-1 style) for fast
+  Latin splitting, with a scalar fallback for non-ASCII codepoints. Use a portable
+  carry-less/parity scan (no PCLMULQDQ dependency) to stay deterministic.
+    where:  crates/nest-runtime/src/bm25/tokenize.rs (currently a char-by-char is_alphanumeric loop), wired
+            through the existing crates/nest-runtime/src/simd/{avx2,neon,scalar}.rs
+            OnceLock+cpuid dispatcher.
+    impact: Speeds bm25 build/query on large corpora (a documented throughput gap) and is the seam to later
+            improve CJK/Thai segmentation; serves the cheap/light pillar without touching size
+            ratio.
+    effort: medium
+    from:   https://github.com/simdjson/simdjson, https://github.com/simd-lite/simd-json
+
+* Add an additive backward 'stop at last valid section' recovery mode to validate: walk the
+  section table from the footer backward, verify each per-section SHA-256, and report the last
+  intact section boundary without trusting the manifest, so a torn/partially-written .nest is
+  recoverable up to the last good section.
+    where:  crates/nest-format/src/reader/validate.rs and crates/nest-format/src/manifest/validate.rs,
+            surfaced via crates/nest-cli/src/cmd/validate.rs. Additive, no NEST_FORMAT_VERSION
+            bump.
+    impact: Hardens the single-file/offline guarantee against crashes/torn writes (current weak spot for a
+            single-file format with 4 SHA surfaces but no partial-recovery path); reuses
+            existing per-section checksums.
+    effort: low
+    from:   https://github.com/jzombie/rust-simd-r-drive
+
+* Verify (not just declare) 64-byte alignment of the embeddings section payload at reader open,
+  and assert it so the SIMD dispatcher can use aligned loads. The pad formula
+  pad=(64-(off%64))&63 is already implicit in SECTION_ALIGNMENT=64; add a read-side guard plus a
+  padded/bounds-guarded tail so 64-byte SIMD scans never read past the mapped buffer.
+    where:  crates/nest-format/src/layout/mod.rs (SECTION_ALIGNMENT already 64, align_up exists) + reader
+            open in crates/nest-format/src/reader/parse.rs; consumed by
+            crates/nest-runtime/src/simd/{avx2,neon}.rs.
+    impact: Precondition for aligned vmovaps loads and safe 64-byte structural scans off mmap with zero
+            copy; validates the 'never zstd embeddings, score straight from disk' design and
+            prevents read-past-end UB if SIMD structural scanning is added later.
+    effort: low
+    from:   https://github.com/jzombie/rust-simd-r-drive, https://github.com/simdjson/simdjson
+
+* Refactor the Encoding enum into a small visitor-style codec registry where each encoding id
+  (raw/zstd/float16/int8 and future delta/varint/bitpack/dictionary) implements one
+  decode(&[u8])->Cow view method in its own <300-line file, keeping the additive 4-255
+  encoding-id space clean and extensible without rewriting every section reader.
+    where:  crates/nest-format/src/encoding/mod.rs (decode_payload match) and
+            crates/nest-format/src/sections/codec.rs; one file per codec under encoding/.
+    impact: Makes the codec layer extensible - the prerequisite for adding
+            delta/varint/bitpacking/dictionary codecs that push the compression frontier on
+            chunk_ids/spans/provenance without touching readers; respects the
+            300-line/single-responsibility hygiene rule.
+    effort: medium
+    from:   https://github.com/serde-rs/serde
+
+* Define a fixed-stride repr(C) u64 tape (type-tag in high bits + LE offset/length) plus a
+  separate length-prefixed string/value blob as a new RESERVED section (id 0x09+) for ingested
+  json/yaml structured documents, enabling pointer-free mmap reopen and sub-document citation
+  (nest://content_hash/chunk_id#json_pointer) without re-parsing. Build it with a portable
+  two-stage structural indexer at ingest time.
+    where:  new module crates/nest-format/src/encoding/structure.rs + a new section file under
+            crates/nest-format/src/sections/; ingest in nest-python build path
+            (crates/nest-python/src/build_fn.rs) or a build-time path that may use
+            serde_json/serde_yaml as a build-only dep (never in the frozen container).
+    impact: Strategic enabler of the 'compress AND serve json/yaml/parquet/datasets' north star: low-entropy
+            offset tape zstd-compresses extremely well as a non-embedding section and is cheaply
+            re-scannable; keeps canonical text byte-exact for content_hash. Higher risk, land
+            after the layout wins.
+    effort: high
+    from:   https://github.com/simdjson/simdjson, https://github.com/simd-lite/simd-json
+
+* Deduplicate the repeated source_uri in chunks_original_spans: store each distinct uri once in
+  a small string pool and reference it by offset/index from each span (most spans in a corpus
+  share one source document), and resolve absent optional provenance fields to schema defaults
+  instead of storing nulls (FlatBuffers vtable-default trick).
+    where:  crates/nest-format/src/sections/spans.rs (OriginalSpan currently inlines a full length-prefixed
+            source_uri per chunk) and crates/nest-format/src/sections/provenance.rs.
+    impact: Direct size reduction on spans/provenance when many chunks share a source uri (the common case
+            for chunked documents); pure entropy reduction, deterministic, zero hot-path cost.
+    effort: medium
+    from:   https://github.com/google/flatbuffers
+
+* Add an in-process atomic-swap sidecar for real-time edit/hot-reload using mmap-sync's
+  packed-u64 {active-index|size|truncated-checksum} version word + double-buffer RCU drain, so a
+  rebuilt .nest is published and queried wait-free while old mmap readers finish. Keep the
+  frozen v1 container immutable; the swap layer lives entirely outside the format and never
+  opens a socket.
+    where:  new module in crates/nest-runtime/src/ (e.g. swap.rs) layered over
+            crates/nest-runtime/src/mmap_file.rs; surfaced to nest-python. Outside
+            crates/nest-format entirely.
+    impact: Delivers the stated-but-missing real-time edit / concurrent-serving mission goal without
+            compromising single-file/offline/deterministic guarantees; the version-word checksum
+            gives O(1) integrity gating per swap.
+    effort: high
+    from:   https://github.com/cloudflare/mmap-sync, https://github.com/jzombie/rust-simd-r-drive
+
+compression wins
+------------------------------------------------------------------------------------------------
+  - chunk_ids: store 32 raw SHA-256 bytes instead of 71-byte ASCII 'sha256:<64 hex>' - ~2.2x
+    shrink pre-zstd and removes the redundant repeated 'sha256:' prefix; verified concrete in
+    sections/chunk_ids.rs.
+  - Structural/offset/provenance integers: FlexBuffers-style minimum-width + delta+varint
+    packing (offsets and lengths are monotonic/low-entropy) trims non-embedding overhead with
+    zero hot-path decode cost, stacking on the zstd nest already applies to non-embedding
+    sections.
+  - chunks_original_spans: dedup the per-chunk source_uri into a single string pool referenced
+    by offset - large win when many chunks share one source document (the common chunking case).
+  - Ingested json/yaml as a fixed-stride u64 offset tape + separate length-prefixed blob: offset
+    deltas are textbook low-entropy and zstd-crush far better than raw nested text, while
+    canonical text stays byte-exact for content_hash stability.
+  - Offset-table layout makes per-cell/per-chunk lazy zstd decode possible (csv2
+    decode-on-demand), so a compressed table/text section can be unpacked one chunk at a time
+    instead of whole-section, lowering working-set memory during ingest and serve.
+  - An extensible codec registry (one encoding id per file in the additive 4-255 space) is the
+    prerequisite to later add delta/RLE/dictionary/bitpacking codecs - the column-oriented
+    per-encoding path (rust-llkv/Arrow direction) is where extreme compression of
+    parquet/datasets actually comes from.
+  - Embeddings stay uncompressed by design (scored from mmap) - none of these wins touch the hot
+    path; the 64-byte alignment guarantee is what KEEPS embeddings serveable at full SIMD speed
+    while every cold section is squeezed.
+
+watch-outs (conflict with nest constraints)
+------------------------------------------------------------------------------------------------
+  - Do NOT pull the serde crate into the frozen container: the format is repr(C) little-endian
+    and must stay dependency-light and byte-deterministic. Steal the patterns (borrowed-view
+    codec, encoding-driven Cow, N+M codec separation), not the dependency. serde_json/serde_yaml
+    are acceptable only in nest-python or a build-time ingest path, never in the on-disk reader.
+  - Do NOT use PCLMULQDQ/vmull_p64 carry-less multiply directly for the prefix-XOR trick if it
+    could vary across CPUs - implement a portable parity/carry-less scan so structural indexing
+    and tokenization stay bit-for-bit deterministic and reproducible (same chunks + model
+    fingerprint => byte-identical file).
+  - Any SIMD structural scanner needs input padding (SIMDJSON_PADDING) so 64-byte loads never
+    read past the mmap buffer end; reading past the mapped region is UB. nest must pad the
+    section tail or bounds-guard the final chunk - and never panic in library code (typed
+    thiserror only).
+  - Every new layout (offset tables, tapes, raw-digest chunk_ids, min-width ints, string dedup)
+    must be additive within v1: use reserved encoding ids 4-255 and section ids 0x09+, and only
+    bump NEST_FORMAT_VERSION for a true v2 where an existing field changes meaning. content_hash
+    must keep hashing a stable canonical decoded representation so the chunk_ids encoding switch
+    and offset tables do not break existing citations.
+  - FlexBuffers/min-width packing trades read speed for size via per-value width-tag dispatch -
+    apply it ONLY to cold structural/metadata sections, NEVER the embedding hot path, which must
+    stay fixed-stride aligned for SIMD.
+  - rkyv (used by mmap-sync) pins a specific version and brings unsafe archived-cast machinery;
+    reimplement the lightweight archived-struct cast directly on nest's existing repr(C)+LE
+    structs rather than adding the rkyv dependency, to keep the small dependency-light core.
+  - csv2 and FlatBuffers are C++/Apache-2.0 and simd-r-drive/simd-json are Rust Apache/MIT - all
+    permissive and safe to reimplement, but reimplement the algorithms in pure
+    safe-where-possible Rust rather than vendoring C++, to preserve the single-binary, no-FFI,
+    offline posture.
+  - mmap-sync's RCU swap is single-writer/multi-reader and tmpfs-oriented; the real-time-edit
+    sidecar must stay in-process and never open a socket (offline by construction), live
+    entirely outside the frozen .nest container, and handle crashed-reader drain without
+    blocking the read path.
+  - Keep SHA-256 for the four integrity/citation surfaces - CRC32C (simd-r-drive) and truncated
+    WyHash (mmap-sync) are cheaper but non-cryptographic and only acceptable as a fast-path
+    liveness check during streaming edits, never as a replacement for the citation/integrity
+    hashes.
+  - File hygiene: every new codec/section/tape module must stay under 300 lines (333 hard cap),
+    single-responsibility - split a codec registry into one file per encoding rather than
+    growing encoding/mod.rs.

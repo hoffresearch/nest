@@ -1,0 +1,67 @@
+================================================================================================
+UKPLab/sentence-transformers
+category: embeddings-models   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A PyTorch framework for dense/sparse/cross-encoder text+image embeddings whose most transferable
+             assets are three post-hoc compression techniques: scalar(int8)/binary embedding
+             quantization with float32 rescoring, Matryoshka (front-loaded truncatable
+             dimensions), and Model2Vec static distillation (attention-free token lookup
+             tables).
+innovation:  Compress-then-rescore as a search contract: store embeddings in a lossily quantized form (binary
+             1-bit or int8) for cheap candidate retrieval over Hamming/int8 distance, then
+             rerank the small candidate set against a higher-fidelity query representation so
+             the FINAL score is near-full-precision. This decouples on-disk storage cost from
+             result quality, exactly nest's "ann/bm25 always run a mandatory exact cosine
+             rerank" philosophy generalized to the codec layer.
+techniques:
+  - Binary quantization: sign-threshold normalized float32 at 0 -> 1 bit/dim, np.packbits into
+    bytes (1024d -> 128 bytes, 32x), retrieve by popcount Hamming distance (~2 CPU cycles)
+  - Scalar int8 quantization: per-dimension min/max calibration buckets map float32 -> int8
+    (-128..127), 4x shrink, affine dequant for rescoring
+  - Asymmetric rescore: fetch rescore_multiplier*top_k binary candidates, rescore with float32
+    query vs stored quantized doc vectors; recovers ~96% (binary) / ~99% (int8) recall
+  - Matryoshka (MRL): train so information is front-loaded; truncate 1024->512 (1.5% drop) or
+    ->256 (0.6% drop) by slicing the prefix, no re-encode
+  - Model2Vec distillation: forward each vocab token through teacher once, PCA the
+    token-embedding matrix (denoises even w/o dim reduction), then SIF weight
+    w=1e-3/(1e-3+proba)
+  - Zipf-rank proxy: vocab is frequency-sorted so rank substitutes for corpus frequency ->
+    IDF-like downweighting of stopword tokens with zero corpus access
+  - Static inference: EmbeddingBag token lookup + mean pooling, no attention, ~100k sents/sec
+    CPU, model ~30MB (potion-base-32M) down to 1.8MB (potion-base-2M)
+  - Tiered store: binary for first-stage memory-resident search, int8 on disk for rescore (cited
+    200GB->5GB RAM / 52GB disk)
+nest steals: Three concrete steals. (1) nest-format encoding layer: add MRL-style truncation metadata to the
+             embeddings section and search_contract so a 'matryoshka' preset stores only the
+             front D dims (e.g. 256 of 768) deterministically, shrinking the embeddings section
+             ~3x with ~0.6% recall loss; stacks on existing int8/f16 codecs for compounding
+             compression. (2) nest-runtime search path: generalize the EXISTING mandatory
+             exact-cosine rerank into a two-fidelity store -- keep an optional binary (1-bit
+             packed, popcount-Hamming) shadow of embeddings as a new RESERVED-id codec for
+             first-stage candidate gen, then rerank with the int8/f32 vectors already mmapped;
+             binary Hamming is a tiny NEON/AVX2 popcount kernel that fits the SIMD dispatcher
+             and never touches Python. (3) nest-python build side: implement a Model2Vec-style
+             static distiller (PCA-normalize + Zipf/SIF reweight via vocab rank) so nest ships a
+             sub-30MB deterministic CPU encoder bundled offline, killing the ~300-500ms python
+             boot for search-text and giving sovereign single-file embedding with no transformer
+             download. int8 per-dim min/max calibration should be stored in provenance for
+             reproducible, byte-identical dequant.
+compression: Directly central. Binary quantization is 32x on the embeddings section (the part nest
+             deliberately leaves uncompressed for hot-path scoring) -- the asymmetric rescore
+             trick is the ONLY way to compress embeddings without breaking nest's "score is real
+             cosine" guarantee, since the lossy form is used only for candidate generation.
+             Matryoshka truncation gives a free orthogonal ~3x. With Model2Vec's PCA denoising
+             they push the 'tiny' preset (currently 0.283 ratio, int8) materially lower while
+             preserving recall@10 ~0.99.
+perf:        Binary Hamming = packed-bit XOR + popcount, ~2 CPU cycles/comparison, ideal for a small
+             std::arch popcnt/vcnt SIMD kernel (scalar fallback trivial via u64::count_ones).
+             int8 dot product is the existing nest path. Static encoder ~107k sents/sec
+             single-thread CPU (397x all-mpnet), pure table lookup + mean, deterministic and
+             reproducible -- aligns with nest's seeded/deterministic-build constraint. Model2Vec
+             PCA-then-int8 reaches 25% of original size with no quality loss, evidence
+             quant+dim-reduction compose without recall collapse.
+license:     Apache-2.0 (sentence-transformers); Model2Vec is MIT (MinishLab) -- both vendor-friendly for
+             nest's build-side python and rust runtime.

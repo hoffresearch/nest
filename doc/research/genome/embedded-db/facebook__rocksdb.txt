@@ -1,0 +1,76 @@
+================================================================================================
+facebook/rocksdb
+category: embedded-db   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        An LSM-tree embedded key-value engine whose on-disk SST "block-based table" format combines
+             prefix/delta-encoded sorted blocks with restart points, full/partitioned Bloom and
+             Ribbon probabilistic filters, and trained-dictionary block compression to hit
+             aggressive space-amplification targets.
+innovation:  Decoupling the compressor's statistical model from the unit of access: RocksDB trains ONE ZSTD
+             dictionary by sampling across many small blocks (buffer up to target_file_size,
+             sample uniformly, run the ZDICT trainer to max_dict_bytes) and stores that single
+             digested dictionary in a meta-block, so each 4KB block compresses against
+             cross-block redundancy a per-block compressor can never see. The complementary idea
+             is the Ribbon filter: replacing per-key Bloom hashing with a solved banded linear
+             system over GF(2) that hits the same false-positive rate at ~30% fewer bits/key,
+             trading one-time construction CPU for permanent space savings on long-lived data.
+techniques:
+  - ZSTD trained dictionary: sample across blocks, run ZDICT trainer to max_dict_bytes, store
+    one shared digested dictionary in a meta-block, compress each block against it
+  - Ribbon filter: banded linear system over GF(2) solved by on-the-fly Gaussian elimination
+    (Dietzfelbinger-Walzer), ~7 bits/key vs Bloom ~10 for equal FP, 128-bit band
+  - Prefix/delta key encoding with restart points: store (shared_len, non_shared_len,
+    non_shared_bytes), full key only every block_restart_interval=16, binary search over
+    restarts
+  - format_version=4 index delta encoding: reconstruct offset as prev_offset+prev_size+trailer,
+    store only the size delta, ~4-5x smaller index blocks
+  - Full/partitioned filter blocks: one filter per whole SST file instead of per-data-block,
+    removing index lookup and address jumping on the query path
+  - Footer-anchored layout parsed backwards from a fixed-size footer pointing to meta-index and
+    index blocks
+  - Cost-based filter selection: Ribbon for long-lived data, Bloom for short-lived, hybrid
+    per-level
+  - optimize_filters_for_memory: round filter sizes to reduce cache-line/page waste
+nest steals: Two steals into nest-format plus one into nest-runtime. (1) ZSTD trained-dictionary codec in
+             crates/nest-format/src/encoding/zstd_codec.rs: today it calls plain
+             zstd::encode_all at level 19 with NO dictionary. Add a build-time pass that trains
+             ONE ZDICT dictionary over all text sections (chunks_canonical,
+             chunks_original_spans, provenance) and compresses each against it; persist the
+             digested dictionary in a new RESERVED section id 0x09+ or in the manifest. This
+             attacks the exact pain point: many small, highly-similar chunks (the PT-BR
+             fake-news corpus repeats names/boilerplate across articles) compress far better
+             against a shared cross-chunk model than independently. Determinism holds because
+             ZDICT is deterministic given identical sampled input and a pinned zstd version, so
+             same chunks => byte-identical dictionary => byte-identical file. Purely additive
+             via a new encoding id (4-255 reserved); old readers fail closed. Embeddings stay
+             untouched for SIMD mmap scoring. Biggest single lever on 'compress more than
+             everyone'. (2) Delta + restart encoding (format_version=4 trick) for chunk_ids and
+             chunks_original_spans sections (crates/nest-format/src/sections/chunk_ids.rs,
+             spans.rs): these are sorted u64 ids and (offset,len) spans that delta-encode almost
+             perfectly; store only the size delta and reconstruct offsets, shrinking metadata
+             overhead in the smallest 'tiny' preset. (3) Deterministic seeded Ribbon filter in
+             nest-runtime alongside ann::HnswIndex and bm25 (crates/nest-runtime/src/bm25/):
+             ~30% smaller membership filter than Bloom at equal FP, stored in the optional
+             bm25_index (0x08) region, as a fast offline pre-filter before the mandatory
+             exact-cosine rerank, never violating the search contract.
+compression: Directly on-mission. Trained-dictionary ZSTD is the highest-ROI compression upgrade for nest: it
+             converts cross-chunk redundancy (invisible to per-section zstd today) into bytes
+             saved on every text section, improving every preset that uses zstd
+             (compressed/tiny/hybrid) at zero recall cost since embeddings are excluded. Ribbon
+             filters and delta/restart encoding of id and span sections cut index and metadata
+             overhead, shrinking the smallest 'tiny' ratio (today 0.283) further. All three
+             respect the FROZEN additive format (new reserved encoding/section ids only) and
+             stay deterministic and offline.
+perf:        Ribbon construction ~140ns/key (4-5x Bloom ~32ns) with ~230 bits/key temporary build memory, but
+             query only ~600ns vs Bloom ~500ns and steady-state ~7 vs ~10 bits/key; one-time
+             offline build cost is fine for nest (python builds). ZSTD dictionary: in-memory
+             digested form is larger than on-disk but decompresses faster; dictionary pin is one
+             small meta-block. nest compresses whole sections (not 4KB blocks), so the
+             dictionary gain is maximal precisely on many-small-similar-chunk corpora. Level 19
+             plus a trained dictionary stacks cleanly.
+license:     Apache-2.0 and GPLv2 dual-licensed. nest must NOT vendor RocksDB code: reimplement Ribbon
+             clean-room from the public Dietzfelbinger-Walzer paper and use the zstd crate's
+             native ZDICT bindings, to avoid GPL contamination of the small rust core.

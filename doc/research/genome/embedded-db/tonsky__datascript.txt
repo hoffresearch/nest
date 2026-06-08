@@ -1,0 +1,32 @@
+================================================================================================
+tonsky/datascript
+category: embedded-db   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        see above
+innovation:  see above
+techniques:
+  - see array above
+nest steals: see above
+compression: Indirect but real. The structural-sharing copy-on-write B+ tree is the cheapest known way to
+             make an append-only single-file container support edits without rewriting (or
+             duplicating) the whole file: an edit costs ~3 dirty nodes, so versioned/edited
+             corpora compress dramatically vs naive re-serialization. Node arenas of packed
+             sorted keys are also delta/front-coding friendly (shared prefixes between adjacent
+             keys), and the index itself is a non-embedding section so it is eligible for nest's
+             zstd codec. It does NOT compress embeddings, but it directly unlocks the 'real-time
+             edit' north-star while preserving single-file size discipline.
+perf:        In-memory range scans ~3x faster than Clojure's built-in sorted-set due to contiguous-array
+             nodes and cache-friendly binary search within a node. Bulk insert via transients is
+             2-3x faster than persistent conj. Per-edit persistence touches only ~log_b(N) nodes
+             (~3 for millions of elements at depth 3). Lazy restore means read working set ~
+             query reach, not total size - ideal pairing with mmap demand paging. No SIMD; the
+             win is allocation/IO economy, not raw scan throughput, so it complements rather
+             than competes with nest's SIMD dot-product hot path (which must stay on raw mmap
+             embeddings).
+license:     Eclipse Public License 1.0 (EPL-1.0) for DataScript and persistent-sorted-set. Note: EPL is
+             weak-copyleft and not a clean fit to vendor into MIT/Apache Rust crates -
+             re-implement the B+ tree + IStorage idea from the documented design rather than
+             copying code; the algorithm/format ideas are not themselves licensable.

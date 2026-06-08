@@ -1,0 +1,69 @@
+================================================================================================
+duckdb/duckdb
+category: embedded-db   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        An in-process columnar analytical database with a single-file, block-based storage engine that
+             applies per-segment adaptive lightweight compression (RLE, bitpacking, FOR, delta,
+             dictionary, FSST for strings, ALP for floats) chosen automatically by a
+             sampling-based Analyze phase.
+innovation:  Per-segment adaptive compression cascade: each fixed-size column segment is independently
+             analyzed by cheaply sampling the data, every candidate codec estimates its own
+             compressed size via a uniform Analyze/Compress interface, and the smallest-estimate
+             codec wins -- so the engine picks the best lightweight scheme per data block rather
+             than committing to one global codec, all while keeping the data scannable in place
+             without a heavyweight LZ pass.
+techniques:
+  - FSST string compression: a 255-entry static symbol table mapping frequent 1-8 byte
+    substrings to single-byte codes, ~2-3x on text with random-access per-string decode (no
+    block decompression); dictionary offsets stored via delta+bitpacking
+  - ALP float compression: PseudoDecimal path uses one shared exponent e + factor f per
+    1024-value vector to map doubles to ints then Frame-of-Reference + bitpacking; falls back to
+    cutting low-variance front bits and bitpacking the remainder; outliers stored as exceptions
+  - FastLanes 1024-value bitpacking with the Unified Transposed '04261537' layout over a virtual
+    MM1024 register so scalar code auto-vectorizes to any SIMD width (AVX2/AVX512/NEON) with no
+    intrinsics
+  - Frame-of-Reference (FOR): store min value + bitpacked offsets per 1024-value block; ideal
+    for dates/timestamps/clustered ints
+  - Delta encoding feeding into FOR+bitpacking for monotonic sequences
+  - Constant + RLE encoding for low-cardinality / repeated runs (store value once, or
+    value+run-length pairs)
+  - Uniform CompressionFunction interface (InitAnalyze/Analyze/FinalAnalyze size estimate then
+    InitCompress/Compress/Finalize) enabling cheap sampling-based codec selection per segment
+  - Block-based single file: 256KB blocks, main header + two alternating DatabaseHeaders for
+    atomic ping-pong checkpoint, free list of reclaimable blocks, metadata blocks pointing to
+    row groups/segments
+nest steals: Two distinct steals into nest-format/src/encoding. (1) FSST as a new RESERVED encoding id (4-255
+             slot) for the canonical text sections (chunks_canonical, chunks_original_spans,
+             provenance): 2-3x on text like zstd but with per-string random-access decode
+             straight off mmap, so nest can cite/materialize a single chunk's bytes without
+             inflating a whole zstd frame; pairs naturally with nest://content_hash/chunk_id
+             byte-span reopen. (2) ALP + FastLanes-style transposed bitpacking as the principled
+             successor to nest's crude int8/float16 embedding quantization: ALP is lossless and
+             the FastLanes 04261537 layout means one scalar decode kernel auto-vectorizes to
+             AVX2 and NEON, collapsing nest-runtime's three SIMD paths into one portable kernel.
+             Most important architecturally: adopt DuckDB's per-section Analyze-and-pick pattern
+             in the nest writer so each section's codec is chosen by a deterministic sampling
+             estimate (seeded/ordered to stay reproducible) instead of fixed per-preset
+             encodings -- directly serving 'compress more than everyone' by letting
+             tiny/compressed presets pick the smallest codec per section while keeping
+             byte-identical determinism.
+compression: Directly central: DuckDB is the reference design for cheap, scannable, lossless lightweight
+             compression. FSST gives random-access text compression (better fit than zstd for
+             nest's cite/materialize path), ALP gives lossless float compression that could
+             shrink embeddings better than naive float16/int8 without recall loss, and the
+             per-segment adaptive selection is exactly the 'pick the smallest encoding
+             automatically' machinery nest's north star needs. Caveat: nest scores f32 directly
+             from mmap on the hot path, so any embedding codec must keep cheap/random decode --
+             FastLanes bitpacking decodes fast enough to fit, plain zstd does not (which is why
+             nest already bans zstd on embeddings).
+perf:        FSST ~= LZ4 ratio (3x on TPCH l_comment) but decodes individual strings; analyze samples 25% of
+             row-group vectors to estimate size. ALP is 2-4x faster decompress than older
+             Patas/Chimp at ~2x better ratio, avg 2.08x on FCBench vs 1.47x for Bitshuffle+Zstd.
+             FastLanes claims >100 billion ints/sec decode; the transposed interleaved layout
+             speeds even scalar decode by exposing ILP, and the same source auto-vectorizes
+             across Intel/AMD/Apple/AWS. All codecs operate on 1024-value vectors keeping
+             working sets in L1/registers.
+license:     MIT

@@ -1,0 +1,66 @@
+================================================================================================
+weaviate/weaviate-python-client
+category: bindings-cli   |   steal priority: MEDIUM
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        The official Python client for Weaviate: a gRPC/protobuf v4 client where vectors are serialized
+             as length-prefixed flat float32 byte blobs, batching is auto-tuned for throughput,
+             and a VectorType enum tags single vs multi-vector layouts inside one wire field.
+innovation:  Tag-then-pack vector serialization: a single bytes field carries an entire vector (or a
+             flattened multi-vector matrix) as a contiguous little-endian float32 blob, prefixed
+             only with the per-row dimension as a uint16, and disambiguated by a tiny VectorType
+             enum (VECTOR_TYPE_SINGLE_FP32 / MULTI_FP32). One field, one struct.pack call, no
+             per-element protobuf framing -- the dtype/layout lives in a side enum, not in the
+             bytes. This is exactly the "type tag + raw contiguous payload, mmap/decode in one
+             shot" discipline nest needs for its embeddings and named-vector sections.
+techniques:
+  - Vector wire encoding: struct.pack("{}f".format(n), *vec) -> one contiguous float32 blob,
+    zero per-element framing
+  - Multi-vector encoding: struct.pack("<H", row_dim) prefix + flattened float32 matrix; row
+    width from the uint16, count from len(bytes)//(dim*4)
+  - VectorType side-enum (SINGLE_FP32 / MULTI_FP32) tags layout/dtype out-of-band so the payload
+    stays a raw blob -- additive room for future int8/fp16 tags
+  - Symmetric _ByteOps decoder: struct.unpack(f"{len//UINT32_LEN}f") infers element count from
+    byte length, no stored count needed
+  - Three explicit batching policies: dynamic (auto-tunes batch size + concurrency for
+    throughput), fixed_size, rate_limit -- a tuning taxonomy, not one magic knob
+  - Context-manager batch lifecycle with auto-flush on __exit__ and early-abort on error
+    threshold (number_errors)
+  - Layered .proto schema (base -> batch/search_get -> weaviate) keeping wire structs additive
+    and codegen-stable across grpcio/protobuf skew
+  - Producer/consumer queue feeding gRPC unary-unary BatchObjects, decoupling Python
+    object-creation rate from server request concurrency
+nest steals: nest-python (the pyo3 builder) and nest-format encoding/sections: adopt the same tag-then-pack
+             discipline for any future named/multi-vector embeddings section. Today nest stores
+             a single embeddings matrix; when it adds named vectors (text + image per chunk),
+             copy Weaviate's layout exactly -- a per-section dtype enum (already implied by
+             nest's encoding ids f32/f16/int8) plus a uint16/uint32 little-endian row-dim
+             prefix, then a contiguous blob the rust runtime mmaps straight into the SIMD
+             dot-product kernel with zero per-element decode. nest already mandates repr(C),
+             little-endian unsigned, contiguous-for-mmap; Weaviate validates that the
+             flat-blob-plus-side-tag shape is correct and shows recovering element count from
+             byte length (len//4) instead of storing a redundant count, saving header bytes.
+             Separately, nest-python's bulk-build path should borrow the producer/consumer +
+             auto-flush + error-threshold batch ergonomics so large-corpus builds stream chunks
+             without holding everything in memory. Relevance to extreme compression: the
+             side-enum-tags-dtype pattern is precisely what lets nest swap f32->f16->int8 per
+             named-vector without touching byte layout or bumping NEST_FORMAT_VERSION, keeping
+             the format additive while the codec gets smaller.
+compression: Indirect. No entropy coder or quantization codec here -- vectors ship raw fp32, no compression
+             on the embedding payload. The transferable compression-adjacent lesson is the
+             side-enum-tags-dtype pattern: it makes per-vector dtype (fp32/fp16/int8) a 1-byte
+             tag rather than a layout change, so nest can shrink embedding sections by swapping
+             codecs without format churn. The dimension-as-uint16-prefix +
+             count-from-byte-length trick also shaves redundant header bytes.
+             Batching/throughput work is orthogonal to compression.
+perf:        Single struct.pack per vector emits a contiguous fp32 blob with no per-element protobuf tag
+             overhead -- the documented "key efficiency feature" of the gRPC path vs the old
+             REST/JSON client. Decode side (_ByteOps) is a single struct.unpack over the whole
+             buffer. Dynamic batching co-tunes batch size and concurrent request count to
+             maximize ingest throughput while bounding memory (no unbounded batch growth). gRPC
+             default port 50051, unary-unary RPCs. Note: this is a network client (REST+gRPC
+             over sockets) -- nest is offline-by-construction and must NOT adopt the transport,
+             only the byte-layout and batch-ergonomics ideas.
+license:     BSD-3-Clause

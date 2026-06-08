@@ -1,0 +1,69 @@
+================================================================================================
+ARM-software/ComputeLibrary
+category: simd-lowlevel   |   steal priority: HIGH
+================================================================================================
+
+siblings: ./00-index.txt   |   map: ../../README.txt
+
+what:        A production multi-ISA CPU/GPU kernel library (MIT) whose CPU core is `arm_gemm`: a bank of
+             hand-tuned NEON/SVE/SVE2 micro-kernels selected at runtime by a CpuInfo
+             feature-detection layer, including int8 GEMMLowp kernels that use SDOT/UDOT/I8MM
+             dot-product instructions with int32 accumulation and an asymmetric (scale +
+             zero-point) requantization output stage.
+innovation:  Decouple "which SIMD instruction set the binary was compiled with" from "which kernel actually
+             runs": a single fat binary carries multiple micro-kernel variants and a runtime
+             CpuInfo probe (getauxval(AT_HWCAP)/AT_HWCAP2 on aarch64, CPUID leaves on x86) picks
+             the best one per call. The int8 path then exploits hardware dot-product
+             instructions (SDOT/UDOT, AVX-VNNI vpdpbusd) that compute 4 int8 MACs into one int32
+             lane in a single instruction, with int32 accumulators to avoid overflow and a
+             fixed-point (scale + zero-point) requantization stage instead of float.
+techniques:
+  - Runtime ISA detection: getauxval(AT_HWCAP/AT_HWCAP2) bits for FEAT_DotProd, FEAT_I8MM, FP16,
+    SVE/SVE2 on aarch64; CPUID leaf 7 for AVX2/AVX-512F/VNNI on x86_64
+  - Multi-ISA fat binary: compile all kernel variants, set an 'arch floor' minimum, select
+    optimal variant at runtime via a function-pointer table keyed on detected features
+  - int8 dot-product micro-kernels: NEON vdotq_s32 / SVE svdot / x86 _mm256_dpbusd_epi32 doing 4
+    int8 MACs/lane into int32 accumulators (GEMMLowp), avoiding int16 overflow
+  - Asymmetric quantization: per-tensor/per-row scale (f32) + zero_point offset, with the
+    (a-zp_a)*(b-zp_b) expansion folded into precomputed offset-correction terms
+  - Fixed-point requantization output stage: int32 accumulator * int32 multiplier + rounding
+    shift instead of float divide, for deterministic integer-only scoring
+  - Kernel naming convention encoding ISA+dtypes+tile (e.g. sve_hybrid_u8u32_dot_6x4VL) plus
+    microarch-specific variants (a64fx.cpp) for issue-width/cache tuning
+  - MxN register tiling/blocking with weight pre-packing so the inner loop streams contiguously
+    and reuses loaded vectors across accumulators
+nest steals: Two concrete steals into nest-runtime's simd dispatcher (crates/nest-runtime simd module +
+             search hot path). (1) Replace nest's compile-time cfg!(target_arch) dispatch with
+             an ACL-style runtime feature probe: a std::sync::OnceLock<Cpu> populated via
+             std::arch::is_x86_feature_detected!("avx512vnni"/"avx2") and
+             is_aarch64_feature_detected!("dotprod"/"neon"), holding a fn pointer to the chosen
+             dot kernel. ONE shipped nest binary then uses AVX-512/VNNI or NEON-dotprod when
+             present and falls back to AVX2/NEON/scalar, all behind a typed never-panic
+             dispatcher. (2) Add a dedicated int8 cosine kernel for the 'tiny' preset (int8
+             embeddings, encoding id already reserved): mirror GEMMLowp by accumulating
+             int8*int8 into i32 with _mm256_dpbusd_epi32 (AVX-VNNI) / vdotq_s32 (NEON) / scalar
+             i32 fallback, storing per-row scale (and optional zero_point) alongside the int8
+             block so cosine is reconstructed from the i32 dot + scales. This makes the smallest
+             preset (0.283 ratio) also the fastest to score directly off mmap, and integer
+             accumulation keeps scoring bit-deterministic across machines (a nest hard
+             requirement) where float SIMD reduction order is not. The scale/zero_point metadata
+             is additive in the int8 codec header, no NEST_FORMAT_VERSION bump.
+compression: Directly serves compress-more-than-everyone: nest's int8 preset is its most compact embedding
+             encoding (0.283 size ratio, recall@10 0.992). ACL's GEMMLowp proves you can score
+             that int8 representation natively with dot-product instructions instead of
+             dequantizing to f32 first, so the smallest-on-disk format also becomes the
+             cheapest-to-search. Asymmetric scale+zero_point quantization packs more fidelity
+             per int8 than a symmetric scheme, enabling more aggressive quantization (toward
+             int4) without recall loss, pushing the compression frontier while keeping search
+             fast and deterministic.
+perf:        SDOT/UDOT (FEAT_DotProd) and AVX-VNNI vpdpbusd give ~4x the int8 throughput of a naive
+             multiply-then-widen-add loop by fusing 4 MACs/lane into one instruction with free
+             int32 accumulation; I8MM/SME push further with outer-product matrix instructions.
+             Integer accumulation is reduction-order-independent, so it is reproducible across
+             CPUs unlike float horizontal sums (matters for nest determinism). MxN register
+             tiling + weight pre-packing keeps the inner GEMM loop bound by dot/FMA issue rate
+             rather than loads; for nest's single-query dot products the win is mainly the
+             per-element instruction fusion + runtime dispatch, not the heavy tiling. int8
+             embeddings are 4x smaller than f32 in cache, so more vectors stay resident on the
+             mmap hot path.
+license:     MIT
