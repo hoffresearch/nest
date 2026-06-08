@@ -77,8 +77,13 @@ gaoj0017/RaBitQ, microsoft/onnxruntime, NixOS/nix, ipfs/kubo
 [ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
 
 --- RESULT (fill in) ---
-  size ratio  before: ____  after: ____
-  recall@10   before: ____  after: ____
+  (int4 leg only; rabitq/dedup/chunk_scalars still open)
+  size ratio  before: 0.283 (tiny/int8)   after: 0.209 (nano/int4)
+  recall@10   before: 0.992 (tiny/int8)   after: 0.913 (nano/int4)
+  embeddings section: 11.92 MB (int8) -> 6.27 MB (int4), 1.9x over int8, 7.5x over f32.
+  stored-precision cosine (no fp source, like int8), disclosed via dtype. preset named 'nano'
+  ('micro' reserved for the dict+fsst+int8 task). measured n=30,725, dim=384, NEON, 100 queries,
+  k=10 vs the float32 exact baseline; recorded in dat/measure/baseline.json (nano row).
 
 --- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
 update only what THIS task actually changed; check each:

@@ -25,7 +25,7 @@
 //! byte unchanged; its dtype is read back from the section stride.
 
 use nest_format::layout::{SECTION_EMBEDDINGS_FP, SectionEntry};
-use nest_format::{Int8EmbeddingsView, NestError};
+use nest_format::{INT4_BLOCK, Int4EmbeddingsView, Int8EmbeddingsView, NestError};
 
 use crate::error::RuntimeError;
 use crate::mmap_file::DType;
@@ -92,6 +92,7 @@ enum RerankRows<'a> {
     F32(&'a [u8]),
     F16(&'a [u8]),
     Int8(Int8EmbeddingsView<'a>),
+    Int4(Int4EmbeddingsView<'a>),
 }
 
 impl<'a> RerankSource<'a> {
@@ -109,6 +110,9 @@ impl<'a> RerankSource<'a> {
             DType::Float16 => RerankRows::F16(bytes),
             DType::Int8 => RerankRows::Int8(
                 Int8EmbeddingsView::parse(bytes, n, dim).map_err(RuntimeError::Format)?,
+            ),
+            DType::Int4 => RerankRows::Int4(
+                Int4EmbeddingsView::parse(bytes, n, dim).map_err(RuntimeError::Format)?,
             ),
         };
         Ok(Self { rows, dim })
@@ -131,6 +135,10 @@ impl<'a> RerankSource<'a> {
                 simd::dot_f32_f16_bytes(qnorm, &b[off..off + rs])
             }
             RerankRows::Int8(view) => simd::dot_f32_i8(qnorm, view.row(i), view.scale(i)),
+            RerankRows::Int4(view) => {
+                let scales = view.row_scales_f32(i);
+                simd::dot_f32_i4_blocked(qnorm, view.row_codes(i), &scales, self.dim, INT4_BLOCK)
+            }
         }
     }
 }
@@ -138,7 +146,7 @@ impl<'a> RerankSource<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nest_format::{encode_int8_embeddings, f32_to_f16_bytes};
+    use nest_format::{encode_int4_embeddings, encode_int8_embeddings, f32_to_f16_bytes};
 
     fn f32_slab(rows: &[[f32; 4]]) -> Vec<u8> {
         let mut b = Vec::new();
@@ -189,5 +197,38 @@ mod tests {
         let f16_bytes = f32_to_f16_bytes(&row);
         let f16 = RerankSource::new(DType::Float16, &f16_bytes, 1, 4).unwrap();
         assert!((f16.score(&q, 0) - 1.0).abs() < 1e-2);
+    }
+
+    /// lThe int4 rerank source scores a known row, and an fp source over the
+    /// same logical vector is strictly more precise. int4 is the coarser
+    /// stored precision, so its self-similarity drifts further from 1.0 than
+    /// the exact fp source does, which is exactly why int4 must disclose
+    /// "real cosine at stored precision".
+    #[test]
+    fn int4_source_scores_row_and_is_less_precise_than_fp() {
+        // ldim = 64 (one block); a row int4 cannot represent exactly.
+        let dim = 64;
+        let raw: Vec<f32> = (0..dim)
+            .map(|j| ((j as f32 * 0.021).cos()) * 0.3 + 0.01)
+            .collect();
+        let norm = raw.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let row: Vec<f32> = raw.iter().map(|x| x / norm).collect();
+        let q = row.clone(); // query == row; exact cosine is 1.0
+
+        let f32_bytes: Vec<u8> = row.iter().flat_map(|v| v.to_le_bytes()).collect();
+        let fp = RerankSource::new(DType::Float32, &f32_bytes, 1, dim).unwrap();
+        let int4_bytes = encode_int4_embeddings(&row, 1, dim).unwrap();
+        let q4 = RerankSource::new(DType::Int4, &int4_bytes, 1, dim).unwrap();
+
+        let s_fp = fp.score(&q, 0);
+        let s_i4 = q4.score(&q, 0);
+        assert!((s_fp - 1.0).abs() < 1e-6, "fp source must be exact: {s_fp}");
+        assert!(
+            (s_i4 - 1.0).abs() > 1e-4,
+            "int4 must lose precision so the fp source is the honest one: {s_i4}"
+        );
+        // lint4 still returns a real, finite cosine near 1.0 (a valid score,
+        // just at the coarser stored precision).
+        assert!(s_i4.is_finite() && s_i4 > 0.9, "int4 score sane: {s_i4}");
     }
 }

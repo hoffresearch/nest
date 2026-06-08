@@ -82,7 +82,10 @@ ok "all source files ≤ 300 lines"
 
 # ---- rebuild PyO3 .so ----
 step "rebuild python/_nest.so"
-cargo build --release -p nest-python >/dev/null
+# build the extension against the SAME interpreter that runs the tests, so a
+# .venv that differs from the default build python can never load a mismatched
+# _nest.so (that mismatch segfaults test_e2e). PYO3_PYTHON pins it to $PY.
+PYO3_PYTHON="$PY" cargo build --release -p nest-python >/dev/null
 case "$(uname)" in
   Darwin) cp target/release/lib_nest.dylib python/_nest.so ;;
   Linux)  cp target/release/lib_nest.so    python/_nest.so ;;

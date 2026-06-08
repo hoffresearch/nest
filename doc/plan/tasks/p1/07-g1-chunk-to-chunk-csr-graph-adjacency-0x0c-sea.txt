@@ -1,7 +1,7 @@
 ==============================================================================================
 TASK #07 :: G1: chunk-to-chunk csr graph_adjacency(0x0C) + search-graph + drop chunk_overlap
 phase: phase 1   layer: cross
-status:  [ ] todo    [ ] doing    [ ] done
+status:  [ ] todo    [ ] doing    [x] done
 ==============================================================================================
 
 self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
@@ -79,9 +79,48 @@ run-llama/llama_index
     passes
 [ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
 
---- RESULT (fill in) ---
-  size ratio  before: ____  after: ____
-  recall@10   before: ____  after: ____
+--- RESULT (filled) ---
+  size ratio  before: 0.256  after: 0.256   (tiny preset; graph is additive + default-off, no byte impact)
+  recall@10   before: 0.9900 after: 0.9900  (tiny preset, 50 queries vs f32 exact baseline; held)
+
+  delivered (G1, all additive within frozen v1, NO NEST_FORMAT_VERSION bump):
+  - SECTION_GRAPH_ADJACENCY (0x0C) chunk-to-chunk csr codec
+    (crates/nest-format/src/sections/graph/{mod,adjacency}.rs):
+    GRAPH_ADJACENCY_PAYLOAD_VERSION=1; intpack offsets + per-(src,edge_type)
+    delta-gapped neighbor ids + falkordb-iso edge-type column inside a RAW
+    self-describing section payload (reuses encoding 4 internally, like hnsw
+    0x07). edge types NEXT_CHUNK=0 / SEMANTIC=1 / CITATION=2. canonical
+    (src,edge_type,dst) sort => byte-identical builds. typed NestError on every
+    truncation/hostile claim, never panics (degree + n_nodes-overflow guards).
+  - EXCLUDED from content_hash: not in CANONICAL_SECTIONS, joins
+    OPTIONAL_SECTIONS so section_name/inspect resolve it. proven by
+    graph_adjacency_roundtrip.rs (content_hash equal WITH vs WITHOUT 0x0C) and
+    reserved_ids.rs (resolves via section_name yet content_hash-excluded).
+  - gated by graph_present via Option<CapabilitiesExt>: the
+    NestFileBuilder::graph_adjacency(payload) method sets it; mmap_file opens
+    the section only behind that flag (has_graph()).
+  - runtime graph::CsrIndex (csr.rs, neighbors(node) = contiguous slice off the
+    parsed columns) + bounded_bfs (traverse.rs, generational visited buffer,
+    no per-query HashSet, hops + max_frontier bounds, dedup, seeds-first).
+  - search_graph(query,k,hops,ef): exact-cosine top-ef seed -> bounded_bfs ->
+    union seed+frontier -> score_subset exact rerank -> top-k.
+    index_type="graph", recall=NaN. falls back to search() when no 0x0C section.
+  - 9th cli subcommand `nest search-graph <file> <q-json> -k --hops --ef` +
+    PyO3 NestFile.search_graph + has_graph.
+  - python build path: nest.build(..., with_graph=True, graph_top_m=8) emits
+    NEXT_CHUNK (sequential, both dirs) + top-m SEMANTIC edges (from the already-
+    built hnsw level-0 graph, no o(n^2) knn), canonically sorted; default off.
+    chunk_overlap drop is opt-in (BuildConfig.drop_overlap implies with_graph;
+    read-side context via python/graph_context.neighbor_context) GATED on
+    python/tools/graph_recall_gate.py (recall@10 vs baseline; PASS at 1.0000).
+  - HONESTY GATE: rerank_contract.rs adds 'graph' to non_exact_paths; the
+    fixture carries a 0x0C section and asserts search_graph scores are
+    byte-equal to the exact-cosine rerank on the union and recall=NaN.
+
+  gate: cargo build --release --workspace OK; cargo fmt --all --check OK;
+        cargo clippy --workspace --all-targets -D warnings OK; cargo test
+        --release --workspace OK (0 failures); measure tiny 0.256 / recall@10
+        0.9900 held; graph_recall_gate.py PASS (recall@10 1.0000).
 
 --- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
 update only what THIS task actually changed; check each:
