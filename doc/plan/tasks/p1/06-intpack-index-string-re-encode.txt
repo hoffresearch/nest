@@ -1,7 +1,7 @@
 ==============================================================================================
 TASK #06 :: intpack + index/string re-encode
 phase: phase 1   layer: nest
-status:  [ ] todo    [ ] doing    [ ] done
+status:  [ ] todo    [ ] doing    [x] done   (merged af9cc655; tiny 0.283->0.256, recall held)
 ==============================================================================================
 
 self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE

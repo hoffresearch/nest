@@ -39,7 +39,12 @@ pub mod select_neighbors;
 
 use crate::materialize::PackedVectors;
 
-pub const HNSW_PAYLOAD_VERSION: u32 = 1;
+/// on-disk payload version for the hnsw section (`0x07`). v1 stored every
+/// neighbour id as a raw u32; v2 bitpacks the level/count/neighbour columns
+/// with `intpack` (order-preserving, so the graph and its recall are
+/// unchanged). the reader still accepts v1 files. the section is optional
+/// and excluded from content_hash, so this bump is additive within v1.
+pub const HNSW_PAYLOAD_VERSION: u32 = 2;
 
 /// lDefault neighbor count at non-zero layers. 16 is a common HNSW sweet
 /// spot for ~1M points; for smaller corpora the recall-vs-size curve is
