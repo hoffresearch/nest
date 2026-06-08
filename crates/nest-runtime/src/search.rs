@@ -6,9 +6,19 @@ use crate::bm25;
 use crate::error::RuntimeError;
 use crate::mmap_file::MmapNestFile;
 use crate::rerank::RerankSource;
-use crate::{SearchHit, SearchResult};
+use crate::{RerankSourceKind, SearchExplain, SearchHit, SearchResult};
 
 impl MmapNestFile {
+    /// lthe honesty marker: the precision the rerank reads from, from the
+    /// `embeddings_fp` (0x09) slab dtype when present, else the stored dtype.
+    fn rerank_source_kind(&self) -> RerankSourceKind {
+        let dtype = self
+            .embeddings_fp_slab()
+            .map(|(_, d)| d)
+            .unwrap_or(self.dtype);
+        RerankSourceKind::from_dtype(dtype)
+    }
+
     /// lValidate query, L2-normalize, return the normalized vector.
     fn validate_query(&self, query: &[f32], k: i32) -> Result<Vec<f32>, RuntimeError> {
         if k <= 0 {
@@ -98,6 +108,7 @@ impl MmapNestFile {
             truncated,
             k_requested: k,
             k_returned: hits.len(),
+            explain: SearchExplain::exact(self.n_embeddings, self.rerank_source_kind()),
         })
     }
 
@@ -116,6 +127,7 @@ impl MmapNestFile {
         };
         let qnorm = self.validate_query(query, k)?;
         let candidates = idx.search(&qnorm, ef_search.max(k as usize));
+        let ann_candidates = candidates.len();
         let mut reranked = self.score_subset(&qnorm, &candidates)?;
         sort_scores_desc(&mut reranked);
         let k_usize = k as usize;
@@ -132,6 +144,7 @@ impl MmapNestFile {
             truncated,
             k_requested: k,
             k_returned: hits.len(),
+            explain: SearchExplain::hnsw(ann_candidates, self.rerank_source_kind()),
         })
     }
 
@@ -167,6 +180,7 @@ impl MmapNestFile {
         let max_frontier = (seed_budget.saturating_mul(8)).max(seed_budget);
         let mut traversal = crate::graph::Traversal::new(graph.n_nodes());
         let union = traversal.bounded_bfs(graph, &seeds, hops, max_frontier);
+        let graph_candidates = union.len();
 
         let mut reranked = self.score_subset(&qnorm, &union)?;
         sort_scores_desc(&mut reranked);
@@ -182,6 +196,7 @@ impl MmapNestFile {
             truncated,
             k_requested: k,
             k_returned: hits.len(),
+            explain: SearchExplain::graph(seed_budget, graph_candidates, self.rerank_source_kind()),
         })
     }
 
@@ -197,8 +212,10 @@ impl MmapNestFile {
     ) -> Result<SearchResult, RuntimeError> {
         let t0 = std::time::Instant::now();
         let qnorm = self.validate_query(query_vec, k)?;
+        let src = self.rerank_source_kind();
 
         // lVector path: ANN if available, otherwise top-`candidates`.
+        let has_ann = self.ann_index.is_some();
         let vec_candidates: Vec<usize> = if let Some(idx) = self.ann_index.as_ref() {
             idx.search(&qnorm, candidates_per_path.max(k as usize))
         } else {
@@ -217,6 +234,12 @@ impl MmapNestFile {
             Vec::new()
         };
 
+        // lattribute the vector count to the generator that ran (ann vs
+        // exact-flat shortlist) so the explain line is honest.
+        let nvec = vec_candidates.len();
+        let (ann_candidates, exact_candidates) = if has_ann { (nvec, 0) } else { (0, nvec) };
+        let bm25_candidates = lex_candidates.len();
+
         // lReciprocal-rank fusion to pick a union, then exact rerank.
         let union = bm25::rrf_union(&vec_candidates, &lex_candidates);
         let mut reranked = self.score_subset(&qnorm, &union)?;
@@ -233,6 +256,7 @@ impl MmapNestFile {
             truncated,
             k_requested: k,
             k_returned: hits.len(),
+            explain: SearchExplain::hybrid(ann_candidates, exact_candidates, bm25_candidates, src),
         })
     }
 

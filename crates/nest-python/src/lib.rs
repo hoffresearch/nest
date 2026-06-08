@@ -8,15 +8,18 @@ mod build_fn;
 mod build_inputs;
 mod chunk_id_fn;
 mod nest_file;
+mod retrieve_fn;
 
 use build_fn::build;
 use chunk_id_fn::chunk_id;
 use nest_file::{NestFile, SearchHitPy};
+use retrieve_fn::RetrieveHitPy;
 
 #[pymodule]
 fn _nest(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<NestFile>()?;
     m.add_class::<SearchHitPy>()?;
+    m.add_class::<RetrieveHitPy>()?;
     m.add_function(wrap_pyfunction!(build, m)?)?;
     m.add_function(wrap_pyfunction!(chunk_id, m)?)?;
     Ok(())
