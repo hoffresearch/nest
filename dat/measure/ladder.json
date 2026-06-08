@@ -301,6 +301,14 @@
       "stored_precision": true
     }
   ],
+  "ruler": {
+    "kind": "self-perturbation",
+    "query": "each query is a corpus chunk's own embedding plus deterministic per-dim noise (up to 8e-5 per dim), re-l2-normalized; it is a near-duplicate of an existing corpus point",
+    "ground_truth": "the same float32 baseline's own top-k on that perturbed query",
+    "measures": "rank-stability of a preset under quantization, NOT real-query retrieval quality",
+    "caveat": "this is NOT a real-query (mteb-style) labeled query-to-doc ruler; recall@10 here is easier than real retrieval and is likely inflated",
+    "real_ruler": "pending gate-zero (real-query labeled harness); see doc/plan/compression-honest-plan.txt"
+  },
   "schema_version": 1,
   "seed": 0,
   "simd_backend": "neon"
