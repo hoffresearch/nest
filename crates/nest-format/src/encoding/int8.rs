@@ -133,6 +133,10 @@ impl<'a> Int8EmbeddingsView<'a> {
         let start = i * self.dim;
         let end = start + self.dim;
         // i8 has the same layout as u8 (one-byte signed).
+        // lSAFETY: bodies[start..end] is bounds-checked (start=i*dim, end=start+dim) so the ptr is
+        // lvalid for dim bytes; i8 and u8 share size 1 and alignment 1, so the cast is layout- and
+        // lalignment-safe; the dim length equals end-start so the slice stays in range; the returned
+        // l&'a [i8] borrows the same bytes, so the lifetime prevents use-after-free.
         unsafe {
             std::slice::from_raw_parts(self.bodies[start..end].as_ptr() as *const i8, self.dim)
         }

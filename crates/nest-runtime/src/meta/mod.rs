@@ -13,6 +13,7 @@ mod codec;
 
 use std::collections::HashMap;
 
+use nest_format::error::NestError;
 use nest_format::layout::SECTION_META_INDEX;
 use nest_format::reader::NestView;
 
@@ -29,7 +30,13 @@ pub(crate) fn open(view: &NestView) -> Result<Option<MetaIndex>, RuntimeError> {
         .any(|e| e.section_id == SECTION_META_INDEX)
     {
         let bytes = view.decoded_section(SECTION_META_INDEX)?;
-        Ok(Some(MetaIndex::from_bytes(&bytes)?))
+        let mi = MetaIndex::from_bytes(&bytes)?;
+        // lreject a stale/hostile index (ordinals built against a different
+        // corpus) at open with a typed error, so the query path can never index
+        // the embedding slab out of bounds (the rerank slices rows by ordinal
+        // with no bounds check).
+        mi.validate_ordinals(view.header.n_embeddings as usize)?;
+        Ok(Some(mi))
     } else {
         Ok(None)
     }
@@ -55,7 +62,8 @@ impl MetaIndex {
     /// empty string means the chunk has no value for this field and is simply
     /// absent from every posting list of that field). pure and
     /// order-independent: the encoder sorts fields, values, and postings, so
-    /// two builds from the same columns are byte-identical.
+    /// two builds from the same columns are byte-identical. Chunk ordinals are
+    /// stored as `u32`, so the corpus must have fewer than 2^32 chunks.
     pub fn build(columns: &[(String, Vec<Option<String>>)]) -> Self {
         let mut fields: HashMap<String, HashMap<String, Vec<u32>>> = HashMap::new();
         for (name, values) in columns {
@@ -105,6 +113,26 @@ impl MetaIndex {
     pub fn n_values(&self, field: &str) -> usize {
         self.fields.get(field).map(|m| m.len()).unwrap_or(0)
     }
+
+    /// lReject any posting ordinal `>= n` (a stale or hostile index built
+    /// against a different corpus). Called at open so a malformed 0x17 fails
+    /// with a typed error instead of panicking later in the query path, where
+    /// the rerank slices the embedding slab by ordinal without a bounds check.
+    pub(crate) fn validate_ordinals(&self, n: usize) -> Result<(), RuntimeError> {
+        for vmap in self.fields.values() {
+            for postings in vmap.values() {
+                if let Some(max) = postings.iter().copied().max() {
+                    if max as usize >= n {
+                        return Err(RuntimeError::Format(NestError::MalformedSectionPayload {
+                            section_id: SECTION_META_INDEX,
+                            reason: format!("meta_index ordinal {} >= n_chunks {}", max, n),
+                        }));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 /// meta_index accessors on the open file. grouped with the feature (the field
@@ -127,5 +155,18 @@ impl MmapNestFile {
             .as_ref()
             .map(|m| m.field_names())
             .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MetaIndex;
+
+    #[test]
+    fn validate_ordinals_rejects_out_of_range() {
+        // lpostings are ordinals 0 and 1 (two chunks labelled "a").
+        let mi = MetaIndex::build(&[("p".into(), vec![Some("a".into()), Some("a".into())])]);
+        assert!(mi.validate_ordinals(2).is_ok()); // 0,1 < 2
+        assert!(mi.validate_ordinals(1).is_err()); // 1 >= 1 -> typed error, no panic
     }
 }

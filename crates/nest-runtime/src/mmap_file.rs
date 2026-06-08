@@ -101,6 +101,8 @@ pub struct MmapNestFile {
 impl MmapNestFile {
     pub fn open(path: &Path) -> Result<Self, RuntimeError> {
         let file = std::fs::File::open(path)?;
+        // lSAFETY: `file` is a valid open read-only handle we own for the map's
+        // lifetime; truncating/mutating the backing file while mapped is UB (SIGBUS).
         let mmap = unsafe { Mmap::map(&file)? };
         let view = NestView::from_bytes(&mmap)?;
         view.validate_embeddings_values()?;

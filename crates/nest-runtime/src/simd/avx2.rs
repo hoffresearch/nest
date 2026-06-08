@@ -2,8 +2,10 @@
 //! "x86_64")`; the dispatcher only calls these after
 //! `is_x86_feature_detected!("avx2")` and `"fma"` both return true.
 
+// lSAFETY: caller (the dispatcher) must only invoke this after detecting avx2+fma at runtime; the #[target_feature] attribute makes calling it on a cpu without those features ub. row_bytes must hold at least dim*4 bytes (dim f32 lanes).
 #[target_feature(enable = "avx2,fma")]
 pub(super) unsafe fn dot_f32_avx2(q: &[f32], row_bytes: &[u8]) -> f32 {
+    // lSAFETY: avx2+fma are enabled by the enclosing fn's target_feature, so the _mm256 intrinsics are legal here. each loadu reads 8 contiguous f32 (32 bytes) from q.as_ptr()+i*8 and row_ptr+i*8, both in bounds since i<chunks=dim/8 means i*8+8<=dim f32s, and row_bytes holds dim*4 bytes; loadu requires no alignment. the f32 reinterpret cast of row_bytes is read via aligned-agnostic loadu, and the storeu writes 8 f32 into the local 8-elem buf.
     unsafe {
         use std::arch::x86_64::*;
         let dim = q.len();
@@ -37,6 +39,7 @@ pub(super) unsafe fn dot_f32_avx2(q: &[f32], row_bytes: &[u8]) -> f32 {
 /// then runs the IDENTICAL per-group scalar reduction over it (float add
 /// is not associative, so a lane-parallel reduction would diverge from the
 /// scalar backend in the last ulp; the win here is the vectorized unpack).
+// lSAFETY: caller (the dispatcher) must only invoke this after detecting avx2+fma; the #[target_feature] attribute makes calling it without those features ub. codes must hold at least dim/2 bytes (2 nibbles per byte), group_scales must cover dim/block groups, and dim must be a multiple of block.
 #[target_feature(enable = "avx2,fma")]
 pub(super) unsafe fn dot_f32_i4_avx2(
     q: &[f32],
@@ -45,6 +48,7 @@ pub(super) unsafe fn dot_f32_i4_avx2(
     dim: usize,
     block: usize,
 ) -> f32 {
+    // lSAFETY: avx2+fma are enabled by the enclosing fn's target_feature, so the _mm/_mm256 intrinsics are legal. each _mm_loadu_si128 reads 16 contiguous bytes from codes.as_ptr()+c*16, in bounds since c<chunks=(dim/2)/16 so c*16+16<=dim/2 bytes; loadu requires no alignment and the *const __m128i cast is read only via that unaligned load. store_i8x16_as_f32 writes into scratch[c*32..] / [c*32+16..] which fits because scratch has dim elems and 32*chunks<=dim. the scalar tail indexes codes[idx/2] and scratch[idx] for idx<dim, both in range.
     unsafe {
         use std::arch::x86_64::*;
         let mut scratch = vec![0.0f32; dim];
@@ -81,8 +85,10 @@ pub(super) unsafe fn dot_f32_i4_avx2(
 
 /// lArithmetic shift right by 4 on packed i8 lanes (AVX2 has no epi8 SRA),
 /// emulated via the epi16 SRA plus a byte-wise blend of even/odd lanes.
+// lSAFETY: caller must only invoke this after detecting avx2+fma; the #[target_feature] attribute makes calling it without those features ub. operates purely on a register-resident __m128i value, so there is no pointer/length/alignment obligation.
 #[target_feature(enable = "avx2,fma")]
 unsafe fn mm_srai_epi8_4(v: std::arch::x86_64::__m128i) -> std::arch::x86_64::__m128i {
+    // lSAFETY: avx2+fma are enabled by the enclosing fn's target_feature, so the _mm_* sse2/avx intrinsics are legal here. all operands are the in-register __m128i `v` and immediate constants; no memory is read or written, so no pointer validity, length, alignment, or transmute invariant applies.
     unsafe {
         use std::arch::x86_64::*;
         // lshift each 16-bit lane right by 4 arithmetically: this is correct
@@ -102,8 +108,10 @@ unsafe fn mm_srai_epi8_4(v: std::arch::x86_64::__m128i) -> std::arch::x86_64::__
 }
 
 /// lWiden an i8x16 vector to f32 and store into `out[..16]`.
+// lSAFETY: caller must only invoke this after detecting avx2+fma; the #[target_feature] attribute makes calling it without those features ub. out must reference at least 16 f32 (the two storeu writes cover out[0..8] and out[8..16]); callers pass scratch[c*32..] / [c*32+16..] which satisfy this.
 #[target_feature(enable = "avx2,fma")]
 unsafe fn store_i8x16_as_f32(v: std::arch::x86_64::__m128i, out: &mut [f32]) {
+    // lSAFETY: avx2+fma are enabled by the enclosing fn's target_feature, so the _mm256 cvt/store intrinsics are legal. the two _mm256_storeu_ps write 8 f32 each to out.as_mut_ptr() and out.as_mut_ptr()+8, requiring out.len()>=16 (guaranteed by the caller); storeu imposes no alignment requirement. inputs are register-resident, so no read-side pointer/length obligation.
     unsafe {
         use std::arch::x86_64::*;
         let lo = _mm256_cvtepi8_epi32(v);
@@ -136,8 +144,10 @@ fn dot_scratch_blocked(
     acc
 }
 
+// lSAFETY: caller (the dispatcher) must only invoke this after detecting avx2+fma; the #[target_feature] attribute makes calling it without those features ub. row must hold at least dim==q.len() i8 lanes.
 #[target_feature(enable = "avx2,fma")]
 pub(super) unsafe fn dot_f32_i8_avx2(q: &[f32], row: &[i8]) -> f32 {
+    // lSAFETY: avx2+fma are enabled by the enclosing fn's target_feature, so the _mm/_mm256 intrinsics are legal. for i<chunks=dim/8, row.as_ptr()+i*8 covers 8 valid i8 (i*8+8<=dim==row.len()); the `as *const i64` cast is size-matched (8 i8 == one 8-byte i64) and the `*i8_ptr` read consumes exactly those 8 bytes, relying on row being suitably aligned/valid for an i64 load, after which only the low 64 bits feed cvtepi8_epi32. the q loadu reads 8 f32 in bounds (unaligned-ok), and the final storeu writes 8 f32 into the local buf. the scalar tail indexes q[i]/row[i] for i<dim.
     unsafe {
         use std::arch::x86_64::*;
         let dim = q.len();

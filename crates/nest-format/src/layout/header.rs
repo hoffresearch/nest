@@ -79,11 +79,18 @@ impl NestHeader {
 
     pub fn as_bytes(&self) -> &[u8] {
         let size = std::mem::size_of::<Self>();
+        // lSAFETY: `self` is a live `&Self` so the pointer is valid and non-null; `size` is exactly
+        // `size_of::<Self>()` so the slice stays within the allocation; `#[repr(C)]` makes the byte
+        // layout well-defined; the `*const u8` target has alignment 1 so the cast is always aligned.
         unsafe { std::slice::from_raw_parts(self as *const _ as *const u8, size) }
     }
 
     pub fn as_bytes_mut(&mut self) -> &mut [u8] {
         let size = std::mem::size_of::<Self>();
+        // lSAFETY: `self` is a unique live `&mut Self` so the pointer is valid, non-null, and the
+        // sole alias for the duration; `size` is exactly `size_of::<Self>()` so the mutable slice
+        // stays within the allocation; `#[repr(C)]` makes the byte layout well-defined; the
+        // `*mut u8` target has alignment 1 so the cast is always aligned.
         unsafe { std::slice::from_raw_parts_mut(self as *mut _ as *mut u8, size) }
     }
 
