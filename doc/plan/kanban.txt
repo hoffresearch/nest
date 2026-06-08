@@ -47,6 +47,12 @@ tagged by layer (forge/nest/lens/cross)
     refs: python/forge/embed_default.py, crates/nest-cli/src/main.rs, minishlab/model2vec
 
 [ ] vendor a REAL model2vec/potion static table (semantic, drop-in)   (HIGH/forge)
+    [p1 #10: DELIVERED on branch research/nest-genome-v2, awaiting reviewer eyes + maintainer
+     merge (NOT merged, NOT marked done). vendored minishlab/potion-base-8M (mit, dim 256, table
+     29528x256 f32, ~30mb git-lfs) behind the same StaticEmbedder interface + sha256 model_hash;
+     numpy+tokenizers offline inference (no torch, no network, matches model2vec vector-for-vector).
+     semantic jump car~automobile +0.78 vs car~banana +0.04 (floor separates -0.09); recall@1 on
+     demo_corpus potion 0.875 vs floor 0.250. embed_potion.py + test_embed_potion.py + recall_harness.py]
     the #04 default is lexical-only; the flagship pitch is SEMANTIC retrieval. vendor an actual
     distilled model2vec/potion table (still offline, tiny, no torch) behind the SAME
     StaticEmbedder interface + model_hash convention, so it is a drop-in swap. REQUIRED before
