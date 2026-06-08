@@ -25,7 +25,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # python/
 
 import nest  # noqa: E402
-from builder import BuildConfig, ChunkSpec, Pipeline, chunk_text  # noqa: E402
+from builder import BuildConfig, Pipeline, chunk_text  # noqa: E402
 from forge.embed_potion import potion_embedder  # noqa: E402
 
 CORPUS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_corpus")
