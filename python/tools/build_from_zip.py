@@ -66,6 +66,8 @@ def main() -> None:
         help="drop exact-duplicate chunks (same normalized text) and empty chunks "
         "before indexing. on by default: identical vectors are pure retrieval noise "
         "(measured ~7.7%% of chunks on the clinical cohort, one block repeated 240x). "
+        "with --index-fields (a 0x17 meta_index) dedup is SCOPED PER DOC so it never "
+        "crosses an entity (a chunk shared by two notes stays in both postings). "
         "use --no-dedup to keep every chunk.",
     )
     args = ap.parse_args()
@@ -117,6 +119,14 @@ def main() -> None:
                 text = text[: args.max_doc_chars]
                 n_truncated += 1
             specs = chunk_text(text, doc.source_uri, max_chars=args.max_chars)
+            # ldedup must NEVER cross a meta_index entity: with --index-fields a
+            # chunk shared by two notes belongs in BOTH (field,value) postings, so
+            # scope the seen-set per doc. global dedup would drop one copy and
+            # misattribute its provenance to the first doc (measured: 26/189 dup
+            # groups span >1 patient; 400 chunk-instances would vanish from 102
+            # patients' postings). per-doc scope keeps every note's chunks correct.
+            if args.dedup and index_fields:
+                seen_chunks.clear()
             kept = 0
             for s in specs:
                 if args.dedup:
@@ -175,9 +185,10 @@ def main() -> None:
         dropped = n_dup_dropped + n_empty_dropped
         denom = len(chunks) + dropped
         pct = (100.0 * dropped / denom) if denom else 0.0
+        scope = "per-doc (meta_index present)" if index_fields else "global"
         print(
-            f"dedup: dropped {n_dup_dropped} duplicate + {n_empty_dropped} empty "
-            f"chunks ({pct:.1f}% of {denom}); {len(chunks)} unique chunks indexed.",
+            f"dedup [{scope}]: dropped {n_dup_dropped} duplicate + {n_empty_dropped} "
+            f"empty chunks ({pct:.1f}% of {denom}); {len(chunks)} chunks indexed.",
             file=sys.stderr,
         )
     print(
