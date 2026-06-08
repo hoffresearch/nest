@@ -51,7 +51,11 @@ impl MmapNestFile {
             hits: hits.clone(),
             query_time_ms: t0.elapsed().as_secs_f64() * 1000.0,
             index_type: "filtered",
-            recall: 1.0,
+            // lrecall is 1.0 WITHIN the filter (exact over the subset). on an
+            // empty candidate set (no meta_index, or the (field,value) matched
+            // nothing) recall of nothing is undefined -> NaN, which the printer
+            // renders as "not computed" rather than a vacuous 1.0.
+            recall: if subset == 0 { f32::NAN } else { 1.0 },
             truncated,
             k_requested: k,
             k_returned: hits.len(),
