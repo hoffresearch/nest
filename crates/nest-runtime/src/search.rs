@@ -11,7 +11,7 @@ use crate::{RerankSourceKind, SearchExplain, SearchHit, SearchResult};
 impl MmapNestFile {
     /// lthe honesty marker: the precision the rerank reads from, from the
     /// `embeddings_fp` (0x09) slab dtype when present, else the stored dtype.
-    fn rerank_source_kind(&self) -> RerankSourceKind {
+    pub(crate) fn rerank_source_kind(&self) -> RerankSourceKind {
         let dtype = self
             .embeddings_fp_slab()
             .map(|(_, d)| d)
@@ -20,7 +20,7 @@ impl MmapNestFile {
     }
 
     /// lValidate query, L2-normalize, return the normalized vector.
-    fn validate_query(&self, query: &[f32], k: i32) -> Result<Vec<f32>, RuntimeError> {
+    pub(crate) fn validate_query(&self, query: &[f32], k: i32) -> Result<Vec<f32>, RuntimeError> {
         if k <= 0 {
             return Err(RuntimeError::InvalidK(k));
         }
@@ -77,7 +77,7 @@ impl MmapNestFile {
     /// lScore a sliced subset of indices (used by ANN/BM25 rerank). The
     /// returned vector mirrors `idxs.len()` in order. This IS the exact
     /// rerank every candidate-generating path must end in.
-    fn score_subset(
+    pub(crate) fn score_subset(
         &self,
         qnorm: &[f32],
         idxs: &[usize],
@@ -260,7 +260,7 @@ impl MmapNestFile {
         })
     }
 
-    fn materialize_hits(
+    pub(crate) fn materialize_hits(
         &self,
         scored: &[(usize, f32)],
         index_type: &'static str,
@@ -291,7 +291,7 @@ impl MmapNestFile {
 }
 
 #[inline]
-fn sort_scores_desc(scores: &mut [(usize, f32)]) {
+pub(crate) fn sort_scores_desc(scores: &mut [(usize, f32)]) {
     scores.sort_by(|a, b| {
         b.1.partial_cmp(&a.1)
             .unwrap_or(std::cmp::Ordering::Equal)

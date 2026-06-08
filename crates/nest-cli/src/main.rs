@@ -91,6 +91,18 @@ enum Commands {
         #[arg(long, default_value = "100")]
         ef: usize,
     },
+    /// lMetadata-scoped exact search: restrict the exact cosine to chunks whose
+    /// FIELD == VALUE (via the 0x17 meta_index), then rank that subset. Score is
+    /// real cosine; recall 1.0 within the filter. QUERY is a JSON array vector
+    /// (like `search`). Empty result if the file has no meta_index / no match.
+    SearchFiltered {
+        file: PathBuf,
+        query: String,
+        field: String,
+        value: String,
+        #[arg(short, long, default_value = "10")]
+        k: i32,
+    },
     /// lBenchmark exact flat search latency.
     Benchmark {
         file: PathBuf,
@@ -199,6 +211,13 @@ fn main() -> Result<()> {
             hops,
             ef,
         } => cmd::search_graph::run(file, query, k, hops, ef),
+        Commands::SearchFiltered {
+            file,
+            query,
+            field,
+            value,
+            k,
+        } => cmd::search_filtered::run(file, query, field, value, k),
         Commands::Benchmark {
             file,
             queries,

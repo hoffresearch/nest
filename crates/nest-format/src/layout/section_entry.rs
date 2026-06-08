@@ -33,11 +33,17 @@ impl SectionEntry {
 
     pub fn as_bytes(&self) -> &[u8] {
         let size = std::mem::size_of::<Self>();
+        // lSAFETY: `self` is a live `&SectionEntry`, so the pointer is non-null, properly
+        // aligned for `u8` (alignment 1), and dereferenceable; `repr(C)` gives a fixed size
+        // and `size == size_of::<Self>()`, so the slice stays within this single object.
         unsafe { std::slice::from_raw_parts(self as *const _ as *const u8, size) }
     }
 
     pub fn as_bytes_mut(&mut self) -> &mut [u8] {
         let size = std::mem::size_of::<Self>();
+        // lSAFETY: `self` is a unique `&mut SectionEntry`, so the pointer is non-null, properly
+        // aligned for `u8` (alignment 1), and the sole mutable borrow; `repr(C)` gives a fixed
+        // size and `size == size_of::<Self>()`, so the slice stays within this single object.
         unsafe { std::slice::from_raw_parts_mut(self as *mut _ as *mut u8, size) }
     }
 
