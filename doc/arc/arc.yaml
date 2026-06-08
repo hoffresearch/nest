@@ -96,12 +96,12 @@ inventory:
     - {path: "crates/nest-format/src/chunk.rs", kind: rust-source, purpose: "ChunkInput, chunk_id, and per-chunk validation", links: ["crates/nest-format/src/error.rs"]}
     - {path: "crates/nest-format/src/encoding/float16.rs", kind: rust-source, purpose: "float16 encode and decode helpers", links: ["crates/nest-format/src/encoding/mod.rs"]}
     - {path: "crates/nest-format/src/encoding/int8.rs", kind: rust-source, purpose: "int8 quantization and parsed embedding views", links: ["crates/nest-runtime/src/search.rs"]}
-    - {path: "crates/nest-format/src/encoding/mod.rs", kind: rust-source, purpose: "encoding exports and shared helpers", links: ["crates/nest-format/src/encoding/float16.rs", "crates/nest-format/src/encoding/int8.rs", "crates/nest-format/src/encoding/zstd_codec.rs"]}
+    - {path: "crates/nest-format/src/encoding/mod.rs", kind: rust-source, purpose: "wire-codec registry (decode_payload dispatch) + cost-driven encode_smallest encoder + encoding exports", links: ["crates/nest-format/src/encoding/float16.rs", "crates/nest-format/src/encoding/int8.rs", "crates/nest-format/src/encoding/zstd_codec.rs"]}
     - {path: "crates/nest-format/src/encoding/zstd_codec.rs", kind: rust-source, purpose: "zstd compression helpers for non-embedding text sections", links: ["crates/nest-format/src/reader/decode.rs"]}
     - {path: "crates/nest-format/src/error.rs", kind: rust-source, purpose: "typed format and validation errors", links: []}
     - {path: "crates/nest-format/src/layout/footer.rs", kind: rust-source, purpose: "footer struct and file-hash trailer", links: ["crates/nest-format/src/layout/mod.rs"]}
     - {path: "crates/nest-format/src/layout/header.rs", kind: rust-source, purpose: "header struct and checksum layout", links: ["crates/nest-format/src/layout/mod.rs"]}
-    - {path: "crates/nest-format/src/layout/mod.rs", kind: rust-source, purpose: "format constants, section ids, and layout re-exports", links: ["crates/nest-format/src/layout/header.rs", "crates/nest-format/src/layout/footer.rs", "crates/nest-format/src/layout/section_entry.rs"]}
+    - {path: "crates/nest-format/src/layout/mod.rs", kind: rust-source, purpose: "format constants, section ids (incl reconciled reserved 0x11-0x16 and per-space bands 0x20-0x2F / 0x30-0x3F), and layout re-exports", links: ["crates/nest-format/src/layout/header.rs", "crates/nest-format/src/layout/footer.rs", "crates/nest-format/src/layout/section_entry.rs"]}
     - {path: "crates/nest-format/src/layout/section_entry.rs", kind: rust-source, purpose: "section-table entry layout and section naming", links: ["crates/nest-format/src/layout/mod.rs"]}
     - {path: "crates/nest-format/src/lib.rs", kind: rust-source, purpose: "public format API surface", links: ["crates/nest-format/src/reader/mod.rs", "crates/nest-format/src/writer/mod.rs"]}
     - {path: "crates/nest-format/src/manifest/canonical.rs", kind: rust-source, purpose: "canonical json serialization for deterministic manifest bytes", links: ["crates/nest-format/src/manifest/mod.rs"]}
@@ -128,6 +128,7 @@ inventory:
     - {path: "crates/nest-format/tests/negative_fp16.rs", kind: rust-test, purpose: "invalid float16 rejection coverage", links: ["crates/nest-format/src/encoding/float16.rs"]}
     - {path: "crates/nest-format/tests/negative_int8.rs", kind: rust-test, purpose: "invalid int8 rejection coverage", links: ["crates/nest-format/src/encoding/int8.rs"]}
     - {path: "crates/nest-format/tests/negative_zstd.rs", kind: rust-test, purpose: "illegal zstd use rejection coverage", links: ["crates/nest-format/src/encoding/zstd_codec.rs"]}
+    - {path: "crates/nest-format/tests/reserved_ids.rs", kind: rust-test, purpose: "reconciled additive section-id bands are disjoint, excluded from content_hash, and unresolved until their feature ships", links: ["crates/nest-format/src/layout/mod.rs"]}
     - {path: "crates/nest-format/tests/roundtrip.rs", kind: rust-test, purpose: "roundtrip coverage across encoding variants", links: ["crates/nest-format/src/writer/mod.rs", "crates/nest-format/src/reader/mod.rs"]}
     - {path: "crates/nest-format/tests/v01_compat.rs", kind: rust-test, purpose: "v0.1 compatibility coverage", links: ["crates/nest-format/src/reader/mod.rs"]}
   nest_python:
