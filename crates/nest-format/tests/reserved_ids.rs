@@ -33,13 +33,19 @@ fn implemented() -> Vec<u32> {
     ]
 }
 
-/// lReserved scalar ids (0x09..=0x16): not yet emitted/read.
+/// lReserved scalar ids (0x09..=0x16) that stay unresolved by section_name
+/// until their feature ships. SECTION_DICTIONARY (0x0A) and SECTION_DEDUP_MAP
+/// (0x0B) are now EMITTED by the dict/dedup text levers, but stay EXCLUDED
+/// from CANONICAL_SECTIONS / content_hash and unresolved by section_name
+/// (they are physical-encoding aux sections, never canonical content).
+/// SECTION_GRAPH_ADJACENCY (0x0C, G1) is NOT in this list: it now resolves
+/// via section_name (OPTIONAL_SECTIONS) yet stays content_hash-excluded; it is
+/// covered separately by `graph_adjacency_resolves_but_excluded_from_content_hash`.
 fn reserved_scalars() -> Vec<u32> {
     vec![
         SECTION_EMBEDDINGS_FP,
         SECTION_DICTIONARY,
         SECTION_DEDUP_MAP,
-        SECTION_GRAPH_ADJACENCY,
         SECTION_CHUNK_SCALARS,
         SECTION_TOKENIZER_MODEL,
         SECTION_EDIT_JOURNAL,
@@ -66,6 +72,9 @@ fn all_reserved_bands_are_disjoint() {
     let mut all: Vec<u32> = Vec::new();
     all.extend(implemented());
     all.extend(reserved_scalars());
+    // graph_adjacency (0x0C) left reserved_scalars when it shipped (G1) but is
+    // still a distinct id that must not collide with any other band.
+    all.push(SECTION_GRAPH_ADJACENCY);
     all.extend(space_band());
     all.extend(space_fp_band());
 
@@ -100,4 +109,20 @@ fn reserved_ids_are_excluded_from_content_hash_and_unresolved() {
             "reserved id {s:#x} must not resolve via section_name until its feature ships"
         );
     }
+}
+
+#[test]
+fn graph_adjacency_resolves_but_excluded_from_content_hash() {
+    // G1: graph_adjacency (0x0C) now resolves via section_name (it is an active
+    // OPTIONAL_SECTION) but MUST stay out of CANONICAL_SECTIONS so it never
+    // enters content_hash and never invalidates a nest:// citation.
+    assert_eq!(
+        section_name(SECTION_GRAPH_ADJACENCY),
+        Some("graph_adjacency")
+    );
+    let canonical: Vec<u32> = CANONICAL_SECTIONS.iter().map(|(id, _)| *id).collect();
+    assert!(
+        !canonical.contains(&SECTION_GRAPH_ADJACENCY),
+        "graph_adjacency must stay excluded from content_hash"
+    );
 }

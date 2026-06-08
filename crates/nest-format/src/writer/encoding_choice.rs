@@ -3,7 +3,8 @@
 //! keeps the public API enum-friendly and the layout module pure.
 
 use crate::layout::{
-    SECTION_ENCODING_FLOAT16, SECTION_ENCODING_INT8, SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD,
+    SECTION_ENCODING_FLOAT16, SECTION_ENCODING_INT4, SECTION_ENCODING_INT8, SECTION_ENCODING_RAW,
+    SECTION_ENCODING_ZSTD,
 };
 
 /// lTimestamp written to the manifest when the builder is in reproducible
@@ -31,12 +32,14 @@ impl SectionEncoding {
 
 /// lEmbedding dtype + on-disk encoding. The two are 1:1 in v1 — float32
 /// implies raw f32 LE, float16 implies raw f16 LE, int8 implies the
-/// quantized prefix layout (see `encoding::encode_int8_embeddings`).
+/// quantized prefix layout (see `encoding::encode_int8_embeddings`), int4
+/// implies the block-64 per-group layout (see `encode_int4_embeddings`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EmbeddingDType {
     Float32,
     Float16,
     Int8,
+    Int4,
 }
 
 impl EmbeddingDType {
@@ -45,6 +48,7 @@ impl EmbeddingDType {
             Self::Float32 => "float32",
             Self::Float16 => "float16",
             Self::Int8 => "int8",
+            Self::Int4 => "int4",
         }
     }
     pub fn encoding(self) -> u32 {
@@ -52,6 +56,7 @@ impl EmbeddingDType {
             Self::Float32 => SECTION_ENCODING_RAW,
             Self::Float16 => SECTION_ENCODING_FLOAT16,
             Self::Int8 => SECTION_ENCODING_INT8,
+            Self::Int4 => SECTION_ENCODING_INT4,
         }
     }
 }

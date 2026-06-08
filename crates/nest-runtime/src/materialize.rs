@@ -11,7 +11,7 @@
 //! path used, so the graph and the search results are byte-for-byte
 //! identical while the resident footprint drops to the packed size.
 
-use nest_format::{Int8EmbeddingsView, NestError};
+use nest_format::{INT4_BLOCK, Int4EmbeddingsView, Int8EmbeddingsView, NestError, nibble_to_i4};
 
 use crate::error::RuntimeError;
 
@@ -26,6 +26,14 @@ pub(crate) enum PackedVectors {
     Int8 {
         data: Vec<i8>,
         scales: Vec<f32>,
+    },
+    /// lint4 block-64: codes stay as i8 in `[-7, 7]` (one per dim) and the
+    /// per-group f16 scales are kept as f32 (`blocks` per row). A row
+    /// decodes to `code * group_scale`, matching the int4 view exactly.
+    Int4 {
+        codes: Vec<i8>,
+        scales: Vec<f32>,
+        blocks: usize,
     },
 }
 
@@ -69,6 +77,28 @@ impl PackedVectors {
                 let scales: Vec<f32> = (0..n).map(|i| view.scale(i)).collect();
                 Ok(PackedVectors::Int8 { data, scales })
             }
+            "int4" => {
+                let view =
+                    Int4EmbeddingsView::parse(bytes, n, dim).map_err(RuntimeError::Format)?;
+                // lunpack nibbles to i8 codes (one per dim) and flatten the
+                // per-group f16 scales to f32 (blocks per row), so the row
+                // decode is `code * group_scale`, identical to the view.
+                let mut codes: Vec<i8> = Vec::with_capacity(n * dim);
+                for i in 0..n {
+                    let packed = view.row_codes(i);
+                    for j in 0..dim {
+                        let byte = packed[j / 2];
+                        let nib = if j % 2 == 0 { byte } else { byte >> 4 };
+                        codes.push(nibble_to_i4(nib));
+                    }
+                }
+                let scales: Vec<f32> = (0..n).flat_map(|i| view.row_scales_f32(i)).collect();
+                Ok(PackedVectors::Int4 {
+                    codes,
+                    scales,
+                    blocks: view.blocks,
+                })
+            }
             other => Err(RuntimeError::Format(NestError::UnsupportedDType(
                 other.into(),
             ))),
@@ -109,6 +139,19 @@ impl PackedVectors {
                 }
                 &scratch[..dim]
             }
+            PackedVectors::Int4 {
+                codes,
+                scales,
+                blocks,
+            } => {
+                let base = i * dim;
+                let scale_base = i * blocks;
+                for (j, slot) in scratch.iter_mut().enumerate().take(dim) {
+                    let g = j / INT4_BLOCK;
+                    *slot = codes[base + j] as f32 * scales[scale_base + g];
+                }
+                &scratch[..dim]
+            }
             PackedVectors::Empty => &scratch[..0],
         }
     }
@@ -117,7 +160,7 @@ impl PackedVectors {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nest_format::{encode_int8_embeddings, f32_to_f16_bytes};
+    use nest_format::{encode_int4_embeddings, encode_int8_embeddings, f32_to_f16_bytes};
 
     fn f32_bytes(rows: &[f32]) -> Vec<u8> {
         rows.iter().flat_map(|v| v.to_le_bytes()).collect()
@@ -148,6 +191,33 @@ mod tests {
         for (j, &g) in got.iter().enumerate() {
             let want = view.row(0)[j] as f32 * scale;
             assert_eq!(g.to_bits(), want.to_bits(), "row[{j}] decode drift");
+        }
+    }
+
+    #[test]
+    fn int4_row_decode_matches_view_group_scale_times_code() {
+        // ldim = 128 -> 2 blocks. Decoded row must equal the int4 view's
+        // group_scale * code bit-for-bit, so HNSW distances are stable.
+        let dim = 128;
+        let row: Vec<f32> = {
+            let raw: Vec<f32> = (0..dim)
+                .map(|j| ((j as f32 * 0.017).sin()) + 0.05)
+                .collect();
+            let norm = raw.iter().map(|x| x * x).sum::<f32>().sqrt();
+            raw.iter().map(|x| x / norm).collect()
+        };
+        let bytes = encode_int4_embeddings(&row, 1, dim).unwrap();
+        let store = PackedVectors::from_section("int4", &bytes, 1, dim).unwrap();
+        let view = nest_format::Int4EmbeddingsView::parse(&bytes, 1, dim).unwrap();
+        let mut s = store.scratch(dim);
+        let got = store.row(0, dim, &mut s);
+        let packed = view.row_codes(0);
+        for (j, &g) in got.iter().enumerate() {
+            let byte = packed[j / 2];
+            let nib = if j % 2 == 0 { byte } else { byte >> 4 };
+            let code = nest_format::nibble_to_i4(nib);
+            let want = code as f32 * view.group_scale(0, j / nest_format::INT4_BLOCK);
+            assert_eq!(g.to_bits(), want.to_bits(), "int4 row[{j}] decode drift");
         }
     }
 

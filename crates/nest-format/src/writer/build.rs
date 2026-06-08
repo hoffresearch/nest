@@ -5,19 +5,22 @@
 
 use super::NestFileBuilder;
 use super::REPRODUCIBLE_CREATED;
+use super::SectionEncoding;
 use super::payload::{encode_embeddings_payload, maybe_zstd};
+use super::text_codec;
 use crate::chunk::{chunk_id, validate_chunk};
 use crate::error::NestError;
 use crate::layout::{
     NEST_FOOTER_SIZE, NEST_HEADER_SIZE, NEST_SECTION_ENTRY_SIZE, NestFooter, NestHeader,
     REQUIRED_SECTIONS, SECTION_ALIGNMENT, SECTION_BM25_INDEX, SECTION_CHUNK_IDS,
     SECTION_CHUNKS_CANONICAL, SECTION_CHUNKS_ORIGINAL_SPANS, SECTION_EMBEDDINGS,
-    SECTION_ENCODING_RAW, SECTION_HNSW_INDEX, SECTION_PROVENANCE, SECTION_SEARCH_CONTRACT,
-    SectionEntry, align_up,
+    SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_GRAPH_ADJACENCY, SECTION_HNSW_INDEX,
+    SECTION_PROVENANCE, SECTION_SEARCH_CONTRACT, SectionEntry, align_up,
 };
 use crate::sections::{
-    OriginalSpan, SearchContract, encode_chunk_ids, encode_chunks_canonical,
-    encode_chunks_original_spans, encode_provenance, encode_search_contract,
+    OriginalSpan, SearchContract, encode_chunk_ids, encode_chunk_ids_intpack,
+    encode_chunks_canonical, encode_chunks_original_spans, encode_chunks_original_spans_intpack,
+    encode_provenance, encode_search_contract,
 };
 use sha2::{Digest, Sha256};
 
@@ -83,26 +86,68 @@ impl NestFileBuilder {
             rerank_policy: self.manifest.rerank_policy.clone(),
         };
 
-        // (id, encoding, payload). chunk_ids stays raw (high-entropy SHA-256
-        // hex strings, near-incompressible), embeddings get dtype-specific
-        // encoding, everything else honors `text_encoding`.
+        // (id, encoding, payload). embeddings get dtype-specific encoding;
+        // text sections honor `text_encoding`. under a compressed (zstd-text)
+        // preset, chunk_ids and spans get the `intpack` repack (encoding 4):
+        // chunk_ids to 32 raw digest bytes (always a win for high-entropy
+        // sha-256), spans to a deduped uri pool + bitpacked offsets. the span
+        // repack only beats zstd when source_uris repeat, so spans takes the
+        // SMALLER of intpack/zstd per corpus. all of these decode BYTE-
+        // IDENTICALLY to the raw payload, so content_hash is unchanged. raw-
+        // text presets (and the golden) keep raw/zstd, so they stay
+        // byte-identical.
         let text_enc = self.text_encoding;
+        let compressed = matches!(text_enc, SectionEncoding::Zstd);
         let mut sections: Vec<(u32, u32, Vec<u8>)> = Vec::with_capacity(8);
-        sections.push((
-            SECTION_CHUNK_IDS,
-            SECTION_ENCODING_RAW,
-            encode_chunk_ids(&chunk_ids)?,
-        ));
-        sections.push(maybe_zstd(
-            SECTION_CHUNKS_CANONICAL,
-            text_enc,
-            encode_chunks_canonical(&canonical_texts)?,
-        )?);
-        sections.push(maybe_zstd(
-            SECTION_CHUNKS_ORIGINAL_SPANS,
-            text_enc,
-            encode_chunks_original_spans(&original_spans)?,
-        )?);
+
+        let chunk_ids_section = match compressed.then(|| encode_chunk_ids_intpack(&chunk_ids)) {
+            Some(Some(packed)) => (SECTION_CHUNK_IDS, SECTION_ENCODING_INTPACK, packed),
+            _ => (
+                SECTION_CHUNK_IDS,
+                SECTION_ENCODING_RAW,
+                encode_chunk_ids(&chunk_ids)?,
+            ),
+        };
+        sections.push(chunk_ids_section);
+
+        // chunks_canonical: under a compressed (zstd-text) preset, the text
+        // codec chooser takes the SMALLEST of single-frame zstd, txt_streams
+        // cold, txt_streams+trained-dict (0x0A), txt_streams+fsst, and
+        // dedup+zstd (0x0B), so the build never regresses (single-frame zstd
+        // is always in the race). every candidate decodes BYTE-IDENTICALLY to
+        // the raw payload, so content_hash is unchanged; the dict/dedup aux
+        // sections are excluded from content_hash. raw-text presets (and the
+        // golden) keep raw bytes and stay byte-identical.
+        if compressed {
+            let choice = text_codec::choose(&canonical_texts)?;
+            sections.push(choice.canonical);
+            sections.extend(choice.aux);
+        } else {
+            let canonical_raw = encode_chunks_canonical(&canonical_texts)?;
+            sections.push(maybe_zstd(
+                SECTION_CHUNKS_CANONICAL,
+                text_enc,
+                canonical_raw,
+            )?);
+        }
+
+        let spans_raw = encode_chunks_original_spans(&original_spans)?;
+        let spans_section = if compressed {
+            let zst = maybe_zstd(SECTION_CHUNKS_ORIGINAL_SPANS, text_enc, spans_raw)?;
+            let packed = encode_chunks_original_spans_intpack(&original_spans);
+            if packed.len() < zst.2.len() {
+                (
+                    SECTION_CHUNKS_ORIGINAL_SPANS,
+                    SECTION_ENCODING_INTPACK,
+                    packed,
+                )
+            } else {
+                zst
+            }
+        } else {
+            maybe_zstd(SECTION_CHUNKS_ORIGINAL_SPANS, text_enc, spans_raw)?
+        };
+        sections.push(spans_section);
         sections.push((SECTION_EMBEDDINGS, self.dtype.encoding(), embeddings_bytes));
         sections.push(maybe_zstd(
             SECTION_PROVENANCE,
@@ -124,6 +169,13 @@ impl NestFileBuilder {
             // lBM25 posting lists are integer-heavy; zstd usually halves
             // them. Honor text_encoding here too.
             sections.push(maybe_zstd(SECTION_BM25_INDEX, text_enc, payload)?);
+        }
+        if let Some(payload) = self.graph_adjacency.take() {
+            // lgraph_adjacency (0x0C) is a self-describing csr that already
+            // bitpacks its integer columns with intpack internally; like hnsw
+            // it stays RAW so the runtime mmaps it directly. it is OPTIONAL and
+            // EXCLUDED from content_hash (not in CANONICAL_SECTIONS).
+            sections.push((SECTION_GRAPH_ADJACENCY, SECTION_ENCODING_RAW, payload));
         }
 
         // lSanity: every required section is present (writer never drops one).

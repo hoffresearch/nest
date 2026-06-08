@@ -1,0 +1,3 @@
+# forge-core is its own cargo workspace; ignore its build tree. Cargo.lock
+# IS committed for reproducible builds (nest's determinism mission).
+/target

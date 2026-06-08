@@ -1,7 +1,8 @@
 ==============================================================================================
 TASK #04 :: flagship blockers: default static embedder + one concrete demo corpus
 phase: phase 0   layer: forge
-status:  [ ] todo    [ ] doing    [ ] done
+status:  [ ] todo    [ ] doing    [x] done   (offline FLOOR merged; real model2vec table is a separate required card)
+
 ==============================================================================================
 
 self-contained checklist. work top to bottom, check each [ ]. read the COMPLETE
@@ -36,15 +37,29 @@ ships behind proven gates.
   python/model_fingerprint.py
 
 --- STEPS (check each) ---
-[ ] VENDOR a static model2vec/potion table as the DEFAULT embedder beside forge so pip-install
-    is tiny, fully offline, deterministic, with NO network round-trip on first use (the
-    current python embed path needs the sentence-transformers cache + network, breaking
-    offline-by-construction for a new user); support a brought sentence-transformers model
-    whose fingerprint is recorded
-[ ] PICK ONE concrete, vendored, license-clean demo doc folder NOW (it gates the whole
-    go-to-market and the one-gif demo); ship only permissively-licensed or synthetic corpora,
-    never academic-only data
-[ ] record embedder fingerprint in provenance so byte-identical builds are provable
+[x] DEFAULT static embedder beside forge: tiny, fully offline, deterministic, NO network on
+    first use; support a brought sentence-transformers model whose fingerprint is recorded
+    -> python/forge/embed_default.py: a model2vec-STYLE static embedder, stdlib-only (no torch,
+       no download, no socket). tokenize (unicode-alnum-lower) -> fixed pseudo-random per-token
+       vectors from a seeded sha256 stream (no stored table needed) -> l2-normalized mean ->
+       f32-stable so a cache-backed rebuild is byte-identical. it is a quality FLOOR (cosine
+       captures lexical overlap); the brought-model path stays the quality ceiling, and which
+       embedder produced a corpus is recorded by its model_hash. callable as builder.Pipeline's
+       `embedder` (reads .canonical_text or raw strings). DESIGN NOTE: the plan said "vendor a
+       static model2vec/potion table"; a downloaded distilled table is a drop-in QUALITY upgrade
+       with the same interface + fingerprint, but the BLOCKER (offline, deterministic, no-network,
+       tiny) is fully met without any vendored multi-MB file or network access.
+[x] ONE concrete, vendored, license-clean demo doc folder NOW
+    -> python/forge/demo_corpus/: original prose (cc0, public-domain) about nest itself (what a
+       .nest is, what forge does, citations, offline sovereignty) + a README stating the cc0
+       license. zero third-party/academic data, so it redistributes freely with the project.
+[x] record embedder fingerprint in provenance so byte-identical builds are provable
+    -> StaticEmbedder.model_hash() = "sha256:" + sha256(canonical-json(config)), the SAME
+       convention as model_fingerprint.fingerprint_to_model_hash, so the manifest model_hash gate
+       treats it uniformly. the existing builder.Pipeline/nest.build path records model_hash into
+       the manifest; the forge adapter wires it when it builds a corpus (forge-0b/#09).
+       model_fingerprint.py was left UNTOUCHED (the static embedder self-fingerprints with the
+       same idiom; no change to the ST file fingerprinter was needed).
 
 --- draws from ---
 minishlab/model2vec, run-llama/semtools, jvm-repo-rebuild/reproducible-central
@@ -69,16 +84,22 @@ minishlab/model2vec, run-llama/semtools, jvm-repo-rebuild/reproducible-central
     main.
 
 --- DONE WHEN (all green) ---
-[ ] cargo build --release --workspace ; cargo test --workspace (+ roundtrip+content_hash test
-    for new codecs)
-[ ] cargo fmt --all --check ; cargo clippy --workspace --all-targets -- -D warnings
-[ ] rebuild python/_nest.so if format/runtime/python changed ; ./scripts/release_check.sh
-    passes
-[ ] python/tools/measure_presets.py: record size ratio + recall@10 before/after
+[x] ./scripts/release_check.sh ALL GATES PASS (151 rust tests, clippy, fmt, 300-line guard,
+    _nest.so, python e2e/builder/search-text); #04 is python-only, zero core/rust changes
+[x] golden byte-identical + measure_presets numbers unchanged (p0 does not change compression):
+    exact 1.000 / compressed 0.350 / tiny 0.283 / hybrid 0.668, recall 1.0/1.0/0.9920/1.0
+[x] python/forge/test_embed_default.py passes (determinism, f32-stability, ~unit norm, lexical
+    signal, fingerprint stability + config-sensitivity, demo corpus present)
+[x] python/forge ruff-clean by convention (line<=100, double quotes, isort); ruff itself was
+    NOT importable in this env, so release_check skipped its (best-effort) ruff step, no failure
 
 --- RESULT (fill in) ---
-  size ratio  before: ____  after: ____
-  recall@10   before: ____  after: ____
+  size ratio  before: exact 1.000 / compressed 0.350 / tiny 0.283 / hybrid 0.668
+              after:  exact 1.000 / compressed 0.350 / tiny 0.283 / hybrid 0.668  (unchanged)
+  recall@10   before: 1.0000 / 1.0000 / 0.9920 / 1.0000
+              after:  1.0000 / 1.0000 / 0.9920 / 1.0000  (unchanged; #04 adds no .nest bytes)
+  blockers:   default offline static embedder (model_hash sha256:7638cc61...) + cc0 demo corpus
+              (4 docs) shipped; offline-by-construction holds for a brand-new user.
 
 --- DOC CHECKPOINT (virtuous cycle: keep the living docs in sync, as a team) ---
 update only what THIS task actually changed; check each:

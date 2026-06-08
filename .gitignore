@@ -66,3 +66,18 @@ dat/measure/*.nest-*
 # Local symlink to external hoff database (not part of this repo)
 dat/hoff.db
 
+# PHI / clinical artifacts — NEVER commit. clinical data lives OUTSIDE this repo
+# (e.g. /Volumes/<redacted>/dat/psy/work, which is NOT under any git repo). these
+# patterns are defense-in-depth so a misdirected --out into the repo tree can
+# never be staged or pushed by any auto-committer — INCLUDING a `git add -A`
+# from a `--no-verify` commit, which still honors .gitignore.
+#
+# Ignore ALL .nest by default (a PHI export with any name, not just cohort_*),
+# then negate ONLY the three sanctioned PUBLIC, non-PHI corpora that ARE tracked.
+*.nest
+*.sidecar.jsonl
+**/pairs/
+!dat/corpus_next.v1.nest
+!crates/nest-format/tests/fixtures/golden_v1_minimal.nest
+!dat/measure/fakerecogna_exact.nest
+
