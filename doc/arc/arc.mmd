@@ -19,10 +19,15 @@ sequenceDiagram
     participant R as nest-runtime
     participant E as embed_query.py
     participant Q as nest cli / api
+    participant P as embed_query_potion.py
+    participant A as ask / retrieve
 
     note over B,N: build · offline · reproducible
     B->>B: chunk + embed + model_hash
-    B->>F: nest.build(chunks, model_hash)
+    B->>F: nest.build(chunks, model_hash, mrl_dim?, with_graph?)
+    F->>F: optional matryoshka truncate + renorm, then quant
+    F->>F: per-section try-smaller wire encoding (text: zstd / txt_streams / dict / fsst / dedup; content_hash-stable)
+    F->>F: optional graph_adjacency 0x0C csr (NEXT_CHUNK + top-m semantic; excluded from content_hash)
     F->>N: deterministic emit + four hashes
 
     note over R,Q: query · offline · mmap
@@ -31,6 +36,14 @@ sequenceDiagram
     Q->>R: search(vector)
     R->>N: mmap open + validate hashes
     R->>R: model_hash vs manifest
-    R->>R: hnsw / bm25 candidates
+    R->>R: hnsw / bm25 / graph-bfs candidates
     R->>R: mandatory exact cosine rerank
     R-->>Q: hits + nest://content_hash/chunk_id
+
+    note over A,N: flagship · agent-native · offline by construction
+    A->>P: ask / retrieve embed query OFFLINE (potion table, no socket)
+    P-->>A: query vector + model_hash
+    A->>R: route by manifest capability, search (score IS the exact rerank)
+    R-->>A: hits + SearchExplain (rerank_source: real cosine vs stored precision)
+    A->>N: decode tier-1 stored canonical text per chunk_id
+    A-->>Q: cited answer (ask) / json-jsonl answer-pack (retrieve) + nest:// citation

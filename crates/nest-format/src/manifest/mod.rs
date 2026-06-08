@@ -101,6 +101,22 @@ pub struct Manifest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub license: Option<String>,
 
+    /// lMatryoshka disclosure metadata (additive optional). When a file is
+    /// built with prefix truncation, `mrl_dim` is the effective (stored)
+    /// embedding prefix dim and `full_dim` is the source model dim before
+    /// truncation; `embedding_dim` always equals the EFFECTIVE stride the
+    /// runtime reads. Unset on non-truncated files so they stay
+    /// byte-identical with a v1 manifest. content_hash is over the decoded
+    /// embeddings bytes, so a truncated file legitimately differs from
+    /// full-dim: citations are tied to a given mrl_dim, never claimed stable
+    /// across dims. Validity (`mrl_dim <= full_dim`, `full_dim ==
+    /// embedding_dim` only when truncation is off, etc) is checked in
+    /// `validate`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mrl_dim: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub full_dim: Option<u32>,
+
     /// lAdditive-safe home for capability flags past the v1 `Capabilities`
     /// bools. `None` (the default) serializes to nothing, so existing files
     /// stay byte-identical; set it only when a feature emits its sections.
@@ -134,6 +150,8 @@ impl Default for Manifest {
             description: None,
             authors: None,
             license: None,
+            mrl_dim: None,
+            full_dim: None,
             capabilities_ext: None,
             extra: BTreeMap::new(),
         }
