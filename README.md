@@ -12,9 +12,6 @@ a portable binary format plus a runtime that opens it. the format is open and fr
 
 the file is the database.
 
-## information optimization target
-(∂μfμν = jν)
-
 ## sovereign data is our priority
 
 four properties, all enforced by the format itself, not by policy.
@@ -231,5 +228,6 @@ with `reproducible=True` (the script default) two operators get byte-identical `
 
 made it simple, but signifcant. 
 Brenner Cruvinel.
+(∂μfμν = jν)
 
 MIT.
