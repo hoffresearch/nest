@@ -4,11 +4,13 @@ all notable changes to `nest` are documented here.
 
 format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). versioning follows [semver](https://semver.org/spec/v2.0.0.html). the on-disk container format is frozen at v1; breaking changes bump `NEST_FORMAT_VERSION` (binary) or `NEST_SCHEMA_VERSION` (manifest fields).
 
-## [unreleased]
+## [0.3.0] - 2026-06-10
+
+additive release within frozen format v1. extends v0.2.0 with the int4 sub-int8 lever and the published preset ladder, the g1 graph pillar, matryoshka prefix truncation, and the forge-core ingestion workspace. existing v0.2 files load unchanged in v0.3 readers.
 
 ### note (2026-06-07): recall ruler provenance
 
-every `recall@10` figure in this changelog is measured on a SELF-PERTURBATION ruler (each query is a corpus vector plus tiny noise, a near-duplicate of an existing point), so it reports rank-stability under quantization, NOT real-query retrieval, and is likely inflated. `dat/measure/ladder.json` and `dat/measure/baseline.json` now carry a `ruler` provenance field saying so. the real-query (mteb-style) ruler is gate-zero (pending); see `doc/plan/compression-honest-plan.txt`.
+every `recall@10` figure in this changelog is measured on a SELF-PERTURBATION ruler (each query is a corpus vector plus tiny noise, a near-duplicate of an existing point), so it reports rank-stability under quantization, NOT real-query retrieval, and is likely inflated. `dat/measure/ladder.json` and `dat/measure/baseline.json` now carry a `ruler` provenance field saying so. the real-query (mteb-style) ruler is gate-zero (pending).
 
 ### added
 
@@ -31,6 +33,40 @@ published preset ladder + honest net-of-fp reconciliation (measurement and docs 
 - net-of-fp framing: the 0x09 `embeddings_fp` writer is not wired, so every shipped sub-int8 preset (`nano`/int4, `micro`/mrl-int8, the mrl-int4 curve) is STORED-PRECISION: net-of-fp ratio == stored ratio, disclosed as real cosine at the stored int4/int8 precision. each published sub-int8 row carries `dtype`, `stored_precision`, `has_fp_source=false`, `net_of_fp_ratio`, and (for matryoshka rows) `mrl_dim`/`full_dim`, so the disclosure is machine-checkable. rabitq 1-bit (which would need a counted f16 fp source) stays out of scope.
 - `compare_measure.py` gains a conditional `micro` gate (`size_ratio <= 0.25`, `recall_at_k >= 0.78`), mirroring the existing `nano` and `mrl256-int8` gates; it fires only when the run includes `micro`.
 - published numbers (100 queries, k=10, vs the float32 exact baseline): `compressed` 0.339 / 1.000, `tiny` 0.256 / 0.992, `micro` 0.223 / 0.810, `nano` 0.209 / 0.913, `hybrid` 0.609 / 1.000.
+
+g1 graph pillar: chunk-to-chunk graph adjacency (section 0x0C) + `search-graph` (additive within v1, no format-version bump):
+
+- new optional section `0x0C graph_adjacency`: a chunk-to-chunk csr with typed edges (`NEXT_CHUNK=0`, `SEMANTIC=1`, `CITATION=2`). the payload is a self-describing raw section reusing intpack internally: `GRAPH_ADJACENCY_PAYLOAD_VERSION=1`, n_nodes, intpack csr offsets, per-(src,edge_type)-run delta-gapped neighbor ids, and a falkordb-iso edge-type column (a single scalar when uniform). canonical ascending (src, edge_type, dst) sort makes two builds of the same edge set byte-identical.
+- excluded from `content_hash` (not in `CANONICAL_SECTIONS`), so adding a graph never invalidates a `nest://` citation. gated by the additive `capabilities_ext.graph_present` flag and opened in `mmap_file` behind it.
+- runtime `graph::CsrIndex` parses the section off mmap into flat offsets plus neighbors (one node's neighbors are a contiguous zero-alloc slice); `graph::Traversal::bounded_bfs` walks it with a generational visited buffer (no per-query HashSet), bounded by hops and max_frontier.
+- 9th engine subcommand `nest search-graph <file> <qvec> -k K --hops N --ef N`: seeds the exact-cosine top-ef, bfs-expands the union, and feeds it to the SAME `score_subset` exact rerank (`index_type=graph`, `recall=NaN`; the candidate-generator contract is asserted in `rerank_contract.rs`). falls back to exact when no 0x0C section is present.
+- build side: `nest.build(with_graph=True, graph_top_m=...)` emits NEXT_CHUNK (sequential ordinals, both directions) plus top-m SEMANTIC edges from the already-built hnsw level-0 graph. `drop_overlap` implies `with_graph`; read-side neighbor context via `python/graph_context.py`; recall gate in `python/tools/graph_recall_gate.py`.
+
+matryoshka prefix truncation (`mrl_dim`), the build-time dimension lever (additive within v1):
+
+- `nest.build(mrl_dim=K)` slices each l2-normalized row to its first K components and re-l2-normalizes the prefix BEFORE quantization and hnsw, so int8/int4 calibrate on the shorter renormalized row. orthogonal to and multiplicative with the dtype levers.
+- additive optional manifest pair `mrl_dim`/`full_dim` (both omitted when unset, so existing files stay byte-identical); the stored `embedding_dim` becomes K, the source dim is recorded as `full_dim`, both shown in `nest stats`.
+- NO runtime kernel change: the reader strides by `header.embedding_dim`. int4 needs the effective dim divisible by 64, so the int4 ladder is valid only at `mrl_dim` in {256, 192, 128}.
+- `content_hash` is over the truncated embeddings, so a citation is tied to its `mrl_dim`, never claimed stable across dims. truncation is a pure deterministic slice, so builds stay byte-identical; guarded by `tests/mrl_truncate.rs`.
+- on the shipped non-mrl MiniLM baseline truncation costs real recall@10, published as a curve (same self-perturbation ruler caveat as the note above); `mrl256-int8` is the named `micro` preset.
+
+forge-core (FORGE-0a): the ingestion layer's frozen .fci schema, in a separate workspace:
+
+- new cargo workspace `forge-core/` at the repo root, deliberately OUTSIDE `crates/`, so its dependency tree never enters the sovereign crates; not built by the sovereign release gate. build, test, and lint it via `--manifest-path forge-core/Cargo.toml`.
+- FORGE-0a ships the frozen .fci canonical-intermediate schema only: `FciBundle`, `ChunkRecord` (mirroring `builder.ChunkSpec` 1:1 so spans round-trip through `nest cite`), `EmbeddingRequest`/`SpaceTag`/`PayloadRef`, `Entity`/`MentionSpan`/`Edge`, and `BlobRef`.
+- `FCI_SCHEMA_VERSION` is versioned independently of `NEST_FORMAT_VERSION`. serialization is deterministic canonical compact json (declaration order, verbatim strings), covered by roundtrip and determinism tests.
+
+### test surface
+
+- 288 rust tests in the sovereign workspace (`cargo test --release --workspace`, 35 suites; was 134 in v0.2.0), plus 6 forge-core tests on its own manifest (`cargo test --manifest-path forge-core/Cargo.toml`).
+- new groups since v0.2.0: txt_streams roundtrip plus negatives, zstd_dict roundtrip plus negatives, fsst roundtrip plus negatives, dedup roundtrip plus order-invariant, content_hash_dict_fsst_dedup, graph_adjacency roundtrip plus negatives, int4 roundtrip plus negatives, mrl_truncate, manifest_additivity, reserved_ids, the expanded rerank_contract (graph path, SearchExplain, stored-precision disclosure), and forge-core serialize.
+- python: the 3 test scripts (`test_e2e.py` incl the flagship retrieve guard, `test_builder.py`, `test_search_text_model_hash.py`) plus the self-test scripts under `python/forge/` (potion, lexical floor, retrieve), which are not run by `release_check.sh`.
+
+### compatibility
+
+no format break. the new optional sections (0x0A dictionary, 0x0B dedup_map, 0x0C graph_adjacency), wire encodings (4 intpack, 5 zstd_dict, 7 int4, 9 fsst, 10 txt_streams), and additive manifest fields (mrl_dim/full_dim, capabilities_ext) all live within v1. v0.2 readers skip the unknown optional sections and reject the new encodings with a typed error, never silently. files built without the new features stay byte-identical.
+
+[0.3.0]: https://github.com/hoffresearch/nest/releases/tag/v0.3.0
 
 ## [0.2.0] - 2026-04-28
 

@@ -7,7 +7,7 @@
 1. fork the repo at https://github.com/hoffresearch/nest.
 2. branch from `dev`: `git checkout -b feature/short-description`.
 3. keep each pr focused on one concern. small is better.
-4. add or update tests for the change. new behavior needs a new test.
+4. add or update tests for the change. new behavior needs a new test. write real tests against real artifacts (built .nest files, golden fixtures, real corpora), no mocks; cover the happy path, the error path, and one edge case.
 5. if the change alters architecture, module boundaries, data flow, or doc locations, update the arc trio (`doc/arc/arc.md`, `doc/arc/arc.yaml`, `doc/arc/arc.mmd`) in the same pr. keep all three concise and pragmatic. do not add a second human architecture doc.
 6. run `./scripts/release_check.sh` locally before pushing. that script is the same gate ci runs on the pr.
 7. commit with a clear message in plain english. no conventional commits prefix.
@@ -49,6 +49,11 @@ these conventions are not aesthetic preferences. they exist to keep the repo rea
 - **no emoji**, anywhere. **no em-dash** (`-`); use `,`, `;`, `.`, or a regular hyphen.
 - short paragraphs, direct voice, no marketing copy. commits explain the **why**; the diff already shows the what. no conventional-commits prefix.
 - every governance or architecture doc starts with a yaml frontmatter block (`project`, `audience`, `status`, `last-updated`, `domain`) so llm and vector tooling can resolve it semantically.
+
+### agent instruction files
+
+- `AGENTS.md` is the single instruction source for ai coding agents working in this repo: use/update/init only `AGENTS.md` (the core global agent file).
+- do not create per-tool instruction files (CLAUDE.md, GEMINI.md, CODEX.md, cursor rules). most agentic tooling already reads AGENTS.md by default; point the rest at it on init.
 
 ### file hygiene
 

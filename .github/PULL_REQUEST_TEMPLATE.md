@@ -36,4 +36,4 @@ n/a
 
 ## related
 
-<!-- linked issues, ADRs, prior PRs. -->
+<!-- linked issues, design notes (doc/changelog.md), prior PRs. -->

@@ -23,8 +23,8 @@ stderr and a structured dump goes to stdout (used by
 WEAK RULER: queries are corpus vectors plus tiny noise (self-perturbation),
 so recall@10 here measures rank-stability under quantization, NOT real-query
 retrieval. the JSON dump carries a `ruler` provenance block saying so. the
-real-query (mteb-style) ruler is gate-zero; see
-doc/plan/compression-honest-plan.txt.
+real-query (mteb-style) ruler is gate-zero; see the ruler note in
+doc/changelog.md.
 
 Helpers live in private siblings:
   `_baseline_decoder.py`  — section-table parser
@@ -53,7 +53,7 @@ from _bench_runner import build_variant, percentile, run_bench  # noqa: E402
 # query is a corpus vector plus tiny deterministic noise, so the figure measures
 # rank-stability under quantization, NOT real-query retrieval. the real-query
 # (mteb-style) ruler is gate-zero; until it exists these numbers are likely
-# inflated. see doc/plan/compression-honest-plan.txt.
+# inflated. see the ruler note in doc/changelog.md.
 _RULER_PROVENANCE = {
     "kind": "self-perturbation",
     "query": (
@@ -69,7 +69,7 @@ _RULER_PROVENANCE = {
     ),
     "real_ruler": (
         "pending gate-zero (real-query labeled harness); see "
-        "doc/plan/compression-honest-plan.txt"
+        "the ruler note in doc/changelog.md"
     ),
 }
 
