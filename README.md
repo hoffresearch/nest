@@ -51,12 +51,12 @@ sequenceDiagram
     Q->>R: search(vector)
     R->>N: mmap open + validate hashes
     R->>R: model_hash vs manifest
-    R->>R: hnsw / bm25 candidates
+    R->>R: hnsw / bm25 / graph candidates
     R->>R: mandatory exact cosine rerank
     R-->>Q: hits + nest://content_hash/chunk_id
 ```
 
-the sequence traces the two flows that define nest. build (python, offline, reproducible) chunks, embeds, fingerprints the model, and writes a deterministic `.nest` file with four hashes. query (rust, offline, mmap) opens the file, validates the embedder's `model_hash` against the manifest, gathers hnsw or bm25 candidates, and reranks them with exact cosine before returning citations. the `.nest` file is the only artifact that crosses between python and rust.
+the sequence traces the two flows that define nest. build (python, offline, reproducible) chunks, embeds, fingerprints the model, and writes a deterministic `.nest` file with four hashes. query (rust, offline, mmap) opens the file, validates the embedder's `model_hash` against the manifest, gathers hnsw, bm25, or graph candidates, and reranks them with exact cosine before returning citations. the `.nest` file is the only artifact that crosses between python and rust.
 
 four crates plus a python tooling layer:
 
