@@ -37,4 +37,4 @@ n/a
 
 ## additional context
 
-<!-- linked issues, prior PRs, ADRs, references. n/a if none. -->
+<!-- linked issues, prior PRs, design notes (doc/changelog.md), references. n/a if none. -->
