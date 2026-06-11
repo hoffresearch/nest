@@ -5,7 +5,7 @@ operating notes for ai agents and human contributors working in this repo. the p
 # build and test
 
 - `cargo build --workspace` / `cargo build --release --workspace`
-- `cargo test --workspace`: all rust tests (unit + integration + golden), 134/134 in v0.2
+- `cargo test --workspace`: all rust tests (unit + integration + golden), 288/288 on the current unreleased state (`forge-core` adds 6 more on its own manifest)
 - `cargo fmt --all --check`: formatting check
 - `cargo clippy --workspace --all-targets -- -D warnings`: linting (warnings are errors)
 - `ruff check .` / `ruff format --check .`: python linting and formatting (config in `pyproject.toml`)
@@ -72,6 +72,10 @@ python entry: `sys.path.insert(0, "python"); import nest`. dynamic loader finds 
 
 # conventions
 
+- every change ships with real tests, no mocks: happy path, error path, one edge case minimum.
+- test against real artifacts (built .nest files, golden fixtures, real corpora), never mocked interfaces.
+- applies to every contributor, human or agent; nothing merges without executable proof.
+- keep the doc/changelog.md test-surface count in sync when adding suites.
 
 # naming
 
@@ -165,8 +169,8 @@ these are documented honest limitations of the current code, not bugs to silentl
 - `doc/arc/arc.md`: single human architecture inventory and runtime contract summary.
 - `doc/arc/arc.yaml`: machine-readable architecture map for agents and tooling.
 - `doc/arc/arc.mmd`: mermaid sequence diagram of the build and query flows.
-- `doc/usage.md`: 10-section how-to for the 8 commands, presets, offline mode, citations.
-- `doc/changelog.md`: v0.1.0 and v0.2.0 deltas.
+- `doc/usage.md`: how-to for the nine engine subcommands plus the ask/retrieve flagship verbs, presets, offline mode, citations.
+- `doc/changelog.md`: v0.1.0, v0.2.0, and unreleased deltas.
 - `dat/demo/README.md`: what each upstream PT-BR dataset is and how to rebuild the unified corpus.
 - `CONTRIBUTING.md`: external contributor flow.
 - `CODE_OF_CONDUCT.md`: contributor covenant 2.1, lowercase plain-style.

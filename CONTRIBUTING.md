@@ -7,7 +7,7 @@
 1. fork the repo at https://github.com/hoffresearch/nest.
 2. branch from `dev`: `git checkout -b feature/short-description`.
 3. keep each pr focused on one concern. small is better.
-4. add or update tests for the change. new behavior needs a new test.
+4. add or update tests for the change. new behavior needs a new test. write real tests against real artifacts (built .nest files, golden fixtures, real corpora), no mocks; cover the happy path, the error path, and one edge case.
 5. if the change alters architecture, module boundaries, data flow, or doc locations, update the arc trio (`doc/arc/arc.md`, `doc/arc/arc.yaml`, `doc/arc/arc.mmd`) in the same pr. keep all three concise and pragmatic. do not add a second human architecture doc.
 6. run `./scripts/release_check.sh` locally before pushing. that script is the same gate ci runs on the pr.
 7. commit with a clear message in plain english. no conventional commits prefix.
