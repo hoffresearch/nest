@@ -178,4 +178,4 @@ these are documented honest limitations of the current code, not bugs to silentl
 
 # agent instructions
 
-this file is the single instruction source for ai coding agents. root-level `CLAUDE.md` and `GEMINI.md` are symlinks to it; point cursor rules and similar tool files here too. do not create a parallel instruction doc.
+this file is the single instruction source for ai coding agents. root-level `CLAUDE.md`, `GEMINI.md`, and `CODEX.md` are one-line reference stubs pointing to it; point cursor rules and similar tool files here too. do not create a parallel instruction doc.
