@@ -4,7 +4,9 @@ all notable changes to `nest` are documented here.
 
 format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). versioning follows [semver](https://semver.org/spec/v2.0.0.html). the on-disk container format is frozen at v1; breaking changes bump `NEST_FORMAT_VERSION` (binary) or `NEST_SCHEMA_VERSION` (manifest fields).
 
-## [unreleased]
+## [0.3.0] - 2026-06-10
+
+additive release within frozen format v1. extends v0.2.0 with the int4 sub-int8 lever and the published preset ladder, the g1 graph pillar, matryoshka prefix truncation, and the forge-core ingestion workspace. existing v0.2 files load unchanged in v0.3 readers.
 
 ### note (2026-06-07): recall ruler provenance
 
@@ -59,6 +61,12 @@ forge-core (FORGE-0a): the ingestion layer's frozen .fci schema, in a separate w
 - 288 rust tests in the sovereign workspace (`cargo test --release --workspace`, 35 suites; was 134 in v0.2.0), plus 6 forge-core tests on its own manifest (`cargo test --manifest-path forge-core/Cargo.toml`).
 - new groups since v0.2.0: txt_streams roundtrip plus negatives, zstd_dict roundtrip plus negatives, fsst roundtrip plus negatives, dedup roundtrip plus order-invariant, content_hash_dict_fsst_dedup, graph_adjacency roundtrip plus negatives, int4 roundtrip plus negatives, mrl_truncate, manifest_additivity, reserved_ids, the expanded rerank_contract (graph path, SearchExplain, stored-precision disclosure), and forge-core serialize.
 - python: the 3 test scripts (`test_e2e.py` incl the flagship retrieve guard, `test_builder.py`, `test_search_text_model_hash.py`) plus the self-test scripts under `python/forge/` (potion, lexical floor, retrieve), which are not run by `release_check.sh`.
+
+### compatibility
+
+no format break. the new optional sections (0x0A dictionary, 0x0B dedup_map, 0x0C graph_adjacency), wire encodings (4 intpack, 5 zstd_dict, 7 int4, 9 fsst, 10 txt_streams), and additive manifest fields (mrl_dim/full_dim, capabilities_ext) all live within v1. v0.2 readers skip the unknown optional sections and reject the new encodings with a typed error, never silently. files built without the new features stay byte-identical.
+
+[0.3.0]: https://github.com/hoffresearch/nest/releases/tag/v0.3.0
 
 ## [0.2.0] - 2026-04-28
 
