@@ -36,11 +36,12 @@ inventory:
     - {path: "AGENTS.md", kind: repo-ops, purpose: "agent operating contract, commands, conventions, and gotchas", links: ["scripts/release_check.sh"]}
     - {path: "Cargo.lock", kind: lockfile, purpose: "generated dependency lock for reproducible cargo resolution", links: ["Cargo.toml"]}
     - {path: "Cargo.toml", kind: workspace-manifest, purpose: "workspace members, edition, resolver, and shared dependencies", links: ["crates/nest-format/Cargo.toml", "crates/nest-runtime/Cargo.toml", "crates/nest-cli/Cargo.toml", "crates/nest-python/Cargo.toml"]}
-    - {path: "CLAUDE.md", kind: symlink, purpose: "agent instruction stub, symlink to AGENTS.md (the single instruction source)", links: ["AGENTS.md"]}
+    - {path: "CLAUDE.md", kind: reference-stub, purpose: "one-line agent instruction stub pointing to AGENTS.md (the single instruction source)", links: ["AGENTS.md"]}
     - {path: "clippy.toml", kind: lint-config, purpose: "pins msrv and clippy thresholds", links: []}
     - {path: "CODE_OF_CONDUCT.md", kind: governance-doc, purpose: "project conduct policy", links: []}
+    - {path: "CODEX.md", kind: reference-stub, purpose: "one-line agent instruction stub pointing to AGENTS.md (the single instruction source)", links: ["AGENTS.md"]}
     - {path: "CONTRIBUTING.md", kind: contributor-doc, purpose: "setup, branching, testing, and style guidance", links: ["scripts/release_check.sh"]}
-    - {path: "GEMINI.md", kind: symlink, purpose: "agent instruction stub, symlink to AGENTS.md (the single instruction source)", links: ["AGENTS.md"]}
+    - {path: "GEMINI.md", kind: reference-stub, purpose: "one-line agent instruction stub pointing to AGENTS.md (the single instruction source)", links: ["AGENTS.md"]}
     - {path: "LICENSE", kind: legal, purpose: "mit license text", links: []}
     - {path: "llms.txt", kind: metadata, purpose: "concise llm and agent guidance", links: ["AGENTS.md", "CONTRIBUTING.md", "README.md"]}
     - {path: "pyproject.toml", kind: python-config, purpose: "ruff config and python tool exclusions", links: ["python", "tests"]}
