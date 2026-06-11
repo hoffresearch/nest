@@ -52,8 +52,8 @@ these conventions are not aesthetic preferences. they exist to keep the repo rea
 
 ### agent instruction files
 
-- `AGENTS.md` is the single instruction source for ai coding agents working in this repo.
-- root-level `CLAUDE.md` and `GEMINI.md` and `CODEX.md` are references/symlinks to `AGENTS.md`. if a tool needs another filename, add a symlink; do not create a parallel instruction document.
+- `AGENTS.md` is the single instruction source for ai coding agents working in this repo: use/update/init only `AGENTS.md` (the core global agent file).
+- do not create per-tool instruction files (CLAUDE.md, GEMINI.md, CODEX.md, cursor rules). most agentic tooling already reads AGENTS.md by default; point the rest at it on init.
 
 ### file hygiene
 
