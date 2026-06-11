@@ -24,6 +24,10 @@ dat/demo/
 
 each upstream dataset keeps its original license file and structure. see the README inside each subdirectory for citation requirements.
 
+## offline demo (no downloads)
+
+none of the datasets below are needed for the one-gif demo. `python python/forge/retrieve.py` builds a byte-identical `.nest` from the cc0 demo corpus in `python/forge/demo_corpus` using the vendored potion embedder (numpy + tokenizers, no torch, no network) and prints a cited answer in seconds. it only needs `git lfs pull` to hydrate the potion table.
+
 ## upstream sources and download
 
 the folders in this directory are vendored snapshots. if you need to rehydrate them from upstream, use the original sources below.

@@ -46,4 +46,4 @@ $ nest <command> ...
 
 ## additional context
 
-<!-- logs, related issues, prior ADRs, anything else. n/a if none. -->
+<!-- logs, related issues, prior design notes (doc/changelog.md), anything else. n/a if none. -->

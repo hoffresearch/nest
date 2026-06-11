@@ -5,7 +5,7 @@ operating notes for ai agents and human contributors working in this repo. the p
 # build and test
 
 - `cargo build --workspace` / `cargo build --release --workspace`
-- `cargo test --workspace`: all rust tests (unit + integration + golden), 134/134 in v0.2
+- `cargo test --workspace`: all rust tests (unit + integration + golden), 288/288 on the current unreleased state (`forge-core` adds 6 more on its own manifest)
 - `cargo fmt --all --check`: formatting check
 - `cargo clippy --workspace --all-targets -- -D warnings`: linting (warnings are errors)
 - `ruff check .` / `ruff format --check .`: python linting and formatting (config in `pyproject.toml`)
@@ -72,6 +72,10 @@ python entry: `sys.path.insert(0, "python"); import nest`. dynamic loader finds 
 
 # conventions
 
+- every change ships with real tests, no mocks: happy path, error path, one edge case minimum.
+- test against real artifacts (built .nest files, golden fixtures, real corpora), never mocked interfaces.
+- applies to every contributor, human or agent; nothing merges without executable proof.
+- keep the doc/changelog.md test-surface count in sync when adding suites.
 
 # naming
 
@@ -96,17 +100,17 @@ hard limit is 333 lines per file. operational target for new files is 220 lines.
 
 every file created or modified in a session that exceeds 333 lines must be read in full and refactored along single-responsibility lines. the rust source carve-out (`crates/**/src/**` at 300 lines) and the test-file exemptions documented below remain in force.
 
-# audit when finishing a task
+# audit when finishing a task 
 
 run a full audit over every change made in the session, no summarizing, from devops, code quality, and secops angles. write a temporary manifest in markdown under your tmp folder to track tasks executed.
 
-identify every trace of dead code, generated scripts and files no longer useful, items needing update, and items to be moved to the correct location per architecture and design pattern. if the project lacks documented conventions, create them: adrs in `kdb/adr/` for architectural decisions, `.editorconfig` for stack-agnostic base formatting, and an idiomatic linter config per language used.
+identify every trace of dead code, generated scripts and files no longer useful, items needing update, and items to be moved to the correct location per architecture and design pattern. if the project lacks documented conventions, create them: design notes in `doc/changelog.md` for architectural decisions, `.editorconfig` for stack-agnostic base formatting, and an idiomatic linter config per language used.
 
 identify temporary scripts and possible dead-code files in incorrect folders. understand how each works, preserve application integrity, test and validate that no imports or responsibilities are left orphan. run tests after execution.
 
 - rust edition 2024, resolver 3, `thiserror` for errors (never panic in library code).
 - `repr(C)` structs for binary layout; all integers LE unsigned.
-- binary format v1 is frozen. v0.2 added encodings 1/2/3 (zstd, float16, int8) and optional sections 0x07 (HNSW) and 0x08 (BM25), all within v1. p1 implemented encoding 4 (intpack): a content_hash-preserving repack of the canonical chunk_ids/spans sections under compressed presets (decodes byte-identically, so content_hash and citations are unchanged; raw presets and the golden stay byte-identical), encoding 7 (int4 block-64 embeddings), and encoding 10 (txt_streams): a content_hash-preserving re-layout of the chunks_canonical (0x02) compressed form into N independent zstd streams + an intpack offset table giving O(1) single-chunk seek/reopen. under a compressed preset the writer takes the SMALLER of single-frame zstd vs txt_streams (try-smaller, never regresses); on the shipped many-short-similar-chunks corpus the per-chunk frame loses cross-chunk LZ context (+85.9% on the text section) so single-frame zstd wins and the file stays byte-identical. txt_streams is the named prerequisite layout for the future dict(5)/fsst(9) text levers and the O(1) reopen path. it also bumped the optional hnsw/bm25 payloads to version 2 (intpack-bitpacked neighbour ids and delta-gapped postings; readers still accept v1, recall/scores unchanged). it then landed three SAFE text-section ratio levers, all additive within frozen v1, all decoding chunks_canonical BYTE-IDENTICALLY (content_hash + nest:// citations unchanged) and all chosen per-build by the existing try-smaller chooser so they never regress: encoding 5 (zstd_dict): a TXT_STREAMS_V2 variant re-framing each per-chunk stream against ONE trained shared zstd dictionary (deterministic ZDICT from_continuous over sorted unique canonical texts, pinned zstd, dict blob in new optional section 0x0A SECTION_DICTIONARY, content_hash-excluded); encoding 9 (fsst): a TXT_STREAMS_V3 clean-room 255-entry static symbol table (1-8 byte substrings to 1-byte codes, 0xFF escape) embedded in the payload, best for short streams; and content-hash dedup-before-zstd (new optional section 0x0B SECTION_DEDUP_MAP, content_hash-excluded) running a first-seen pass on DECOMPRESSED canonical texts (nix/ipfs order rule) with a u32 back-ref array, the unique pool zstd/dict/fsst-compressed after. honest measurement: on the shipped all-unique pt-br corpus single-frame zstd-19 (15.73MB) still beats dict (21.18MB), txt_streams (29.25MB), and fsst (48.47MB), so the chooser keeps single-frame zstd and tiny stays byte-identical (0.256 ratio, recall@10 0.9900 held on the weak SELF-PERTURBATION ruler = rank-stability under quantization, NOT real-query quality; real-query ruler is gate-zero, see doc/plan/compression-honest-plan.txt); the levers engage on their regimes (dedup wins only on far-apart repeats beyond a single zstd window). reserved wire encodings now cover ids 4-10 (intpack, zstd_dict, frontcode, int4, rabitq, fsst, txt_streams); 5/9/10 (and 4/7) implemented, 6/8 stay reserved-but-unimplemented. p1 also landed G1: the additive optional SECTION_GRAPH_ADJACENCY (0x0C) chunk-to-chunk csr (NEXT_CHUNK + top-m SEMANTIC + CITATION typed edges; intpack offsets + delta-gapped neighbor ids + falkordb-iso edge-type column inside a raw section payload, GRAPH_ADJACENCY_PAYLOAD_VERSION=1). it is EXCLUDED from content_hash (not in CANONICAL_SECTIONS, so citations stay stable), gated by the additive `graph_present` capability (via Option<CapabilitiesExt>), opened in mmap_file behind that flag. runtime graph::CsrIndex parses it; search-graph seeds the exact-cosine top-ef, runs a generational-buffer bounded-bfs, and feeds the union to the SAME score_subset exact rerank (index_type="graph", recall=NaN, candidate-generator contract asserted in rerank_contract.rs). all additive within v1. bump `NEST_FORMAT_VERSION` for breaking changes.
+- Wip feature study/progress (not final resolutiom) binary format v1 is frozen. v0.2 added encodings 1/2/3 (zstd, float16, int8) and optional sections 0x07 (HNSW) and 0x08 (BM25).
 - hash format: always `sha256:<64 lowercase hex>`.
 - four hashes: `header_checksum`, per-section `checksum` (physical bytes), `file_hash` (whole file), `content_hash` (decoded canonical sections, stable across encodings).
 - `NestFileBuilder` is a consuming builder (`add_chunk(self) -> Self`). presets via `.text_encoding()` + `.embedding_dtype()`.
@@ -139,7 +143,7 @@ documentation, comments, and commit messages follow the README's tone.
 - **`ask`/`retrieve` embed OFFLINE with potion, NOT sentence-transformers**: the flagship verbs shell out to `python/forge/embed_query_potion.py` (the default potion static table, numpy + tokenizers, no torch, no socket), so they stay offline-by-construction. only `search-text` uses `python/embed_query.py` (sentence-transformers, network on first use). the embedder runs under `python3` unless `NEST_PYTHON` is set; point `NEST_PYTHON` at a venv that carries the forge deps (numpy + tokenizers + the git-lfs potion table) or the embed step fails with `ModuleNotFoundError`. the two flagship e2e tests in `cli_e2e.rs` and `python/forge/test_retrieve.py` need those deps and skip cleanly when absent; they are not run by `release_check.sh`.
 - **`cite` is tier-1 only**: it returns the stored canonical text + verifying hashes, NEVER an original-byte reopen. `ask`/`retrieve` print the same tier-1 text. do not let help text or docs claim original-byte reopen (that is net-new tier-2 catalog work, post-gate).
 
-# known gaps
+# known gaps 
 
 these are documented honest limitations of the current code, not bugs to silently fix. user-visible behavior; flag them in any work that interacts with these areas.
 
@@ -148,7 +152,7 @@ these are documented honest limitations of the current code, not bugs to silentl
 - **no PyPI / maturin**: distribution is manual `cargo build` + `cp .dylib`. fine for the current audience (engineers embedding into a pipeline), real friction for casual adopters. maturin + PyPI publish is on the v0.3 backlog.
 - **the semantic default embedder is english**: `potion-base-8M` is distilled from `bge-base-en-v1.5`, so english synonyms cluster tightly (car ~ automobile +0.78 vs car ~ banana +0.04) but non-english text rides english subword rows and the semantic signal is weak (carro ~ automovel +0.08 vs carro ~ banana -0.05: right direction, small margin). for a primarily non-english corpus, bring a multilingual sentence-transformers model (the ceiling path) or a multilingual potion table. the lexical floor is language-agnostic but captures literal token overlap only.
 
-# things not to do
+# things to avoid 
 
 - **avoid write markdown that wasn't requested**. 
 - **avoid bump `NEST_FORMAT_VERSION` for additive changes**. encodings 4-255 and section IDs 0x09+ are reserved within v1. v2 only when an existing field changes meaning.
@@ -165,9 +169,13 @@ these are documented honest limitations of the current code, not bugs to silentl
 - `doc/arc/arc.md`: single human architecture inventory and runtime contract summary.
 - `doc/arc/arc.yaml`: machine-readable architecture map for agents and tooling.
 - `doc/arc/arc.mmd`: mermaid sequence diagram of the build and query flows.
-- `doc/usage.md`: 10-section how-to for the 8 commands, presets, offline mode, citations.
-- `doc/changelog.md`: v0.1.0 and v0.2.0 deltas.
+- `doc/usage.md`: how-to for the nine engine subcommands plus the ask/retrieve flagship verbs, presets, offline mode, citations.
+- `doc/changelog.md`: v0.1.0, v0.2.0, and unreleased deltas.
 - `dat/demo/README.md`: what each upstream PT-BR dataset is and how to rebuild the unified corpus.
 - `CONTRIBUTING.md`: external contributor flow.
 - `CODE_OF_CONDUCT.md`: contributor covenant 2.1, lowercase plain-style.
 - `scripts/release_check.sh`: read it. it documents the gate by being the gate.
+
+# agent instructions
+
+this file is the single instruction source for ai coding agents: use/update/init only AGENTS.md (the core global agent file). codex and most agentic tooling already read AGENTS.md by default; point claude, gemini, cursor rules and similar tools here on init. do not create CLAUDE.md, GEMINI.md, CODEX.md, or any parallel instruction doc.

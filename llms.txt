@@ -2,11 +2,30 @@
 
 concise context for llm coding agents working in this repository.
 
+## what this is
+
+single-file sovereign vector database. the .nest file IS the database: chunks, embeddings, source spans, optional hnsw/bm25/graph indices, and a search contract in one mmap-friendly container. agents get cited, hash-verified answers fully offline: no server, no api call, no socket at query time.
+
 ## project snapshot
 
-- language stack: rust workspace + python tooling.
-- product: single-file .nest format, mmap runtime, cli, and pyo3 bindings.
-- architecture docs: doc/arc/arc.md and doc/arc/arc.yaml are the source of truth.
+- language stack: rust workspace (format, runtime, cli, pyo3 bindings) + python tooling (builder, embedders, measurement).
+- architecture docs: doc/arc/arc.md (human), doc/arc/arc.yaml (machine), doc/arc/arc.mmd (visual mermaid). the trio is the source of truth.
+- AGENTS.md is the agent and contributor operating contract and the single agent instruction source; use/update/init only AGENTS.md, no per-tool instruction files.
+- forge-core/ is a SEPARATE cargo workspace (ingestion layer, frozen .fci schema); not in the sovereign --workspace set, build it via --manifest-path forge-core/Cargo.toml.
+
+## flagship verbs (agent-native)
+
+text query in, cited answer out. offline by construction: the verbs embed with the vendored potion static table (numpy + tokenizers, no torch, no network) and validate the embedder's model_hash against the manifest.
+
+- nest ask <file> "query" -k 3: prints the cited canonical text + a nest://content_hash/chunk_id citation. --disclose explain adds the rerank-source honesty line ("real cosine" vs "real cosine at stored precision").
+- nest retrieve <file> "query" -k 3 --format jsonl: json/jsonl answer-pack; every hit's score IS the exact-cosine rerank value, with the tier-1 stored canonical text + verifying hashes + the citation.
+
+engine subcommands: inspect, validate, stats, search, search-ann, search-graph, search-text, benchmark, cite.
+
+## python entry
+
+- sys.path.insert(0, "python"); import nest; db = nest.open(path)
+- db.retrieve(qvec, k=5) is the agent-native path: routes by manifest capability, score IS the exact rerank value, each hit carries the tier-1 text + the nest:// citation.
 
 ## build and verification
 
@@ -17,7 +36,7 @@ concise context for llm coding agents working in this repository.
 - cargo clippy --workspace --all-targets -- -D warnings
 - ./scripts/release_check.sh
 
-prefer release_check.sh before merge, it is the project gate.
+prefer release_check.sh before merge, it is the project gate. forge-core carries its own gate: cargo test --manifest-path forge-core/Cargo.toml.
 
 ## coding practices
 
@@ -27,19 +46,21 @@ prefer release_check.sh before merge, it is the project gate.
 - preserve deterministic behavior for hashing and index builds.
 - for unsafe blocks, include a safety comment naming the invariant.
 - keep markdown lowercase, no emoji, no em dash.
+- every change ships with real tests, no mocks, against real artifacts.
 
 ## format and runtime invariants
 
-- format v1 is frozen.
+- format v1 is frozen; new sections and encodings are additive within v1.
 - hash format: sha256:<64 lowercase hex>.
 - content_hash must stay stable across non-semantic encodings.
-- search score contract is cosine with exact rerank for ann/hybrid paths.
+- search score contract is cosine with exact rerank for ann/graph/hybrid paths.
 
 ## dataset policy
 
 - dat/corpus_next.v1.nest is tracked with git lfs.
 - dat/demo datasets are local-only and gitignored.
 - dataset fetch commands and provenance are documented in dat/demo/README.md.
+- the offline one-gif demo needs no datasets: python python/forge/retrieve.py.
 
 ## branch and release flow
 
@@ -57,7 +78,10 @@ prefer release_check.sh before merge, it is the project gate.
 ## references
 
 - README.md
-- AGENTS.md
+- AGENTS.md (the single agent instruction source)
 - CONTRIBUTING.md
 - doc/arc/arc.md
+- doc/arc/arc.yaml
+- doc/arc/arc.mmd
 - doc/usage.md
+- doc/changelog.md
