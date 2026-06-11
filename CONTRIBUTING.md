@@ -50,6 +50,11 @@ these conventions are not aesthetic preferences. they exist to keep the repo rea
 - short paragraphs, direct voice, no marketing copy. commits explain the **why**; the diff already shows the what. no conventional-commits prefix.
 - every governance or architecture doc starts with a yaml frontmatter block (`project`, `audience`, `status`, `last-updated`, `domain`) so llm and vector tooling can resolve it semantically.
 
+### agent instruction files
+
+- `AGENTS.md` is the single instruction source for ai coding agents working in this repo.
+- root-level `CLAUDE.md` and `GEMINI.md` are symlinks to `AGENTS.md`. if a tool needs another filename, add a symlink; do not create a parallel instruction document.
+
 ### file hygiene
 
 human working memory holds four plus or minus one chunks at once (cowan, 2001). neural networks behave better the same way. a file that does not fit the mental window forces internal context switching and raises bug rates. this is the same principle ui designers apply to information density.

@@ -1,6 +1,6 @@
 ---
 project: nest
-last-updated: "2026-06-06"
+last-updated: "2026-06-10"
 domain: architecture
 ---
 
@@ -41,7 +41,8 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - .editorconfig | config | pins utf-8, lf, indentation, and binary-safe editing rules for .nest fixtures.
 - .gitattributes | config | routes large binary assets through git lfs and keeps golden fixtures in normal git.
 - .gitignore | config | excludes build outputs, caches, virtualenvs, regenerated corpora, and local scratch paths.
-- AGENTS.md | repo operations | defines build commands, file hygiene, architectural conventions, and known runtime gotchas.
+- AGENTS.md | repo operations | the operating contract for ai agents and contributors: build commands, file hygiene, architectural conventions, and known runtime gotchas.
+- CLAUDE.md, GEMINI.md | symlinks | route agent tooling instruction files to AGENTS.md, the single instruction source; do not create parallel instruction docs.
 - Cargo.lock | lockfile | generated dependency snapshot for reproducible cargo resolution, with no business logic of its own.
 - Cargo.toml | workspace manifest | declares the four crates, resolver 3, workspace edition 2024, and shared dependencies.
 - clippy.toml | lint policy | fixes msrv and lint thresholds so the release gate behaves deterministically across clippy updates.

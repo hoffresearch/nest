@@ -175,3 +175,7 @@ these are documented honest limitations of the current code, not bugs to silentl
 - `CONTRIBUTING.md`: external contributor flow.
 - `CODE_OF_CONDUCT.md`: contributor covenant 2.1, lowercase plain-style.
 - `scripts/release_check.sh`: read it. it documents the gate by being the gate.
+
+# agent instructions
+
+this file is the single instruction source for ai coding agents. root-level `CLAUDE.md` and `GEMINI.md` are symlinks to it; point cursor rules and similar tool files here too. do not create a parallel instruction doc.
