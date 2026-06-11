@@ -1,5 +1,5 @@
 project: nest
-last-updated: "2026-06-06"
+last-updated: "2026-06-10"
 domain: architecture
 summary: "single-file semantic knowledge stack: rust owns format, runtime, cli, and bindings; python owns ingestion, model fingerprinting, and support tooling. p1#07 (G1) added the optional chunk-to-chunk graph_adjacency (0x0C) csr + search-graph. p1#08 stood up the agent-native flagship over the EXISTING engine: cli `ask`/`retrieve` + python NestFile.retrieve (offline potion embed, model_hash gate, capability route, tier-1 cited spans whose score IS the exact rerank value) + the additive SearchExplain honesty backbone (rerank_source: real cosine vs real cosine at stored precision). zero format bytes, no NEST_FORMAT_VERSION bump; verb-collapse / nest dev / nest-profile deferred."
 layers:
@@ -36,9 +36,11 @@ inventory:
     - {path: "AGENTS.md", kind: repo-ops, purpose: "agent operating contract, commands, conventions, and gotchas", links: ["scripts/release_check.sh"]}
     - {path: "Cargo.lock", kind: lockfile, purpose: "generated dependency lock for reproducible cargo resolution", links: ["Cargo.toml"]}
     - {path: "Cargo.toml", kind: workspace-manifest, purpose: "workspace members, edition, resolver, and shared dependencies", links: ["crates/nest-format/Cargo.toml", "crates/nest-runtime/Cargo.toml", "crates/nest-cli/Cargo.toml", "crates/nest-python/Cargo.toml"]}
+    - {path: "CLAUDE.md", kind: symlink, purpose: "agent instruction stub, symlink to AGENTS.md (the single instruction source)", links: ["AGENTS.md"]}
     - {path: "clippy.toml", kind: lint-config, purpose: "pins msrv and clippy thresholds", links: []}
     - {path: "CODE_OF_CONDUCT.md", kind: governance-doc, purpose: "project conduct policy", links: []}
     - {path: "CONTRIBUTING.md", kind: contributor-doc, purpose: "setup, branching, testing, and style guidance", links: ["scripts/release_check.sh"]}
+    - {path: "GEMINI.md", kind: symlink, purpose: "agent instruction stub, symlink to AGENTS.md (the single instruction source)", links: ["AGENTS.md"]}
     - {path: "LICENSE", kind: legal, purpose: "mit license text", links: []}
     - {path: "llms.txt", kind: metadata, purpose: "concise llm and agent guidance", links: ["AGENTS.md", "CONTRIBUTING.md", "README.md"]}
     - {path: "pyproject.toml", kind: python-config, purpose: "ruff config and python tool exclusions", links: ["python", "tests"]}

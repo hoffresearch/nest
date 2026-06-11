@@ -221,8 +221,9 @@ with `reproducible=True` (the script default) two operators get byte-identical `
 - `doc/arc/arc.md` for architecture, binary layout, API surface, errors, and versioning
 - `doc/arc/arc.yaml` for the machine-readable architecture map used by agents and tooling
 - `doc/arc/arc.mmd` for the mermaid sequence diagram of the build and query flows
-- `doc/usage.md` for the eight commands, presets, offline mode, citations
-- `doc/changelog.md` for v0.1 to v0.2 deltas
+- `doc/usage.md` for the engine subcommands, the ask/retrieve flagship verbs, presets, offline mode, citations
+- `doc/changelog.md` for v0.1.0, v0.2.0, and unreleased deltas
+- `AGENTS.md` for the operating contract for ai agents and contributors (root `CLAUDE.md` and `GEMINI.md` are symlinks to it)
 
 ## license
 
