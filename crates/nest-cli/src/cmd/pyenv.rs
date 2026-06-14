@@ -4,6 +4,14 @@
 //! needs numpy + tokenizers (the potion table). this picks an interpreter that
 //! has them with no manual setup, while never touching the network: the
 //! embedder opens no socket regardless of which interpreter runs it.
+//!
+//! trust note: with `NEST_PYTHON` unset, discovery EXECUTES the first
+//! `.venv/bin/python` found walking up from the cwd, so the choice is made by
+//! filesystem proximity. running from inside a tree whose ancestor carries an
+//! untrusted `.venv` (a world-writable parent, or a repo from an untrusted
+//! source) would run that binary before any socket is involved. set
+//! `NEST_PYTHON` to pin the interpreter explicitly there; the resolved
+//! interpreter is always logged to stderr so the choice is never silent.
 
 use std::path::PathBuf;
 
@@ -12,15 +20,19 @@ use std::path::PathBuf;
 /// potion table) so `search-text`, `ask`, and `retrieve` work without extra
 /// setup; else fall back to `python3` on PATH.
 pub fn resolve_interpreter() -> String {
-    resolve_interpreter_from(
+    let interp = resolve_interpreter_from(
         std::env::var("NEST_PYTHON").ok(),
         std::env::current_dir().ok(),
-    )
+    );
+    // surface the choice: discovery can execute a `.venv` found by filesystem
+    // proximity, so the selected interpreter must never be silent.
+    eprintln!("[nest] embedder interpreter: {interp}");
+    interp
 }
 
 /// Testable core of [`resolve_interpreter`]: an explicit `NEST_PYTHON` wins,
-/// then the nearest `.venv/bin/python` walking up to four ancestors of `start`
-/// (the same shallow search the embedder scripts use), then `python3`.
+/// then the nearest `.venv/bin/python` walking up to four ancestors of `start`,
+/// then `python3`.
 fn resolve_interpreter_from(nest_python: Option<String>, start: Option<PathBuf>) -> String {
     if let Some(p) = nest_python {
         return p;
