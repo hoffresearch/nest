@@ -4,6 +4,12 @@ all notable changes to `nest` are documented here.
 
 format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). versioning follows [semver](https://semver.org/spec/v2.0.0.html). the on-disk container format is frozen at v1; breaking changes bump `NEST_FORMAT_VERSION` (binary) or `NEST_SCHEMA_VERSION` (manifest fields).
 
+## [Unreleased]
+
+### fixed
+
+- the aarch64 build now honors the declared msrv (1.85) again. the f16 NEON dot-product uses `float16x4_t` / `vcvt_f32_f16`, stable only since rustc 1.94; the runtime used them unconditionally on aarch64 (suppressing the lint), so a 1.85–1.93 toolchain failed to compile the workspace despite the claimed msrv. a new `crates/nest-runtime/build.rs` probes the compiling rustc and emits `cfg(neon_f16)` only at >= 1.94; the f16 NEON kernel and its dispatch arm are gated behind it, and older toolchains fall back to the scalar f16 kernel (the f32/int8/int4 NEON paths are unaffected). on rustc >= 1.94 the vectorized f16 path is byte-for-byte identical to before, so scores and recall are unchanged.
+
 ## [0.3.0] - 2026-06-10
 
 additive release within frozen format v1. extends v0.2.0 with the int4 sub-int8 lever and the published preset ladder, the g1 graph pillar, matryoshka prefix truncation, and the forge-core ingestion workspace. existing v0.2 files load unchanged in v0.3 readers.
