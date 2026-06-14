@@ -4,6 +4,12 @@ all notable changes to `nest` are documented here.
 
 format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). versioning follows [semver](https://semver.org/spec/v2.0.0.html). the on-disk container format is frozen at v1; breaking changes bump `NEST_FORMAT_VERSION` (binary) or `NEST_SCHEMA_VERSION` (manifest fields).
 
+## [Unreleased]
+
+### changed
+
+- the offline embedder now resolves its python interpreter in a fixed order instead of a single hard-coded `python3`: an explicit `NEST_PYTHON` wins, else the repo's `.venv/bin/python` discovered by walking up to four ancestors of the cwd, else `python3` on PATH. `nest search-text` previously always spawned `python3` and `ask`/`retrieve` only honored `NEST_PYTHON`, so on a machine whose system `python3` lacks numpy + tokenizers (the potion-table deps) the flagship verbs failed until the user set `NEST_PYTHON` or fixed PATH by hand; the repo `.venv` is now picked up with no extra setup. the embedder opens no socket regardless of interpreter, so the offline-by-construction guarantee is unchanged. centralized in `nest-cli`'s `cmd::pyenv::resolve_interpreter`, with a `resolve_interpreter_from` core unit-tested for the override / `.venv`-discovery / `python3`-fallback precedence.
+
 ## [0.3.0] - 2026-06-10
 
 additive release within frozen format v1. extends v0.2.0 with the int4 sub-int8 lever and the published preset ladder, the g1 graph pillar, matryoshka prefix truncation, and the forge-core ingestion workspace. existing v0.2 files load unchanged in v0.3 readers.
