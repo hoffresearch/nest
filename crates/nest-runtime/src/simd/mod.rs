@@ -109,7 +109,10 @@ pub fn dot_f32_bytes(q: &[f32], row_bytes: &[u8]) -> f32 {
 pub fn dot_f32_f16_bytes(q: &[f32], row_bytes: &[u8]) -> f32 {
     debug_assert_eq!(row_bytes.len(), q.len() * 2);
     match detect_backend() {
-        #[cfg(target_arch = "aarch64")]
+        // neon f16 widening needs rustc >= 1.94 (see build.rs / neon.rs); on
+        // older toolchains this arm is absent and the f16 path falls through to
+        // scalar (f32/i8/i4 still use neon).
+        #[cfg(all(target_arch = "aarch64", neon_f16))]
         SimdBackend::Neon => unsafe { neon::dot_f32_f16_neon(q, row_bytes) },
         // lAVX2 has no native f16->f32 unless F16C is present; our cutoff
         // is "AVX2 + FMA" which usually pulls F16C along. Using a portable

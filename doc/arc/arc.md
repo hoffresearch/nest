@@ -43,7 +43,7 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - .gitignore | config | excludes build outputs, caches, virtualenvs, regenerated corpora, and local scratch paths.
 - AGENTS.md | repo operations | the operating contract for ai agents and contributors: build commands, file hygiene, architectural conventions, and known runtime gotchas. the single agent instruction source: claude, gemini, codex and similar tools route here on init; do not create per-tool instruction files or parallel instruction docs.
 - Cargo.lock | lockfile | generated dependency snapshot for reproducible cargo resolution, with no business logic of its own.
-- Cargo.toml | workspace manifest | declares the four crates, resolver 3, workspace edition 2024, and shared dependencies.
+- Cargo.toml | workspace manifest | declares the four crates, resolver 3, workspace edition 2024, msrv rust-version 1.85 (inherited by all crates), and shared dependencies.
 - clippy.toml | lint policy | fixes msrv and lint thresholds so the release gate behaves deterministically across clippy updates.
 - CODE_OF_CONDUCT.md | governance | contributor conduct policy in the repo's lowercase documentation style.
 - CONTRIBUTING.md | contributor guide | explains branch flow, setup, tests, line-count rules, and the local release gate.
@@ -194,6 +194,7 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 ## nest-runtime
 
 - crates/nest-runtime/Cargo.toml | crate manifest | declares the runtime crate and its dependencies on nest-format, mmap, rayon, half, serde, and sha2.
+- crates/nest-runtime/build.rs | rust build script | probes the compiling rustc and emits cfg(neon_f16) only at >= 1.94, so the aarch64 f16 NEON kernel (float16x4_t/vcvt_f32_f16, stable since 1.94) is gated to toolchains that have it and the workspace still builds at its declared msrv (1.85) on older rustc, falling back to the scalar f16 kernel.
 - crates/nest-runtime/src/ann/build.rs | rust source | deterministic hnsw graph construction over normalized vectors.
 - crates/nest-runtime/src/ann/codec.rs | rust source | serializes and deserializes the optional hnsw section payload; v2 bitpacks the level/count/neighbour-id columns with intpack (order-preserving, recall unchanged) and still reads v1.
 - crates/nest-runtime/src/ann/mod.rs | rust source | hnsw index types, defaults, distance model, and roundtrip tests.
@@ -215,8 +216,8 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - crates/nest-runtime/src/mmap_file.rs | rust source | owns the mmap, decodes metadata and optional indices at open time (including the optional embeddings_fp slab, the packed ann vector store, and the graph_adjacency 0x0C csr opened behind the graph_present capability via has_graph), and exposes inspect and revalidate helpers while assuming embeddings stay directly readable from the mapped file.
 - crates/nest-runtime/src/search.rs | rust source | validates queries, scores exact rows and reranks ann, graph, and hybrid candidates through the single rerank source, materializes stable hit contracts, and builds the additive SearchExplain on all four paths (route, candidate counts, fusion_mode, recall_estimate, rerank_source from the effective dtype); search_graph seeds the exact top-ef then bounded-bfs-expands the union before the same exact rerank.
 - crates/nest-runtime/src/simd/avx2.rs | rust source | x86_64 avx2 kernels for dot products over f32, int8, and the fused int4 block-64 dequant+dot hot paths.
-- crates/nest-runtime/src/simd/mod.rs | rust source | once-only backend detection plus dispatch for scalar, avx2, and neon kernels (incl dot_f32_i4_blocked).
-- crates/nest-runtime/src/simd/neon.rs | rust source | aarch64 neon kernels, including float16, int8, and the fused int4 block-64 dequant+dot paths.
+- crates/nest-runtime/src/simd/mod.rs | rust source | once-only backend detection plus dispatch for scalar, avx2, and neon kernels (incl dot_f32_i4_blocked); the f16 neon dispatch arm is gated behind cfg(neon_f16) (set by build.rs at rustc >= 1.94) and falls back to scalar f16 on older toolchains.
+- crates/nest-runtime/src/simd/neon.rs | rust source | aarch64 neon kernels, including int8, the fused int4 block-64 dequant+dot, and the float16 widening path (gated behind cfg(neon_f16) since vcvt_f32_f16 is stable only at rustc >= 1.94).
 - crates/nest-runtime/src/simd/scalar.rs | rust source | portable scalar fallback for all dtype combinations, incl the int4 per-group reference reduction the simd backends match bit-for-bit.
 - crates/nest-runtime/src/simd/tests.rs | rust test | parity coverage across scalar and simd implementations, incl the int4 bit-for-bit backend-parity and reference-dequant-dot checks.
 - crates/nest-runtime/tests/fp16_topk_recall_vs_f32.rs | rust test | recall and score-drift checks for float16 against float32 exact search.
