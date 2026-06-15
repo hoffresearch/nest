@@ -124,7 +124,7 @@ nest retrieve my_corpus.nest "can I use this offline" -k 5 --format jsonl
 
 each hit is `{chunk_id, score, score_type=cosine, source_uri, offset_start, offset_end, citation_id, text, file_hash, content_hash, rerank_source}`. the `score` is the exact rerank value (never a candidate-generator proxy), `text` is the tier-1 stored canonical text, and `citation_id` round-trips through `nest cite`. `--format json` emits a single pretty array instead of one object per line.
 
-the embedder runs under `python3` by default; set `NEST_PYTHON` to a venv that carries the forge deps (numpy + tokenizers + the vendored potion table) if `python3` does not. point `--model-path` at a copied potion table dir for a fully sealed offline run.
+the embedder picks its interpreter in a fixed order: `NEST_PYTHON` if set, else the repo's `.venv/bin/python` (which carries the forge deps: numpy + tokenizers + the vendored potion table) discovered by walking up from the cwd, else `python3` on PATH. so the repo `.venv` is used automatically; set `NEST_PYTHON` only to force a specific interpreter. the selected interpreter is printed to stderr — and since discovery executes the nearest ancestor `.venv/bin/python`, set `NEST_PYTHON` explicitly if you run `nest` from inside an untrusted directory tree. point `--model-path` at a copied potion table dir for a fully sealed offline run.
 
 the python convenience is `python python/forge/retrieve.py`: it builds a `.nest` from the cc0 demo corpus with the potion embedder, asks a question, and prints the cited answer with a `nest://` citation, all offline and deterministic (the one-gif demo).
 
