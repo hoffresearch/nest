@@ -35,7 +35,7 @@ inventory:
     - {path: ".gitignore", kind: config, purpose: "ignores build outputs, caches, and regenerated corpora", links: []}
     - {path: "AGENTS.md", kind: repo-ops, purpose: "agent operating contract, commands, conventions, and gotchas; the single agent instruction source, no per-tool instruction files", links: ["scripts/release_check.sh"]}
     - {path: "Cargo.lock", kind: lockfile, purpose: "generated dependency lock for reproducible cargo resolution", links: ["Cargo.toml"]}
-    - {path: "Cargo.toml", kind: workspace-manifest, purpose: "workspace members, edition, resolver, and shared dependencies", links: ["crates/nest-format/Cargo.toml", "crates/nest-runtime/Cargo.toml", "crates/nest-cli/Cargo.toml", "crates/nest-python/Cargo.toml"]}
+    - {path: "Cargo.toml", kind: workspace-manifest, purpose: "workspace members, edition, resolver, rust-version 1.85 (msrv, inherited by all crates), and shared dependencies", links: ["crates/nest-format/Cargo.toml", "crates/nest-runtime/Cargo.toml", "crates/nest-cli/Cargo.toml", "crates/nest-python/Cargo.toml"]}
     - {path: "clippy.toml", kind: lint-config, purpose: "pins msrv and clippy thresholds", links: []}
     - {path: "CODE_OF_CONDUCT.md", kind: governance-doc, purpose: "project conduct policy", links: []}
     - {path: "CONTRIBUTING.md", kind: contributor-doc, purpose: "setup, branching, testing, and style guidance", links: ["scripts/release_check.sh"]}

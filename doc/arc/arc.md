@@ -43,7 +43,7 @@ the trio is kept in sync: arc.md (human), arc.yaml (machine), arc.mmd (visual). 
 - .gitignore | config | excludes build outputs, caches, virtualenvs, regenerated corpora, and local scratch paths.
 - AGENTS.md | repo operations | the operating contract for ai agents and contributors: build commands, file hygiene, architectural conventions, and known runtime gotchas. the single agent instruction source: claude, gemini, codex and similar tools route here on init; do not create per-tool instruction files or parallel instruction docs.
 - Cargo.lock | lockfile | generated dependency snapshot for reproducible cargo resolution, with no business logic of its own.
-- Cargo.toml | workspace manifest | declares the four crates, resolver 3, workspace edition 2024, and shared dependencies.
+- Cargo.toml | workspace manifest | declares the four crates, resolver 3, workspace edition 2024, msrv rust-version 1.85 (inherited by all crates), and shared dependencies.
 - clippy.toml | lint policy | fixes msrv and lint thresholds so the release gate behaves deterministically across clippy updates.
 - CODE_OF_CONDUCT.md | governance | contributor conduct policy in the repo's lowercase documentation style.
 - CONTRIBUTING.md | contributor guide | explains branch flow, setup, tests, line-count rules, and the local release gate.
