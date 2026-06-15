@@ -148,11 +148,10 @@ pub fn embed_and_search(
         );
     }
 
-    // lthe interpreter the offline embedder runs under. defaults to `python3`
-    // but `NEST_PYTHON` overrides it, so a venv carrying the forge deps
-    // (numpy + tokenizers for the potion table) can be selected without
-    // touching PATH. the embedder itself opens no socket.
-    let interpreter = std::env::var("NEST_PYTHON").unwrap_or_else(|_| "python3".into());
+    // the interpreter the offline embedder runs under: `NEST_PYTHON`, else the
+    // repo's `.venv`, else `python3` (see cmd::pyenv::resolve_interpreter). the
+    // embedder itself opens no socket regardless of interpreter.
+    let interpreter = super::pyenv::resolve_interpreter();
     let mut cmd = ProcCommand::new(&interpreter);
     cmd.arg(&embedder);
     if let Some(p) = &model_path {
