@@ -5,6 +5,7 @@ pub mod ask;
 pub mod benchmark;
 pub mod cite;
 pub mod inspect;
+pub mod pyenv;
 pub mod retrieve;
 pub mod search;
 pub mod search_ann;
