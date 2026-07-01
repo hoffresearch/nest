@@ -89,7 +89,7 @@ impl NestFile {
     /// tier-1 stored canonical `text`, the verifying hashes, the stable
     /// citation_id, and the rerank-source precision marker. embed the query
     /// OFFLINE first (see python/forge/retrieve.py for the potion path).
-    #[pyo3(signature = (query, k, candidates=None, hops=1, ef=100))]
+    #[pyo3(signature = (query, k, candidates=None, hops=1, ef=100, expected_model_hash=None))]
     fn retrieve(
         &self,
         query: &Bound<PyAny>,
@@ -97,8 +97,17 @@ impl NestFile {
         candidates: Option<usize>,
         hops: usize,
         ef: usize,
+        expected_model_hash: Option<String>,
     ) -> PyResult<Vec<crate::retrieve_fn::RetrieveHitPy>> {
-        crate::retrieve_fn::retrieve(&self.rt, query, k, candidates, hops, ef)
+        crate::retrieve_fn::retrieve(
+            &self.rt,
+            query,
+            k,
+            candidates,
+            hops,
+            ef,
+            expected_model_hash,
+        )
     }
 
     #[getter]
@@ -134,6 +143,11 @@ impl NestFile {
     #[getter]
     fn has_graph(&self) -> bool {
         self.rt.has_graph()
+    }
+
+    #[getter]
+    fn model_hash(&self) -> String {
+        self.rt.model_hash().to_string()
     }
 
     #[getter]

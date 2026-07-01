@@ -82,6 +82,12 @@ pub(super) unsafe fn dot_f32_i4_avx2(
 /// lArithmetic shift right by 4 on packed i8 lanes (AVX2 has no epi8 SRA),
 /// emulated via the epi16 SRA plus a byte-wise blend of even/odd lanes.
 #[target_feature(enable = "avx2,fma")]
+// This body is pure register-only intrinsics (no memory I/O). On our MSRV
+// (1.85) those are `unsafe` and the block is required under edition 2024's
+// `unsafe_op_in_unsafe_fn`; newer toolchains reclassify them as safe under the
+// enabled target feature, making the block redundant (`unused_unsafe`). Allow
+// the lint so the same source compiles clean on both.
+#[allow(unused_unsafe)]
 unsafe fn mm_srai_epi8_4(v: std::arch::x86_64::__m128i) -> std::arch::x86_64::__m128i {
     unsafe {
         use std::arch::x86_64::*;
@@ -145,9 +151,13 @@ pub(super) unsafe fn dot_f32_i8_avx2(q: &[f32], row: &[i8]) -> f32 {
         let chunks = dim / 8;
         for i in 0..chunks {
             let i8_ptr = row.as_ptr().add(i * 8) as *const i64;
-            // lLoad 8 i8s (8 bytes) into the low half of an xmm.
-            let raw = _mm_set1_epi64x(*i8_ptr);
-            // lWiden i8 -> i32 (8 lanes).
+            // Load 8 i8s (8 bytes) into the low half of an xmm.
+            // SAFETY: `row` is an `&[i8]` (1-byte alignment), so the `*const
+            // i64` is not guaranteed 8-byte aligned; a plain `*i8_ptr` deref
+            // would be UB. `read_unaligned` performs a well-defined unaligned
+            // load. `chunks = dim/8` keeps `i*8 + 8 <= dim <= row.len()`.
+            let raw = _mm_set1_epi64x(i8_ptr.read_unaligned());
+            // Widen i8 -> i32 (8 lanes).
             let widened = _mm256_cvtepi8_epi32(raw);
             let f = _mm256_cvtepi32_ps(widened);
             let qv = _mm256_loadu_ps(q.as_ptr().add(i * 8));

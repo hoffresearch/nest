@@ -94,19 +94,27 @@ fn write_blob(out: &mut Vec<u8>, blob: &[u8]) {
     out.extend_from_slice(blob);
 }
 
+/// hostile-input guard: `n_docs`, `n_terms`, and `df` are raw `u32` read from
+/// an untrusted section and would otherwise be passed straight to
+/// `Vec::/HashMap::with_capacity`, letting a crafted header (e.g. `df =
+/// 0xFFFF_FFFF`) force a multi-GiB reservation and abort the process at
+/// `open()`. Cap the capacity HINT and let the collection grow on demand; the
+/// cursor's per-read EOF check bounds the actual work to the bytes present.
+const MAX_PREALLOC: usize = 1 << 20;
+
 type Decoded = (Vec<u32>, HashMap<String, TermEntry>);
 
 /// v1: flat `u32` doc lengths and `(doc, tf)` postings.
 fn decode_v1(cur: &mut ByteCursor, n_docs: usize, n_terms: usize) -> Result<Decoded, RuntimeError> {
-    let mut doc_lengths = Vec::with_capacity(n_docs);
+    let mut doc_lengths = Vec::with_capacity(n_docs.min(MAX_PREALLOC));
     for _ in 0..n_docs {
         doc_lengths.push(cur.u32()?);
     }
-    let mut terms: HashMap<String, TermEntry> = HashMap::with_capacity(n_terms);
+    let mut terms: HashMap<String, TermEntry> = HashMap::with_capacity(n_terms.min(MAX_PREALLOC));
     for _ in 0..n_terms {
         let term = cur.term()?;
         let df = cur.u32()?;
-        let mut postings = Vec::with_capacity(df as usize);
+        let mut postings = Vec::with_capacity((df as usize).min(MAX_PREALLOC));
         for _ in 0..df {
             let doc = cur.u32()?;
             let tf = cur.u32()?;
@@ -126,7 +134,7 @@ fn decode_v2(cur: &mut ByteCursor, n_docs: usize, n_terms: usize) -> Result<Deco
     let doc_lengths: Vec<u32> = dls.iter().map(|&x| x as u32).collect();
 
     // term dictionary: (term, df) in alphabetical order.
-    let mut dict: Vec<(String, u32)> = Vec::with_capacity(n_terms);
+    let mut dict: Vec<(String, u32)> = Vec::with_capacity(n_terms.min(MAX_PREALLOC));
     let mut total: usize = 0;
     for _ in 0..n_terms {
         let term = cur.term()?;
@@ -139,10 +147,10 @@ fn decode_v2(cur: &mut ByteCursor, n_docs: usize, n_terms: usize) -> Result<Deco
     if gaps.len() != total || tfs.len() != total {
         return Err(malformed("bm25 v2: posting column mismatch"));
     }
-    let mut terms: HashMap<String, TermEntry> = HashMap::with_capacity(n_terms);
+    let mut terms: HashMap<String, TermEntry> = HashMap::with_capacity(n_terms.min(MAX_PREALLOC));
     let mut k = 0usize;
     for (term, df) in dict {
-        let mut postings = Vec::with_capacity(df as usize);
+        let mut postings = Vec::with_capacity((df as usize).min(MAX_PREALLOC));
         let mut prev = 0u32;
         for _ in 0..df {
             let doc = prev.wrapping_add(gaps[k] as u32);
@@ -193,5 +201,39 @@ impl<'a> ByteCursor<'a> {
         let len = self.u32()? as usize;
         let blob = self.bytes(len)?;
         unpack_u64s(blob).map_err(RuntimeError::Format)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn v1_header(n_docs: u32, n_terms: u32) -> Vec<u8> {
+        let mut out = 1u32.to_le_bytes().to_vec(); // version 1
+        out.extend_from_slice(&1.2f32.to_le_bytes()); // k1
+        out.extend_from_slice(&0.75f32.to_le_bytes()); // b
+        out.extend_from_slice(&1.0f32.to_le_bytes()); // avgdl
+        out.extend_from_slice(&n_docs.to_le_bytes());
+        out.extend_from_slice(&n_terms.to_le_bytes());
+        out
+    }
+
+    // a header claiming ~4.3e9 docs must not reserve ~17 GiB before the read
+    // loop hits EOF; it must return a typed error, never OOM/abort.
+    #[test]
+    fn v1_hostile_n_docs_errors_without_ooming() {
+        let p = v1_header(u32::MAX, 0); // no doc-length bytes follow
+        assert!(Bm25Index::from_bytes(&p).is_err());
+    }
+
+    // a term declaring df = u32::MAX must not reserve ~34 GiB of postings.
+    #[test]
+    fn v1_hostile_df_errors_without_ooming() {
+        let mut p = v1_header(0, 1);
+        p.extend_from_slice(&1u32.to_le_bytes()); // term length 1
+        p.extend_from_slice(b"a"); // term
+        p.extend_from_slice(&u32::MAX.to_le_bytes()); // df = u32::MAX
+        // no posting bytes follow
+        assert!(Bm25Index::from_bytes(&p).is_err());
     }
 }
