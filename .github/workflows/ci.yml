@@ -20,7 +20,7 @@ jobs:
     name: rust · build · test · clippy · fmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -33,11 +33,11 @@ jobs:
     name: python · tests · ruff
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true # hydrate the vendored potion table for the forge self-tests
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install --upgrade numpy tokenizers ruff
@@ -62,7 +62,7 @@ jobs:
     name: cargo-audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo install cargo-audit --locked
       # Blocking: the advisory backlog was cleared with the pyo3 0.29 bump, so
