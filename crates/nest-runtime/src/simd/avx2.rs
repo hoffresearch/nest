@@ -82,6 +82,12 @@ pub(super) unsafe fn dot_f32_i4_avx2(
 /// lArithmetic shift right by 4 on packed i8 lanes (AVX2 has no epi8 SRA),
 /// emulated via the epi16 SRA plus a byte-wise blend of even/odd lanes.
 #[target_feature(enable = "avx2,fma")]
+// This body is pure register-only intrinsics (no memory I/O). On our MSRV
+// (1.85) those are `unsafe` and the block is required under edition 2024's
+// `unsafe_op_in_unsafe_fn`; newer toolchains reclassify them as safe under the
+// enabled target feature, making the block redundant (`unused_unsafe`). Allow
+// the lint so the same source compiles clean on both.
+#[allow(unused_unsafe)]
 unsafe fn mm_srai_epi8_4(v: std::arch::x86_64::__m128i) -> std::arch::x86_64::__m128i {
     unsafe {
         use std::arch::x86_64::*;
