@@ -79,6 +79,17 @@ impl HnswIndex {
                 }));
             }
         };
+        // hostile-input guard: `entry_point` and `max_level` are parsed from
+        // untrusted bytes and later index `nodes` / drive the layer descent at
+        // search time. Neighbour ids are range-checked in decode_nodes_v{1,2};
+        // validate the two scalar fields here so a crafted payload can never
+        // index out of range (an OOB slice = guaranteed panic / DoS).
+        if max_level as u64 > MAX_LEVEL {
+            return Err(malformed("hnsw: max_level exceeds cap"));
+        }
+        if n_nodes > 0 && entry_point as usize >= n_nodes {
+            return Err(malformed("hnsw: entry_point out of range"));
+        }
         Ok(Self {
             m,
             m_max0,
@@ -132,7 +143,11 @@ fn decode_nodes_v1(cur: &mut ByteCursor, n_nodes: usize) -> Result<Vec<Node>, Ru
             }
             let mut ids = Vec::with_capacity(k);
             for _ in 0..k {
-                ids.push(cur.u32()?);
+                let id = cur.u32()?;
+                if id as usize >= n_nodes {
+                    return Err(malformed("hnsw v1: neighbour id out of range"));
+                }
+                ids.push(id);
             }
             neighbors.push(ids);
         }
@@ -160,6 +175,11 @@ fn decode_nodes_v2(cur: &mut ByteCursor, n_nodes: usize) -> Result<Vec<Node>, Ru
     let ids = cur.intpack_column()?;
     if ids.len() != total_ids {
         return Err(malformed("hnsw v2: neighbour-id column mismatch"));
+    }
+    // range-check every neighbour id before it is used to index `nodes` /
+    // the vector store at search time (a hostile id = OOB panic / DoS).
+    if ids.iter().any(|&id| id as usize >= n_nodes) {
+        return Err(malformed("hnsw v2: neighbour id out of range"));
     }
     let mut nodes = Vec::with_capacity(n_nodes.min(1 << 16));
     let (mut ci, mut ii) = (0usize, 0usize);
@@ -254,5 +274,41 @@ mod tests {
         write_blob(&mut p, &pack_u64s(&[0]));
         // counts and ids columns missing -> EOF, typed error.
         assert!(HnswIndex::from_bytes(&p, 1, 8).is_err());
+    }
+
+    // a neighbour id parsed from a hostile file that is >= n_nodes would index
+    // `nodes` / the vector store out of range at search time. It must be
+    // rejected at decode, never accepted then panic on the first query.
+    #[test]
+    fn v2_rejects_out_of_range_neighbour_id() {
+        let mut p = v2_header(2); // n_nodes = 2 -> valid ids are {0, 1}
+        write_blob(&mut p, &pack_u64s(&[0, 0])); // two nodes, level 0
+        write_blob(&mut p, &pack_u64s(&[1, 1])); // one neighbour each
+        write_blob(&mut p, &pack_u64s(&[5, 0])); // id 5 is out of range
+        assert!(HnswIndex::from_bytes(&p, 2, 8).is_err());
+    }
+
+    #[test]
+    fn v1_rejects_out_of_range_neighbour_id() {
+        let mut out = 1u32.to_le_bytes().to_vec(); // version 1
+        for v in [16u32, 32, 400, 0, 0, 1] {
+            out.extend_from_slice(&v.to_le_bytes()); // entry 0, max_level 0, n 1
+        }
+        out.extend_from_slice(&0u32.to_le_bytes()); // node 0 level
+        out.extend_from_slice(&1u32.to_le_bytes()); // layer 0 degree = 1
+        out.extend_from_slice(&7u32.to_le_bytes()); // neighbour id 7 >= n(1)
+        assert!(HnswIndex::from_bytes(&out, 1, 8).is_err());
+    }
+
+    #[test]
+    fn rejects_out_of_range_entry_point() {
+        let mut out = 2u32.to_le_bytes().to_vec(); // version 2
+        for v in [16u32, 32, 400, 9, 0, 1] {
+            out.extend_from_slice(&v.to_le_bytes()); // entry_point 9, n_nodes 1
+        }
+        write_blob(&mut out, &pack_u64s(&[0])); // one node, level 0
+        write_blob(&mut out, &pack_u64s(&[0])); // that layer has 0 neighbours
+        write_blob(&mut out, &pack_u64s(&[])); // no ids
+        assert!(HnswIndex::from_bytes(&out, 1, 8).is_err());
     }
 }

@@ -1,5 +1,6 @@
 /target
-/Cargo.lock
+# Cargo.lock IS tracked: nest ships a CLI binary, so a committed lockfile is
+# required for reproducible builds and CVE triage against a pinned dep set.
 **/*.rs.bk
 *.pdb
 *.so

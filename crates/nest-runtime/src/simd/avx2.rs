@@ -145,9 +145,13 @@ pub(super) unsafe fn dot_f32_i8_avx2(q: &[f32], row: &[i8]) -> f32 {
         let chunks = dim / 8;
         for i in 0..chunks {
             let i8_ptr = row.as_ptr().add(i * 8) as *const i64;
-            // lLoad 8 i8s (8 bytes) into the low half of an xmm.
-            let raw = _mm_set1_epi64x(*i8_ptr);
-            // lWiden i8 -> i32 (8 lanes).
+            // Load 8 i8s (8 bytes) into the low half of an xmm.
+            // SAFETY: `row` is an `&[i8]` (1-byte alignment), so the `*const
+            // i64` is not guaranteed 8-byte aligned; a plain `*i8_ptr` deref
+            // would be UB. `read_unaligned` performs a well-defined unaligned
+            // load. `chunks = dim/8` keeps `i*8 + 8 <= dim <= row.len()`.
+            let raw = _mm_set1_epi64x(i8_ptr.read_unaligned());
+            // Widen i8 -> i32 (8 lanes).
             let widened = _mm256_cvtepi8_epi32(raw);
             let f = _mm256_cvtepi32_ps(widened);
             let qv = _mm256_loadu_ps(q.as_ptr().add(i * 8));

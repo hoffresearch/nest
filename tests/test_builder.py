@@ -1,4 +1,5 @@
 """end-to-end test of the Python ingestion pipeline."""
+
 import math
 import os
 import sys
@@ -30,7 +31,7 @@ def test_chunk_text_byte_spans_round_trip():
     assert rebuilt == encoded, (rebuilt, encoded)
     # Byte spans must point to the right place in the original encoding.
     for c in chunks:
-        assert encoded[c.byte_start:c.byte_end] == c.canonical_text.encode("utf-8")
+        assert encoded[c.byte_start : c.byte_end] == c.canonical_text.encode("utf-8")
 
 
 def test_pipeline_emits_validated_nest_file():
@@ -135,7 +136,7 @@ def test_mrl_truncation_sets_embedding_dim_and_query_stride():
                 byte_end=s.byte_end,
                 embedding=e,
             )
-            for s, e in zip(specs, embs)
+            for s, e in zip(specs, embs, strict=False)
         ]
         nest.build(
             output_path=out,
@@ -198,10 +199,82 @@ def test_mrl_dim_validation_rejects_oversized_and_zero():
             assert raised, f"mrl_dim={bad} must be rejected"
 
 
+def test_cache_keyed_by_model_no_stale_reuse():
+    """EmbeddingCache must not hand back a DIFFERENT model's vectors for the
+    same chunk_id (audit finding P2). chunk_id is model-independent, so a
+    cache keyed on chunk_id alone would silently reuse stale vectors."""
+    with tempfile.TemporaryDirectory() as d:
+        scratch = os.path.join(d, "cache.db")
+        a = EmbeddingCache(scratch, model_key="modelA")
+        a.put("chunk1", [0.1, 0.2, 0.3, 0.4])
+        got = a.get("chunk1", 4)
+        assert got is not None and abs(got[0] - 0.1) < 1e-6, got
+        a.close()
+
+        # a different model must MISS, even though the chunk_id is identical.
+        b = EmbeddingCache(scratch, model_key="modelB")
+        assert b.get("chunk1", 4) is None, "different model must not reuse vectors"
+        b.close()
+
+        # the original model still hits.
+        a2 = EmbeddingCache(scratch, model_key="modelA")
+        again = a2.get("chunk1", 4)
+        assert again is not None and len(again) == 4
+        a2.close()
+
+
+def test_retrieve_model_hash_gate():
+    """The Python flagship retrieve binding enforces the model_hash honesty
+    gate when the caller passes expected_model_hash (audit finding S4)."""
+    h1 = "sha256:" + "ab" * 32
+    wrong = "sha256:" + "cd" * 32
+    with tempfile.TemporaryDirectory() as d:
+        out = os.path.join(d, "gate.nest")
+        chunks = [
+            dict(
+                canonical_text="alpha",
+                source_uri="a.txt",
+                byte_start=0,
+                byte_end=5,
+                embedding=[1.0, 0.0, 0.0, 0.0],
+            ),
+            dict(
+                canonical_text="beta",
+                source_uri="b.txt",
+                byte_start=5,
+                byte_end=9,
+                embedding=[0.0, 1.0, 0.0, 0.0],
+            ),
+        ]
+        nest.build(
+            output_path=out,
+            embedding_model="toy",
+            embedding_dim=4,
+            chunker_version="char/512",
+            model_hash=h1,
+            chunks=chunks,
+            reproducible=True,
+        )
+        db = nest.open(out)
+        assert db.model_hash == h1, db.model_hash
+        q = [1.0, 0.0, 0.0, 0.0]
+        assert db.retrieve(q, 1, expected_model_hash=h1), "matching hash must succeed"
+        assert db.retrieve(q, 1), "no expected hash must stay backward-compatible"
+        raised = False
+        try:
+            db.retrieve(q, 1, expected_model_hash=wrong)
+        except ValueError as e:
+            raised = True
+            assert "model_hash mismatch" in str(e), str(e)
+        assert raised, "a mismatched expected_model_hash must raise"
+
+
 if __name__ == "__main__":
     test_chunk_text_byte_spans_round_trip()
     test_pipeline_emits_validated_nest_file()
     test_cache_skips_re_embedding_on_second_run()
+    test_cache_keyed_by_model_no_stale_reuse()
+    test_retrieve_model_hash_gate()
     test_mrl_truncation_sets_embedding_dim_and_query_stride()
     test_mrl_dim_validation_rejects_oversized_and_zero()
     print("builder tests OK")

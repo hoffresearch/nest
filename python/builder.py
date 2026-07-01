@@ -95,28 +95,43 @@ def chunk_text(
 
 
 class EmbeddingCache:
-    """SQLite scratch keyed by chunk_id. Stores raw float32 embeddings.
+    """SQLite scratch keyed by (chunk_id, model). Stores raw float32 embeddings.
 
     Intended to be reused across runs so re-builds skip the expensive
     embedding step for chunks that have already been computed.
+
+    The key includes `model_key` (embedding_model + model_hash). A chunk_id is
+    only a function of the text/spans/chunker, NOT the embedding model, so a
+    cache keyed on chunk_id alone would silently hand back a PREVIOUS model's
+    vectors when the same corpus is re-embedded with a different model —
+    shipping a .nest whose vectors do not match its declared model_hash. Keying
+    on the model closes that.
+
+    Uses table `embeddings_v2`: an old chunk-id-only `embeddings` table (from a
+    prior nest version) is simply not reused (chunks are re-embedded), never
+    misread — no in-place migration, no stale-model hit.
     """
 
     SCHEMA = """
-        CREATE TABLE IF NOT EXISTS embeddings (
-            chunk_id TEXT PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS embeddings_v2 (
+            chunk_id TEXT NOT NULL,
+            model TEXT NOT NULL,
             dim INTEGER NOT NULL,
-            data BLOB NOT NULL
+            data BLOB NOT NULL,
+            PRIMARY KEY (chunk_id, model)
         );
     """
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, model_key: str = ""):
         self.path = path
+        self.model_key = model_key
         self.conn = sqlite3.connect(path)
         self.conn.executescript(self.SCHEMA)
 
     def get(self, chunk_id: str, dim: int) -> list[float] | None:
         row = self.conn.execute(
-            "SELECT dim, data FROM embeddings WHERE chunk_id=?", (chunk_id,)
+            "SELECT dim, data FROM embeddings_v2 WHERE chunk_id=? AND model=?",
+            (chunk_id, self.model_key),
         ).fetchone()
         if row is None:
             return None
@@ -127,8 +142,8 @@ class EmbeddingCache:
     def put(self, chunk_id: str, embedding: Sequence[float]) -> None:
         data = struct.pack(f"<{len(embedding)}f", *embedding)
         self.conn.execute(
-            "INSERT OR REPLACE INTO embeddings(chunk_id, dim, data) VALUES(?,?,?)",
-            (chunk_id, len(embedding), data),
+            "INSERT OR REPLACE INTO embeddings_v2(chunk_id, model, dim, data) VALUES(?,?,?,?)",
+            (chunk_id, self.model_key, len(embedding), data),
         )
         self.conn.commit()
 
@@ -195,7 +210,10 @@ class Pipeline:
     ):
         self.cfg = cfg
         self.embedder = embedder
-        self.cache = EmbeddingCache(scratch_db) if scratch_db else None
+        # key the cache by the model too, so re-embedding the same corpus with
+        # a different model never reuses stale vectors under a new model_hash.
+        model_key = f"{cfg.embedding_model}\x00{cfg.model_hash}"
+        self.cache = EmbeddingCache(scratch_db, model_key=model_key) if scratch_db else None
         self._specs: list[ChunkSpec] = []
 
     def add(self, spec: ChunkSpec) -> None:
