@@ -6,6 +6,7 @@ mod cmd;
 
 #[derive(Parser)]
 #[command(name = "nest")]
+#[command(version)]
 #[command(about = ".nest — Semantic Knowledge Format for Local Agents", long_about = None)]
 struct Cli {
     #[command(subcommand)]

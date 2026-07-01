@@ -8,7 +8,8 @@ only the latest minor on `main` is supported.
 
 | version | status |
 |---------|--------|
-| 0.2.x   | supported |
+| 0.3.x   | supported (current) |
+| 0.2.x   | not supported, please upgrade |
 | 0.1.x   | not supported, please upgrade |
 
 ## reporting a vulnerability
@@ -52,7 +53,8 @@ things we do not treat as security bugs:
 
 ## hardening notes
 
-- the runtime never opens a network socket. queries are answered from `mmap`.
-- `model_hash` is a granular fingerprint over the local model snapshot (config + tokenizer + weights + pooling + dim + normalize). a mismatch fails with a typed error, never silently.
-- `unsafe` is concentrated in the SIMD dispatcher (`crates/nest-runtime/src/simd/`) and the mmap reader (`crates/nest-runtime/src/mmap_file.rs`). every `unsafe` block carries a `// SAFETY:` comment documenting the invariant.
-- binary releases of `nest-cli` are not yet signed. signed tags are on the v0.3 backlog.
+- the runtime (rust) never opens a network socket. queries are answered from `mmap`. the default query embedders are offline too: `ask`/`retrieve` use the vendored potion table (no network by construction), and the `search-text` sentence-transformers path forces `HF_HUB_OFFLINE`/`TRANSFORMERS_OFFLINE` unless you opt in with `NEST_ALLOW_DOWNLOAD=1` (or pass `--model-path`).
+- `model_hash` is a granular fingerprint over the local model snapshot (config + tokenizer + weights + pooling + dim + normalize). a mismatch fails with a typed error, never silently. the CLI (`search-text`) enforces this; the Python `NestFile.retrieve` binding accepts `expected_model_hash` and the flagship `forge/retrieve.py` passes it by default, so the honesty gate holds on the Python surface too.
+- `unsafe` lives in the SIMD dispatcher (`crates/nest-runtime/src/simd/`), the mmap reader (`crates/nest-runtime/src/mmap_file.rs`), and a handful of zero-copy view casts in `crates/nest-format/src/layout/` and `encoding/int8.rs`. the SIMD and mmap sites carry `// SAFETY:` comments; documenting the remaining `nest-format` sites is a tracked hardening item (do not assume every block is annotated).
+- untrusted `.nest` files: the header/section/footer checksums are unkeyed SHA-256 (corruption detection, NOT authenticity) — an attacker can recompute them, so `validate()` does not prove a file is trustworthy. Safety against a hostile file rests on the parser's memory-safety (bounds-checked indices, capped decompression/allocation); opening an untrusted corpus still executes that parser, so treat unknown `.nest` files with the same care as any untrusted input.
+- release provenance: commits are signed (ssh signing), but release tags and `nest-cli` binaries are NOT yet cryptographically signed, and no SBOM is published per release. Treat a downloaded artifact as unverified against source until signed releases land. `Cargo.lock` is committed so the rust dependency set is pinned and auditable. This is a tracked hardening item.
