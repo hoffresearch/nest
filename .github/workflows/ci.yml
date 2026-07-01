@@ -59,14 +59,12 @@ jobs:
       - run: ruff check python tests
 
   audit:
-    name: cargo-audit (advisory)
+    name: cargo-audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo install cargo-audit --locked
-      # Informational until the pre-existing advisory backlog is triaged: it
-      # surfaces vulnerable deps in the logs without blocking merges. Flip to a
-      # blocking check once the tree is clean.
+      # Blocking: the advisory backlog was cleared with the pyo3 0.29 bump, so
+      # any new advisory against the committed Cargo.lock should fail CI.
       - run: cargo audit
-        continue-on-error: true
