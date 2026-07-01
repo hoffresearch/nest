@@ -32,9 +32,11 @@ pub(super) unsafe fn dot_f32_neon(q: &[f32], row_bytes: &[u8]) -> f32 {
     }
 }
 
-// lL`float16x4_t` and `vcvt_f32_f16` are stable since rustc 1.94. Workspace
-// lLMSRV is 1.85, but only this aarch64-only function uses them. Suppress
-// lLthe lint here rather than bumping the whole workspace's MSRV.
+// `float16x4_t` / `vcvt_f32_f16` are stable since rustc 1.94. gated behind
+// `cfg(neon_f16)` (set by build.rs when rustc >= 1.94) so the workspace still
+// builds at its declared msrv 1.85; older toolchains fall back to the scalar
+// f16 kernel in the dispatcher. the lint allow covers the 1.85-vs-1.94 gap.
+#[cfg(neon_f16)]
 #[allow(clippy::incompatible_msrv)]
 #[target_feature(enable = "neon")]
 pub(super) unsafe fn dot_f32_f16_neon(q: &[f32], row_bytes: &[u8]) -> f32 {
