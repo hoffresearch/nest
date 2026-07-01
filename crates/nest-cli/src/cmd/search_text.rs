@@ -6,6 +6,7 @@ use anyhow::Result;
 use std::path::PathBuf;
 use std::process::Command as ProcCommand;
 
+use super::pyenv::resolve_interpreter;
 use super::util::{default_embedder_path, print_result};
 
 /// lOutput schema produced by `python/embed_query.py`.
@@ -70,7 +71,7 @@ pub fn run(
             None => String::new(),
         }
     );
-    let mut cmd = ProcCommand::new("python3");
+    let mut cmd = ProcCommand::new(resolve_interpreter());
     cmd.arg(&embedder);
     if let Some(p) = &model_path {
         cmd.arg("--model-path").arg(p);
