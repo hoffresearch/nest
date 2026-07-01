@@ -84,6 +84,9 @@ mod tests {
     fn cap_has_floor_and_ratio() {
         assert_eq!(decompress_cap(0), MIN_DECOMPRESS_CAP);
         assert_eq!(decompress_cap(usize::MAX), usize::MAX); // saturating, no overflow
-        assert_eq!(decompress_cap(MIN_DECOMPRESS_CAP), MIN_DECOMPRESS_CAP * MAX_DECOMPRESS_RATIO);
+        assert_eq!(
+            decompress_cap(MIN_DECOMPRESS_CAP),
+            MIN_DECOMPRESS_CAP * MAX_DECOMPRESS_RATIO
+        );
     }
 }

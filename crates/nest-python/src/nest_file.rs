@@ -99,7 +99,15 @@ impl NestFile {
         ef: usize,
         expected_model_hash: Option<String>,
     ) -> PyResult<Vec<crate::retrieve_fn::RetrieveHitPy>> {
-        crate::retrieve_fn::retrieve(&self.rt, query, k, candidates, hops, ef, expected_model_hash)
+        crate::retrieve_fn::retrieve(
+            &self.rt,
+            query,
+            k,
+            candidates,
+            hops,
+            ef,
+            expected_model_hash,
+        )
     }
 
     #[getter]
