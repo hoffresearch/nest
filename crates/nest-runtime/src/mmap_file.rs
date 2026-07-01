@@ -78,6 +78,10 @@ pub struct MmapNestFile {
     pub(crate) chunk_ids: Vec<String>,
     pub(crate) spans: Vec<OriginalSpan>,
     pub(crate) embedding_model: String,
+    /// lManifest `model_hash`: the granular fingerprint of the model that
+    /// produced the corpus embeddings. Exposed so a caller embedding a query
+    /// can verify its embedder matches the corpus (the honesty gate).
+    pub(crate) model_hash: String,
     pub(crate) file_hash: String,
     pub(crate) content_hash: String,
     /// lOptional ANN index. Built from the HNSW section payload at open
@@ -172,6 +176,7 @@ impl MmapNestFile {
         };
 
         let embedding_model = view.manifest.embedding_model.clone();
+        let model_hash = view.manifest.model_hash.clone();
         let declared_index_type = view.manifest.index_type.clone();
         let declared_score_type = view.manifest.score_type.clone();
         let file_hash = view.file_hash_hex();
@@ -189,6 +194,7 @@ impl MmapNestFile {
             chunk_ids,
             spans,
             embedding_model,
+            model_hash,
             file_hash,
             content_hash,
             ann_index,
@@ -219,6 +225,11 @@ impl MmapNestFile {
     }
     pub fn declared_index_type(&self) -> &str {
         &self.declared_index_type
+    }
+    /// lManifest `model_hash` (the model fingerprint the corpus was built
+    /// with). Callers embed the query with their own model and compare.
+    pub fn model_hash(&self) -> &str {
+        &self.model_hash
     }
     pub fn declared_score_type(&self) -> &str {
         &self.declared_score_type

@@ -41,7 +41,8 @@ _ext_path = _find_extension()
 if _ext_path is None:
     raise ImportError(
         "Cannot find _nest extension. Run "
-        "`cargo build --release -p nest-python && cp target/release/lib_nest.dylib python/_nest.so` "
+        "`cargo build --release -p nest-python && "
+        "cp target/release/lib_nest.dylib python/_nest.so` "
         "from the repo root."
     )
 

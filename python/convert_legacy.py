@@ -23,6 +23,13 @@ import struct
 import sys
 import time
 
+# Force HF/sentence-transformers OFFLINE by default (opt in with
+# NEST_ALLOW_DOWNLOAD=1) before any hub access. model_fingerprint also sets
+# this on import; kept here too so the guarantee is explicit at the entry point.
+if os.environ.get("NEST_ALLOW_DOWNLOAD") != "1":
+    for _k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
+        os.environ.setdefault(_k, "1")
+
 import numpy as np
 import zstandard as zstd
 

@@ -26,18 +26,26 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) 
 
 import nest  # noqa: E402
 from builder import BuildConfig, Pipeline, chunk_text  # noqa: E402
+
 from forge.embed_potion import potion_embedder  # noqa: E402
 
 CORPUS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_corpus")
 
 
-def retrieve(nestfile, query: str, k: int = 5, embedder=None):
+def retrieve(nestfile, query: str, k: int = 5, embedder=None, verify_model: bool = True):
     """embed `query` OFFLINE with potion, then NestFile.retrieve. the returned
     hits' `score` is the exact-cosine rerank value; each carries tier-1 text +
-    a nest:// citation. `embedder` defaults to the vendored potion table."""
+    a nest:// citation. `embedder` defaults to the vendored potion table.
+
+    honesty gate (on by default): the embedder's `model_hash` is passed to
+    NestFile.retrieve, which raises if it does not match the corpus manifest —
+    so a query embedded by a DIFFERENT model can never silently return
+    cosine-valid, wrong hits (the invariant the CLI enforces, now on the
+    flagship Python surface too). Set `verify_model=False` to bypass."""
     emb = embedder or potion_embedder()
     qvec = emb.embed_texts([query])[0]
-    return nestfile.retrieve(qvec, k)
+    expected = emb.model_hash() if (verify_model and hasattr(emb, "model_hash")) else None
+    return nestfile.retrieve(qvec, k, expected_model_hash=expected)
 
 
 def build_demo(out_path: str) -> str:

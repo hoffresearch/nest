@@ -24,6 +24,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # python/
 
 import nest  # noqa: E402
+
 from forge.embed_potion import potion_embedder  # noqa: E402
 from forge.retrieve import build_demo, retrieve  # noqa: E402
 

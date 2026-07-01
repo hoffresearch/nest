@@ -63,7 +63,25 @@ pub fn retrieve(
     candidates: Option<usize>,
     hops: usize,
     ef: usize,
+    expected_model_hash: Option<String>,
 ) -> PyResult<Vec<RetrieveHitPy>> {
+    // lhonesty gate: when the caller passes the model_hash of the embedder it
+    // used for `query`, reject a corpus built with a different model. A bare
+    // query vector carries no model identity, so the runtime cannot gate
+    // unconditionally the way the CLI does — the caller opts in by passing the
+    // hash (forge/retrieve.py does so by default). Without it, behaviour is
+    // unchanged, but a mismatch would silently return cosine-valid, wrong hits.
+    if let Some(expected) = &expected_model_hash {
+        let actual = rt.model_hash();
+        if expected != actual {
+            return Err(PyValueError::new_err(format!(
+                "model_hash mismatch: the query was embedded with {expected}, but the corpus \
+                 was built with {actual}. Results would be cosine-valid but semantically wrong. \
+                 Pass expected_model_hash=None to bypass this check."
+            )));
+        }
+    }
+
     let qvec: Vec<f32> = query
         .extract()
         .map_err(|e| PyValueError::new_err(format!("invalid query vector: {e}")))?;

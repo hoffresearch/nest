@@ -21,10 +21,19 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
+
+# Force HF/sentence-transformers OFFLINE by default before the (lazy) ST
+# import at embed time. A corpus build touches source text; it must not make
+# an unexpected outbound fetch. Opt into a first-time download with
+# NEST_ALLOW_DOWNLOAD=1 (then re-run offline for reproducibility).
+if os.environ.get("NEST_ALLOW_DOWNLOAD") != "1":
+    for _k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
+        os.environ.setdefault(_k, "1")
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))

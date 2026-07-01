@@ -125,3 +125,33 @@ deduplication by sha256 collapses the inevitable overlap (FakeRecogna re-publish
 ## licenses
 
 each subdirectory inherits its upstream license. some are CC-BY-SA, some are MIT, some are unspecified academic distributions. if you redistribute a built `.nest` derived from this directory, the license of the resulting corpus is the union of all upstream licenses (most restrictive wins). check each `README` inside the subdirectories.
+
+### corpus license bill of materials
+
+The shipped `dat/corpus_next.v1.nest` embeds text derived from all seven sources
+below. **Verify each upstream license before redistributing** — several are
+research/academic distributions without an explicit redistribution grant, and at
+least one is share-alike (CC-BY-SA), which is viral over the derived corpus.
+
+| source | upstream | license (verify at source) | redistribution note |
+|--------|----------|----------------------------|---------------------|
+| `FakeBr-hf` | huggingface `vzani/corpus-fake-br` | see upstream | derived from Fake.br |
+| `FakeTrue.Br-hf` | huggingface `vzani/corpus-faketrue-br` | see upstream | |
+| `Fake.br-Corpus` | github `roneysco/Fake.br-Corpus` | academic (UFG/USP) — verify grant | attribution expected |
+| `FakeTrue.Br` | github `jpchav98/FakeTrue.Br` | academic — verify grant | |
+| `FakeRecogna` | github `Gabriel-Lino-Garcia/FakeRecogna` | academic — verify grant | contains health/political claims about named people |
+| `factck-br` | github `opit-research/factck-br` (agência lupa) | see upstream — likely attribution/share-alike | fact-check ratings; attribution required |
+| `portuguese-fake-news-classifier-bilstm-combined` | huggingface `vzani/...` | see upstream | held-out test split |
+
+**Obligations for redistributors of a built `.nest`:**
+
+- Honor the **most-restrictive** upstream license (CC-BY-SA attribution +
+  share-alike propagates to the whole derived corpus).
+- Carry **attribution**: the built file's manifest sets `license` and records
+  per-source provenance, but `nest cite` does not yet surface a per-chunk
+  license/attribution field — carry the attribution alongside the artifact until
+  it does.
+- The corpus embeds **personal data about named public figures** (political and
+  health claims). See [`doc/data-governance.md`](../../doc/data-governance.md)
+  for the erasure/lawful-basis posture. For anything you ship broadly, prefer the
+  CC0 `python/forge/demo_corpus` corpus instead of this mixed-license union.
