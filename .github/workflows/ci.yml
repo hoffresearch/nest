@@ -37,7 +37,7 @@ jobs:
         with:
           lfs: true # hydrate the vendored potion table for the forge self-tests
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install --upgrade numpy tokenizers ruff
