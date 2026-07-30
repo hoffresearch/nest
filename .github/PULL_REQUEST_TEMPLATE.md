@@ -24,7 +24,7 @@
 
 ## format / runtime impact
 
-<!-- if this PR touches the binary layout, the search contract, hash semantics, or the model fingerprint, write or update an ADR under kdb/adr/. otherwise: n/a. -->
+<!-- describe any change to the binary layout, the search contract, hash semantics, or the model fingerprint. otherwise: n/a. -->
 
 n/a
 
@@ -36,4 +36,4 @@ n/a
 
 ## related
 
-<!-- linked issues, ADRs, prior PRs. -->
+<!-- linked issues, design notes (doc/changelog.md), prior PRs. -->

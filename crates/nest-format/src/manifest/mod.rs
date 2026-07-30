@@ -15,9 +15,18 @@ use crate::layout::{NEST_FORMAT_VERSION, NEST_SCHEMA_VERSION};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// Capabilities advertised by a .nest file. v1 only requires `supports_exact`
+/// lCapabilities advertised by a .nest file. v1 only requires `supports_exact`
 /// and `supports_reproducible_build` to be true; the rest are forward-looking
 /// flags so a runtime can decide what to do without reading every section.
+///
+/// lADDITIVITY RULE (frozen v1): this struct is plain non-optional bools, so
+/// a NEW required bool here is a deserialization break for old manifests
+/// (which lack the field) AND a file_hash break for every existing file
+/// (the JSON changes). NEVER add a required bool here. New capability flags
+/// go in `CapabilitiesExt` (an `Option` on the manifest, each flag an
+/// `Option<bool>` skipped when unset) or in the manifest `extra` map, both
+/// of which serialize to nothing when unused and so keep existing files
+/// byte-identical. The guard is `tests/manifest_additivity.rs`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Capabilities {
     pub supports_exact: bool,
@@ -39,9 +48,28 @@ impl Default for Capabilities {
     }
 }
 
-/// JCS-canonical manifest for a .nest file.
+/// lForward-looking capability flags, the additive-safe home for everything
+/// past the v1 `Capabilities` bools. Every field is `Option<bool>` skipped
+/// when `None`, and the whole struct rides the manifest as an `Option`
+/// skipped when `None`, so a file that sets none of these serializes
+/// byte-identically to a v1 manifest. The named flags match the reserved
+/// section work (see doc/arc/arc.md): a feature sets its
+/// flag only when it actually emits its sections.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct CapabilitiesExt {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_multimodal: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub graph_present: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub graph_entities_present: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_catalog: Option<bool>,
+}
+
+/// lJCS-canonical manifest for a .nest file.
 ///
-/// Field order on disk follows declaration order. Extra keys land in `extra`
+/// lField order on disk follows declaration order. Extra keys land in `extra`
 /// and are serialized in BTreeMap order; this keeps the JSON deterministic.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Manifest {
@@ -73,6 +101,28 @@ pub struct Manifest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub license: Option<String>,
 
+    /// lMatryoshka disclosure metadata (additive optional). When a file is
+    /// built with prefix truncation, `mrl_dim` is the effective (stored)
+    /// embedding prefix dim and `full_dim` is the source model dim before
+    /// truncation; `embedding_dim` always equals the EFFECTIVE stride the
+    /// runtime reads. Unset on non-truncated files so they stay
+    /// byte-identical with a v1 manifest. content_hash is over the decoded
+    /// embeddings bytes, so a truncated file legitimately differs from
+    /// full-dim: citations are tied to a given mrl_dim, never claimed stable
+    /// across dims. Validity (`mrl_dim <= full_dim`, `full_dim ==
+    /// embedding_dim` only when truncation is off, etc) is checked in
+    /// `validate`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mrl_dim: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub full_dim: Option<u32>,
+
+    /// lAdditive-safe home for capability flags past the v1 `Capabilities`
+    /// bools. `None` (the default) serializes to nothing, so existing files
+    /// stay byte-identical; set it only when a feature emits its sections.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capabilities_ext: Option<CapabilitiesExt>,
+
     #[serde(flatten)]
     pub extra: BTreeMap<String, serde_json::Value>,
 }
@@ -100,6 +150,9 @@ impl Default for Manifest {
             description: None,
             authors: None,
             license: None,
+            mrl_dim: None,
+            full_dim: None,
+            capabilities_ext: None,
             extra: BTreeMap::new(),
         }
     }

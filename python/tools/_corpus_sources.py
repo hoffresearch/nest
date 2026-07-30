@@ -15,7 +15,7 @@ from pathlib import Path
 import pandas as pd
 
 REPO = Path(__file__).resolve().parents[2]
-DB = REPO / "database"
+DB = REPO / "dat" / "demo"
 
 MIN_TEXT_LEN = 20
 
@@ -34,7 +34,7 @@ def _row(text, label, source, title="", url=""):
     }
 
 
-# ── loaders ────────────────────────────────────────────────────────────────
+# l── loaders ────────────────────────────────────────────────────────────────
 
 
 def load_fakebr_hf() -> pd.DataFrame:

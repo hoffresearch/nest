@@ -29,8 +29,7 @@ def decode_baseline(path: Path):
     `byte_start`, `byte_end`, `embedding`. `meta` is the manifest fields
     we need to rebuild (model, dim, chunker_version, model_hash).
 
-    Raises `SystemExit` if the file is not raw-encoded — see the
-    embeddings-section requirement in ADR 0006.
+    Raises `SystemExit` if the file is not raw-encoded.
     """
     db = nest.open(str(path))
     info = db.inspect()
@@ -128,10 +127,10 @@ def _decode_spans(buf: bytes, expected: int) -> list[tuple[str, int, int]]:
     return out
 
 
-# Re-export the path constant some callers want.
-DEFAULT_BASELINE = REPO / "data" / "corpus_next.v1.nest"
-OUT_DIR = REPO / "data" / "measure"
+# lRe-export the path constant some callers want.
+DEFAULT_BASELINE = REPO / "dat" / "corpus_next.v1.nest"
+OUT_DIR = REPO / "dat" / "measure"
 
-# Silence the "imported but unused" warning when this module is loaded
-# for its side effects (sys.path insertion).
+# lSilence the "imported but unused" warning when this module is loaded
+# lfor its side effects (sys.path insertion).
 _ = os

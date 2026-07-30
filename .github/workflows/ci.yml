@@ -1,0 +1,70 @@
+name: ci
+
+# Runs the quality gate on every push to main and every PR, so the checks that
+# previously only ran on the maintainer's laptop (release_check.sh) produce
+# independent, logged, reproducible evidence. Gate merges on this workflow.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: rust · build · test · clippy · fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - run: cargo fmt --all --check
+      - run: cargo build --workspace --locked
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+
+  python:
+    name: python · tests · ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: true # hydrate the vendored potion table for the forge self-tests
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install --upgrade numpy tokenizers ruff
+      - name: build extension + cli
+        run: |
+          cargo build --release -p nest-cli --locked
+          PYO3_PYTHON="$(which python)" cargo build --release -p nest-python --locked
+          cp target/release/lib_nest.so python/_nest.so
+      - name: engine + builder tests
+        run: |
+          python tests/test_e2e.py
+          python tests/test_builder.py
+          python tests/test_search_text_model_hash.py
+          python tests/test_offline_guard.py
+      - name: forge self-tests (offline, socket-blocked)
+        run: |
+          python python/forge/test_embed_potion.py
+          python python/forge/test_retrieve.py
+      - run: ruff check python tests
+
+  audit:
+    name: cargo-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install cargo-audit --locked
+      # Blocking: the advisory backlog was cleared with the pyo3 0.29 bump, so
+      # any new advisory against the committed Cargo.lock should fail CI.
+      - run: cargo audit

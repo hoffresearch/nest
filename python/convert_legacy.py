@@ -23,6 +23,13 @@ import struct
 import sys
 import time
 
+# Force HF/sentence-transformers OFFLINE by default (opt in with
+# NEST_ALLOW_DOWNLOAD=1) before any hub access. model_fingerprint also sets
+# this on import; kept here too so the guarantee is explicit at the entry point.
+if os.environ.get("NEST_ALLOW_DOWNLOAD") != "1":
+    for _k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
+        os.environ.setdefault(_k, "1")
+
 import numpy as np
 import zstandard as zstd
 
@@ -59,7 +66,7 @@ def load_embeddings(conn: sqlite3.Connection, n: int, dim: int) -> np.ndarray:
         raise SystemExit("legacy file has no `embeddings` blob")
     raw = dec.decompress(row[0])
     arr = np.frombuffer(raw, dtype=np.float16).reshape(n, dim).astype(np.float32)
-    # The legacy builder stored unit-normalized vectors but float16 round-trip
+    # the legacy builder stored unit-normalized vectors but float16 round-trip
     # can drift the norm by ~1e-3. Re-normalize so the runtime's dot product
     # is exactly cosine.
     norms = np.linalg.norm(arr, axis=1, keepdims=True)
@@ -83,7 +90,7 @@ def convert(src: str, dst: str, *, reproducible: bool) -> None:
     model = legacy_manifest["embedding_model"]
     print(f"legacy: {n} articles, dim={dim}, model={model}")
 
-    # Load all texts into memory, indexed by article id.
+    # load all texts into memory, indexed by article id.
     texts: list[str | None] = [None] * n
     for block_id, block_texts in load_blocks(conn):
         for pos, text in enumerate(block_texts):
@@ -94,7 +101,7 @@ def convert(src: str, dst: str, *, reproducible: bool) -> None:
     if missing:
         raise SystemExit(f"{len(missing)} articles have no text (e.g. id={missing[:5]})")
 
-    # Per-article metadata.
+    # per-article metadata.
     rows = list(conn.execute("SELECT id, source, label FROM articles ORDER BY id"))
     if len(rows) != n:
         raise SystemExit(f"articles table has {len(rows)} rows but manifest says {n}")
@@ -133,7 +140,7 @@ def convert(src: str, dst: str, *, reproducible: bool) -> None:
         ),
     }
 
-    # Resolve the model snapshot and compute a real fingerprint. We
+    # resolve the model snapshot and compute a real fingerprint. We
     # require the snapshot to be locally available — if it isn't, the
     # caller can re-download it via `python -c "from sentence_transformers
     # import SentenceTransformer; SentenceTransformer('<id>')"`. The
@@ -169,7 +176,7 @@ def convert(src: str, dst: str, *, reproducible: bool) -> None:
     size = os.path.getsize(dst)
     print(f"wrote {dst}: {size / 1e6:.2f} MB in {elapsed:.1f}s")
 
-    # Final integrity check through the same Rust reader the runtime uses.
+    # final integrity check through the same Rust reader the runtime uses.
     db = nest.open(dst)
     db.validate()
     print(
@@ -183,8 +190,8 @@ def convert(src: str, dst: str, *, reproducible: bool) -> None:
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--src", default="data/truw_ptbr.nest")
-    p.add_argument("--dst", default="data/truw_ptbr.v1.nest")
+    p.add_argument("--src", required=True, help="path to a legacy SQLite-based truw_ptbr.nest")
+    p.add_argument("--dst", required=True, help="output path for the converted v1 .nest")
     p.add_argument("--reproducible", action="store_true")
     args = p.parse_args()
     convert(args.src, args.dst, reproducible=args.reproducible)

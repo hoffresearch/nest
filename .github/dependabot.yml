@@ -1,13 +1,18 @@
 # dependabot configuration. simple by design: weekly cadence, capped pr count,
-# explicit scope. update when adding new package ecosystems (e.g. requirements.txt
-# would unlock the `pip` ecosystem).
+# explicit scope. update when adding new package ecosystems.
+#
+# pip is intentionally absent: pyproject.toml declares only `>=` floors in a
+# PEP 735 dependency group (no pins, no lockfile), so version updates would
+# have nothing to bump. add the ecosystem if pinned requirements or a Python
+# lockfile ever land.
 #
 # docs: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
 
 updates:
-  # rust workspace at the repo root.
+  # rust workspace at the repo root. Cargo.lock is committed, so updates
+  # target the exact resolved versions the CLI binary ships with.
   - package-ecosystem: cargo
     directory: /
     schedule:
@@ -26,7 +31,7 @@ updates:
           - patch
           - minor
 
-  # github actions workflows. picks up files under .github/workflows/ once they exist.
+  # github actions workflows (.github/workflows/).
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -39,3 +44,7 @@ updates:
     commit-message:
       prefix: actions
       include: scope
+    groups:
+      actions:
+        patterns:
+          - "*"

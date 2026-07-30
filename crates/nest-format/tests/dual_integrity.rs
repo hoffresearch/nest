@@ -21,8 +21,9 @@
 //! Together: physical and semantic guarantees are independent.
 
 use nest_format::layout::{
-    SECTION_CHUNKS_CANONICAL, SECTION_CHUNKS_ORIGINAL_SPANS, SECTION_ENCODING_RAW,
-    SECTION_ENCODING_ZSTD, SECTION_PROVENANCE, SECTION_SEARCH_CONTRACT,
+    SECTION_CHUNK_IDS, SECTION_CHUNKS_CANONICAL, SECTION_CHUNKS_ORIGINAL_SPANS,
+    SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD, SECTION_PROVENANCE,
+    SECTION_SEARCH_CONTRACT,
 };
 use nest_format::manifest::{Capabilities, Manifest};
 use nest_format::writer::{NestFileBuilder, SectionEncoding};
@@ -56,6 +57,9 @@ fn manifest_for(n: u64) -> Manifest {
         description: None,
         authors: None,
         license: None,
+        mrl_dim: None,
+        full_dim: None,
+        capabilities_ext: None,
         extra: Default::default(),
     }
 }
@@ -114,7 +118,7 @@ fn raw_and_zstd_share_content_hash_but_not_file_hash() {
 
 #[test]
 fn section_checksums_track_physical_bytes_not_decoded() {
-    // Same logical content, two encodings. Physical checksums for the
+    // lSame logical content, two encodings. Physical checksums for the
     // text-heavy sections must differ (different bytes on disk =
     // different SHA-256 over those bytes). This is what catches a
     // bit-flip even when the logical content is unchanged.
@@ -142,13 +146,60 @@ fn section_checksums_track_physical_bytes_not_decoded() {
             .find(|e| e.section_id == sid)
             .unwrap();
         assert_eq!(raw_entry.encoding, SECTION_ENCODING_RAW);
-        assert_eq!(zst_entry.encoding, SECTION_ENCODING_ZSTD);
+        // under the compressed preset every text section is compressed: the
+        // text/provenance/contract sections zstd, while spans takes the
+        // smaller of zstd or the intpack repack (deduped uri pool + bitpacked
+        // offsets). either way it is physically distinct from the raw variant.
+        let compressed_enc = if sid == SECTION_CHUNKS_ORIGINAL_SPANS {
+            matches!(
+                zst_entry.encoding,
+                SECTION_ENCODING_ZSTD | SECTION_ENCODING_INTPACK
+            )
+        } else {
+            zst_entry.encoding == SECTION_ENCODING_ZSTD
+        };
+        assert!(
+            compressed_enc,
+            "section 0x{:02x} compressed variant has unexpected encoding {}",
+            sid, zst_entry.encoding
+        );
         assert_ne!(
             raw_entry.checksum, zst_entry.checksum,
-            "physical checksums must differ between raw and zstd for section 0x{:02x}",
+            "physical checksums must differ between raw and compressed for section 0x{:02x}",
             sid
         );
     }
+}
+
+#[test]
+fn compressed_preset_repacks_chunk_ids_with_intpack() {
+    // chunk_ids are high-entropy sha-256, so the 32-raw intpack repack
+    // always beats the ascii form. it must be chosen under the compressed
+    // preset, shrink the section, and leave content_hash unchanged.
+    let texts = &["alfa", "beta", "gama"];
+    let raw = build(SectionEncoding::Raw, texts);
+    let zst = build(SectionEncoding::Zstd, texts);
+    let v_raw = NestView::from_bytes(&raw).unwrap();
+    let v_zst = NestView::from_bytes(&zst).unwrap();
+
+    let raw_ci = v_raw
+        .section_table
+        .iter()
+        .find(|e| e.section_id == SECTION_CHUNK_IDS)
+        .unwrap();
+    let zst_ci = v_zst
+        .section_table
+        .iter()
+        .find(|e| e.section_id == SECTION_CHUNK_IDS)
+        .unwrap();
+    assert_eq!(raw_ci.encoding, SECTION_ENCODING_RAW);
+    assert_eq!(zst_ci.encoding, SECTION_ENCODING_INTPACK);
+    assert!(zst_ci.size < raw_ci.size, "intpack must shrink chunk_ids");
+    assert_eq!(
+        v_raw.content_hash_hex().unwrap(),
+        v_zst.content_hash_hex().unwrap(),
+        "the chunk_ids repack must not move content_hash"
+    );
 }
 
 #[test]
@@ -162,7 +213,7 @@ fn content_hash_diverges_when_canonical_text_changes() {
     let va = NestView::from_bytes(&a).unwrap();
     let vb = NestView::from_bytes(&b).unwrap();
 
-    // Both pass physical validation: section checksums are over each
+    // lBoth pass physical validation: section checksums are over each
     // file's own bytes, both internally consistent.
     va.validate_embeddings_values().unwrap();
     vb.validate_embeddings_values().unwrap();
@@ -178,7 +229,7 @@ fn content_hash_diverges_when_canonical_text_changes() {
 
 #[test]
 fn three_files_three_distinct_classifications() {
-    // A complete proof: file A (raw, X), file B (zstd, X), file C (raw, Y).
+    // lA complete proof: file A (raw, X), file B (zstd, X), file C (raw, Y).
     //   A.content_hash == B.content_hash (semantic equivalence)
     //   A.content_hash != C.content_hash (semantic divergence)
     //   A.file_hash != B.file_hash != C.file_hash (all three differ physically)

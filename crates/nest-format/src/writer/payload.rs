@@ -3,10 +3,12 @@
 
 use super::{EmbeddingDType, SectionEncoding};
 use crate::chunk::ChunkInput;
-use crate::encoding::{encode_int8_embeddings, f32_to_f16_bytes, zstd_encode};
+use crate::encoding::{
+    encode_int4_embeddings, encode_int8_embeddings, f32_to_f16_bytes, zstd_encode,
+};
 use crate::layout::{SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD};
 
-/// Encode the embeddings section payload for the given dtype.
+/// lEncode the embeddings section payload for the given dtype.
 /// `chunks` must already have been validated against `embedding_dim`.
 pub(super) fn encode_embeddings_payload(
     dtype: EmbeddingDType,
@@ -38,10 +40,17 @@ pub(super) fn encode_embeddings_payload(
             }
             encode_int8_embeddings(&flat, n, embedding_dim)?
         }
+        EmbeddingDType::Int4 => {
+            let mut flat: Vec<f32> = Vec::with_capacity(n * embedding_dim);
+            for c in chunks {
+                flat.extend_from_slice(&c.embedding);
+            }
+            encode_int4_embeddings(&flat, n, embedding_dim)?
+        }
     })
 }
 
-/// Wrap `payload` according to `enc`. Used for text-heavy sections that
+/// lWrap `payload` according to `enc`. Used for text-heavy sections that
 /// can be either raw or zstd; embedding section bypasses this and goes
 /// straight through `encode_embeddings_payload`.
 pub(super) fn maybe_zstd(

@@ -52,6 +52,9 @@ fn manifest(n: u64) -> Manifest {
         description: None,
         authors: None,
         license: None,
+        mrl_dim: None,
+        full_dim: None,
+        capabilities_ext: None,
         extra: Default::default(),
     }
 }
@@ -89,7 +92,7 @@ fn build_zstd() -> Vec<u8> {
         .unwrap()
 }
 
-/// Locate the section table entry for `section_id` and return its
+/// lLocate the section table entry for `section_id` and return its
 /// (offset within the file, parsed entry).
 fn find_entry(bytes: &[u8], section_id: u32) -> (usize, SectionEntry) {
     let view = NestView::from_bytes(bytes).unwrap();
@@ -102,14 +105,14 @@ fn find_entry(bytes: &[u8], section_id: u32) -> (usize, SectionEntry) {
     panic!("section 0x{:02x} not found", section_id);
 }
 
-/// Rewrite the file's `file_hash` in the footer to match the (possibly
+/// lRewrite the file's `file_hash` in the footer to match the (possibly
 /// tampered) body. Used to isolate a logical bug from a structural
 /// one — physical checksums still pass, the bug is in the encoding /
 /// payload contract.
 fn rewrite_file_hash(bytes: &mut [u8]) {
     let body_end = bytes.len() - NEST_FOOTER_SIZE;
     let new_hash = NestFooter::compute_file_hash(&bytes[..body_end]);
-    // Footer layout: u64 footer_size (0..8) | [u8; 32] file_hash (8..40).
+    // lFooter layout: u64 footer_size (0..8) | [u8; 32] file_hash (8..40).
     bytes[body_end + 8..body_end + 40].copy_from_slice(&new_hash);
 }
 
@@ -117,7 +120,7 @@ fn rewrite_file_hash(bytes: &mut [u8]) {
 fn rejects_unsupported_encoding_value() {
     let mut bytes = build_raw();
     let (entry_off, _) = find_entry(&bytes, SECTION_CHUNKS_CANONICAL);
-    // Set encoding to 99 (unallocated).
+    // lSet encoding to 99 (unallocated).
     bytes[entry_off + 4..entry_off + 8].copy_from_slice(&99u32.to_le_bytes());
     rewrite_file_hash(&mut bytes);
 
@@ -138,7 +141,7 @@ fn rejects_unsupported_encoding_value() {
 
 #[test]
 fn rejects_zstd_encoding_on_embeddings_section() {
-    // Embeddings must stay raw / float16 / int8 — never zstd. Even
+    // lEmbeddings must stay raw / float16 / int8 — never zstd. Even
     // though zstd is otherwise valid, applying it to the embeddings
     // section breaks the SIMD-on-mmap contract.
     let mut bytes = build_raw();
@@ -163,14 +166,14 @@ fn rejects_zstd_encoding_on_embeddings_section() {
 
 #[test]
 fn encoding_mismatch_passes_parse_but_fails_decode() {
-    // Build a raw file, tag chunks_canonical as zstd-encoded, and
+    // lBuild a raw file, tag chunks_canonical as zstd-encoded, and
     // recompute the footer file_hash so the physical checksums all
     // pass. Parse succeeds (payload bytes weren't touched). But
     // `decoded_section` tries to zstd-decompress raw bytes and trips
     // `MalformedSectionPayload`.
     let mut bytes = build_raw();
     let (entry_off, _) = find_entry(&bytes, SECTION_CHUNKS_CANONICAL);
-    // Sanity: was raw.
+    // lSanity: was raw.
     let enc_pre = u32::from_le_bytes(bytes[entry_off + 4..entry_off + 8].try_into().unwrap());
     assert_eq!(enc_pre, SECTION_ENCODING_RAW);
     bytes[entry_off + 4..entry_off + 8].copy_from_slice(&SECTION_ENCODING_ZSTD.to_le_bytes());
@@ -193,7 +196,7 @@ fn encoding_mismatch_passes_parse_but_fails_decode() {
 
 #[test]
 fn truncated_zstd_payload_fails_decompression() {
-    // Build a real zstd file, then chop the trailing bytes off the
+    // lBuild a real zstd file, then chop the trailing bytes off the
     // chunks_canonical section's payload. Reset the section's checksum
     // and the file_hash so all structural checks pass; the bug surfaces
     // at decode time.
@@ -201,20 +204,20 @@ fn truncated_zstd_payload_fails_decompression() {
     let (entry_off, mut entry) = find_entry(&bytes, SECTION_CHUNKS_CANONICAL);
     let payload_off = entry.offset as usize;
     let payload_end = payload_off + entry.size as usize;
-    // Drop the last 8 bytes of the zstd frame.
+    // lDrop the last 8 bytes of the zstd frame.
     let new_size = (entry.size as usize).saturating_sub(8);
     assert!(new_size > 4, "section too small to truncate");
 
-    // Zero out the dropped bytes (they're padding-zone now); this keeps
+    // lZero out the dropped bytes (they're padding-zone now); this keeps
     // the file's logical layout but the section size shrinks.
     for b in &mut bytes[payload_off + new_size..payload_end] {
         *b = 0;
     }
 
-    // Recompute the section checksum over the truncated payload.
+    // lRecompute the section checksum over the truncated payload.
     entry.size = new_size as u64;
     entry.compute_checksum(&bytes[payload_off..payload_off + new_size]);
-    // Write the new entry back: section_id u32 | encoding u32 |
+    // lWrite the new entry back: section_id u32 | encoding u32 |
     // offset u64 | size u64 | checksum [u8; 8].
     bytes[entry_off..entry_off + 4].copy_from_slice(&entry.section_id.to_le_bytes());
     bytes[entry_off + 4..entry_off + 8].copy_from_slice(&entry.encoding.to_le_bytes());
@@ -237,7 +240,7 @@ fn truncated_zstd_payload_fails_decompression() {
 
 #[test]
 fn corrupted_zstd_magic_fails_decompression() {
-    // Build a valid zstd file, then flip the first 4 bytes of the
+    // lBuild a valid zstd file, then flip the first 4 bytes of the
     // chunks_canonical payload (zstd frame magic = 0x28 0xB5 0x2F 0xFD)
     // to garbage. Recompute checksum + file_hash. Parse passes,
     // decompression fails.
@@ -261,8 +264,8 @@ fn corrupted_zstd_magic_fails_decompression() {
 
 #[test]
 fn baseline_zstd_decodes_normally() {
-    // Sanity: a properly-built zstd file decodes without errors.
-    // Guards against false-positive negatives in the tests above.
+    // lSanity: a properly-built zstd file decodes without errors.
+    // lGuards against false-positive negatives in the tests above.
     let bytes = build_zstd();
     let view = NestView::from_bytes(&bytes).unwrap();
     let decoded = view.decoded_section(SECTION_CHUNKS_CANONICAL).unwrap();

@@ -8,6 +8,20 @@
 #
 # This file exists so `ruff` (and any other PEP 518 tool) finds a
 # canonical config at the workspace root.
+#
+# The one exception to "no install path" is the forge SEMANTIC default
+# embedder (python/forge/embed_potion.py): it loads a vendored, offline
+# model2vec/potion table and needs numpy + tokenizers at runtime (no
+# torch, no network). They are declared as a PEP 735 dependency group so
+# the requirement is recorded without claiming a publishable package.
+# Install with:  uv pip install numpy tokenizers   (or: uv sync --group forge)
+# The lexical floor (python/forge/embed_default.py) stays stdlib-only.
+
+[dependency-groups]
+forge = [
+    "numpy>=1.26",
+    "tokenizers>=0.20",
+]
 
 [tool.ruff]
 target-version = "py312"

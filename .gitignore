@@ -1,12 +1,11 @@
 /target
-/Cargo.lock
+# Cargo.lock IS tracked: nest ships a CLI binary, so a committed lockfile is
+# required for reproducible builds and CVE triage against a pinned dep set.
 **/*.rs.bk
 *.pdb
 *.so
 *.dylib
 *.dll
-kdb/
-adr/
 # Python
 __pycache__/
 *.py[cod]
@@ -19,6 +18,7 @@ wheels/
 .mypy_cache/
 .ruff_cache/
 .python-version
+dat/demos/
 
 # Virtual environments
 .venv
@@ -36,13 +36,47 @@ Thumbs.db
 *.swo
 *~
 
+# claude personal config
+.claude/
+
 # Project specific
-# database/ and data/corpus_next.v1.nest are tracked via Git LFS.
-# Per-phase preset .nest files (data/measure/corpus_*.nest) are
+# demo datasets are local-only and intentionally not tracked.
+dat/demo/corpus-combined/
+dat/demo/corpus-next/
+dat/demo/factck-br/
+dat/demo/Fake.br-Corpus/
+dat/demo/FakeBr-hf/
+dat/demo/FakeRecogna/
+dat/demo/FakeTrue.Br/
+dat/demo/FakeTrue.Br-hf/
+dat/demo/portuguese-fake-news-classifier-bilstm-combined/
+dat/demo/truw-built/
+
+# dat/corpus_next.v1.nest remains tracked via Git LFS.
+# Per-phase preset .nest files (dat/measure/corpus_*.nest) are
 # regeneration artifacts: re-derivable in minutes by measure_presets.py
 # from the LFS-tracked baseline. Do NOT commit them — they'd inflate the
 # LFS bandwidth quota every phase. We commit only the JSON checksums and
 # metrics next to them.
-data/measure/corpus_*.nest
-data/measure/*.nest-*
+dat/measure/corpus_*.nest
+dat/measure/*.nest-*
+
+
+# Local symlink to external hoff database (not part of this repo)
+dat/hoff.db
+
+# PHI / clinical artifacts — NEVER commit. clinical data lives OUTSIDE this repo
+# (e.g. /Volumes/<redacted>/dat/psy/work, which is NOT under any git repo). these
+# patterns are defense-in-depth so a misdirected --out into the repo tree can
+# never be staged or pushed by any auto-committer — INCLUDING a `git add -A`
+# from a `--no-verify` commit, which still honors .gitignore.
+#
+# Ignore ALL .nest by default (a PHI export with any name, not just cohort_*),
+# then negate ONLY the three sanctioned PUBLIC, non-PHI corpora that ARE tracked.
+*.nest
+*.sidecar.jsonl
+**/pairs/
+!dat/corpus_next.v1.nest
+!crates/nest-format/tests/fixtures/golden_v1_minimal.nest
+!dat/measure/fakerecogna_exact.nest
 
