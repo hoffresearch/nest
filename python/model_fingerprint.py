@@ -29,11 +29,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
-# Files whose contents affect inference output. Other files in the
-# snapshot dir (LICENSE, README.md, .git*) are ignored.
+# Force HF/sentence-transformers OFFLINE by default before any (lazy) hub
+# access. Opt into a first-time model download with NEST_ALLOW_DOWNLOAD=1.
+if os.environ.get("NEST_ALLOW_DOWNLOAD") != "1":
+    for _k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
+        os.environ.setdefault(_k, "1")
+
+# lFiles whose contents affect inference output. Other files in the
+# lsnapshot dir (LICENSE, README.md, .git*) are ignored.
 RELEVANT_FILES: tuple[str, ...] = (
     "config.json",
     "config_sentence_transformers.json",
@@ -176,6 +183,36 @@ def is_placeholder(model_hash: str) -> bool:
     return model_hash == PLACEHOLDER_HASH
 
 
+def hf_cache_snapshot(model_id: str) -> Path | None:
+    """Resolve the HF Hub cache snapshot dir for `model_id`, picking the
+    revision that `refs/main` points to — the one HF actually loads — rather
+    than an arbitrary alphabetical snapshot.
+
+    Returns `None` if the model is not cached, or if the loaded revision
+    cannot be determined unambiguously (multiple snapshots and no usable
+    `refs/main`). Callers must then fail closed / require an explicit
+    `--model-path`, never guess: hashing the wrong snapshot would stamp a
+    corpus with a `model_hash` that does not match the model that produced
+    its vectors, defeating the honesty gate.
+    """
+    hf_home = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
+    cache_dir = hf_home / "hub" / f"models--{model_id.replace('/', '--')}"
+    snap_dir = cache_dir / "snapshots"
+    if not snap_dir.is_dir():
+        return None
+    ref = cache_dir / "refs" / "main"
+    if ref.is_file():
+        commit = ref.read_text().strip()
+        cand = snap_dir / commit
+        if cand.is_dir():
+            return cand.resolve()
+    snaps = [d for d in snap_dir.iterdir() if d.is_dir()]
+    if len(snaps) == 1:
+        return snaps[0].resolve()
+    # zero snapshots, or ambiguous (multiple with no usable ref): do not guess.
+    return None
+
+
 def resolve_model_dir(model_name_or_path: str) -> Path:
     """Resolve a model name (HF id) or local path to its snapshot dir.
 
@@ -192,24 +229,19 @@ def resolve_model_dir(model_name_or_path: str) -> Path:
     Raises `FileNotFoundError` with an actionable message if nothing
     works — the caller should pass `--model-path` explicitly.
     """
-    import os as _os
-
     p = Path(model_name_or_path).expanduser()
     if p.is_dir():
         return p.resolve()
 
-    # HF Hub cache: standard layout. Finds the model regardless of
-    # whether sentence-transformers is importable.
-    hf_home = Path(_os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
-    cache_dir = hf_home / "hub" / f"models--{model_name_or_path.replace('/', '--')}"
-    snap_dir = cache_dir / "snapshots"
-    if snap_dir.is_dir():
-        snaps = sorted(snap_dir.iterdir())
-        if snaps:
-            return snaps[0].resolve()
+    # hF Hub cache: standard layout, resolving the revision refs/main points
+    # to (not an arbitrary alphabetical snapshot). Finds the model regardless
+    # of whether sentence-transformers is importable.
+    snap = hf_cache_snapshot(model_name_or_path)
+    if snap is not None:
+        return snap
 
-    # Older sentence-transformers (v2.x) put the snapshot path in the
-    # AutoModel config. Importing is heavy; only do it as a last resort.
+    # older sentence-transformers (v2.x) put the snapshot path in the
+    # autoModel config. Importing is heavy; only do it as a last resort.
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError as e:

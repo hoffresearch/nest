@@ -88,35 +88,50 @@ def chunk_text(
         if end == text_len:
             break
         char_idx = end - overlap
-    # Sanity: spans must cover bytes within the original encoding.
+    # sanity: spans must cover bytes within the original encoding.
     for c in chunks:
         assert c.byte_end <= len(encoded), "byte span overshoots source"
     return chunks
 
 
 class EmbeddingCache:
-    """SQLite scratch keyed by chunk_id. Stores raw float32 embeddings.
+    """SQLite scratch keyed by (chunk_id, model). Stores raw float32 embeddings.
 
     Intended to be reused across runs so re-builds skip the expensive
     embedding step for chunks that have already been computed.
+
+    The key includes `model_key` (embedding_model + model_hash). A chunk_id is
+    only a function of the text/spans/chunker, NOT the embedding model, so a
+    cache keyed on chunk_id alone would silently hand back a PREVIOUS model's
+    vectors when the same corpus is re-embedded with a different model —
+    shipping a .nest whose vectors do not match its declared model_hash. Keying
+    on the model closes that.
+
+    Uses table `embeddings_v2`: an old chunk-id-only `embeddings` table (from a
+    prior nest version) is simply not reused (chunks are re-embedded), never
+    misread — no in-place migration, no stale-model hit.
     """
 
     SCHEMA = """
-        CREATE TABLE IF NOT EXISTS embeddings (
-            chunk_id TEXT PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS embeddings_v2 (
+            chunk_id TEXT NOT NULL,
+            model TEXT NOT NULL,
             dim INTEGER NOT NULL,
-            data BLOB NOT NULL
+            data BLOB NOT NULL,
+            PRIMARY KEY (chunk_id, model)
         );
     """
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, model_key: str = ""):
         self.path = path
+        self.model_key = model_key
         self.conn = sqlite3.connect(path)
         self.conn.executescript(self.SCHEMA)
 
     def get(self, chunk_id: str, dim: int) -> list[float] | None:
         row = self.conn.execute(
-            "SELECT dim, data FROM embeddings WHERE chunk_id=?", (chunk_id,)
+            "SELECT dim, data FROM embeddings_v2 WHERE chunk_id=? AND model=?",
+            (chunk_id, self.model_key),
         ).fetchone()
         if row is None:
             return None
@@ -127,8 +142,8 @@ class EmbeddingCache:
     def put(self, chunk_id: str, embedding: Sequence[float]) -> None:
         data = struct.pack(f"<{len(embedding)}f", *embedding)
         self.conn.execute(
-            "INSERT OR REPLACE INTO embeddings(chunk_id, dim, data) VALUES(?,?,?)",
-            (chunk_id, len(embedding), data),
+            "INSERT OR REPLACE INTO embeddings_v2(chunk_id, model, dim, data) VALUES(?,?,?,?)",
+            (chunk_id, self.model_key, len(embedding), data),
         )
         self.conn.commit()
 
@@ -148,17 +163,27 @@ class BuildConfig:
     description: str | None = None
     license: str | None = None
     reproducible: bool = True
-    # Encoding presets:
-    #   "exact"      — raw text, float32 embeddings, no ANN, no BM25
-    #   "compressed" — zstd text, float16 embeddings, no ANN, no BM25
-    #   "tiny"       — zstd text, int8 embeddings, HNSW, no BM25
-    #   "hybrid"     — zstd text, float32 embeddings, HNSW, BM25
+    # encoding preset (see nest.build docstring for the full table): exact /
+    # compressed / tiny / nano (int4, dim %64==0, stored-prec) / hybrid.
     preset: str = "exact"
-    # Per-knob overrides (None = inherit from preset)
+    # per-knob overrides (None = inherit from preset)
     text_encoding: str | None = None  # "raw" | "zstd"
-    dtype: str | None = None  # "float32" | "float16" | "int8"
+    dtype: str | None = None  # "float32" | "float16" | "int8" | "int4"
+    # matryoshka prefix dim (None = no truncation). When set, each vector is
+    # sliced to the first mrl_dim components and re-L2-normalized at build time
+    # (before quantization); embedding_dim becomes mrl_dim, source dim recorded
+    # as full_dim. int4 needs mrl_dim divisible by 64.
+    mrl_dim: int | None = None
     with_hnsw: bool | None = None
     with_bm25: bool | None = None
+    # G1 chunk-to-chunk graph: emit the additive graph_adjacency (0x0C) csr
+    # (NEXT_CHUNK + top-graph_top_m SEMANTIC), excluded from content_hash.
+    with_graph: bool = False
+    graph_top_m: int = 8
+    # opt-in chunk_overlap drop (text reclaim): implies with_graph (read-side
+    # graph_context.neighbor_context rebuilds context). gate on a recall@10-vs-
+    # baseline check (graph_recall_gate.py) before shipping a dropped corpus.
+    drop_overlap: bool = False
     hnsw_m: int = 16
     hnsw_ef_construction: int = 400
     hnsw_seed: int = 42
@@ -185,7 +210,10 @@ class Pipeline:
     ):
         self.cfg = cfg
         self.embedder = embedder
-        self.cache = EmbeddingCache(scratch_db) if scratch_db else None
+        # key the cache by the model too, so re-embedding the same corpus with
+        # a different model never reuses stale vectors under a new model_hash.
+        model_key = f"{cfg.embedding_model}\x00{cfg.model_hash}"
+        self.cache = EmbeddingCache(scratch_db, model_key=model_key) if scratch_db else None
         self._specs: list[ChunkSpec] = []
 
     def add(self, spec: ChunkSpec) -> None:
@@ -195,7 +223,7 @@ class Pipeline:
         self._specs.extend(specs)
 
     def _embeddings(self) -> list[list[float]]:
-        # Resolve from cache where possible; embed only the misses.
+        # resolve from cache where possible; embed only the misses.
         cached: list[list[float] | None] = [None] * len(self._specs)
         misses_idx: list[int] = []
         misses: list[ChunkSpec] = []
@@ -247,6 +275,10 @@ class Pipeline:
             for s, emb in zip(self._specs, embeddings, strict=False)
         ]
 
+        # drop_overlap implies with_graph (read-side neighbor reconstruction
+        # needs the NEXT_CHUNK edges); the caller still owns the recall@10 gate.
+        want_graph = self.cfg.with_graph or self.cfg.drop_overlap
+
         if os.path.exists(self.cfg.output_path):
             os.unlink(self.cfg.output_path)
         nest.build(
@@ -265,15 +297,18 @@ class Pipeline:
             preset=self.cfg.preset,
             text_encoding=self.cfg.text_encoding,
             dtype=self.cfg.dtype,
+            mrl_dim=self.cfg.mrl_dim,
             with_hnsw=self.cfg.with_hnsw,
             with_bm25=self.cfg.with_bm25,
+            with_graph=want_graph,
+            graph_top_m=self.cfg.graph_top_m,
             hnsw_m=self.cfg.hnsw_m,
             hnsw_ef_construction=self.cfg.hnsw_ef_construction,
             hnsw_seed=self.cfg.hnsw_seed,
         )
 
-        # Final integrity check via the in-process reader (PyO3 path).
-        # No CLI subprocess: one Python entry point only.
+        # final integrity check via the in-process reader (PyO3 path).
+        # no CLI subprocess: one Python entry point only.
         db = nest.open(self.cfg.output_path)
         db.validate()
         return self.cfg.output_path

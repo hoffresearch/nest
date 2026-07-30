@@ -6,6 +6,7 @@ mod cmd;
 
 #[derive(Parser)]
 #[command(name = "nest")]
+#[command(version)]
 #[command(about = ".nest — Semantic Knowledge Format for Local Agents", long_about = None)]
 struct Cli {
     #[command(subcommand)]
@@ -14,10 +15,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Inspect file metadata, manifest, and section table.
+    /// lInspect file metadata, manifest, and section table.
     Inspect {
         file: PathBuf,
-        /// Emit as JSON instead of the human-readable layout. Schema:
+        /// lEmit as JSON instead of the human-readable layout. Schema:
         /// `{magic, version_major, version_minor, format_version,
         /// schema_version, embedding_dim, n_chunks, n_embeddings,
         /// file_size, manifest, sections[], file_hash, content_hash,
@@ -25,16 +26,16 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
-    /// Validate file integrity (magic, checksums, hashes, manifest, contract).
+    /// lValidate file integrity (magic, checksums, hashes, manifest, contract).
     Validate { file: PathBuf },
-    /// Search a `.nest` file with a JSON-array query vector (exact path).
+    /// lSearch a `.nest` file with a JSON-array query vector (exact path).
     Search {
         file: PathBuf,
         query: String,
         #[arg(short, long, default_value = "10")]
         k: i32,
     },
-    /// Search by raw text — embeds the query with the model declared in
+    /// lSearch by raw text — embeds the query with the model declared in
     /// the manifest, then runs the appropriate vector path. Honors the
     /// declared `index_type` (exact / hnsw / hybrid). Validates the
     /// embedder's model_hash against the manifest before running search;
@@ -45,20 +46,20 @@ enum Commands {
         query: String,
         #[arg(short, long, default_value = "10")]
         k: i32,
-        /// Override the embedder script. Default: `python/embed_query.py`.
+        /// lOverride the embedder script. Default: `python/embed_query.py`.
         #[arg(long)]
         embedder: Option<PathBuf>,
         /// `ef` (HNSW) / candidates-per-path (hybrid). Default: 4*k or 64.
         #[arg(long)]
         candidates: Option<usize>,
-        /// Local path to the model snapshot dir. Use this for fully
+        /// lLocal path to the model snapshot dir. Use this for fully
         /// offline operation: copy the model dir alongside the .nest,
         /// pass --model-path at every search. Without this, the
         /// embedder resolves the model from the sentence-transformers
         /// cache (requires network on first use).
         #[arg(long)]
         model_path: Option<PathBuf>,
-        /// Skip model_hash validation. ONLY use when intentionally
+        /// lSkip model_hash validation. ONLY use when intentionally
         /// running search-text against a corpus whose `model_hash`
         /// is the legacy zero-placeholder (pre-Phase-3 builds). In
         /// that case the search is still cosine-valid IF the user
@@ -67,7 +68,7 @@ enum Commands {
         #[arg(long)]
         skip_model_hash_check: bool,
     },
-    /// Force the ANN (HNSW) path. Falls back to exact if the file has
+    /// lForce the ANN (HNSW) path. Falls back to exact if the file has
     /// no HNSW section.
     SearchAnn {
         file: PathBuf,
@@ -77,31 +78,94 @@ enum Commands {
         #[arg(long, default_value = "100")]
         ef: usize,
     },
-    /// Benchmark exact flat search latency.
+    /// lGraph search: seed from the exact-cosine top-`ef`, expand a bounded
+    /// bfs over the chunk-to-chunk graph, then exact-rerank the union. The
+    /// graph only generates candidates; the score is real cosine. Falls back
+    /// to exact if the file has no graph_adjacency section.
+    SearchGraph {
+        file: PathBuf,
+        query: String,
+        #[arg(short, long, default_value = "10")]
+        k: i32,
+        #[arg(long, default_value = "1")]
+        hops: usize,
+        #[arg(long, default_value = "100")]
+        ef: usize,
+    },
+    /// lBenchmark exact flat search latency.
     Benchmark {
         file: PathBuf,
         #[arg(short, long, default_value = "100")]
         queries: usize,
         #[arg(short, long, default_value = "10")]
         k: i32,
-        /// If set, also benchmark `search_ann` with the given ef.
+        /// lIf set, also benchmark `search_ann` with the given ef.
         #[arg(long)]
         ann: Option<usize>,
-        /// Force a "madvise-cold" cache between queries by calling
+        /// lForce a "madvise-cold" cache between queries by calling
         /// posix_madvise(MADV_DONTNEED) on the mmap. Approximates the
         /// first hit pos-boot — but it's a hint, not a guarantee.
-        /// See MmapNestFile::madvise_cold for caveats.
+        /// lSee MmapNestFile::madvise_cold for caveats.
         #[arg(long)]
         madvise_cold: bool,
     },
-    /// Show file stats.
+    /// lShow file stats.
     Stats { file: PathBuf },
-    /// Resolve a `nest://content_hash/chunk_id` citation into the
+    /// lResolve a `nest://content_hash/chunk_id` citation into the
     /// canonical text and original span for the chunk.
     Cite {
         file: PathBuf,
         /// `nest://<content_hash>/<chunk_id>` URI.
         citation: String,
+    },
+    /// lFlagship verb: text query in, cited answer out. embeds the query
+    /// OFFLINE with the default potion static table (never
+    /// sentence-transformers), validates model_hash against the manifest,
+    /// routes by manifest capability, and prints the cited canonical text
+    /// with a nest:// citation. `--disclose explain` adds the rerank-source
+    /// honesty line (real cosine vs real cosine at stored precision). cite is
+    /// tier-1: the printed text is the stored canonical text, never an
+    /// original-byte reopen.
+    Ask {
+        file: PathBuf,
+        query: String,
+        #[arg(short, long, default_value = "10")]
+        k: i32,
+        /// ldisclosure level: `answer` (cited text + nest:// only, default)
+        /// or `explain` (also the rerank-source honesty line + route).
+        #[arg(long, value_enum, default_value = "answer")]
+        disclose: cmd::ask::Disclose,
+        /// loverride the offline embedder. default: python/forge/embed_query_potion.py.
+        #[arg(long)]
+        embedder: Option<PathBuf>,
+        /// `ef` (HNSW) / candidates-per-path (hybrid). Default: 4*k or 64.
+        #[arg(long)]
+        candidates: Option<usize>,
+        /// llocal path to the vendored potion table dir (fully offline).
+        #[arg(long)]
+        model_path: Option<PathBuf>,
+    },
+    /// lAgent-shaped flagship: text query in, a json/jsonl answer-pack of
+    /// cited spans out. each hit's `score` IS the exact-cosine rerank value.
+    /// embeds OFFLINE with the potion table + the same model_hash gate as
+    /// `ask`. `text` is the stored canonical text (TIER-1), the citation_id
+    /// round-trips through `cite`; never an original-byte reopen.
+    Retrieve {
+        file: PathBuf,
+        query: String,
+        #[arg(short, long, default_value = "10")]
+        k: i32,
+        /// loutput format: `jsonl` (one object per line, default) or `json`.
+        #[arg(long, value_enum, default_value = "jsonl")]
+        format: cmd::retrieve::Format,
+        /// loverride the offline embedder. default: python/forge/embed_query_potion.py.
+        #[arg(long)]
+        embedder: Option<PathBuf>,
+        #[arg(long)]
+        candidates: Option<usize>,
+        /// llocal path to the vendored potion table dir (fully offline).
+        #[arg(long)]
+        model_path: Option<PathBuf>,
     },
 }
 
@@ -129,6 +193,13 @@ fn main() -> Result<()> {
             skip_model_hash_check,
         ),
         Commands::SearchAnn { file, query, k, ef } => cmd::search_ann::run(file, query, k, ef),
+        Commands::SearchGraph {
+            file,
+            query,
+            k,
+            hops,
+            ef,
+        } => cmd::search_graph::run(file, query, k, hops, ef),
         Commands::Benchmark {
             file,
             queries,
@@ -138,5 +209,23 @@ fn main() -> Result<()> {
         } => cmd::benchmark::run(file, queries, k, ann, madvise_cold),
         Commands::Stats { file } => cmd::stats::run(file),
         Commands::Cite { file, citation } => cmd::cite::run(file, citation),
+        Commands::Ask {
+            file,
+            query,
+            k,
+            disclose,
+            embedder,
+            candidates,
+            model_path,
+        } => cmd::ask::run(file, query, k, disclose, embedder, candidates, model_path),
+        Commands::Retrieve {
+            file,
+            query,
+            k,
+            format,
+            embedder,
+            candidates,
+            model_path,
+        } => cmd::retrieve::run(file, query, k, format, embedder, candidates, model_path),
     }
 }

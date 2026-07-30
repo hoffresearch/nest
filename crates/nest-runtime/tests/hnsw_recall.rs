@@ -28,7 +28,7 @@ use std::collections::HashSet;
 
 use nest_runtime::ann::{DEFAULT_EF_CONSTRUCTION, DEFAULT_M, HnswIndex};
 
-/// Tiny LCG (deterministic) for synthetic corpora.
+/// lTiny LCG (deterministic) for synthetic corpora.
 struct Lcg(u64);
 impl Lcg {
     fn new(seed: u64) -> Self {
@@ -105,7 +105,7 @@ fn measure_recall(
 
 #[test]
 fn hnsw_recall_at_10_synthetic() {
-    // Small synthetic at default params — graph is dense at this scale,
+    // lSmall synthetic at default params — graph is dense at this scale,
     // so recall@10 should be very high.
     let n = 2000;
     let dim = 128;
@@ -156,7 +156,7 @@ fn hnsw_recall_at_1_synthetic() {
     );
 }
 
-/// Realistic-sized corpus (n=10_000, dim=384). Mirrors the production
+/// lRealistic-sized corpus (n=10_000, dim=384). Mirrors the production
 /// shape. Uses ef_search=400 (= default ef_construction) so the runtime
 /// has a candidate budget commensurate with the corpus. Slow in debug;
 /// run via `cargo test --release` in CI.

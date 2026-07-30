@@ -1,5 +1,5 @@
 """nest_build_corpus.py — build a deterministic .nest from the seven
-PT-BR fake-news datasets under `database/`.
+PT-BR fake-news datasets under `dat/demo/`.
 
 Steps:
   1. read each source (loaders live in `_corpus_sources.py`)
@@ -8,23 +8,32 @@ Steps:
   4. dedupe by sha256(text), keep first
   5. embed each row with the model declared in EMBED_MODEL
   6. call builder.Pipeline (existing tool) to chunk + cache + emit
-  7. write data/<name>.nest
+    7. write dat/<name>.nest
   8. shell out to `nest validate`
   9. print report: original counts vs post-dedup vs in .nest
 
 Run:
   python3 python/tools/nest_build_corpus.py
-  python3 python/tools/nest_build_corpus.py --out data/foo.nest
+    python3 python/tools/nest_build_corpus.py --out dat/foo.nest
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
+
+# Force HF/sentence-transformers OFFLINE by default before the (lazy) ST
+# import at embed time. A corpus build touches source text; it must not make
+# an unexpected outbound fetch. Opt into a first-time download with
+# NEST_ALLOW_DOWNLOAD=1 (then re-run offline for reproducibility).
+if os.environ.get("NEST_ALLOW_DOWNLOAD") != "1":
+    for _k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
+        os.environ.setdefault(_k, "1")
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -34,8 +43,8 @@ import pandas as pd  # noqa: E402
 from _corpus_sources import MIN_TEXT_LEN, SOURCES  # noqa: E402
 from builder import BuildConfig, ChunkSpec, Pipeline  # noqa: E402
 
-DATA = REPO / "data"
-DB = REPO / "database"
+DATA = REPO / "dat"
+DB = REPO / "dat" / "demo"
 NEST_BIN = REPO / "target" / "release" / "nest"
 
 EMBED_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -57,7 +66,7 @@ def _filter_and_dedupe(combined: pd.DataFrame) -> tuple[pd.DataFrame, int, int]:
 
 def _resolve_model_hash():
     """Compute the corpus' `model_hash` from the local sentence-transformers
-    snapshot. Refuses to write the legacy placeholder — see ADR 0008."""
+    snapshot. Refuses to write the legacy placeholder."""
     from model_fingerprint import (
         compute_model_fingerprint,
         fingerprint_to_model_hash,
@@ -114,7 +123,7 @@ def main():
     ap.add_argument(
         "--out",
         default=str(DATA / "corpus_next.v1.nest"),
-        help="output .nest path (default: data/corpus_next.v1.nest)",
+        help="output .nest path (default: dat/corpus_next.v1.nest)",
     )
     ap.add_argument(
         "--cache",

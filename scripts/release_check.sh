@@ -6,14 +6,14 @@
 #   2. rebuild PyO3 extension (.so)
 #   3. python tests: e2e, builder, search-text model_hash
 #   4. measure_presets --json on the LFS-tracked corpus
-#   5. compare_measure regression gates vs data/measure/baseline.json
+#   5. compare_measure regression gates vs dat/measure/baseline.json
 #
 # Exits non-zero on the first failure. Total runtime ≈ 2–3 min on a
 # warm cache (most of it is the measure_presets re-build of the four
 # presets).
 #
 # Override knobs (env vars):
-#   NEST_BASELINE  — baseline JSON to compare against (default: data/measure/baseline.json)
+#   NEST_BASELINE  — baseline JSON to compare against (default: dat/measure/baseline.json)
 #   NEST_QUERIES   — measure_presets query count (default: 100)
 #   NEST_K         — measure_presets top-k (default: 10)
 #   NEST_PYTHON    — python interpreter (default: ./.venv/bin/python if present, else python3)
@@ -25,7 +25,7 @@ cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 
 # ---- knobs ----
-BASELINE="${NEST_BASELINE:-data/measure/baseline.json}"
+BASELINE="${NEST_BASELINE:-dat/measure/baseline.json}"
 QUERIES="${NEST_QUERIES:-100}"
 K="${NEST_K:-10}"
 OUT="${NEST_OUT:-/tmp/release_check_post.json}"
@@ -82,7 +82,10 @@ ok "all source files ≤ 300 lines"
 
 # ---- rebuild PyO3 .so ----
 step "rebuild python/_nest.so"
-cargo build --release -p nest-python >/dev/null
+# build the extension against the SAME interpreter that runs the tests, so a
+# .venv that differs from the default build python can never load a mismatched
+# _nest.so (that mismatch segfaults test_e2e). PYO3_PYTHON pins it to $PY.
+PYO3_PYTHON="$PY" cargo build --release -p nest-python >/dev/null
 case "$(uname)" in
   Darwin) cp target/release/lib_nest.dylib python/_nest.so ;;
   Linux)  cp target/release/lib_nest.so    python/_nest.so ;;

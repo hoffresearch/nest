@@ -44,6 +44,9 @@ fn manifest(n: u64, dim: u32) -> Manifest {
         description: None,
         authors: None,
         license: None,
+        mrl_dim: None,
+        full_dim: None,
+        capabilities_ext: None,
         extra: Default::default(),
     }
 }
@@ -73,7 +76,7 @@ fn build_fp16(n: usize, dim: usize) -> Vec<u8> {
         .unwrap()
 }
 
-/// Rewrite the section's physical checksum (over the now-tampered
+/// lRewrite the section's physical checksum (over the now-tampered
 /// payload) and the footer's file_hash. Bypasses NestView::from_bytes
 /// because that would refuse to parse a file whose section checksum
 /// was just invalidated. Reads the section table directly from header
@@ -124,7 +127,7 @@ fn rejects_nan_in_fp16_embedding() {
         .unwrap();
     assert_eq!(entry.encoding, SECTION_ENCODING_FLOAT16);
     let payload_off = entry.offset as usize;
-    // Overwrite first f16 lane with a NaN bit pattern.
+    // lOverwrite first f16 lane with a NaN bit pattern.
     let nan_le = fp16_le(f32::NAN);
     bytes[payload_off..payload_off + 2].copy_from_slice(&nan_le);
     rewrite_section_checksum_and_file_hash(&mut bytes, SECTION_EMBEDDINGS);
@@ -207,7 +210,7 @@ fn fp16_section_size_matches_n_dim_2() {
 
 #[test]
 fn fp16_odd_dims_validate_cleanly() {
-    // Dims that don't align to 4/8/16 lane SIMD widths must still pass
+    // lDims that don't align to 4/8/16 lane SIMD widths must still pass
     // validation. The runtime's SIMD dot product has a tail loop for
     // these; if it ever regresses, the simd module's parity tests fail
     // first, but this end-to-end check is the contract guarantee.
@@ -225,4 +228,17 @@ fn fp16_baseline_decodes_with_no_error() {
     let view = NestView::from_bytes(&bytes).unwrap();
     assert_eq!(view.manifest.dtype, "float16");
     view.validate_embeddings_values().unwrap();
+}
+
+#[test]
+fn f16_codec_roundtrip_within_tolerance() {
+    // the f32<->f16 byte codec round-trips within f16 precision (relocated
+    // out of encoding/mod.rs to keep the wire-codec registry under 300 lines).
+    let v: Vec<f32> = (0..16).map(|i| (i as f32) * 0.05).collect();
+    let bytes = nest_format::f32_to_f16_bytes(&v);
+    let back = nest_format::f16_bytes_to_f32(&bytes);
+    assert_eq!(back.len(), v.len());
+    for (a, b) in v.iter().zip(back.iter()) {
+        assert!((a - b).abs() < 1e-3, "{} vs {}", a, b);
+    }
 }

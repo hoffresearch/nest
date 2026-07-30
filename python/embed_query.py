@@ -34,10 +34,20 @@ import os
 import sys
 from pathlib import Path
 
+# Force HuggingFace/sentence-transformers OFFLINE by default, BEFORE the
+# (lazy) sentence_transformers import ever runs. A hostile or misconfigured
+# corpus model name must never trigger a hub download mid-run — especially
+# while the box is handling PHI (see doc/phi-safety.md). Opt into the
+# first-time model fetch explicitly with NEST_ALLOW_DOWNLOAD=1.
+if os.environ.get("NEST_ALLOW_DOWNLOAD") != "1":
+    for _k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
+        os.environ.setdefault(_k, "1")
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from model_fingerprint import (  # noqa: E402
     compute_model_fingerprint,
     fingerprint_to_model_hash,
+    hf_cache_snapshot,
 )
 
 
@@ -48,12 +58,12 @@ def _embed(model_name_or_path: str, query: str) -> tuple[list[float], int, str]:
     model = SentenceTransformer(model_name_or_path)
     vec = model.encode([query], normalize_embeddings=True, convert_to_numpy=True)[0]
     dim = int(model.get_sentence_embedding_dimension())
-    # Defensive re-normalize (some sentence-transformers versions skip it
+    # defensive re-normalize (some sentence-transformers versions skip it
     # on certain backbones).
     n = math.sqrt(sum(float(x) * float(x) for x in vec))
     vec = [float(x) / n for x in vec] if n > 0 else [float(x) for x in vec]
 
-    # Locate the actual snapshot directory the model was loaded from.
+    # locate the actual snapshot directory the model was loaded from.
     local_path = _resolve_local_path(model, model_name_or_path)
     return vec, dim, local_path
 
@@ -81,14 +91,11 @@ def _resolve_local_path(model, fallback: str) -> str:
         nop = getattr(cfg, "_name_or_path", None) or getattr(cfg, "name_or_path", None)
         if nop and Path(nop).is_dir():
             return str(Path(nop).resolve())
-    # HF cache fallback.
-    hf_home = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
-    cache_dir = hf_home / "hub" / f"models--{fallback.replace('/', '--')}"
-    snap_dir = cache_dir / "snapshots"
-    if snap_dir.is_dir():
-        snaps = sorted(snap_dir.iterdir())
-        if snaps:
-            return str(snaps[0].resolve())
+    # hF cache fallback: resolve the revision refs/main points to (the one
+    # actually loaded), NOT an arbitrary alphabetical snapshot.
+    snap = hf_cache_snapshot(fallback)
+    if snap is not None:
+        return str(snap)
     return fallback
 
 

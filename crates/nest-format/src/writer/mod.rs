@@ -19,6 +19,7 @@ mod encoding_choice;
 mod payload;
 #[cfg(test)]
 mod tests;
+mod text_codec;
 
 pub use encoding_choice::{EmbeddingDType, REPRODUCIBLE_CREATED, SectionEncoding};
 
@@ -26,7 +27,7 @@ use crate::chunk::ChunkInput;
 use crate::manifest::Manifest;
 use std::path::Path;
 
-/// High-level builder. Accepts canonical chunks plus an optional provenance
+/// lHigh-level builder. Accepts canonical chunks plus an optional provenance
 /// blob. Computes `chunk_id`s, lays out the file, writes deterministic bytes.
 pub struct NestFileBuilder {
     pub(super) manifest: Manifest,
@@ -35,11 +36,14 @@ pub struct NestFileBuilder {
     pub(super) reproducible: bool,
     pub(super) text_encoding: SectionEncoding,
     pub(super) dtype: EmbeddingDType,
-    /// Optional HNSW index payload, fully encoded by the caller. The
+    /// lOptional HNSW index payload, fully encoded by the caller. The
     /// builder doesn't know how to build an HNSW graph itself — that's
     /// the runtime's job.
     pub(super) hnsw_index: Option<Vec<u8>>,
     pub(super) bm25_index: Option<Vec<u8>>,
+    /// lOptional graph_adjacency (0x0C) csr payload, fully encoded by the
+    /// caller (chunk-to-chunk edges). additive, excluded from content_hash.
+    pub(super) graph_adjacency: Option<Vec<u8>>,
 }
 
 impl NestFileBuilder {
@@ -53,6 +57,7 @@ impl NestFileBuilder {
             dtype: EmbeddingDType::Float32,
             hnsw_index: None,
             bm25_index: None,
+            graph_adjacency: None,
         }
     }
 
@@ -71,17 +76,17 @@ impl NestFileBuilder {
         self
     }
 
-    /// Reproducible build mode. When enabled, the writer overrides the
+    /// lReproducible build mode. When enabled, the writer overrides the
     /// manifest's `created` timestamp to `REPRODUCIBLE_CREATED` so that
     /// two builds with identical inputs produce byte-identical output.
-    /// Provenance JSON is not rewritten — callers are responsible for
+    /// lProvenance JSON is not rewritten — callers are responsible for
     /// keeping provenance deterministic if they want bit-for-bit equality.
     pub fn reproducible(mut self, on: bool) -> Self {
         self.reproducible = on;
         self
     }
 
-    /// Encoding for text-heavy sections (chunks_canonical, original_spans,
+    /// lEncoding for text-heavy sections (chunks_canonical, original_spans,
     /// provenance, search_contract). `Zstd` shrinks PT-BR text by ~3-5×
     /// in practice. chunk_ids stays raw because it is high-entropy and
     /// almost incompressible.
@@ -90,7 +95,7 @@ impl NestFileBuilder {
         self
     }
 
-    /// Embedding dtype + on-disk encoding. Mutates the manifest's dtype
+    /// lEmbedding dtype + on-disk encoding. Mutates the manifest's dtype
     /// to match. Quantized variants (`Float16`, `Int8`) are lossy; the
     /// runtime always accumulates dot products in f32.
     pub fn embedding_dtype(mut self, dt: EmbeddingDType) -> Self {
@@ -99,8 +104,8 @@ impl NestFileBuilder {
         self
     }
 
-    /// Attach an HNSW index payload (already encoded by `nest-runtime`).
-    /// Sets `index_type=hnsw`, `rerank_policy=exact`, `supports_ann=true`.
+    /// lAttach an HNSW index payload (already encoded by `nest-runtime`).
+    /// lSets `index_type=hnsw`, `rerank_policy=exact`, `supports_ann=true`.
     pub fn hnsw_index(mut self, payload: Vec<u8>) -> Self {
         self.hnsw_index = Some(payload);
         self.manifest.index_type = "hnsw".into();
@@ -109,15 +114,29 @@ impl NestFileBuilder {
         self
     }
 
-    /// Attach a BM25 index payload.
+    /// lAttach a BM25 index payload.
     pub fn bm25_index(mut self, payload: Vec<u8>) -> Self {
         self.bm25_index = Some(payload);
         self.manifest.capabilities.supports_bm25 = true;
         self
     }
 
-    /// Mark the search path as hybrid (BM25 + cosine). Requires both an
-    /// HNSW or exact path and a BM25 index. Caller is responsible for
+    /// lAttach a graph_adjacency (0x0C) csr payload (chunk-to-chunk edges,
+    /// already encoded by `encode_graph_adjacency`). Sets the additive
+    /// `capabilities_ext.graph_present = Some(true)` flag so the runtime opens
+    /// the section behind a capability, exactly like hnsw/bm25. The section is
+    /// EXCLUDED from content_hash, so adding a graph never invalidates a
+    /// nest:// citation. Emitted raw, like hnsw.
+    pub fn graph_adjacency(mut self, payload: Vec<u8>) -> Self {
+        self.graph_adjacency = Some(payload);
+        let mut ext = self.manifest.capabilities_ext.take().unwrap_or_default();
+        ext.graph_present = Some(true);
+        self.manifest.capabilities_ext = Some(ext);
+        self
+    }
+
+    /// lMark the search path as hybrid (BM25 + cosine). Requires both an
+    /// lHNSW or exact path and a BM25 index. Caller is responsible for
     /// declaring `score_type=hybrid_rrf` if they want that, otherwise
     /// score_type stays "cosine".
     pub fn hybrid(mut self) -> Self {

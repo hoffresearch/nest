@@ -2,7 +2,7 @@
 
 `nest` is a single-file binary container for distributing semantic knowledge bases. one file: chunks, canonical text, byte-spans, embeddings, search contract, hashes. copy it, share it, search it.
 
-this guide covers the eight commands you'll actually use.
+this guide covers the commands you'll actually use: the agent-native flagship verbs `ask` and `retrieve` (the front door), and the engine subcommands beneath them (build via python, validate, stats, inspect, search/search-ann/search-graph/search-text, benchmark, cite).
 
 ## 1. build a `.nest` from chunks
 
@@ -96,20 +96,74 @@ useful for debugging or measuring `ef_search` curves. falls back to exact if the
 nest search-ann my_corpus.nest "[0.1, 0.2, ...]" -k 10 --ef 200
 ```
 
+### graph search (chunk-to-chunk)
+
+seeds from the exact-cosine top-`ef`, expands a bounded breadth-first walk over the chunk-to-chunk graph (`--hops`), then exact-reranks the union. the graph only generates candidates; the returned score is real cosine (recall is not computed, the rerank guarantees the score). falls back to exact if the file has no `graph_adjacency` (0x0C) section. build a graph-carrying file with `nest.build(..., with_graph=True)` (default off); the section is additive and excluded from content_hash, so adding a graph never changes a citation.
+
+```sh
+nest search-graph my_corpus.nest "[0.1, 0.2, ...]" -k 10 --hops 2 --ef 100
+```
+
+### the flagship: ask and retrieve
+
+`ask` and `retrieve` are the agent-native front door: text query in, cited answer out, no flags needed. they embed the query OFFLINE with the default potion static table (`python/forge/embed_query_potion.py`), NOT sentence-transformers, so they work offline-by-construction; they validate the embedder's `model_hash` against the manifest exactly like `search-text`; and they route by manifest capability (exact if only embeddings, hnsw/hybrid/graph as the file advertises). every printed score IS the exact-cosine rerank value.
+
+`ask` prints one low-cognitive-load cited answer:
+
+```sh
+nest ask my_corpus.nest "can I use this offline" -k 3
+```
+
+`--disclose answer` (default) prints the cited canonical text and a `nest://` citation, nothing else. `--disclose explain` ALSO prints the rerank-source honesty line: `real cosine` when the score is full precision, `real cosine at stored precision` for a lossy stored slab (float16/int8/int4) with no full-precision source, plus the route and per-path candidate counts.
+
+`retrieve` is the agent-shaped surface: a json/jsonl answer-pack of cited spans.
+
+```sh
+nest retrieve my_corpus.nest "can I use this offline" -k 5 --format jsonl
+```
+
+each hit is `{chunk_id, score, score_type=cosine, source_uri, offset_start, offset_end, citation_id, text, file_hash, content_hash, rerank_source}`. the `score` is the exact rerank value (never a candidate-generator proxy), `text` is the tier-1 stored canonical text, and `citation_id` round-trips through `nest cite`. `--format json` emits a single pretty array instead of one object per line.
+
+the embedder picks its interpreter in a fixed order: `NEST_PYTHON` if set, else the repo's `.venv/bin/python` (which carries the forge deps: numpy + tokenizers + the vendored potion table) discovered by walking up from the cwd, else `python3` on PATH. so the repo `.venv` is used automatically; set `NEST_PYTHON` only to force a specific interpreter. the selected interpreter is printed to stderr — and since discovery executes the nearest ancestor `.venv/bin/python`, set `NEST_PYTHON` explicitly if you run `nest` from inside an untrusted directory tree. point `--model-path` at a copied potion table dir for a fully sealed offline run.
+
+the python convenience is `python python/forge/retrieve.py`: it builds a `.nest` from the cc0 demo corpus with the potion embedder, asks a question, and prints the cited answer with a `nest://` citation, all offline and deterministic (the one-gif demo).
+
 ## 6. presets
 
-`preset=` selects a (text encoding, embedding dtype, optional ANN, optional BM25) bundle. per-knob overrides win, see `BuildConfig.text_encoding`, `.dtype`, `.with_hnsw`, `.with_bm25`.
+`preset=` selects a (text encoding, embedding dtype, optional ANN, optional BM25) bundle. per-knob overrides win, see `BuildConfig.text_encoding`, `.dtype`, `.with_hnsw`, `.with_bm25`, `.mrl_dim`.
 
-| preset       | text encoding | embeddings | ANN | BM25 | size_ratio | recall@10 |
-|--------------|---------------|------------|-----|------|-----------:|----------:|
-| `exact`      | raw           | float32    | no  | no   |      1.000 |    1.0000 |
-| `compressed` | zstd          | float16    | no  | no   |      0.350 |    1.0000 |
-| `tiny`       | zstd          | int8       | yes | no   |      0.283 |    0.9920 |
-| `hybrid`     | zstd          | float32    | yes | yes |      0.668 |    1.0000 |
+| preset       | text encoding | embeddings  | ANN | BM25 | size_ratio | recall@10 |
+|--------------|---------------|-------------|-----|------|-----------:|----------:|
+| `exact`      | raw           | float32     | no  | no   |      1.000 |    1.0000 |
+| `compressed` | zstd          | float16     | no  | no   |      0.339 |    1.0000 |
+| `tiny`       | zstd          | int8        | yes | no   |      0.256 |    0.9920 |
+| `micro`      | zstd          | mrl256-int8 | yes | no   |      0.223 |    0.8100 |
+| `nano`       | zstd          | int4        | yes | no   |      0.209 |    0.9130 |
+| `hybrid`     | zstd          | float32     | yes | yes  |      0.609 |    1.0000 |
 
-numbers measured on the project's PT-BR fake-news corpus (n=30,725, dim=384). latency ranges (NEON, hot cache): exact p50 ~3.0 ms, tiny p50 ~1.3 ms, hybrid p50 ~4.5 ms.
+numbers measured on the project's PT-BR fake-news corpus (n=30,725, dim=384), 100 queries, k=10 vs the float32 exact baseline (the published ladder `dat/measure/ladder.json`, gated against `dat/measure/baseline.json`). RULER CAVEAT: these `recall@10` figures use a SELF-PERTURBATION ruler (each query is a corpus vector plus tiny noise), so they measure rank-stability under quantization, NOT real-query retrieval, and are likely inflated; see the `ruler` field in `ladder.json`/`baseline.json` and the pending real-query (mteb-style) ruler (gate-zero). these are the honest current sizes after the text-codec repack (intpack chunk_ids/spans, bitpacked hnsw/bm25 payloads) shrank the indexed presets below the v0.2 figures: `tiny` 0.283 -> 0.256, `compressed` 0.350 -> 0.339, `hybrid` 0.668 -> 0.609. latency ranges (NEON, hot cache): exact p50 ~3.1 ms, tiny p50 ~1.2 ms, micro p50 ~0.8 ms, nano p50 ~2.1 ms, hybrid p50 ~4.0 ms.
 
-pick `tiny` for the smallest distributable file (~30% of `exact`), `compressed` when you need lossless cosine + 3x compression, `hybrid` when queries include rare terms, proper nouns, or siglas that pure embeddings underweight, and `exact` when storage isn't the bottleneck and you want the recall=1.0 ground truth.
+the `exact`/`compressed`/`tiny`/`nano`/`hybrid` rows are direct `preset=` values; `micro` is the published name for the matryoshka size lever (the documented honest point `mrl256-int8`), built with `nest.build(text_encoding="zstd", dtype="int8", mrl_dim=256, with_hnsw=True)` and emitted by `measure_presets.py --variants ...,micro,...`.
+
+pick `nano` for the smallest distributable file with recall above the nano floor: int4 block-64 embeddings (per-64-dim-group f16 absmax scales + packed 4-bit codes) take the embeddings section from int8's 11.92 MB down to 6.27 MB (~1.9x over int8, ~7.5x over float32). `nano`/`micro` require the effective `embedding_dim` divisible by 64. every sub-int8 preset (`micro`/`nano` and the whole mrl curve) is STORED-PRECISION: the 0x09 `embeddings_fp` rerank source is not wired, so the net-of-fp ratio equals the stored ratio and `score`/`recall@10` are real cosine AT THE STORED PRECISION (int4/int8), disclosed via `dtype` (and `mrl_dim`/`full_dim` for `micro`) in `nest stats` and on every result, never a bare-slab ratio. `micro` trades recall for size on this non-mrl MiniLM baseline (0.810 recall@10 at 0.223 ratio, see the curve below); pick it only when raw size beats the last ~10 recall points or once a real mrl-trained model lands. pick `tiny` when you want a smaller file than `compressed` with recall still above 0.99, `compressed` when you need lossless cosine + 3x compression, `hybrid` when queries include rare terms, proper nouns, or siglas that pure embeddings underweight, and `exact` when storage isn't the bottleneck and you want the recall=1.0 ground truth.
+
+### matryoshka prefix truncation (`mrl_dim`)
+
+`nest.build(..., mrl_dim=K)` (or `BuildConfig.mrl_dim`) slices each l2-normalized vector to its first `K` components and re-l2-normalizes the prefix BEFORE quantization (Qwen3/ST/BGE truncate-then-renormalize). this is the dimension axis: orthogonal to and multiplicative with the dtype levers. the stored `embedding_dim` becomes `K`, the source dim is recorded as `full_dim`, and both appear in `nest stats`. queries are striped at `K` too, so a full-dim query against a truncated file is a dimension mismatch; slice + renorm the query to `K` first. truncation is a pure deterministic op, so builds stay byte-identical; `content_hash` is over the truncated embeddings, so a citation is tied to its `mrl_dim` (never claimed stable across dims). int4 still needs the effective dim divisible by 64, so `mrl_dim` in {256, 192, 128} works with int4 but 96 does not (use int8/f16/f32 at 96).
+
+matryoshka pays off on a model trained for it (information front-loads into the prefix). the shipped MiniLM corpus is NOT mrl-trained, so truncation costs real recall@10 there; the published ladder in `dat/measure/ladder.json` (100 queries, k=10) reports the honest curve (same self-perturbation ruler as above, see the RULER CAVEAT) and `python/tools/measure_presets.py` emits it (the default `--variants` are `compressed,tiny,micro,nano,hybrid` plus `mrl256/192/128-int8`, `mrl96-int8`, `mrl256/192/128-int4`):
+
+| ladder        | size ratio | recall@10 |
+|---------------|-----------:|----------:|
+| `mrl256-int8` (`micro`) |     0.223  |   0.810   |
+| `mrl192-int8` |     0.207  |   0.733   |
+| `mrl128-int8` |     0.190  |   0.659   |
+| `mrl96-int8`  |     0.182  |   0.574   |
+| `mrl256-int4` |     0.191  |   0.777   |
+| `mrl192-int4` |     0.183  |   0.713   |
+| `mrl128-int4` |     0.174  |   0.627   |
+
+on that baseline `nano` (full-dim int4) still beats every truncated point on recall, so reach for `mrl_dim` (the `micro` rung is `mrl256-int8`) when raw size matters more than the last ~10 recall points, or once an mrl-trained embedder is in play. `compare_measure.py` gates `micro`/`nano`/`mrl256-int8` conditionally (size_ratio <= 0.25; recall >= 0.78 for micro/mrl256-int8, >= 0.85 for nano), only when the run includes them.
 
 ## 7. model_hash and offline operation (`--model-path`)
 
@@ -170,6 +224,8 @@ ANN ef=100 (100 queries) [hot]:
   recall@10 (ANN vs exact): 0.9920
 ```
 
+recall@10 here is ANN-vs-exact rank-stability (the ANN index against the exact-cosine top-k on the same queries), NOT real-query retrieval quality, and the printed value mirrors the published tiny ladder number; see the RULER CAVEAT in section 6.
+
 ## 9. citations
 
 every search hit carries a stable `citation_id` of the form `nest://<content_hash>/<chunk_id>`. resolve it back to the canonical text and original byte span:
@@ -179,6 +235,8 @@ nest cite my_corpus.nest 'nest://sha256:1aa9.../sha256:8f314...'
 ```
 
 `content_hash` is hashed over the **decoded** bytes, so a corpus stored with `text_encoding=zstd` produces the same `content_hash` as the same logical content stored raw. citations are stable across wire encodings.
+
+`cite` is tier-1: it returns the stored canonical text plus the verifying hashes (`file_hash`, `content_hash`) and the byte span. it does NOT reopen the original source bytes; original-byte reopen with a blob-digest verify is net-new tier-2 work that belongs to catalog mode, not the flagship. `ask` and `retrieve` print the same tier-1 stored canonical text, so the answer you get is exactly what `cite` resolves.
 
 ## 10. release verification
 

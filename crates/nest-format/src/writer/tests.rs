@@ -203,8 +203,62 @@ fn int8_embeddings_roundtrip() {
 }
 
 #[test]
+fn two_compressed_builds_byte_identical_with_text_levers() {
+    // a heavily-repeated corpus engages the dict/dedup text levers under the
+    // compressed preset. two reproducible builds must still be byte-identical
+    // (the dict trainer + dedup pass + chooser are all pure functions).
+    let mut m = good_manifest();
+    let uniques: Vec<String> = (0..30)
+        .map(|i| {
+            (0..300)
+                .map(|j| char::from(b'a' + (((i * 13 + j * 5) % 26) as u8)))
+                .collect::<String>()
+        })
+        .collect();
+    let mut texts: Vec<String> = Vec::new();
+    for _ in 0..12 {
+        for u in &uniques {
+            texts.push(u.clone());
+        }
+    }
+    m.n_chunks = texts.len() as u64;
+    let chunks: Vec<ChunkInput> = texts
+        .iter()
+        .enumerate()
+        .map(|(i, t)| ChunkInput {
+            canonical_text: t.clone(),
+            source_uri: format!("doc://{}", i % 5),
+            byte_start: 0,
+            byte_end: t.len() as u64,
+            embedding: {
+                let mut v = vec![0.0f32; 4];
+                v[i % 4] = 1.0;
+                v
+            },
+        })
+        .collect();
+
+    let b1 = NestFileBuilder::new(m.clone())
+        .text_encoding(SectionEncoding::Zstd)
+        .reproducible(true)
+        .add_chunks(chunks.clone())
+        .build_bytes()
+        .unwrap();
+    let b2 = NestFileBuilder::new(m)
+        .text_encoding(SectionEncoding::Zstd)
+        .reproducible(true)
+        .add_chunks(chunks)
+        .build_bytes()
+        .unwrap();
+    assert_eq!(b1, b2, "two compressed builds must be byte-identical");
+    // the file is valid and re-openable.
+    let view = NestView::from_bytes(&b1).unwrap();
+    view.content_hash_hex().unwrap();
+}
+
+#[test]
 fn rejects_zstd_embeddings() {
-    // Embeddings can never be zstd-compressed (we want SIMD-friendly
+    // lEmbeddings can never be zstd-compressed (we want SIMD-friendly
     // mmap reads). text_encoding does not apply to embeddings.
     let m = good_manifest();
     let bytes = NestFileBuilder::new(m)

@@ -47,7 +47,7 @@ impl<'a> NestView<'a> {
         self.data
     }
 
-    /// Look up the section table entry for `section_id`.
+    /// lLook up the section table entry for `section_id`.
     pub fn entry(&self, section_id: u32) -> crate::Result<&SectionEntry> {
         self.section_table
             .iter()
@@ -55,8 +55,8 @@ impl<'a> NestView<'a> {
             .ok_or(NestError::SectionNotFound(section_id))
     }
 
-    /// Physical (on-disk, mmap-backed) bytes of a section's payload.
-    /// Use `decoded_section` if you want the logical bytes (e.g. zstd
+    /// lPhysical (on-disk, mmap-backed) bytes of a section's payload.
+    /// lUse `decoded_section` if you want the logical bytes (e.g. zstd
     /// decompressed) the chunk decoders consume.
     pub fn get_section_data(&self, section_id: u32) -> crate::Result<&'a [u8]> {
         let entry = self.entry(section_id)?;
