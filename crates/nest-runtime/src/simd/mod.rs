@@ -39,7 +39,7 @@ pub use scalar::{
     dot_f32_f16_scalar, dot_f32_i4_blocked_scalar, dot_f32_i8_scalar, dot_f32_scalar,
 };
 
-/// lWhat backend is the runtime using right now? Useful for `nest stats`
+/// What backend is the runtime using right now? Useful for `nest stats`
 /// / benchmarks so the user can see whether SIMD is active.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SimdBackend {
@@ -60,9 +60,9 @@ impl SimdBackend {
 
 static BACKEND: OnceLock<SimdBackend> = OnceLock::new();
 
-/// lThe SIMD backend selected at runtime. Cached after the first call.
+/// The SIMD backend selected at runtime. Cached after the first call.
 ///
-/// lSet `NEST_FORCE_SCALAR=1` to disable SIMD entirely — useful for
+/// Set `NEST_FORCE_SCALAR=1` to disable SIMD entirely — useful for
 /// before/after SIMD benchmarks on the same binary.
 pub fn detect_backend() -> SimdBackend {
     *BACKEND.get_or_init(|| {
@@ -88,7 +88,7 @@ pub fn detect_backend() -> SimdBackend {
     })
 }
 
-/// lDot product between an f32 query and an f32 row stored as little-endian
+/// Dot product between an f32 query and an f32 row stored as little-endian
 /// bytes (the way embeddings live in mmap).
 #[inline]
 pub fn dot_f32_bytes(q: &[f32], row_bytes: &[u8]) -> f32 {
@@ -102,19 +102,18 @@ pub fn dot_f32_bytes(q: &[f32], row_bytes: &[u8]) -> f32 {
     }
 }
 
-/// lDot product between an f32 query and an f16 row stored as little-endian
+/// Dot product between an f32 query and an f16 row stored as little-endian
 /// bytes. Accumulates in f32. The query stays f32 (it is normalized once
 /// per call, no need to drop precision there).
 #[inline]
 pub fn dot_f32_f16_bytes(q: &[f32], row_bytes: &[u8]) -> f32 {
     debug_assert_eq!(row_bytes.len(), q.len() * 2);
     match detect_backend() {
-        // neon f16 widening needs rustc >= 1.94 (see build.rs / neon.rs); on
-        // older toolchains this arm is absent and the f16 path falls through to
-        // scalar (f32/i8/i4 still use neon).
+        // the neon f16 arm needs rustc >= 1.94 (cfg(neon_f16), see build.rs);
+        // on older toolchains only this f16 path falls back to scalar.
         #[cfg(all(target_arch = "aarch64", neon_f16))]
         SimdBackend::Neon => unsafe { neon::dot_f32_f16_neon(q, row_bytes) },
-        // lAVX2 has no native f16->f32 unless F16C is present; our cutoff
+        // AVX2 has no native f16->f32 unless F16C is present; our cutoff
         // is "AVX2 + FMA" which usually pulls F16C along. Using a portable
         // unpack here keeps the AVX2 path simple and avoids the F16C
         // detection branch.
@@ -122,7 +121,7 @@ pub fn dot_f32_f16_bytes(q: &[f32], row_bytes: &[u8]) -> f32 {
     }
 }
 
-/// lDot product between an f32 query and a single i8 row, multiplied by
+/// Dot product between an f32 query and a single i8 row, multiplied by
 /// the row's f32 scale. `q` stays f32; the i8 row is widened to i32 in
 /// the inner loop, multiplied by f32 lanes of `q`, accumulated in f32.
 ///
@@ -141,7 +140,7 @@ pub fn dot_f32_i8(q: &[f32], row: &[i8], scale: f32) -> f32 {
     acc * scale
 }
 
-/// lFused dequant + dot for an int4 block-`block` row against an f32 query.
+/// Fused dequant + dot for an int4 block-`block` row against an f32 query.
 /// `codes` is `dim/2` packed nibble bytes (low nibble first), `group_scales`
 /// is one f32 per `block`-dim group. The SIMD backends vectorize the nibble
 /// unpack but reduce per-group identically to scalar, so the result is
@@ -170,7 +169,7 @@ pub fn dot_f32_i4_blocked(
     }
 }
 
-/// lScore every row of an int8 embeddings section against `q`.
+/// Score every row of an int8 embeddings section against `q`.
 /// `out[i]` is the cosine score; the runtime sorts these.
 pub fn score_int8_section(q: &[f32], view: &Int8EmbeddingsView<'_>, out: &mut [f32]) {
     debug_assert_eq!(out.len(), view.n);

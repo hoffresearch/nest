@@ -7,8 +7,11 @@
 use std::process::Command;
 
 fn main() {
+    println!("cargo::rerun-if-changed=build.rs");
     println!("cargo::rustc-check-cfg=cfg(neon_f16)");
-    if rustc_minor().is_some_and(|m| m >= 94) {
+    // the cfg only gates aarch64 code; skip the rustc probe elsewhere.
+    let aarch64 = std::env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|a| a == "aarch64");
+    if aarch64 && rustc_minor().is_some_and(|m| m >= 94) {
         println!("cargo::rustc-cfg=neon_f16");
     }
 }
