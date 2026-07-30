@@ -8,10 +8,8 @@
 # clippy lint is treated as a hard error. New lints from clippy
 # upgrades will block the gate until reviewed.
 
-# Minimum supported Rust version. Set to whatever rustc the workspace
-# Cargo.toml declares (edition 2024 needs ≥ 1.85). Bump in lock-step
-# with the toolchain.
-msrv = "1.85"
+# MSRV is NOT set here: clippy reads `rust-version` from the workspace
+# Cargo.toml, which is the single source of truth.
 
 # Cognitive complexity: clippy default is 25; the 12-file Phase 5
 # refactor proved the codebase fits in ≤ 15 per function with the
