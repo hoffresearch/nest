@@ -1,3 +1,4 @@
+
 # Rustfmt configuration. Pinning stable-channel defaults explicitly so a
 # future rustfmt release that changes a default cannot silently reformat
 # the tree. Run via `cargo fmt --all`.
