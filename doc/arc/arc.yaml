@@ -33,14 +33,14 @@ inventory:
     - {path: ".editorconfig", kind: config, purpose: "editor defaults plus binary-safe .nest handling", links: []}
     - {path: ".gitattributes", kind: config, purpose: "git lfs routing for datasets and binaries", links: []}
     - {path: ".gitignore", kind: config, purpose: "ignores build outputs, caches, and regenerated corpora", links: []}
-    - {path: "AGENTS.md", kind: repo-ops, purpose: "agent operating contract, commands, conventions, and gotchas; the single agent instruction source, no per-tool instruction files", links: ["scripts/release_check.sh"]}
+    - {path: ".contracts/.agents/AGENTS.md", kind: repo-ops, purpose: "agent operating contract, commands, conventions, and gotchas; the single agent instruction source, no per-tool instruction files", links: ["scripts/release_check.sh"]}
     - {path: "Cargo.lock", kind: lockfile, purpose: "generated dependency lock for reproducible cargo resolution", links: ["Cargo.toml"]}
     - {path: "Cargo.toml", kind: workspace-manifest, purpose: "workspace members, edition, resolver, rust-version 1.85 (msrv, inherited by all crates), and shared dependencies", links: ["crates/nest-format/Cargo.toml", "crates/nest-runtime/Cargo.toml", "crates/nest-cli/Cargo.toml", "crates/nest-python/Cargo.toml"]}
     - {path: "clippy.toml", kind: lint-config, purpose: "pins clippy lint thresholds; msrv comes from the workspace rust-version", links: ["Cargo.toml"]}
     - {path: "CODE_OF_CONDUCT.md", kind: governance-doc, purpose: "project conduct policy", links: []}
     - {path: "CONTRIBUTING.md", kind: contributor-doc, purpose: "setup, branching, testing, and style guidance", links: ["scripts/release_check.sh"]}
     - {path: "LICENSE", kind: legal, purpose: "mit license text", links: []}
-    - {path: "llms.txt", kind: metadata, purpose: "concise llm and agent guidance", links: ["AGENTS.md", "CONTRIBUTING.md", "README.md"]}
+    - {path: "llms.txt", kind: metadata, purpose: "concise llm and agent guidance", links: [".contracts/.agents/AGENTS.md", "CONTRIBUTING.md", "README.md"]}
     - {path: "pyproject.toml", kind: python-config, purpose: "ruff config and python tool exclusions", links: ["python", "tests"]}
     - {path: "README.md", kind: overview-doc, purpose: "project overview plus pointers to the architecture maps and usage docs", links: ["doc/arc/arc.md", "doc/arc/arc.yaml", "doc/arc/arc.mmd", "doc/usage.md"]}
     - {path: "rustfmt.toml", kind: format-config, purpose: "stable rustfmt policy", links: []}
