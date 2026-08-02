@@ -37,7 +37,7 @@ things we do not treat as security bugs:
 
 - low recall on a particular corpus
 - HNSW recall under user expectation (configuration tuning, see `--ef`)
-- BM25 tokenizer degrading on CJK / thai / lao (documented limitation, see `AGENTS.md` known gaps)
+- BM25 tokenizer degrading on CJK / thai / lao (documented limitation, see `.contracts/.agents/AGENTS.md` known gaps)
 - compressed vs raw size differences
 - vulnerabilities in upstream sentence-transformers / huggingface stack; report those upstream first
 - weaknesses in the embedding model itself (false positives, biased recall)

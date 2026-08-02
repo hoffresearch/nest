@@ -178,4 +178,4 @@ these are documented honest limitations of the current code, not bugs to silentl
 
 # agent instructions
 
-this file is the single instruction source for ai coding agents: use/update/init only AGENTS.md (the core global agent file). codex and most agentic tooling already read AGENTS.md by default; point claude, gemini, cursor rules and similar tools here on init. do not create CLAUDE.md, GEMINI.md, CODEX.md, or any parallel instruction doc.
+this file is the single instruction source for ai coding agents: use/update/init only .contracts/.agents/AGENTS.md (the core global agent file). codex and most agentic tooling already read .contracts/.agents/AGENTS.md by default; point claude, gemini, cursor rules and similar tools here on init. do not create CLAUDE.md, GEMINI.md, CODEX.md, or any parallel instruction doc.
