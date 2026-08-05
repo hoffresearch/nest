@@ -37,6 +37,39 @@ pipe.emit()
 
 for real-world examples: `python/convert_legacy.py` (SQLite to `.nest`) and `python/tools/nest_build_corpus.py` (7 PT-BR datasets to a unified `.nest`).
 
+### image and pdf corpora
+
+`python/tools/nest_build_image_corpus.py` builds a `.nest` from image directories or PDFs. it discovers images, optionally compresses them to an AV1 video, embeds the compressed frames with a vision model, and stores one chunk per image/page with a resolvable `source_uri`.
+
+```sh
+.venv/bin/python python/tools/nest_build_image_corpus.py \
+    --input-dir /path/to/dermoscopy_images \
+    --dataset my-derm-dataset \
+    --output my-derm-dataset.nest \
+    --sample 1000
+```
+
+for PDFs, add `--pdf` to render each page as an image. for a generic image domain (not dermatology), pass `--model ViT-B-32 --pretrained openai`.
+
+search the corpus with a query image:
+
+```sh
+.venv/bin/python python/tools/nest_search_image.py \
+    --index my-derm-dataset.nest \
+    --query-image query_lesion.jpg \
+    -k 10
+```
+
+measure recall against the original images:
+
+```sh
+.venv/bin/python python/tools/nest_image_recall.py \
+    --index my-derm-dataset.nest \
+    --input-dir /path/to/dermoscopy_images \
+    --dataset my-derm-dataset \
+    --sample 200
+```
+
 direct API (no chunker): `nest.build(output_path, embedding_model, embedding_dim, chunker_version, model_hash, chunks, preset="exact", reproducible=True)`.
 
 ## 2. validate

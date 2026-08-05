@@ -62,6 +62,12 @@ dat/measure/corpus_*.nest
 dat/measure/*.nest-*
 
 
+# Temporary workspace for agent sessions.
+tmp/
+
+# Dermatology demo datasets downloaded for local benchmarking.
+dat/demo/derm/
+
 # Local symlink to external hoff database (not part of this repo)
 dat/hoff.db
 

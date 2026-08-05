@@ -10,6 +10,18 @@ format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). version
 
 - the offline embedder now resolves its python interpreter in a fixed order instead of a single hard-coded `python3`: an explicit `NEST_PYTHON` wins, else the repo's `.venv/bin/python` discovered by walking up to four ancestors of the cwd, else `python3` on PATH. `nest search-text` previously always spawned `python3` and `ask`/`retrieve` only honored `NEST_PYTHON`, so on a machine whose system `python3` lacks numpy + tokenizers (the potion-table deps) the flagship verbs failed until the user set `NEST_PYTHON` or fixed PATH by hand; the repo `.venv` is now picked up with no extra setup. the embedder opens no socket regardless of interpreter, so the offline-by-construction guarantee is unchanged. centralized in `nest-cli`'s `cmd::pyenv::resolve_interpreter`, with a `resolve_interpreter_from` core unit-tested for the override / `.venv`-discovery / `python3`-fallback precedence. the resolved interpreter is logged to stderr (the choice is never silent), and the ancestor-search trust assumption is documented: with `NEST_PYTHON` unset, discovery executes the nearest ancestor `.venv/bin/python`, so set `NEST_PYTHON` explicitly when running from an untrusted tree.
 
+### added
+
+image dataset corpus builder (experimental, outside the sovereign release gate):
+
+- `python/forge/embed_image.py` provides a vision embedder abstraction over `open_clip` (DermLIP for dermatology, generic CLIP for other domains). it exposes `model_id`, `dim`, and `model_hash` so image corpora satisfy the same manifest gate as text corpora.
+- `python/tools/nest_build_image_corpus.py` ingests image directories or PDFs, optionally compresses them to an AV1 video (`libsvtav1`, CRF 35, 1024w, 1fps), extracts embeddings from the compressed frames (so the index is the honest recall target), and emits a `.nest` file where each image/page is one chunk. `source_uri` points at either the original file or a `video://path#frame=N` pointer, and `byte_start/end` encode the frame ordinal.
+- `python/tools/nest_search_image.py` embeds a query image and searches the `.nest`.
+- `python/tools/nest_image_recall.py` measures `Recall@k` of original images against the compressed-frame index.
+- `tests/test_image_corpus.py` end-to-end tests the uncompressed and compressed paths on a small public dataset.
+- initial benchmarks: PH2 dermatoscopy (n=200) compresses ~20x with AV1 and keeps `Recall@10 = 1.00` and `Recall@1 = 0.82` using DermLIP embeddings extracted from the compressed frames.
+
+
 ## [0.3.0] - 2026-06-10
 
 additive release within frozen format v1. extends v0.2.0 with the int4 sub-int8 lever and the published preset ladder, the g1 graph pillar, matryoshka prefix truncation, and the forge-core ingestion workspace. existing v0.2 files load unchanged in v0.3 readers.
@@ -66,7 +78,7 @@ forge-core (FORGE-0a): the ingestion layer's frozen .fci schema, in a separate w
 
 - 288 rust tests in the sovereign workspace (`cargo test --release --workspace`, 35 suites; was 134 in v0.2.0), plus 6 forge-core tests on its own manifest (`cargo test --manifest-path forge-core/Cargo.toml`).
 - new groups since v0.2.0: txt_streams roundtrip plus negatives, zstd_dict roundtrip plus negatives, fsst roundtrip plus negatives, dedup roundtrip plus order-invariant, content_hash_dict_fsst_dedup, graph_adjacency roundtrip plus negatives, int4 roundtrip plus negatives, mrl_truncate, manifest_additivity, reserved_ids, the expanded rerank_contract (graph path, SearchExplain, stored-precision disclosure), and forge-core serialize.
-- python: the 3 test scripts (`test_e2e.py` incl the flagship retrieve guard, `test_builder.py`, `test_search_text_model_hash.py`) plus the self-test scripts under `python/forge/` (potion, lexical floor, retrieve), which are not run by `release_check.sh`.
+- python: the 4 test scripts (`test_e2e.py` incl the flagship retrieve guard, `test_builder.py`, `test_search_text_model_hash.py`, `test_image_corpus.py`) plus the self-test scripts under `python/forge/` (potion, lexical floor, retrieve, image embedder), which are not run by `release_check.sh`.
 
 ### compatibility
 
