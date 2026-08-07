@@ -110,7 +110,7 @@ ok "search-text model_hash gate (5 cases)"
 # skip themselves when ffmpeg/libsvtav1 is absent.
 step "python tests/test_image_corpus.py"
 "$PY" tests/test_image_corpus.py
-ok "image corpus pipeline (12 cases)"
+ok "image corpus pipeline (15 cases)"
 
 # ---- ruff (best-effort) ----
 if "$PY" -c "import ruff" 2>/dev/null || "$PY" -m ruff --version 2>/dev/null | head -1 >/dev/null; then

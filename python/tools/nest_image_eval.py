@@ -43,6 +43,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import nest
 from forge import embed_image, image_items
 
+# bootstrap resamples. fixed rather than a flag so two runs of the harness are
+# comparable, and published intervals are reproducible from the shipped tool.
+RESAMPLES = 5000
+
 
 def load_manifest(index_path: Path) -> dict:
     manifest_path = Path(index_path).with_suffix(".manifest.json")
@@ -77,6 +81,33 @@ def random_label_precision(items: list[dict]) -> float | None:
     return sum((n / total) * ((n - 1) / (total - 1)) for n in counts.values())
 
 
+def bootstrap_delta(sample: np.ndarray, control: np.ndarray, *, seed: int = 42) -> dict:
+    """Percentile bootstrap on a paired per-query difference.
+
+    A point estimate alone is not a result. An earlier draft of this work
+    published "av1 costs 1.9 points of precision@10" from a difference whose
+    interval crossed zero, which at n=200 meant the codec's cost was simply
+    below what the sample could resolve. Reporting the interval, and a plain
+    `significant` flag, is what stops that being written down again.
+
+    Paired because both indexes answer the SAME queries: resampling the pairs
+    removes the query-difficulty variance that dominates the raw spread.
+    """
+    diff = np.asarray(sample, dtype=np.float64) - np.asarray(control, dtype=np.float64)
+    n = len(diff)
+    if n == 0:
+        raise ValueError("bootstrap_delta needs at least one paired observation")
+    rng = np.random.default_rng(seed)
+    means = diff[rng.integers(0, n, (RESAMPLES, n))].mean(axis=1)
+    lo, hi = (float(v) for v in np.percentile(means, [2.5, 97.5]))
+    return {
+        "mean": round(float(diff.mean()), 4),
+        "ci95": [round(lo, 4), round(hi, 4)],
+        "significant": not (lo <= 0.0 <= hi),
+        "n": n,
+    }
+
+
 def evaluate(index_path: Path, queries: list[dict], ks: list[int]) -> dict:
     """Run both rulers over one index."""
     db = nest.open(str(index_path))
@@ -87,6 +118,9 @@ def evaluate(index_path: Path, queries: list[dict], ks: list[int]) -> dict:
     identity_hits = dict.fromkeys(ks, 0)
     label_matched = dict.fromkeys(ks, 0.0)
     label_any = dict.fromkeys(ks, 0)
+    # kept per query, in query order, so a paired bootstrap against another
+    # index can resample the same queries rather than two aggregates.
+    per_query: dict[int, list[float]] = {k: [] for k in ks}
 
     for query in queries:
         # search one extra so removing the query's own frame still leaves k
@@ -106,6 +140,7 @@ def evaluate(index_path: Path, queries: list[dict], ks: list[int]) -> dict:
             same = sum(1 for o in window if query["_by_ordinal"].get(o) == query["label"])
             label_matched[k] += same / len(window)
             label_any[k] += 1 if same else 0
+            per_query[k].append(same / len(window))
 
     n_q, n_l = len(queries), len(labelled)
     report = {
@@ -120,6 +155,7 @@ def evaluate(index_path: Path, queries: list[dict], ks: list[int]) -> dict:
             **{f"precision@{k}": round(label_matched[k] / n_l, 4) for k in ks},
             **{f"hit@{k}": round(label_any[k] / n_l, 4) for k in ks},
         }
+        report["_per_query"] = per_query
     return report
 
 
@@ -214,6 +250,21 @@ def main() -> int:
             for ruler in ("identity", "label")
             if ruler in report["compressed"] and ruler in report["uncompressed"]
         }
+        # a delta is only readable next to its interval; without one, a
+        # difference smaller than the sample can resolve reads as a finding.
+        sample, control = report["compressed"], report["uncompressed"]
+        if "_per_query" in sample and "_per_query" in control:
+            report["delta"]["label_ci"] = {
+                f"precision@{k}": bootstrap_delta(
+                    np.array(sample["_per_query"][k]),
+                    np.array(control["_per_query"][k]),
+                    seed=args.seed,
+                )
+                for k in args.k
+                if sample["_per_query"].get(k) and control["_per_query"].get(k)
+            }
+    for section in ("compressed", "uncompressed"):
+        report.get(section, {}).pop("_per_query", None)
 
     text = json.dumps(report, indent=2)
     print(text)
