@@ -1,37 +1,36 @@
-"""Vision embedder for image datasets.
+"""Vision embedder for image corpora.
 
-This module lives in the forge tooling layer because it pulls optional
-heavy dependencies (torch, open_clip, Pillow). It never enters the
-sovereign nest runtime.
+This lives in the forge tooling layer because it pulls heavy optional
+dependencies (torch, open_clip, Pillow). It never enters the sovereign
+runtime, and no `.nest` reader needs it.
 
-Supported models:
-- `redlessone/DermLIP_ViT-B-16` for dermatology images.
-- `ViT-B-16` or other open_clip models as a generic fallback.
+Models are addressed the way open_clip addresses them:
+`hf-hub:redlessone/DermLIP_ViT-B-16` for dermatology, or a plain
+architecture name plus a pretrained tag (`ViT-B-32` + `openai`) for the
+general-image case.
 
-The embedder exposes a model_hash so the resulting .nest files satisfy
-the same manifest gate as text corpora.
+`model_hash` fingerprints the weights that were actually loaded, not the
+model name. The manifest gate only means something if a different
+checkpoint produces a different hash, and a name plus a constant string
+cannot do that.
 """
 
 from __future__ import annotations
 
 import hashlib
-import os
 from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
 
-
-def _compute_model_hash(model_id: str, files_hash: str, dim: int, normalize: bool) -> str:
-    payload = f"{model_id}\n{files_hash}\n{dim}\n{normalize}"
-    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".tif")
 
 
 class ImageEmbedder:
-    """Embed images with a vision model.
+    """Embed images or decoded frames with an open_clip vision tower.
 
-    Loads the model lazily on first embed call so callers that only need
-    the model metadata do not pay the import cost.
+    The model loads lazily, so callers that only need metadata do not pay
+    the import and checkpoint cost.
     """
 
     def __init__(
@@ -49,6 +48,7 @@ class ImageEmbedder:
         self._model = None
         self._preprocess = None
         self._dim: int | None = None
+        self._model_hash: str | None = None
 
     @staticmethod
     def _default_device() -> str:
@@ -58,35 +58,68 @@ class ImageEmbedder:
             return "cpu"
         if torch.cuda.is_available():
             return "cuda"
-        if torch.backends.mps.is_available():
-            return "mps"
+        try:
+            if torch.backends.mps.is_available():
+                return "mps"
+        except (AttributeError, RuntimeError):
+            pass
         return "cpu"
 
-    def _load(self):
+    def _load(self) -> None:
         if self._model is not None:
             return
         import open_clip
-        import torch
         from PIL import Image
 
-        # hf-hub:... models load their weights through the model_id itself.
-        # Plain model names like ViT-B-32 require a pretrained tag.
+        # hf-hub: ids carry their own weights; a bare architecture name does
+        # not, and open_clip silently returns RANDOM weights when the tag is
+        # missing, so the tag is required rather than defaulted.
         if self.model_id.startswith("hf-hub:"):
             model, _, preprocess = open_clip.create_model_and_transforms(self.model_id)
         else:
-            tag = self.pretrained or "openai"
+            if not self.pretrained:
+                raise ValueError(
+                    f"model '{self.model_id}' needs an explicit pretrained tag "
+                    "(for example --pretrained openai); without it open_clip "
+                    "initializes random weights and search silently returns noise"
+                )
             model, _, preprocess = open_clip.create_model_and_transforms(
-                self.model_id, pretrained=tag
+                self.model_id, pretrained=self.pretrained
             )
+        self._model_hash = self._fingerprint(model, preprocess)
         self._model = model.to(self.device).eval()
         self._preprocess = preprocess
-        self._dim = (
-            model.output_dim
-            if hasattr(model, "output_dim")
-            else model.token_embedding.weight.shape[-1]
+        self._image = Image
+        self._dim = self._resolve_dim(model)
+
+    def _fingerprint(self, model, preprocess) -> str:
+        """Hash the loaded weights plus the preprocess transform.
+
+        Two checkpoints under the same name must not collide, and the same
+        weights read through a different resize/normalize must not either:
+        the preprocess is part of what produced the vectors.
+        """
+        digest = hashlib.sha256()
+        state = model.state_dict()
+        for key in sorted(state):
+            tensor = state[key]
+            digest.update(key.encode("utf-8"))
+            digest.update(f"{tuple(tensor.shape)}|{tensor.dtype}".encode())
+            digest.update(tensor.detach().to("cpu").contiguous().numpy().tobytes())
+        payload = "\n".join(
+            [self.model_id, self.pretrained or "", repr(preprocess), digest.hexdigest(), "l2"]
         )
-        # open_clip models expose output_dim on the model.
-        self._image_class = Image
+        return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _resolve_dim(self, model) -> int:
+        for holder in (model, getattr(model, "visual", None)):
+            dim = getattr(holder, "output_dim", None)
+            if isinstance(dim, int) and dim > 0:
+                return dim
+        # last resort: ask the model, rather than guess from an unrelated
+        # weight matrix (the text tower's width is not the joint dim).
+        probe = np.zeros((8, 8, 3), dtype=np.uint8)
+        return int(self.embed_arrays([probe]).shape[1])
 
     @property
     def dim(self) -> int:
@@ -96,101 +129,57 @@ class ImageEmbedder:
     @property
     def model_hash(self) -> str:
         self._load()
-        # The files_hash here is a placeholder: open_clip caches are local and
-        # vary by machine. For reproducible builds, callers should fingerprint
-        # the actual local checkpoint files and pass files_hash explicitly.
-        return _compute_model_hash(self.model_id, "open_clip_cached", self.dim, normalize=True)
+        return self._model_hash  # type: ignore[return-value]
 
-    def embed(self, image_paths: Sequence[str | Path]) -> np.ndarray:
-        """Return a float32 array of shape (n, dim), L2-normalized."""
-        self._load()
+    def _encode(self, images: list) -> np.ndarray:
         import torch
 
-        embeddings = []
+        tensors = [self._preprocess(img) for img in images]
+        with torch.no_grad():
+            feats = self._model.encode_image(torch.stack(tensors).to(self.device))
+            feats = feats / feats.norm(dim=-1, keepdim=True)
+        return feats.cpu().numpy().astype(np.float32)
+
+    def embed_paths(self, image_paths: Sequence[str | Path]) -> np.ndarray:
+        """Return an (n, dim) L2-normalized float32 array for files on disk."""
+        self._load()
         paths = [Path(p) for p in image_paths]
-        for i in range(0, len(paths), self.batch_size):
-            batch_paths = paths[i : i + self.batch_size]
-            tensors = []
-            for p in batch_paths:
-                img = self._image_class.open(p).convert("RGB")
-                tensors.append(self._preprocess(img))
-            batch = torch.stack(tensors).to(self.device)
-            with torch.no_grad():
-                feats = self._model.encode_image(batch)
-                feats = feats / feats.norm(dim=-1, keepdim=True)
-            embeddings.append(feats.cpu().numpy().astype(np.float32))
-        return np.vstack(embeddings)
+        out = []
+        for start in range(0, len(paths), self.batch_size):
+            batch = []
+            for path in paths[start : start + self.batch_size]:
+                with self._image.open(path) as img:
+                    batch.append(img.convert("RGB"))
+            out.append(self._encode(batch))
+        return np.vstack(out) if out else np.zeros((0, self.dim), dtype=np.float32)
 
-    def embed_single(self, image_path: str | Path) -> np.ndarray:
-        """Return a single L2-normalized float32 vector."""
-        return self.embed([image_path])[0]
+    def embed_arrays(self, frames: Sequence[np.ndarray]) -> np.ndarray:
+        """Return an (n, dim) array for already-decoded RGB frames.
 
-    def embed_frames(self, frames: Sequence[np.ndarray]) -> np.ndarray:
-        """Embed already-loaded RGB numpy arrays.
-
-        Used when the searchable index must represent compressed video frames
-        rather than the original pixel buffers.
+        This is the path used when the index must represent the compressed
+        frames rather than the source pixels.
         """
         self._load()
-        import torch
+        out = []
+        for start in range(0, len(frames), self.batch_size):
+            batch = [
+                self._image.fromarray(arr).convert("RGB")
+                for arr in frames[start : start + self.batch_size]
+            ]
+            out.append(self._encode(batch))
+        return np.vstack(out) if out else np.zeros((0, self.dim), dtype=np.float32)
 
-        embeddings = []
-        for i in range(0, len(frames), self.batch_size):
-            batch = frames[i : i + self.batch_size]
-            tensors = []
-            for arr in batch:
-                img = self._image_class.fromarray(arr).convert("RGB")
-                tensors.append(self._preprocess(img))
-            stacked = torch.stack(tensors).to(self.device)
-            with torch.no_grad():
-                feats = self._model.encode_image(stacked)
-                feats = feats / feats.norm(dim=-1, keepdim=True)
-            embeddings.append(feats.cpu().numpy().astype(np.float32))
-        return np.vstack(embeddings)
+    def embed_one(self, image_path: str | Path) -> np.ndarray:
+        return self.embed_paths([image_path])[0]
 
 
 def list_images(root: Path, extensions: Sequence[str] | None = None) -> list[Path]:
-    if extensions is None:
-        extensions = (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".gif", ".tiff", ".tif")
-    ext_set = {e.lower() for e in extensions}
+    """Every image under `root`, in a stable sorted order.
+
+    The order is the corpus ordinal, so it has to be deterministic across
+    machines: `rglob` alone is filesystem-ordered.
+    """
+    ext_set = {e.lower() for e in (extensions or IMAGE_EXTENSIONS)}
     paths = [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in ext_set]
     paths.sort()
     return paths
-
-
-def extract_frame_from_video(video_path: Path, frame_idx: int) -> np.ndarray:
-    """Decode a single frame from a video file to an RGB numpy array."""
-    import cv2
-
-    cap = cv2.VideoCapture(str(video_path))
-    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-    ret, frame = cap.read()
-    cap.release()
-    if not ret:
-        raise RuntimeError(f"could not decode frame {frame_idx} from {video_path}")
-    return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-
-def model_fingerprint_from_local_cache(model_id: str, cache_dir: Path | None = None) -> str:
-    """Hash the local open_clip/hf checkpoint files for reproducibility.
-
-    This mirrors python/model_fingerprint.py for text embedders.
-    """
-    if cache_dir is None:
-        cache_dir = Path.home() / ".cache" / "huggingface" / "hub"
-    if not cache_dir.exists():
-        return "sha256:" + "0" * 64
-    # open_clip hub repos live under models--<org>--<repo> with a snapshots dir.
-    # Hash all files under matching snapshots deterministically.
-    digest = hashlib.sha256()
-    # Best-effort: include files whose path contains a sanitized model id.
-    token = model_id.replace("/", "--").replace(":", "--")
-    found = False
-    for p in sorted(cache_dir.rglob("*")):
-        if p.is_file() and token in str(p):
-            found = True
-            digest.update(p.name.encode("utf-8"))
-            digest.update(p.read_bytes())
-    if not found:
-        digest.update(b"no_local_cache")
-    return "sha256:" + digest.hexdigest()

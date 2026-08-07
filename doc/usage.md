@@ -39,36 +39,59 @@ for real-world examples: `python/convert_legacy.py` (SQLite to `.nest`) and `pyt
 
 ### image and pdf corpora
 
-`python/tools/nest_build_image_corpus.py` builds a `.nest` from image directories or PDFs. it discovers images, optionally compresses them to an AV1 video, embeds the compressed frames with a vision model, and stores one chunk per image/page with a resolvable `source_uri`.
+experimental, and python-only: image corpora live in the forge tooling layer because a vision tower needs torch, which the sovereign runtime does not take. the `.nest` they emit is an ordinary `.nest`.
+
+`python/tools/nest_build_image_corpus.py` letterboxes every image onto one canvas, encodes the sequence as a single AV1 stream, embeds the DECODED frames, and writes one chunk per image or pdf page. embedding the decoded frames rather than the source pixels is deliberate: the index has to describe what a reader can actually get back.
 
 ```sh
 .venv/bin/python python/tools/nest_build_image_corpus.py \
     --input-dir /path/to/dermoscopy_images \
-    --dataset my-derm-dataset \
-    --output my-derm-dataset.nest \
-    --sample 1000
+    --dataset my-derm \
+    --output corpora/my-derm.nest \
+    --labels labels.csv
 ```
 
-for PDFs, add `--pdf` to render each page as an image. for a generic image domain (not dermatology), pass `--model ViT-B-32 --pretrained openai`.
+a corpus is a pair, not a file:
 
-search the corpus with a query image:
+```
+corpora/my-derm.nest            the searchable index
+corpora/my-derm.media/          the encoded stream
+corpora/my-derm.manifest.json   ordinals, origins, labels, media sha256
+```
+
+frame uris are relative to that pair (`media://my-derm-av1.mp4#frame=51`), so copying both together moves the corpus intact. an absolute path in a `source_uri` would not survive the copy.
+
+`--all-intra` makes every frame a keyframe. try it whenever the images are unrelated to each other, which is the normal case for a photo dataset: inter-frame prediction has nothing to find and the bits it spends looking are wasted. on PH2 it produced a smaller file (30.8x against 25.9x) and a 26 percent faster single-frame decode, for 1.6 points of label `precision@10`. it is a trade, so it is off by default.
+
+add `--pdf` to render pdf pages as the images; page numbers are kept in the manifest and in the citable text. for a non-dermatology domain pass `--model ViT-B-32 --pretrained openai`. the pretrained tag is required for bare architecture names, because open_clip answers a missing tag with random weights.
+
+search with a query image, and optionally decode the matched frames back out:
 
 ```sh
 .venv/bin/python python/tools/nest_search_image.py \
-    --index my-derm-dataset.nest \
-    --query-image query_lesion.jpg \
-    -k 10
+    --index corpora/my-derm.nest --query-image lesion.jpg -k 10 \
+    --save-frames hits/
 ```
 
-measure recall against the original images:
+queries route through `retrieve`, so the embedder's `model_hash` is checked against the manifest before anything is scored.
+
+### measuring an image corpus
+
+`python/tools/nest_image_eval.py` reports two rulers and keeps them apart, because they answer different questions:
+
+- `identity` asks whether a source image retrieves its own frame. it measures rank stability under the codec and is inflated by construction, since the corpus contains the answer. on an uncompressed index it returns 1.000 by definition.
+- `label` removes the query's own frame and scores how many of the remaining neighbours share its label. nothing in the corpus is the answer, so this is the one that reports retrieval quality. it is printed next to the random-pick baseline for the same label distribution, without which the number cannot be read.
+
+neither means much alone. pass `--baseline` with an uncompressed control index (`--no-compress` at build time) to get the delta, which is what the codec actually cost:
 
 ```sh
-.venv/bin/python python/tools/nest_image_recall.py \
-    --index my-derm-dataset.nest \
-    --input-dir /path/to/dermoscopy_images \
-    --dataset my-derm-dataset \
-    --sample 200
+.venv/bin/python python/tools/nest_image_eval.py \
+    --index corpora/my-derm.nest \
+    --baseline corpora/my-derm-raw.nest \
+    -k 1 5 10 --out eval.json
 ```
+
+measured on PH2 (n=200): 25.9x on the media, and at that ratio av1 costs 1.9 points of label `precision@10`. see `doc/changelog.md` for the full table.
 
 direct API (no chunker): `nest.build(output_path, embedding_model, embedding_dim, chunker_version, model_hash, chunks, preset="exact", reproducible=True)`.
 
