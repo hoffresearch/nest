@@ -37,7 +37,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from builder import BuildConfig, ChunkSpec, Pipeline
-from forge import embed_image, image_encode, image_items, image_media
+from forge import embed_image, image_backends, image_items, image_media
 from forge.image_decode import frame_sha256
 
 CHUNKER_VERSION = "image-v1"
@@ -82,6 +82,7 @@ def build_corpus(
     control: bool = False,
     scratch_db: str | None = None,
     preset: str = "compressed",
+    return_embeddings: bool = False,
 ) -> dict:
     input_dir, output_path = Path(input_dir), Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -103,7 +104,7 @@ def build_corpus(
         frame_hashes: list[str] = []
         if compress:
             canvas = image_media.canvas_size(render_paths, width)
-            built = image_encode.build_media(
+            built = image_backends.build_media(
                 render_paths,
                 output_path,
                 dataset_name,
@@ -117,9 +118,7 @@ def build_corpus(
                 control=control,
             )
             media_info, uris = built["media"], built["uris"]
-            embeddings, frame_hashes = _embed_compressed(
-                embedder, built["frames"], len(items)
-            )
+            embeddings, frame_hashes = _embed_compressed(embedder, built["frames"], len(items))
         else:
             uris = [Path(p).resolve().as_uri() for p in render_paths]
             embeddings = embedder.embed_paths(render_paths)
@@ -180,6 +179,10 @@ def build_corpus(
         "input_kind": "pdf" if is_pdf else "images",
         "media": media_info,
         "model": {"id": embedder.model_id, "dim": embedder.dim, "hash": embedder.model_hash},
+        # one content hash per decoded frame. the count guard catches a lost
+        # frame; only these catch a reordered one. verify with
+        # forge.image_decode.verify_frame_hashes.
+        "frame_sha256": frame_hashes,
         "items": [
             {
                 "ordinal": item.ordinal,
@@ -196,7 +199,7 @@ def build_corpus(
     }
     manifest_path = output_path.with_suffix(".manifest.json")
     manifest_path.write_text(json.dumps(manifest, indent=2))
-    return {
+    result = {
         "dataset": dataset_name,
         "nest": str(output_path),
         "manifest": str(manifest_path),
@@ -204,6 +207,11 @@ def build_corpus(
         "compressed": compress,
         "media": media_info,
     }
+    if return_embeddings:
+        # programmatic callers only (the sweep): the vectors the index was
+        # built from, so drift against source-pixel vectors costs no re-embed.
+        result["embeddings"] = embeddings
+    return result
 
 
 def main() -> int:
@@ -226,6 +234,24 @@ def main() -> int:
         "--all-intra",
         action="store_true",
         help="every frame a keyframe; try it when the images are unrelated to each other",
+    )
+    parser.add_argument(
+        "--backend",
+        choices=["av1", "avif"],
+        default="av1",
+        help="av1 stream (default, won the size-matched matrix) or one avif per image",
+    )
+    parser.add_argument(
+        "--pix-fmt",
+        choices=["yuv420p", "yuv444p"],
+        default="yuv420p",
+        help="probed after encode; 444 only works on the avif backend",
+    )
+    parser.add_argument("--avif-quality", type=int, default=35, help="avifenc -q, 0 worst to 100")
+    parser.add_argument(
+        "--control",
+        action="store_true",
+        help="letterbox-lossless control corpus (png), the ruler codec cost is measured against",
     )
     parser.add_argument("--preset", default="compressed", help="nest encoding preset")
     parser.add_argument("--scratch-db")
@@ -254,6 +280,10 @@ def main() -> int:
                 crf=args.crf,
                 speed=args.speed,
                 all_intra=args.all_intra,
+                backend=args.backend,
+                pix_fmt=args.pix_fmt,
+                avif_quality=args.avif_quality,
+                control=args.control,
                 scratch_db=args.scratch_db,
                 preset=args.preset,
             ),
