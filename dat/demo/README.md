@@ -24,6 +24,33 @@ dat/demo/
 
 each upstream dataset keeps its original license file and structure. see the README inside each subdirectory for citation requirements.
 
+## image corpora (experimental)
+
+`dat/demo/derm/` holds the dermatology images used to measure the experimental image corpus path. like everything else here it is local-only and gitignored.
+
+```
+dat/demo/derm/
+└── ph2/images/          200 dermoscopy images + PH2_simple_dataset.csv (diagnosis labels)
+```
+
+PH2 (Mendonca et al., ADDI project, Universidade do Porto) is 200 dermoscopy images labelled Common Nevus, Atypical Nevus, or Melanoma. it is the reference dataset for the image benchmark in `doc/changelog.md` because it is small, labelled, and visually homogeneous, which is the case av1 inter-frame coding is supposed to be good at. it is research-use only, so check the upstream terms before redistributing it.
+
+rebuild the benchmark:
+
+```sh
+.venv/bin/python python/tools/nest_build_image_corpus.py \
+    --input-dir dat/demo/derm/ph2/images --dataset ph2 \
+    --output tmp/ph2/ph2.nest --labels dat/demo/derm/ph2/PH2_simple_dataset.csv
+.venv/bin/python python/tools/nest_build_image_corpus.py \
+    --input-dir dat/demo/derm/ph2/images --dataset ph2 \
+    --output tmp/ph2-raw/ph2-raw.nest --labels dat/demo/derm/ph2/PH2_simple_dataset.csv \
+    --no-compress
+.venv/bin/python python/tools/nest_image_eval.py \
+    --index tmp/ph2/ph2.nest --baseline tmp/ph2-raw/ph2-raw.nest -k 1 5 10
+```
+
+the control index (`--no-compress`) is not optional: the compressed numbers mean nothing without it.
+
 ## offline demo (no downloads)
 
 none of the datasets below are needed for the one-gif demo. `python python/forge/retrieve.py` builds a byte-identical `.nest` from the cc0 demo corpus in `python/forge/demo_corpus` using the vendored potion embedder (numpy + tokenizers, no torch, no network) and prints a cited answer in seconds. it only needs `git lfs pull` to hydrate the potion table.

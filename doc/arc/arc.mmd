@@ -31,12 +31,14 @@ sequenceDiagram
     F->>F: optional graph_adjacency 0x0C csr (NEXT_CHUNK + top-m semantic; excluded from content_hash)
     F->>N: deterministic emit + four hashes
 
-    note over I,N: image corpus build · offline
-    I->>I: discover images / render PDF pages
-    I->>I: optional AV1 compression (libsvtav1, 1fps)
-    I->>I: vision embed (DermLIP / CLIP)
-    I->>F: nest.build(chunks, model_hash, preset=compressed)
+    note over I,N: image corpus build · offline · experimental
+    I->>I: discover images / render pdf pages (sorted, ordinal = frame no)
+    I->>I: letterbox onto one canvas, encode av1 via rawvideo pipe
+    I->>I: verify frame count == item count
+    I->>I: vision embed the DECODED frames (dermlip / clip)
+    I->>F: nest.build(chunks keyed by chunk_id, model_hash, preset=compressed)
     F->>N: deterministic emit + four hashes
+    I->>N: corpus.media/ + corpus.manifest.json beside the .nest
 
     note over R,Q: query · offline · mmap
     Q->>E: search-text spawns embedder
