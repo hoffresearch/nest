@@ -23,14 +23,6 @@ mod provenance;
 mod spans;
 
 /// `intpack` (encoding id 4) repack kinds. the kind byte leads the
-mod chunk_ids;
-mod codec;
-mod contract;
-pub mod graph;
-mod provenance;
-mod spans;
-
-/// `intpack` (encoding id 4) repack kinds. the kind byte leads the
 /// packed payload so the wire codec can rebuild the exact canonical
 /// bytes of the section it was packed from, keeping `content_hash`
 /// stable. canonical sections are never version-bumped; this is a wire
