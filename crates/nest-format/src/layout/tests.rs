@@ -92,9 +92,9 @@ fn reserved_additive_ids_are_in_range_and_distinct() {
     assert_eq!(SECTION_SPACE_EMBEDDINGS_FP_BASE, 0x30);
     assert_eq!(SPACE_BAND_LEN, 0x10);
     // reserved sections stay section_name-unresolved until their feature
-    // ships. EXCEPTIONS: graph_adjacency (0x0C, G1) and the blob pair
-    // (0x14/0x16, media blobs) resolve yet stay content_hash-excluded
-    // (see reserved_ids.rs).
+    // ships. EXCEPTIONS: graph_adjacency (0x0C, G1), the blob pair
+    // (0x14/0x16, media blobs) and space_table (0x15, multimodal) resolve
+    // yet stay content_hash-excluded (see reserved_ids.rs).
     for &s in sec.iter().chain(recon.iter()) {
         match s {
             SECTION_GRAPH_ADJACENCY => assert_eq!(section_name(s), Some("graph_adjacency")),
@@ -102,7 +102,13 @@ fn reserved_additive_ids_are_in_range_and_distinct() {
             SECTION_BLOB_SPAN_OVERLAY => {
                 assert_eq!(section_name(s), Some("blob_span_overlay"))
             }
+            SECTION_SPACE_TABLE => assert_eq!(section_name(s), Some("space_table")),
             _ => assert!(section_name(s).is_none()),
         }
     }
+    // the per-space bands resolve through the range check.
+    assert_eq!(section_name(0x20), Some("space_embeddings"));
+    assert_eq!(section_name(0x2F), Some("space_embeddings"));
+    assert_eq!(section_name(0x30), Some("space_embeddings_fp"));
+    assert_eq!(section_name(0x3F), Some("space_embeddings_fp"));
 }

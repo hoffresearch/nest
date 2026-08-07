@@ -6,6 +6,8 @@ use pyo3::prelude::*;
 
 mod build_fn;
 mod build_inputs;
+mod build_manifest;
+mod build_spaces;
 mod chunk_id_fn;
 mod nest_file;
 mod retrieve_fn;

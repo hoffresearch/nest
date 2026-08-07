@@ -111,6 +111,44 @@ impl NestFile {
         )
     }
 
+    /// lExact search over one named multimodal space (e.g. "vision").
+    /// the query must be embedded with the model the space's model_hash
+    /// fingerprints and have the space's dim: a text-tower query fails
+    /// loudly instead of silently scoring the vision band. falls back to
+    /// nothing: an unknown space is a typed error, never a silent text
+    /// search.
+    #[pyo3(signature = (name, query, k, expected_model_hash=None))]
+    fn search_space(
+        &self,
+        name: &str,
+        query: &Bound<PyAny>,
+        k: i32,
+        expected_model_hash: Option<String>,
+    ) -> PyResult<Vec<SearchHitPy>> {
+        let qvec: Vec<f32> = query
+            .extract()
+            .map_err(|e| PyValueError::new_err(format!("invalid query vector: {}", e)))?;
+        let res = self
+            .rt
+            .search_space(name, &qvec, k, expected_model_hash.as_deref())
+            .map_err(|e| PyValueError::new_err(format!("{}", e)))?;
+        Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
+    }
+
+    #[getter]
+    fn has_spaces(&self) -> bool {
+        self.rt.has_spaces()
+    }
+
+    #[getter]
+    fn space_names(&self) -> Vec<String> {
+        self.rt
+            .space_names()
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
+    }
+
     #[getter]
     fn embedding_dim(&self) -> usize {
         self.rt.embedding_dim()

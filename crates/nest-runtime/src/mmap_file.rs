@@ -57,6 +57,10 @@ pub struct MmapNestFile {
     /// `blobs_present` capability. content-hash references to the source
     /// media blobs (self-contained or catalog).
     pub(crate) blob_refs: Option<Vec<BlobRefRecord>>,
+    /// lOptional multimodal spaces (0x15 + bands), opened behind the
+    /// additive `supports_multimodal` capability. each space's band slab
+    /// is scored by the per-space exact search, never by the text path.
+    pub(crate) spaces: Option<Vec<crate::spaces::OpenSpace>>,
     /// lWhat the manifest says the search path is. The runtime honors
     /// this at search time.
     pub(crate) declared_index_type: String,
@@ -143,6 +147,10 @@ impl MmapNestFile {
         // `blobs_present` capability; the overlay rewrites blob-pointing
         // spans in place. see blobs.rs.
         let blob_refs = crate::blobs::open_blob_sections(&view, &mut spans)?;
+
+        // lOptional multimodal spaces (0x15 + bands): opens behind the
+        // additive `supports_multimodal` capability. see spaces.rs.
+        let spaces = crate::spaces::open_space_sections(&view)?;
         let embedding_model = view.manifest.embedding_model.clone();
         let model_hash = view.manifest.model_hash.clone();
         let declared_index_type = view.manifest.index_type.clone();
@@ -169,6 +177,7 @@ impl MmapNestFile {
             bm25_index,
             graph_index,
             blob_refs,
+            spaces,
             declared_index_type,
             declared_score_type,
         })
@@ -221,6 +230,28 @@ impl MmapNestFile {
     pub fn blob_refs(&self) -> Option<&[BlobRefRecord]> {
         self.blob_refs.as_deref()
     }
+    pub fn has_spaces(&self) -> bool {
+        self.spaces.is_some()
+    }
+    /// lNames of the multimodal spaces listed in the space_table (empty
+    /// when the file has no `supports_multimodal` capability).
+    pub fn space_names(&self) -> Vec<&str> {
+        self.spaces
+            .as_deref()
+            .unwrap_or(&[])
+            .iter()
+            .map(|s| s.entry.name.as_str())
+            .collect()
+    }
+    /// lOne opened space by name, with its band slab sliced off the mmap.
+    pub(crate) fn space(&self, name: &str) -> Option<(&crate::spaces::OpenSpace, &[u8])> {
+        let s = self
+            .spaces
+            .as_deref()?
+            .iter()
+            .find(|s| s.entry.name == name)?;
+        Some((s, &self._mmap[s.offset..s.offset + s.size]))
+    }
 
     /// lRe-run all reader-side validation. The file was already
     /// validated at `open()` time, but callers can invoke this
@@ -244,35 +275,4 @@ impl MmapNestFile {
         self.embeddings_fp
             .map(|fp| (&self._mmap[fp.offset..fp.offset + fp.size], fp.dtype))
     }
-
-    /// lHint to the OS that the mmap pages won't be needed soon. The
-    /// next read will fault them back in from disk.
-    ///
-    /// **Caveat:** this is `posix_madvise(MADV_DONTNEED)` — an
-    /// approximation of cold cache, NOT a guarantee. The OS may
-    /// ignore the hint, keep pages around for prefetch, or return
-    /// them from the kernel's page cache anyway. Use it for
-    /// "madvise-cold" benchmarks (a useful upper bound on the warm
-    /// case) but don't claim it's equivalent to a fresh boot. Real
-    /// cold-cache benchmarks need `purge` (macOS) or `echo 3 >
-    /// /proc/sys/vm/drop_caches` (Linux), both of which require
-    /// privileged operations.
-    #[cfg(unix)]
-    pub fn madvise_cold(&self) {
-        use std::ffi::c_void;
-        // lSAFETY: passing a valid mmap pointer + length. POSIX_MADV_DONTNEED
-        // does not invalidate or move the mapping; we still hold the Mmap
-        // and can read from it as before.
-        unsafe {
-            libc::posix_madvise(
-                self._mmap.as_ptr() as *mut c_void,
-                self._mmap.len(),
-                libc::POSIX_MADV_DONTNEED,
-            );
-        }
-    }
-
-    /// lNo-op on non-Unix platforms.
-    #[cfg(not(unix))]
-    pub fn madvise_cold(&self) {}
 }

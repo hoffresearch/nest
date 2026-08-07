@@ -60,6 +60,10 @@ use crate::build_inputs::{
 ///     blob_span_overlay (0x16): keys `blob_ref_index` (int or None),
 ///     `byte_start`, `byte_end`. the runtime prefers these over 0x03 spans
 ///     for cite/retrieve. excluded from content_hash.
+///   - `spaces`: optional list of dicts for multimodal embedding spaces
+///     (0x15 + bands): keys `name`, `model_hash`, optional `dtype`
+///     (default "float32"), `vectors` (one row per chunk). queries route
+///     through `NestFile.search_space`, never the text path.
 ///   - `hnsw_m`, `hnsw_ef_construction`, `hnsw_seed`: HNSW knobs
 #[pyfunction]
 #[pyo3(signature = (
@@ -88,6 +92,7 @@ use crate::build_inputs::{
     graph_top_m=8,
     blob_refs=None,
     chunk_blob_spans=None,
+    spaces=None,
     hnsw_m=16,
     hnsw_ef_construction=400,
     hnsw_seed=42,
@@ -119,11 +124,11 @@ pub fn build(
     graph_top_m: usize,
     blob_refs: Option<&Bound<PyList>>,
     chunk_blob_spans: Option<&Bound<PyList>>,
+    spaces: Option<&Bound<PyList>>,
     hnsw_m: usize,
     hnsw_ef_construction: usize,
     hnsw_seed: u64,
 ) -> PyResult<String> {
-    use nest_format::manifest::Manifest;
     use nest_format::writer::{EmbeddingDType, NestFileBuilder};
 
     let n_chunks = chunks.len() as u64;
@@ -178,32 +183,23 @@ pub fn build(
     let want_hnsw = with_hnsw.unwrap_or(default_hnsw);
     let want_bm25 = with_bm25.unwrap_or(default_bm25);
 
-    // lDisclosure metadata: when matryoshka truncation is active, record the
-    // effective prefix dim plus the full source dim as additive optional
-    // fields so the size/recall tradeoff is visible and citations are
-    // honestly tied to a given mrl_dim. Unset for non-truncated files so
-    // they stay byte-identical with a v1 manifest.
-    let (manifest_mrl_dim, manifest_full_dim) = match mrl_dim {
-        Some(_) => (Some(effective_dim), Some(full_dim)),
-        None => (None, None),
-    };
-
-    let manifest = Manifest {
-        embedding_model: embedding_model.to_string(),
+    // lDisclosure metadata + manifest assembly live in build_manifest so
+    // this entry point stays under the 300-line guard.
+    let manifest = crate::build_manifest::build_manifest(
+        embedding_model,
         embedding_dim,
         n_chunks,
-        chunker_version: chunker_version.to_string(),
-        model_hash: model_hash.to_string(),
+        chunker_version,
+        model_hash,
         title,
         version,
         created,
         description,
         authors,
         license,
-        mrl_dim: manifest_mrl_dim,
-        full_dim: manifest_full_dim,
-        ..Default::default()
-    };
+        mrl_dim.map(|_| effective_dim),
+        mrl_dim.map(|_| full_dim),
+    );
 
     let mut builder = NestFileBuilder::new(manifest)
         .reproducible(reproducible)
@@ -216,18 +212,13 @@ pub fn build(
     // here we use the originals so build is independent of dtype loss. The
     // index is also the source of top-m SEMANTIC edges for the optional graph,
     // so build it whenever hnsw OR the graph is wanted; only attach the hnsw
-    // SECTION when hnsw is wanted.
+    // SECTION when hnsw is wanted. helper lives in build_inputs (300-line
+    // guard).
     let n = chunk_inputs.len();
     let hnsw_index = if want_hnsw || with_graph {
-        let dim = embedding_dim as usize;
-        let mut flat: Vec<f32> = Vec::with_capacity(n * dim);
-        for c in &chunk_inputs {
-            flat.extend_from_slice(&c.embedding);
-        }
-        Some(nest_runtime::ann::HnswIndex::build(
-            flat,
-            n,
-            dim,
+        Some(crate::build_inputs::build_hnsw(
+            &chunk_inputs,
+            embedding_dim as usize,
             hnsw_m,
             hnsw_ef_construction,
             hnsw_seed,
@@ -273,6 +264,14 @@ pub fn build(
         let payload = nest_format::encode_blob_span_overlay(&entries)
             .map_err(|e| PyValueError::new_err(format!("blob_span_overlay encode: {}", e)))?;
         builder = builder.blob_span_overlay(payload);
+    }
+
+    // lOptional multimodal spaces (0x15 + one band per space). additive,
+    // excluded from content_hash; sets supports_multimodal. the per-space
+    // model_hash rides the table, so the runtime's per-space honesty gate
+    // works exactly like the corpus-level one.
+    if let Some(list) = spaces {
+        builder = crate::build_spaces::attach_spaces(builder, list, n as u64)?;
     }
 
     if want_bm25 {
