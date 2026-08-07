@@ -177,20 +177,14 @@ def frame_sha256(frame: np.ndarray) -> str:
     return "sha256:" + digest.hexdigest()
 
 
-def verify_frame_hashes(
-    video_path: Path, canvas: tuple[int, int], expected: Sequence[str]
-) -> None:
+def verify_frame_hashes(video_path: Path, canvas: tuple[int, int], expected: Sequence[str]) -> None:
     """Re-decode and compare every frame hash.
 
     The frame-count guard catches a LOST frame; it cannot catch REORDERED
     frames, and a reordered corpus hands every citation the wrong image.
     Raises ValueError naming the first mismatch.
     """
-    actual = [
-        frame_sha256(frame)
-        for batch in decode_frames(video_path, canvas)
-        for frame in batch
-    ]
+    actual = [frame_sha256(frame) for batch in decode_frames(video_path, canvas) for frame in batch]
     if len(actual) != len(expected):
         raise ValueError(f"decoded {len(actual)} frames for {len(expected)} hashes")
     for i, (got, want) in enumerate(zip(actual, expected, strict=True)):

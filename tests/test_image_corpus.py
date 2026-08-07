@@ -467,13 +467,9 @@ class ImageCorpusTest(unittest.TestCase):
         for name, intra in (("seekgop", False), ("seekintra", True)):
             result = self._build(name, compress=True, all_intra=intra)
             media = result["media"]
-            video = (
-                self.tmp / name / f"{name}.media" / f"{name}-av1.mp4"
-            )
+            video = self.tmp / name / f"{name}.media" / f"{name}-av1.mp4"
             canvas = tuple(media["canvas"])
-            sequential = [
-                f for batch in image_decode.decode_frames(video, canvas) for f in batch
-            ]
+            sequential = [f for batch in image_decode.decode_frames(video, canvas) for f in batch]
             for ordinal in (0, 5, 11):
                 sought = image_decode.decode_frame(video, canvas, ordinal)
                 np.testing.assert_array_equal(
@@ -570,9 +566,7 @@ class ImageCorpusTest(unittest.TestCase):
         paths = sorted(self.src.glob("*.png"))
         canvas = image_media.canvas_size(paths, 256)
         with self.assertRaises(RuntimeError):
-            image_encode.encode_av1(
-                paths, self.tmp / "x444.mp4", canvas=canvas, pix_fmt="yuv444p"
-            )
+            image_encode.encode_av1(paths, self.tmp / "x444.mp4", canvas=canvas, pix_fmt="yuv444p")
 
     def test_444_preserves_more_chroma_than_420(self):
         """Red edge on black: chroma subsampling blurs it, 444 blurs less."""
@@ -675,6 +669,107 @@ class ImageCorpusTest(unittest.TestCase):
             )
         args = search.parse_args(["--index", "x.nest", "--query-text", "blue nevus"])
         self.assertEqual(args.query_text, "blue nevus")
+
+    # ---- fase 3: the measurement battery beyond the bootstrap ----
+
+    def test_sign_test_pairs_with_the_bootstrap(self):
+        """The bootstrap answers "how big"; the sign test answers "how often".
+
+        A paired sign test is assumption-free: identical samples must give
+        p=1, and a consistent 30-point drop on every query must clear 0.05.
+        """
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
+        import _image_metrics as met
+
+        rng = np.random.default_rng(0)
+        same = rng.normal(0.6, 0.2, 200)
+        self.assertEqual(met.sign_test(same, same.copy())["p_value"], 1.0)
+        worse = np.clip(same - 0.3, 0, 1)
+        self.assertLess(met.sign_test(worse, same)["p_value"], 0.05)
+
+    def test_ranking_agreement_reads_identity_and_reversal(self):
+        """overlap@k counts shared hits; kendall tau-b reads their order."""
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
+        import _image_metrics as met
+
+        a = [[3, 1, 4, 0, 2], [0, 1, 2, 3, 4]]
+        same = met.ranking_agreement(a, a, k=3)
+        self.assertEqual(same["overlap@3"], 1.0)
+        self.assertEqual(same["kendall_tau_b"], 1.0)
+        b = [[2, 0, 4, 1, 3], [4, 3, 2, 1, 0]]
+        rev = met.ranking_agreement(a, b, k=5)
+        self.assertLess(rev["kendall_tau_b"], 0.0)
+
+    def test_cosine_drift_distribution(self):
+        """Per-image drift between source-pixel and decoded-frame vectors."""
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
+        import _image_metrics as met
+
+        rng = np.random.default_rng(0)
+        base = rng.normal(size=(50, 32)).astype(np.float32)
+        base /= np.linalg.norm(base, axis=1, keepdims=True)
+        identical = met.cosine_drift(base, base.copy())
+        self.assertEqual(identical["median"], 1.0)
+        drifted = met.cosine_drift(base, -base)
+        self.assertEqual(drifted["median"], -1.0)
+        self.assertIn("p05", drifted)
+
+    def test_per_class_floor_catches_a_collapsed_class(self):
+        """CP-0.6: a mean can hide one destroyed class; the floor cannot."""
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
+        import _image_metrics as met
+
+        labels = ["nev"] * 80 + ["mel"] * 20
+        rng = np.random.default_rng(0)
+        control = rng.normal(0.6, 0.1, 100)
+        sample = control.copy()
+        sample[80:] -= 0.3  # melanoma collapses, the mean barely moves
+        out = met.per_class_delta(sample, control, labels, seed=1)
+        self.assertTrue(out["mel"]["significant"])
+        self.assertFalse(out["nev"]["significant"])
+        self.assertFalse(met.class_floor_ok(out, floor=0.05))
+        self.assertTrue(met.class_floor_ok({"nev": out["nev"]}, floor=0.05))
+
+    def test_sweep_runs_end_to_end_on_a_tiny_corpus(self):
+        """One model load, a control and two variants, the full battery out."""
+        if not have_avif() or not have_ffmpeg():
+            self.skipTest("sweep needs ffmpeg+libsvtav1 and avifenc/avifdec")
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
+        import argparse
+
+        import nest_image_sweep as sweep
+
+        labels_csv = self.tmp / "labels.csv"
+        labels_csv.write_text(
+            "image_id,label\n"
+            + "\n".join(f"img{i:03d},{'even' if i % 2 == 0 else 'odd'}" for i in range(12))
+            + "\n"
+        )
+        args = argparse.Namespace(
+            input_dir=self.src,
+            dataset="sweeptest",
+            out_dir=self.tmp / "sweep",
+            variants="av1-intra:35;avif:35",
+            labels=labels_csv,
+            pdf=False,
+            sample=None,
+            queries=None,
+            seed=42,
+            width=256,
+            preset="compressed",
+            class_floor=0.05,
+            k=[1, 5, 10],
+        )
+        report = sweep.run_sweep(args, StubEmbedder())
+        self.assertIn("control", report)
+        self.assertEqual(set(report["variants"]), {"av1-intra-35", "avif-35"})
+        for variant in report["variants"].values():
+            self.assertIn("bootstrap", variant["delta_vs_control"]["precision@10"])
+            self.assertIn("sign_test", variant["delta_vs_control"]["precision@10"])
+            self.assertIn("even", variant["delta_vs_control"]["per_class"])
+            self.assertIn("kendall_tau_b", variant["delta_vs_control"]["ranking"])
+            self.assertIn("median", variant["drift"])
+            self.assertGreater(variant["media_bytes"], 0)
 
 
 if __name__ == "__main__":

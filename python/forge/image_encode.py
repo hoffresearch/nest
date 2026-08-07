@@ -1,9 +1,7 @@
-"""Encode side of image corpus media: av1 stream, avif per-image, control.
+"""Encode side of image corpus media: av1 stream and avif per-image.
 
-Three backends, one contract: the builder gets back `media_info` for the
-manifest, the uris the chunks point at, and a `frames()` iterator that
-yields the pixels the index must describe (always the DECODED pixels, never
-the sources, or the index reports a quality the corpus does not have).
+Backend selection and the control corpus live in `forge/image_backends.py`;
+this module keeps the two encoders and their shared provenance record.
 
 Provenance is recorded on every encode: the decoded pixels depend on the
 exact toolchain (ffmpeg version, encoder, parameters), and another version
@@ -19,13 +17,12 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
 
 from . import image_media
-from .image_decode import decode_avif, decode_frames
 
 
 def _tool_version(cmd: list[str]) -> str:
@@ -120,8 +117,12 @@ def encode_av1(
         "ffmpeg": _tool_version(["ffmpeg", "-version"]),
         "encoder": "libsvtav1",
         "params": {
-            "crf": crf, "preset": preset, "fps": fps, "lp": lp,
-            "keyint": keyint, "pix_fmt": actual_fmt,
+            "crf": crf,
+            "preset": preset,
+            "fps": fps,
+            "lp": lp,
+            "keyint": keyint,
+            "pix_fmt": actual_fmt,
         },
     }
     output_bytes = output_path.stat().st_size
@@ -205,107 +206,3 @@ def encode_avif(
         "toolchain": toolchain,
         "provenance_sha256": provenance_sha256(toolchain),
     }
-
-
-def build_media(
-    render_paths: Sequence[Path],
-    output_path: Path,
-    dataset_name: str,
-    *,
-    backend: str,
-    canvas: tuple[int, int] | None,
-    crf: int,
-    speed: int,
-    all_intra: bool,
-    pix_fmt: str,
-    avif_quality: int,
-    control: bool,
-) -> dict:
-    """Build the media side of a corpus and return its manifest record.
-
-    Returns `media` (the manifest block), `uris` (one per item), and
-    `frames()`, an iterator of decoded RGB batches for the embed pass.
-    `control=True` ignores `backend` and writes letterboxed lossless pngs:
-    the control corpus the codec cost is measured against.
-    """
-    media_dir = image_media.media_dir_for(output_path)
-    if control:
-        from PIL import Image
-
-        assert canvas is not None
-        png_dir = media_dir / f"{dataset_name}-png"
-        png_dir.mkdir(parents=True, exist_ok=True)
-        for i, path in enumerate(render_paths):
-            out = png_dir / f"{i:06d}.png"
-            if not out.exists():
-                with Image.open(path) as img:
-                    image_media.letterbox(img, canvas).save(out)
-        media = {
-            "backend": "png-lossless",
-            "canvas": [canvas[0], canvas[1]],
-            "frame_count": len(render_paths),
-        }
-        uris = [f"media://{dataset_name}-png/{i:06d}.png" for i in range(len(render_paths))]
-
-        def control_frames(batch_size: int = 32) -> Iterator[list[np.ndarray]]:
-            batch: list[np.ndarray] = []
-            for out in sorted(png_dir.glob("*.png")):
-                with Image.open(out) as img:
-                    batch.append(np.asarray(img.convert("RGB"), dtype=np.uint8))
-                if len(batch) == batch_size:
-                    yield batch
-                    batch = []
-            if batch:
-                yield batch
-
-        return {"media": media, "uris": uris, "frames": control_frames}
-
-    if backend == "avif":
-        from PIL import Image
-
-        assert canvas is not None
-        # the avif path letterboxes onto the same canvas as the stream: the
-        # corpus contract (uniform geometry, symmetric queries) holds across
-        # backends, and avifenc only accepts file input anyway.
-        import tempfile
-
-        avif_dir = media_dir / f"{dataset_name}-avif"
-        with tempfile.TemporaryDirectory(prefix="nest-avif-src-") as tmp:
-            tmp_pngs = []
-            for i, path in enumerate(render_paths):
-                out = Path(tmp) / f"{i:06d}.png"
-                with Image.open(path) as img:
-                    image_media.letterbox(img, canvas).save(out)
-                tmp_pngs.append(out)
-            yuv = {"yuv420p": "420", "yuv444p": "444"}[pix_fmt]
-            media = encode_avif(tmp_pngs, avif_dir, quality=avif_quality, yuv=yuv)
-        media["canvas"] = [canvas[0], canvas[1]]
-        uris = [f"media://{dataset_name}-avif/{i:06d}.avif" for i in range(len(render_paths))]
-
-        def avif_frames(batch_size: int = 32) -> Iterator[list[np.ndarray]]:
-            batch: list[np.ndarray] = []
-            for frame in sorted(avif_dir.glob("*.avif")):
-                batch.append(decode_avif(frame))
-                if len(batch) == batch_size:
-                    yield batch
-                    batch = []
-            if batch:
-                yield batch
-
-        return {"media": media, "uris": uris, "frames": avif_frames}
-
-    assert canvas is not None
-    media_name = f"{dataset_name}-av1.mp4"
-    media_path = media_dir / media_name
-    media = encode_av1(
-        render_paths,
-        media_path,
-        canvas=canvas,
-        crf=crf,
-        preset=speed,
-        keyint=1 if all_intra else None,
-        pix_fmt=pix_fmt,
-    )
-    uris = [f"media://{media_name}#frame={i}" for i in range(len(render_paths))]
-    frames = lambda batch_size=32: decode_frames(media_path, canvas, batch_size=batch_size)  # noqa: E731
-    return {"media": media, "uris": uris, "frames": frames}
