@@ -30,8 +30,10 @@ pub use sections::graph::{
     encode_graph_adjacency, parse_csr_parts,
 };
 pub use sections::{
-    OriginalSpan, SearchContract, decode_chunk_ids, decode_chunks_canonical,
-    decode_chunks_original_spans, decode_provenance, decode_search_contract, decode_txt_streams,
-    encode_chunks_canonical,
+    OriginalSpan, SPACE_DTYPE_F16, SPACE_DTYPE_F32, SPACE_DTYPE_I4, SPACE_DTYPE_I8,
+    SPACE_TABLE_PAYLOAD_VERSION, SearchContract, SpaceEntry, decode_chunk_ids,
+    decode_chunks_canonical, decode_chunks_original_spans, decode_provenance,
+    decode_search_contract, decode_space_table, decode_txt_streams, encode_chunks_canonical,
+    encode_space_table,
 };
 pub use writer::{EmbeddingDType, NestFileBuilder, SectionEncoding};

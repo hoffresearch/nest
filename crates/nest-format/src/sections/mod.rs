@@ -20,6 +20,7 @@ mod codec;
 mod contract;
 pub mod graph;
 mod provenance;
+mod space_table;
 mod spans;
 
 /// `intpack` (encoding id 4) repack kinds. the kind byte leads the
@@ -41,6 +42,10 @@ pub use chunk_ids::{
 };
 pub use contract::{SearchContract, decode_search_contract, encode_search_contract};
 pub use provenance::{decode_provenance, encode_provenance};
+pub use space_table::{
+    SPACE_DTYPE_F16, SPACE_DTYPE_F32, SPACE_DTYPE_I4, SPACE_DTYPE_I8, SPACE_TABLE_PAYLOAD_VERSION,
+    SpaceEntry, decode_space_table, encode_space_table,
+};
 pub use spans::{
     OriginalSpan, decode_chunks_original_spans, decode_chunks_original_spans_intpack,
     encode_chunks_original_spans, encode_chunks_original_spans_intpack,

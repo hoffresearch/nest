@@ -17,10 +17,13 @@ pub mod error;
 pub mod graph;
 mod inspect;
 mod materialize;
+mod mmap_cold;
 mod mmap_file;
 mod rerank;
 mod search;
 pub mod simd;
+mod space_search;
+mod spaces;
 
 pub use dtype::DType;
 pub use error::RuntimeError;

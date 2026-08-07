@@ -56,7 +56,6 @@ fn reserved_scalars() -> Vec<u32> {
         SECTION_GRAPH_NODES,
         SECTION_GRAPH_EDGE_PROPS,
         SECTION_GRAPH_ENTITY_MAP,
-        SECTION_SPACE_TABLE,
     ]
 }
 
@@ -79,6 +78,7 @@ fn all_reserved_bands_are_disjoint() {
     all.push(SECTION_GRAPH_ADJACENCY);
     all.push(SECTION_BLOB_REFS);
     all.push(SECTION_BLOB_SPAN_OVERLAY);
+    all.push(SECTION_SPACE_TABLE);
     all.extend(space_band());
     all.extend(space_fp_band());
 
@@ -99,9 +99,7 @@ fn all_reserved_bands_are_disjoint() {
 #[test]
 fn reserved_ids_are_excluded_from_content_hash_and_unresolved() {
     let canonical: Vec<u32> = CANONICAL_SECTIONS.iter().map(|(id, _)| *id).collect();
-    let mut reserved = reserved_scalars();
-    reserved.extend(space_band());
-    reserved.extend(space_fp_band());
+    let reserved = reserved_scalars();
 
     for s in reserved {
         assert!(
@@ -111,6 +109,32 @@ fn reserved_ids_are_excluded_from_content_hash_and_unresolved() {
         assert!(
             section_name(s).is_none(),
             "reserved id {s:#x} must not resolve via section_name until its feature ships"
+        );
+    }
+}
+
+#[test]
+fn space_sections_resolve_but_excluded_from_content_hash() {
+    // the multimodal feature shipped space_table (0x15) and the per-space
+    // vector bands: all resolve via section_name (0x15 is an active
+    // OPTIONAL_SECTION, the bands resolve through the range check) but MUST
+    // stay out of CANONICAL_SECTIONS, so a multimodal corpus keeps the
+    // content_hash of its text-only twin.
+    assert_eq!(section_name(SECTION_SPACE_TABLE), Some("space_table"));
+    let canonical: Vec<u32> = CANONICAL_SECTIONS.iter().map(|(id, _)| *id).collect();
+    assert!(!canonical.contains(&SECTION_SPACE_TABLE));
+    for s in space_band() {
+        assert_eq!(section_name(s), Some("space_embeddings"));
+        assert!(
+            !canonical.contains(&s),
+            "band id {s:#x} must stay excluded from content_hash"
+        );
+    }
+    for s in space_fp_band() {
+        assert_eq!(section_name(s), Some("space_embeddings_fp"));
+        assert!(
+            !canonical.contains(&s),
+            "fp band id {s:#x} must stay excluded from content_hash"
         );
     }
 }

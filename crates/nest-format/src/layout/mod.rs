@@ -186,9 +186,23 @@ pub const OPTIONAL_SECTIONS: &[(u32, &str)] = &[
     // self-contained media corpus keeps the content_hash of its text twin.
     (SECTION_BLOB_REFS, "blob_refs"),
     (SECTION_BLOB_SPAN_OVERLAY, "blob_span_overlay"),
+    // space_table (0x15): the multimodal per-space directory. resolves via
+    // section_name and stays OUT of CANONICAL_SECTIONS; the vector bands it
+    // describes (0x20-0x2F / 0x30-0x3F) resolve through the range check in
+    // section_name below and are likewise content_hash-excluded.
+    (SECTION_SPACE_TABLE, "space_table"),
 ];
 
 pub fn section_name(id: u32) -> Option<&'static str> {
+    if (SECTION_SPACE_EMBEDDINGS_BASE..SECTION_SPACE_EMBEDDINGS_BASE + SPACE_BAND_LEN).contains(&id)
+    {
+        return Some("space_embeddings");
+    }
+    if (SECTION_SPACE_EMBEDDINGS_FP_BASE..SECTION_SPACE_EMBEDDINGS_FP_BASE + SPACE_BAND_LEN)
+        .contains(&id)
+    {
+        return Some("space_embeddings_fp");
+    }
     CANONICAL_SECTIONS
         .iter()
         .chain(OPTIONAL_SECTIONS.iter())

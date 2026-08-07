@@ -236,6 +236,24 @@ pub(crate) fn build_graph_payload(
     Ok(Some(payload))
 }
 
+/// lBuild the hnsw index over the chunk embeddings (flattened f32 rows).
+/// carved out of `build_fn.rs` (300-line guard): the index doubles as the
+/// source of top-m SEMANTIC edges for the optional graph, so it is built
+/// whenever hnsw OR the graph is wanted.
+pub(crate) fn build_hnsw(
+    chunks: &[nest_format::ChunkInput],
+    dim: usize,
+    m: usize,
+    ef_construction: usize,
+    seed: u64,
+) -> nest_runtime::ann::HnswIndex {
+    let mut flat: Vec<f32> = Vec::with_capacity(chunks.len() * dim);
+    for c in chunks {
+        flat.extend_from_slice(&c.embedding);
+    }
+    nest_runtime::ann::HnswIndex::build(flat, chunks.len(), dim, m, ef_construction, seed)
+}
+
 pub(crate) fn parse_chunks(chunks: &Bound<PyList>) -> PyResult<Vec<nest_format::ChunkInput>> {
     use nest_format::ChunkInput;
     let mut out: Vec<ChunkInput> = Vec::with_capacity(chunks.len());
