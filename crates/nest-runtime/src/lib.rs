@@ -10,7 +10,9 @@
 //! always the real cosine value.
 
 pub mod ann;
+mod blobs;
 pub mod bm25;
+mod dtype;
 pub mod error;
 pub mod graph;
 mod inspect;
@@ -20,8 +22,9 @@ mod rerank;
 mod search;
 pub mod simd;
 
+pub use dtype::DType;
 pub use error::RuntimeError;
-pub use mmap_file::{DType, MmapNestFile};
+pub use mmap_file::MmapNestFile;
 pub use simd::SimdBackend;
 
 #[derive(Clone, Debug, PartialEq)]

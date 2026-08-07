@@ -44,6 +44,13 @@ pub struct NestFileBuilder {
     /// lOptional graph_adjacency (0x0C) csr payload, fully encoded by the
     /// caller (chunk-to-chunk edges). additive, excluded from content_hash.
     pub(super) graph_adjacency: Option<Vec<u8>>,
+    /// lOptional blob_refs (0x14) payload, fully encoded by the caller
+    /// (`encode_blob_refs`). additive, excluded from content_hash.
+    pub(super) blob_refs: Option<Vec<u8>>,
+    /// lOptional blob_span_overlay (0x16) payload, fully encoded by the
+    /// caller (`encode_blob_span_overlay`). additive, excluded from
+    /// content_hash; the runtime prefers it over 0x03 spans for cite.
+    pub(super) blob_span_overlay: Option<Vec<u8>>,
 }
 
 impl NestFileBuilder {
@@ -58,6 +65,8 @@ impl NestFileBuilder {
             hnsw_index: None,
             bm25_index: None,
             graph_adjacency: None,
+            blob_refs: None,
+            blob_span_overlay: None,
         }
     }
 
@@ -131,6 +140,35 @@ impl NestFileBuilder {
         self.graph_adjacency = Some(payload);
         let mut ext = self.manifest.capabilities_ext.take().unwrap_or_default();
         ext.graph_present = Some(true);
+        self.manifest.capabilities_ext = Some(ext);
+        self
+    }
+
+    /// lAttach a blob_refs (0x14) payload (already encoded by
+    /// `encode_blob_refs`): the content-hash reference table for source
+    /// media blobs. Sets the additive `capabilities_ext.blobs_present`
+    /// flag so the runtime opens the section behind a capability, exactly
+    /// like hnsw/bm25/graph. The section is EXCLUDED from content_hash, so
+    /// a self-contained media corpus keeps the content_hash (and the
+    /// nest:// citations) of its text-only twin. Emitted raw, like hnsw.
+    pub fn blob_refs(mut self, payload: Vec<u8>) -> Self {
+        self.blob_refs = Some(payload);
+        let mut ext = self.manifest.capabilities_ext.take().unwrap_or_default();
+        ext.blobs_present = Some(true);
+        self.manifest.capabilities_ext = Some(ext);
+        self
+    }
+
+    /// lAttach a blob_span_overlay (0x16) payload (already encoded by
+    /// `encode_blob_span_overlay`): per-chunk blob-relative spans that the
+    /// runtime prefers over chunks_original_spans (0x03) for cite/retrieve,
+    /// so 0x03 never has to carry an ordinal disguised as a byte range.
+    /// additive and EXCLUDED from content_hash; also implies
+    /// `blobs_present` (the overlay indexes the 0x14 table).
+    pub fn blob_span_overlay(mut self, payload: Vec<u8>) -> Self {
+        self.blob_span_overlay = Some(payload);
+        let mut ext = self.manifest.capabilities_ext.take().unwrap_or_default();
+        ext.blobs_present = Some(true);
         self.manifest.capabilities_ext = Some(ext);
         self
     }

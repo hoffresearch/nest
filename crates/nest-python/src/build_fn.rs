@@ -7,7 +7,10 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
-use crate::build_inputs::{build_graph_payload, parse_chunks, truncate_renormalize};
+use crate::build_inputs::{
+    build_graph_payload, parse_blob_refs, parse_blob_spans, parse_chunks, resolve_preset,
+    truncate_renormalize,
+};
 
 /// lBuild a .nest file from already-embedded chunks.
 ///
@@ -48,6 +51,15 @@ use crate::build_inputs::{build_graph_payload, parse_chunks, truncate_renormaliz
 ///     unchanged. Builds (and discards) an hnsw index for the semantic edges
 ///     even when `with_hnsw` is off.
 ///   - `graph_top_m`: int (default 8). Max semantic edges per node.
+///   - `blob_refs`: optional list of dicts for the blob_refs (0x14) table
+///     (media blobs): keys `content_hash` ("sha256:<hex>" or bare hex),
+///     `original_uri`, `byte_len`, `inlined`. entry order is the table
+///     order the span overlay addresses. excluded from content_hash, so a
+///     self-contained media corpus keeps the citations of its text twin.
+///   - `chunk_blob_spans`: optional list of dicts (one per chunk) for the
+///     blob_span_overlay (0x16): keys `blob_ref_index` (int or None),
+///     `byte_start`, `byte_end`. the runtime prefers these over 0x03 spans
+///     for cite/retrieve. excluded from content_hash.
 ///   - `hnsw_m`, `hnsw_ef_construction`, `hnsw_seed`: HNSW knobs
 #[pyfunction]
 #[pyo3(signature = (
@@ -74,6 +86,8 @@ use crate::build_inputs::{build_graph_payload, parse_chunks, truncate_renormaliz
     with_bm25=None,
     with_graph=false,
     graph_top_m=8,
+    blob_refs=None,
+    chunk_blob_spans=None,
     hnsw_m=16,
     hnsw_ef_construction=400,
     hnsw_seed=42,
@@ -103,12 +117,14 @@ pub fn build(
     with_bm25: Option<bool>,
     with_graph: bool,
     graph_top_m: usize,
+    blob_refs: Option<&Bound<PyList>>,
+    chunk_blob_spans: Option<&Bound<PyList>>,
     hnsw_m: usize,
     hnsw_ef_construction: usize,
     hnsw_seed: u64,
 ) -> PyResult<String> {
     use nest_format::manifest::Manifest;
-    use nest_format::writer::{EmbeddingDType, NestFileBuilder, SectionEncoding};
+    use nest_format::writer::{EmbeddingDType, NestFileBuilder};
 
     let n_chunks = chunks.len() as u64;
     let full_dim = embedding_dim;
@@ -146,47 +162,9 @@ pub fn build(
         None => serde_json::json!({}),
     };
 
-    // lResolve preset defaults; explicit kwargs win. "nano" sits below
-    // "tiny": int4 block-64 embeddings at stored precision (~2x over int8),
-    // zstd text, hnsw shortlist. exact/compressed/tiny/hybrid are byte-
-    // frozen and unchanged.
-    let (default_text_enc, default_dtype, default_hnsw, default_bm25) = match preset {
-        "exact" => (SectionEncoding::Raw, EmbeddingDType::Float32, false, false),
-        "compressed" => (SectionEncoding::Zstd, EmbeddingDType::Float16, false, false),
-        "tiny" => (SectionEncoding::Zstd, EmbeddingDType::Int8, true, false),
-        "nano" => (SectionEncoding::Zstd, EmbeddingDType::Int4, true, false),
-        "hybrid" => (SectionEncoding::Zstd, EmbeddingDType::Float32, true, true),
-        other => {
-            return Err(PyValueError::new_err(format!(
-                "unknown preset: {} (expected exact|compressed|tiny|nano|hybrid)",
-                other
-            )));
-        }
-    };
-    let text_enc = match text_encoding {
-        Some("raw") => SectionEncoding::Raw,
-        Some("zstd") => SectionEncoding::Zstd,
-        Some(other) => {
-            return Err(PyValueError::new_err(format!(
-                "unknown text_encoding: {} (expected raw|zstd)",
-                other
-            )));
-        }
-        None => default_text_enc,
-    };
-    let dt = match dtype {
-        Some("float32") => EmbeddingDType::Float32,
-        Some("float16") => EmbeddingDType::Float16,
-        Some("int8") => EmbeddingDType::Int8,
-        Some("int4") => EmbeddingDType::Int4,
-        Some(other) => {
-            return Err(PyValueError::new_err(format!(
-                "unknown dtype: {} (expected float32|float16|int8|int4)",
-                other
-            )));
-        }
-        None => default_dtype,
-    };
+    // lResolve preset defaults; explicit kwargs win (helper lives in
+    // build_inputs so this entry point stays under the 300-line guard).
+    let (text_enc, dt, default_hnsw, default_bm25) = resolve_preset(preset, text_encoding, dtype)?;
     // lint4 requires the EFFECTIVE (post-truncation) embedding_dim to be a
     // multiple of the block size so every 64-dim group has its own absmax
     // scale. With matryoshka this means mrl_dim%64==0 (e.g. 256/192/128 are
@@ -271,6 +249,30 @@ pub fn build(
         if let Some(payload) = build_graph_payload(hnsw_index.as_ref(), n, graph_top_m)? {
             builder = builder.graph_adjacency(payload);
         }
+    }
+
+    // lOptional blob pair (0x14/0x16) for media corpora. both additive and
+    // excluded from content_hash; the builder setters declare the additive
+    // `blobs_present` capability. the overlay must have one entry per chunk
+    // (chunk order), or the runtime's span rewrite would misalign.
+    if let Some(refs) = blob_refs {
+        let records = parse_blob_refs(refs)?;
+        let payload = nest_format::encode_blob_refs(&records)
+            .map_err(|e| PyValueError::new_err(format!("blob_refs encode: {}", e)))?;
+        builder = builder.blob_refs(payload);
+    }
+    if let Some(spans) = chunk_blob_spans {
+        let entries = parse_blob_spans(spans)?;
+        if entries.len() != n {
+            return Err(PyValueError::new_err(format!(
+                "chunk_blob_spans must have one entry per chunk ({}), got {}",
+                n,
+                entries.len()
+            )));
+        }
+        let payload = nest_format::encode_blob_span_overlay(&entries)
+            .map_err(|e| PyValueError::new_err(format!("blob_span_overlay encode: {}", e)))?;
+        builder = builder.blob_span_overlay(payload);
     }
 
     if want_bm25 {

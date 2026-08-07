@@ -3,6 +3,7 @@
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 
 #[pyclass]
 pub struct NestFile {
@@ -143,6 +144,35 @@ impl NestFile {
     #[getter]
     fn has_graph(&self) -> bool {
         self.rt.has_graph()
+    }
+
+    #[getter]
+    fn has_blobs(&self) -> bool {
+        self.rt.has_blobs()
+    }
+
+    /// lThe blob_refs (0x14) table as a list of dicts (empty when the file
+    /// has no blob capability): content_hash as "sha256:<hex>", the uri
+    /// hint, original byte length, and the inlined flag.
+    fn blob_refs(&self) -> Vec<pyo3::Py<PyDict>> {
+        Python::attach(|py| {
+            self.rt
+                .blob_refs()
+                .unwrap_or(&[])
+                .iter()
+                .map(|r| {
+                    let d = PyDict::new(py);
+                    let _ = d.set_item(
+                        "content_hash",
+                        format!("sha256:{}", hex::encode(r.content_hash)),
+                    );
+                    let _ = d.set_item("original_uri", &r.original_uri);
+                    let _ = d.set_item("byte_len", r.byte_len);
+                    let _ = d.set_item("inlined", r.inlined);
+                    d.unbind()
+                })
+                .collect()
+        })
     }
 
     #[getter]

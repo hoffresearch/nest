@@ -9,6 +9,149 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
+/// lResolve the build preset plus the explicit `text_encoding`/`dtype`
+/// overrides into the concrete (SectionEncoding, EmbeddingDType, hnsw,
+/// bm25) quadruple. "nano" sits below "tiny": int4 block-64 embeddings at
+/// stored precision (~2x over int8), zstd text, hnsw shortlist.
+/// exact/compressed/tiny/hybrid are byte-frozen and unchanged.
+pub(crate) fn resolve_preset(
+    preset: &str,
+    text_encoding: Option<&str>,
+    dtype: Option<&str>,
+) -> PyResult<(
+    nest_format::writer::SectionEncoding,
+    nest_format::writer::EmbeddingDType,
+    bool,
+    bool,
+)> {
+    use nest_format::writer::{EmbeddingDType, SectionEncoding};
+    let (default_text_enc, default_dtype, default_hnsw, default_bm25) = match preset {
+        "exact" => (SectionEncoding::Raw, EmbeddingDType::Float32, false, false),
+        "compressed" => (SectionEncoding::Zstd, EmbeddingDType::Float16, false, false),
+        "tiny" => (SectionEncoding::Zstd, EmbeddingDType::Int8, true, false),
+        "nano" => (SectionEncoding::Zstd, EmbeddingDType::Int4, true, false),
+        "hybrid" => (SectionEncoding::Zstd, EmbeddingDType::Float32, true, true),
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "unknown preset: {} (expected exact|compressed|tiny|nano|hybrid)",
+                other
+            )));
+        }
+    };
+    let text_enc = match text_encoding {
+        Some("raw") => SectionEncoding::Raw,
+        Some("zstd") => SectionEncoding::Zstd,
+        Some(other) => {
+            return Err(PyValueError::new_err(format!(
+                "unknown text_encoding: {} (expected raw|zstd)",
+                other
+            )));
+        }
+        None => default_text_enc,
+    };
+    let dt = match dtype {
+        Some("float32") => EmbeddingDType::Float32,
+        Some("float16") => EmbeddingDType::Float16,
+        Some("int8") => EmbeddingDType::Int8,
+        Some("int4") => EmbeddingDType::Int4,
+        Some(other) => {
+            return Err(PyValueError::new_err(format!(
+                "unknown dtype: {} (expected float32|float16|int8|int4)",
+                other
+            )));
+        }
+        None => default_dtype,
+    };
+    Ok((text_enc, dt, default_hnsw, default_bm25))
+}
+
+/// lParse the optional `blob_refs` kwarg: a list of dicts with keys
+/// `content_hash` ("sha256:<64 hex>" or bare 64 hex), `original_uri`,
+/// `byte_len`, `inlined`. entry order is preserved: the 0x14 table is
+/// addressed by ordinal from the span overlay.
+pub(crate) fn parse_blob_refs(refs: &Bound<PyList>) -> PyResult<Vec<nest_format::BlobRefRecord>> {
+    let mut out = Vec::with_capacity(refs.len());
+    for (i, item) in refs.iter().enumerate() {
+        let d: Bound<PyDict> = item
+            .cast::<PyDict>()
+            .map_err(|_| PyValueError::new_err(format!("blob_refs[{}] is not a dict", i)))?
+            .clone();
+        let d = &d;
+        let hash_str: String = d
+            .get_item("content_hash")?
+            .ok_or_else(|| PyValueError::new_err(format!("blob_refs[{}] missing content_hash", i)))?
+            .extract()?;
+        let hex_part = hash_str.strip_prefix("sha256:").unwrap_or(&hash_str);
+        let raw = hex::decode(hex_part).map_err(|e| {
+            PyValueError::new_err(format!("blob_refs[{}] content_hash hex: {}", i, e))
+        })?;
+        let content_hash: [u8; 32] = raw.try_into().map_err(|_| {
+            PyValueError::new_err(format!("blob_refs[{}] content_hash must be 32 bytes", i))
+        })?;
+        let original_uri: String = d
+            .get_item("original_uri")?
+            .ok_or_else(|| PyValueError::new_err(format!("blob_refs[{}] missing original_uri", i)))?
+            .extract()?;
+        let byte_len: u64 = d
+            .get_item("byte_len")?
+            .ok_or_else(|| PyValueError::new_err(format!("blob_refs[{}] missing byte_len", i)))?
+            .extract()?;
+        let inlined: bool = d
+            .get_item("inlined")?
+            .ok_or_else(|| PyValueError::new_err(format!("blob_refs[{}] missing inlined", i)))?
+            .extract()?;
+        out.push(nest_format::BlobRefRecord {
+            content_hash,
+            original_uri,
+            byte_len,
+            inlined,
+        });
+    }
+    Ok(out)
+}
+
+/// lParse the optional `chunk_blob_spans` kwarg: a list of dicts with keys
+/// `blob_ref_index` (int, or None for BLOB_REF_NONE), `byte_start`,
+/// `byte_end`. one entry per chunk, in chunk order.
+pub(crate) fn parse_blob_spans(spans: &Bound<PyList>) -> PyResult<Vec<nest_format::BlobSpanEntry>> {
+    let mut out = Vec::with_capacity(spans.len());
+    for (i, item) in spans.iter().enumerate() {
+        let d: Bound<PyDict> = item
+            .cast::<PyDict>()
+            .map_err(|_| PyValueError::new_err(format!("chunk_blob_spans[{}] is not a dict", i)))?
+            .clone();
+        let d = &d;
+        let blob_ref_index = match d.get_item("blob_ref_index")? {
+            None => {
+                return Err(PyValueError::new_err(format!(
+                    "chunk_blob_spans[{}] missing blob_ref_index",
+                    i
+                )));
+            }
+            Some(v) if v.is_none() => nest_format::BLOB_REF_NONE,
+            Some(v) => v.extract::<u32>()?,
+        };
+        let byte_start: u64 = d
+            .get_item("byte_start")?
+            .ok_or_else(|| {
+                PyValueError::new_err(format!("chunk_blob_spans[{}] missing byte_start", i))
+            })?
+            .extract()?;
+        let byte_end: u64 = d
+            .get_item("byte_end")?
+            .ok_or_else(|| {
+                PyValueError::new_err(format!("chunk_blob_spans[{}] missing byte_end", i))
+            })?
+            .extract()?;
+        out.push(nest_format::BlobSpanEntry {
+            blob_ref_index,
+            byte_start,
+            byte_end,
+        });
+    }
+    Ok(out)
+}
+
 /// lTruncate each row to its first `mrl_dim` components and re-L2-normalize
 /// the prefix in place (matryoshka truncate-then-renormalize). `full_dim` is
 /// the source dim; rows shorter than `full_dim` are left untouched (the

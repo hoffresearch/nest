@@ -19,6 +19,11 @@ pub use error::{NestError, Result};
 pub use layout::*;
 pub use manifest::{Capabilities, Manifest};
 pub use reader::NestView;
+pub use sections::blob::{
+    BLOB_REF_NONE, BLOB_REFS_PAYLOAD_VERSION, BLOB_SPAN_OVERLAY_PAYLOAD_VERSION, BlobRefRecord,
+    BlobSpanEntry, decode_blob_refs, decode_blob_span_overlay, encode_blob_refs,
+    encode_blob_span_overlay,
+};
 pub use sections::graph::{
     CsrParts, EDGE_TYPE_CITATION, EDGE_TYPE_NEXT_CHUNK, EDGE_TYPE_SEMANTIC, Edge,
     GRAPH_ADJACENCY_PAYLOAD_VERSION, GRAPH_MAX_DEGREE, decode_graph_adjacency,
