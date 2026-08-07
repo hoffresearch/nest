@@ -61,7 +61,9 @@ corpora/my-derm.manifest.json   ordinals, origins, labels, media sha256
 
 frame uris are relative to that pair (`media://my-derm-av1.mp4#frame=51`), so copying both together moves the corpus intact. an absolute path in a `source_uri` would not survive the copy.
 
-`--all-intra` makes every frame a keyframe. try it whenever the images are unrelated to each other, which is the normal case for a photo dataset: inter-frame prediction has nothing to find and the bits it spends looking are wasted. on PH2 it produced a smaller file (30.8x against 25.9x) and a 26 percent faster single-frame decode, for 1.6 points of label `precision@10`. it is a trade, so it is off by default.
+`--width` is a ceiling, not a target: the canvas is clamped to the dataset's median source width, so a corpus is never upscaled. lower it to trade quality for size; raising it above the source does nothing but make the encoder pay for interpolated pixels.
+
+`--all-intra` makes every frame a keyframe. try it whenever the images are unrelated to each other, which is the normal case for a photo dataset: inter-frame prediction has nothing to find and the bits it spends looking are wasted. on PH2 it bought another 5.2x (44.7x against 39.5x) for 0.6 points of label `precision@10`, a difference inside the noise at n=200. it is off by default because that is one dataset.
 
 add `--pdf` to render pdf pages as the images; page numbers are kept in the manifest and in the citable text. for a non-dermatology domain pass `--model ViT-B-32 --pretrained openai`. the pretrained tag is required for bare architecture names, because open_clip answers a missing tag with random weights.
 
@@ -91,7 +93,7 @@ neither means much alone. pass `--baseline` with an uncompressed control index (
     -k 1 5 10 --out eval.json
 ```
 
-measured on PH2 (n=200): 25.9x on the media, and at that ratio av1 costs 1.9 points of label `precision@10`. see `doc/changelog.md` for the full table.
+measured on PH2 (n=200): 39.5x on the media, costing 3.5 points of label `precision@10` with a bootstrap 95 percent CI of [-6.1, -1.1]. report the interval, not just the point: at this sample size a difference under ~2.5 points cannot be told from noise, which is how an earlier draft came to publish a codec cost that was not actually there. see `doc/changelog.md` for the full table.
 
 direct API (no chunker): `nest.build(output_path, embedding_model, embedding_dim, chunker_version, model_hash, chunks, preset="exact", reproducible=True)`.
 

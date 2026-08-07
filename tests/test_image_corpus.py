@@ -379,6 +379,34 @@ class ImageCorpusTest(unittest.TestCase):
         corner = padded.getpixel((1, canvas[1] // 2))
         self.assertEqual(corner, (0, 0, 0), "expected padding, got stretched content")
 
+    def test_delta_carries_a_confidence_interval(self):
+        """A delta without an interval is not a result.
+
+        The published claim "av1 costs 1.9 points of precision@10" came from a
+        point estimate whose interval crossed zero: at n=200 that difference
+        was not distinguishable from noise. The harness now reports the
+        interval and says so, so the same claim cannot be made twice.
+        """
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
+        import nest_image_eval as ev
+
+        rng = np.random.default_rng(0)
+        same = rng.normal(0.6, 0.2, 400)
+        ci = ev.bootstrap_delta(same, same.copy(), seed=1)
+        self.assertEqual(ci["mean"], 0.0)
+        self.assertFalse(ci["significant"], "identical samples cannot differ")
+
+        worse = np.clip(same - 0.30, 0, 1)
+        ci = ev.bootstrap_delta(worse, same, seed=1)
+        self.assertLess(ci["mean"], 0)
+        self.assertLess(ci["ci95"][1], 0, "a 30-point drop must clear zero")
+        self.assertTrue(ci["significant"])
+
+        # a difference far below what this sample size resolves must NOT be
+        # reported as real, which is the exact failure being guarded.
+        tiny = same + rng.normal(0.002, 0.2, 400)
+        self.assertFalse(ev.bootstrap_delta(tiny, same, seed=1)["significant"])
+
     def test_canvas_never_upscales_the_source(self):
         """`--width` is a ceiling, not a target.
 
