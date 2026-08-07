@@ -37,6 +37,64 @@ pipe.emit()
 
 for real-world examples: `python/convert_legacy.py` (SQLite to `.nest`) and `python/tools/nest_build_corpus.py` (7 PT-BR datasets to a unified `.nest`).
 
+### image and pdf corpora
+
+experimental, and python-only: image corpora live in the forge tooling layer because a vision tower needs torch, which the sovereign runtime does not take. the `.nest` they emit is an ordinary `.nest`.
+
+`python/tools/nest_build_image_corpus.py` letterboxes every image onto one canvas, encodes the sequence as a single AV1 stream, embeds the DECODED frames, and writes one chunk per image or pdf page. embedding the decoded frames rather than the source pixels is deliberate: the index has to describe what a reader can actually get back.
+
+```sh
+.venv/bin/python python/tools/nest_build_image_corpus.py \
+    --input-dir /path/to/dermoscopy_images \
+    --dataset my-derm \
+    --output corpora/my-derm.nest \
+    --labels labels.csv
+```
+
+a corpus is a pair, not a file:
+
+```
+corpora/my-derm.nest            the searchable index
+corpora/my-derm.media/          the encoded stream
+corpora/my-derm.manifest.json   ordinals, origins, labels, media sha256
+```
+
+frame uris are relative to that pair (`media://my-derm-av1.mp4#frame=51`), so copying both together moves the corpus intact. an absolute path in a `source_uri` would not survive the copy.
+
+`--width` is a ceiling, not a target: the canvas is clamped to the dataset's median source width, so a corpus is never upscaled. lower it to trade quality for size; raising it above the source does nothing but make the encoder pay for interpolated pixels.
+
+`--all-intra` makes every frame a keyframe. try it whenever the images are unrelated to each other, which is the normal case for a photo dataset: inter-frame prediction has nothing to find and the bits it spends looking are wasted. on PH2 it bought another 5.2x (44.7x against 39.5x) for 0.6 points of label `precision@10`, a difference inside the noise at n=200. it is off by default because that is one dataset.
+
+add `--pdf` to render pdf pages as the images; page numbers are kept in the manifest and in the citable text. for a non-dermatology domain pass `--model ViT-B-32 --pretrained openai`. the pretrained tag is required for bare architecture names, because open_clip answers a missing tag with random weights.
+
+search with a query image, and optionally decode the matched frames back out:
+
+```sh
+.venv/bin/python python/tools/nest_search_image.py \
+    --index corpora/my-derm.nest --query-image lesion.jpg -k 10 \
+    --save-frames hits/
+```
+
+queries route through `retrieve`, so the embedder's `model_hash` is checked against the manifest before anything is scored.
+
+### measuring an image corpus
+
+`python/tools/nest_image_eval.py` reports two rulers and keeps them apart, because they answer different questions:
+
+- `identity` asks whether a source image retrieves its own frame. it measures rank stability under the codec and is inflated by construction, since the corpus contains the answer. on an uncompressed index it returns 1.000 by definition.
+- `label` removes the query's own frame and scores how many of the remaining neighbours share its label. nothing in the corpus is the answer, so this is the one that reports retrieval quality. it is printed next to the random-pick baseline for the same label distribution, without which the number cannot be read.
+
+neither means much alone. pass `--baseline` with an uncompressed control index (`--no-compress` at build time) to get the delta, which is what the codec actually cost:
+
+```sh
+.venv/bin/python python/tools/nest_image_eval.py \
+    --index corpora/my-derm.nest \
+    --baseline corpora/my-derm-raw.nest \
+    -k 1 5 10 --out eval.json
+```
+
+measured on PH2 (n=200): 39.5x on the media, costing 3.5 points of label `precision@10` with a bootstrap 95 percent CI of [-6.1, -1.1]. report the interval, not just the point: at this sample size a difference under ~2.5 points cannot be told from noise, which is how an earlier draft came to publish a codec cost that was not actually there. see `doc/changelog.md` for the full table.
+
 direct API (no chunker): `nest.build(output_path, embedding_model, embedding_dim, chunker_version, model_hash, chunks, preset="exact", reproducible=True)`.
 
 ## 2. validate
