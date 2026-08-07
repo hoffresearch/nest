@@ -13,7 +13,7 @@
 //! All multi-byte integers are little-endian. Strings are raw UTF-8 bytes
 //! prefixed by a u32 length (no NUL terminators).
 
-mod blob_span_overlay;
+pub mod blob;
 mod canonical;
 mod chunk_ids;
 mod codec;
@@ -30,8 +30,10 @@ mod spans;
 pub const REPACK_KIND_CHUNK_IDS: u8 = 0;
 pub const REPACK_KIND_SPANS: u8 = 1;
 
-pub use blob_span_overlay::{
-    BLOB_REF_NONE, BlobSpanEntry, decode_blob_span_overlay, encode_blob_span_overlay,
+pub use blob::{
+    BLOB_REF_NONE, BLOB_REFS_PAYLOAD_VERSION, BLOB_SPAN_OVERLAY_PAYLOAD_VERSION, BlobRefRecord,
+    BlobSpanEntry, decode_blob_refs, decode_blob_span_overlay, encode_blob_refs,
+    encode_blob_span_overlay,
 };
 pub use canonical::{decode_chunks_canonical, encode_chunks_canonical};
 pub use chunk_ids::{

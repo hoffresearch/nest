@@ -460,6 +460,7 @@ dependencies = [
 name = "nest-python"
 version = "0.3.0"
 dependencies = [
+ "hex",
  "nest-format",
  "nest-runtime",
  "pyo3",

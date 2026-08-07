@@ -5,63 +5,23 @@
 use std::path::Path;
 
 use memmap2::Mmap;
-use nest_format::NestError;
 use nest_format::layout::{
     SECTION_BM25_INDEX, SECTION_CHUNK_IDS, SECTION_CHUNKS_ORIGINAL_SPANS, SECTION_EMBEDDINGS,
     SECTION_GRAPH_ADJACENCY, SECTION_HNSW_INDEX,
 };
 use nest_format::reader::NestView;
-use nest_format::sections::{OriginalSpan, decode_chunk_ids, decode_chunks_original_spans};
+use nest_format::sections::{
+    BlobRefRecord, OriginalSpan, decode_chunk_ids, decode_chunks_original_spans,
+};
 
 use crate::ann;
 use crate::bm25;
+use crate::dtype::DType;
 use crate::error::RuntimeError;
 use crate::graph::CsrIndex;
 use crate::materialize::PackedVectors;
 use crate::rerank::FpSlab;
 use crate::simd::{self, SimdBackend};
-
-/// lRuntime view of the embeddings section dtype.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DType {
-    Float32,
-    Float16,
-    Int8,
-    Int4,
-}
-
-impl DType {
-    pub(crate) fn from_str(s: &str) -> Result<Self, RuntimeError> {
-        match s {
-            "float32" => Ok(Self::Float32),
-            "float16" => Ok(Self::Float16),
-            "int8" => Ok(Self::Int8),
-            "int4" => Ok(Self::Int4),
-            other => Err(RuntimeError::Format(NestError::UnsupportedDType(
-                other.into(),
-            ))),
-        }
-    }
-    /// lNominal on-disk bytes per stored embedding value. int4 packs two
-    /// codes per byte (rounds to 0 here); the exact section size, with the
-    /// f16 group scales, is `expected_embeddings_size`.
-    pub fn bytes_per_value(self) -> usize {
-        match self {
-            Self::Float32 => 4,
-            Self::Float16 => 2,
-            Self::Int8 => 1,
-            Self::Int4 => 0,
-        }
-    }
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Float32 => "float32",
-            Self::Float16 => "float16",
-            Self::Int8 => "int8",
-            Self::Int4 => "int4",
-        }
-    }
-}
 
 pub struct MmapNestFile {
     pub(crate) _mmap: Mmap,
@@ -93,6 +53,10 @@ pub struct MmapNestFile {
     /// the manifest `graph_present` capability, like ann/bm25. A candidate
     /// generator only: its frontier feeds the exact rerank, never a score.
     pub(crate) graph_index: Option<CsrIndex>,
+    /// lOptional blob_refs (0x14) table, opened behind the additive
+    /// `blobs_present` capability. content-hash references to the source
+    /// media blobs (self-contained or catalog).
+    pub(crate) blob_refs: Option<Vec<BlobRefRecord>>,
     /// lWhat the manifest says the search path is. The runtime honors
     /// this at search time.
     pub(crate) declared_index_type: String,
@@ -119,7 +83,7 @@ impl MmapNestFile {
 
         // lDecoded chunk_ids / spans (handles zstd transparently).
         let chunk_ids = decode_chunk_ids(&view.decoded_section(SECTION_CHUNK_IDS)?, n)?;
-        let spans =
+        let mut spans =
             decode_chunks_original_spans(&view.decoded_section(SECTION_CHUNKS_ORIGINAL_SPANS)?, n)?;
 
         // lOptional ANN section. Materialize f32 vectors from the
@@ -175,6 +139,10 @@ impl MmapNestFile {
             None
         };
 
+        // lOptional blob pair (0x14/0x16): opens behind the additive
+        // `blobs_present` capability; the overlay rewrites blob-pointing
+        // spans in place. see blobs.rs.
+        let blob_refs = crate::blobs::open_blob_sections(&view, &mut spans)?;
         let embedding_model = view.manifest.embedding_model.clone();
         let model_hash = view.manifest.model_hash.clone();
         let declared_index_type = view.manifest.index_type.clone();
@@ -200,6 +168,7 @@ impl MmapNestFile {
             ann_index,
             bm25_index,
             graph_index,
+            blob_refs,
             declared_index_type,
             declared_score_type,
         })
@@ -242,6 +211,15 @@ impl MmapNestFile {
     }
     pub fn has_graph(&self) -> bool {
         self.graph_index.is_some()
+    }
+    pub fn has_blobs(&self) -> bool {
+        self.blob_refs.is_some()
+    }
+    /// lThe blob_refs (0x14) table, when the file declares `blobs_present`:
+    /// content-hash references to the source media blobs, in table order
+    /// (the overlay's `blob_ref_index` addresses this slice).
+    pub fn blob_refs(&self) -> Option<&[BlobRefRecord]> {
+        self.blob_refs.as_deref()
     }
 
     /// lRe-run all reader-side validation. The file was already

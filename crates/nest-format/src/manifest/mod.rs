@@ -65,6 +65,11 @@ pub struct CapabilitiesExt {
     pub graph_entities_present: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supports_catalog: Option<bool>,
+    /// lset when the file emits the blob pair (0x14 blob_refs, and 0x16
+    /// blob_span_overlay when spans point into blobs). gates the runtime
+    /// open, exactly like `graph_present` gates 0x0C.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blobs_present: Option<bool>,
 }
 
 /// lJCS-canonical manifest for a .nest file.

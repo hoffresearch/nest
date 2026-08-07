@@ -41,6 +41,9 @@ fn implemented() -> Vec<u32> {
 /// SECTION_GRAPH_ADJACENCY (0x0C, G1) is NOT in this list: it now resolves
 /// via section_name (OPTIONAL_SECTIONS) yet stays content_hash-excluded; it is
 /// covered separately by `graph_adjacency_resolves_but_excluded_from_content_hash`.
+/// SECTION_BLOB_REFS (0x14) and SECTION_BLOB_SPAN_OVERLAY (0x16) likewise left
+/// this list when the media blob feature shipped; they are covered by
+/// `blob_sections_resolve_but_excluded_from_content_hash`.
 fn reserved_scalars() -> Vec<u32> {
     vec![
         SECTION_EMBEDDINGS_FP,
@@ -53,9 +56,7 @@ fn reserved_scalars() -> Vec<u32> {
         SECTION_GRAPH_NODES,
         SECTION_GRAPH_EDGE_PROPS,
         SECTION_GRAPH_ENTITY_MAP,
-        SECTION_BLOB_REFS,
         SECTION_SPACE_TABLE,
-        SECTION_BLOB_SPAN_OVERLAY,
     ]
 }
 
@@ -72,9 +73,12 @@ fn all_reserved_bands_are_disjoint() {
     let mut all: Vec<u32> = Vec::new();
     all.extend(implemented());
     all.extend(reserved_scalars());
-    // graph_adjacency (0x0C) left reserved_scalars when it shipped (G1) but is
-    // still a distinct id that must not collide with any other band.
+    // graph_adjacency (0x0C) left reserved_scalars when it shipped (G1), and
+    // the blob pair (0x14/0x16) left with the media blob feature; all are
+    // still distinct ids that must not collide with any other band.
     all.push(SECTION_GRAPH_ADJACENCY);
+    all.push(SECTION_BLOB_REFS);
+    all.push(SECTION_BLOB_SPAN_OVERLAY);
     all.extend(space_band());
     all.extend(space_fp_band());
 
@@ -125,4 +129,24 @@ fn graph_adjacency_resolves_but_excluded_from_content_hash() {
         !canonical.contains(&SECTION_GRAPH_ADJACENCY),
         "graph_adjacency must stay excluded from content_hash"
     );
+}
+
+#[test]
+fn blob_sections_resolve_but_excluded_from_content_hash() {
+    // the media blob feature shipped 0x14 (blob_refs) and 0x16
+    // (blob_span_overlay): both resolve via section_name (active
+    // OPTIONAL_SECTIONS) but MUST stay out of CANONICAL_SECTIONS, so a
+    // self-contained media corpus keeps the content_hash of its text twin.
+    assert_eq!(section_name(SECTION_BLOB_REFS), Some("blob_refs"));
+    assert_eq!(
+        section_name(SECTION_BLOB_SPAN_OVERLAY),
+        Some("blob_span_overlay")
+    );
+    let canonical: Vec<u32> = CANONICAL_SECTIONS.iter().map(|(id, _)| *id).collect();
+    for s in [SECTION_BLOB_REFS, SECTION_BLOB_SPAN_OVERLAY] {
+        assert!(
+            !canonical.contains(&s),
+            "blob section {s:#x} must stay excluded from content_hash"
+        );
+    }
 }

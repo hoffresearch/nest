@@ -59,6 +59,11 @@ pub fn decode_blob_span_overlay(bytes: &[u8]) -> Result<Vec<BlobSpanEntry>, Nest
         });
     }
     let n = cur.u64()? as usize;
+    // bound the claim against the physical payload before allocating:
+    // every entry costs exactly 16 bytes (u32 + u64 + u64).
+    if n > (bytes.len() - cur.pos) / 16 {
+        return Err(malformed("blob_span_overlay: entry count exceeds payload"));
+    }
     let mut entries = Vec::with_capacity(n);
     for _ in 0..n {
         entries.push(BlobSpanEntry {

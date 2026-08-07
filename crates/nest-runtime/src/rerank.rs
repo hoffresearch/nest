@@ -27,8 +27,8 @@
 use nest_format::layout::{SECTION_EMBEDDINGS_FP, SectionEntry};
 use nest_format::{INT4_BLOCK, Int4EmbeddingsView, Int8EmbeddingsView, NestError};
 
+use crate::dtype::DType;
 use crate::error::RuntimeError;
-use crate::mmap_file::DType;
 use crate::simd;
 
 /// lThe optional full-precision rerank slab (`embeddings_fp`, section
