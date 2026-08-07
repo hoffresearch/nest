@@ -10,6 +10,65 @@ format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). version
 
 - the offline embedder now resolves its python interpreter in a fixed order instead of a single hard-coded `python3`: an explicit `NEST_PYTHON` wins, else the repo's `.venv/bin/python` discovered by walking up to four ancestors of the cwd, else `python3` on PATH. `nest search-text` previously always spawned `python3` and `ask`/`retrieve` only honored `NEST_PYTHON`, so on a machine whose system `python3` lacks numpy + tokenizers (the potion-table deps) the flagship verbs failed until the user set `NEST_PYTHON` or fixed PATH by hand; the repo `.venv` is now picked up with no extra setup. the embedder opens no socket regardless of interpreter, so the offline-by-construction guarantee is unchanged. centralized in `nest-cli`'s `cmd::pyenv::resolve_interpreter`, with a `resolve_interpreter_from` core unit-tested for the override / `.venv`-discovery / `python3`-fallback precedence. the resolved interpreter is logged to stderr (the choice is never silent), and the ancestor-search trust assumption is documented: with `NEST_PYTHON` unset, discovery executes the nearest ancestor `.venv/bin/python`, so set `NEST_PYTHON` explicitly when running from an untrusted tree.
 
+### added
+
+image and pdf corpus builder (experimental, forge tooling layer only, no format or runtime change):
+
+- `python/forge/embed_image.py` is a vision embedder over `open_clip` (DermLIP for dermatology, a plain architecture plus a pretrained tag for other domains). `model_hash` fingerprints the weights that were actually loaded plus the preprocess transform, not the model name, so the manifest gate can tell two checkpoints apart. a bare architecture name without a pretrained tag is now rejected: open_clip answers that request with RANDOM weights, and a corpus built on random weights searches like noise while looking healthy.
+- `python/forge/image_media.py` owns the codec path. every image is letterboxed onto one canvas derived from the dataset's median aspect ratio and median width, with `--width` acting as a ceiling rather than a target so a corpus is never upscaled into encoding interpolated pixels. frames move through a rawvideo pipe rather than the concat demuxer, which re-derives timestamps per input and drops frames it reads as out of order. the encoded frame count is verified against the item count, because a corpus whose `#frame=N` pointers are off by one is worse than no corpus.
+- `python/forge/image_items.py` is the discovery layer. an item's position becomes its corpus ordinal, its frame number, and the `byte_start` its citation resolves through, so the ordering is sorted and reproducible, and sampling renumbers densely.
+- `python/tools/nest_build_image_corpus.py` emits the `.nest`, one chunk per image or pdf page. precomputed embeddings are handed to `Pipeline` keyed by `chunk_id`, never by position: `Pipeline` passes only the chunks the scratch cache missed, so a positional lookup silently assigns other images' vectors on any partially warm rebuild.
+- a corpus is `corpus.nest` beside `corpus.media/`, with `media://<file>#frame=N` uris relative to that pair, so it can be copied to another machine and still resolve. `corpus.manifest.json` records ordinals, origins, labels, pdf page numbers, and the media sha256.
+- `python/tools/nest_search_image.py` queries through `retrieve` (so the `model_hash` gate runs), resolves hits back to their original file and page, and can decode the matched frames out of the corpus media.
+- `python/tools/nest_image_eval.py` replaces the earlier recall script and reports two rulers separately, never blended. every delta against the control carries a paired percentile bootstrap (5000 resamples, seeded) and a `significant` flag, so a difference the sample cannot resolve is not reported as a finding.
+- pdf pages carry their page number into the manifest and into the citable text, and the eval harness re-renders a page from its source pdf when it needs the original pixels, since the build-time renders are temporaries. without that a pdf corpus could be built but never measured.
+- `tests/test_image_corpus.py` builds its dataset in-test instead of pointing at a local disk path, and covers frame alignment, the partly-warm cache path, relocatability, the model_hash gate, pdf page provenance, seeded sampling with dense renumbering, letterbox geometry, the no-upscale canvas ceiling, and the bootstrap's refusal to call a sub-resolution difference significant. the vision model is not needed to run it, and `release_check.sh` now runs it.
+
+### note (2026-08-05): the release gate was red before this change, and one stage still is
+
+`release_check.sh` did not run to completion on `main`. it died at the 300-line guard on `crates/nest-runtime/src/ann/codec.rs` (314 lines), so every stage after it was unreachable. splitting that file made the rest of the gate reachable and surfaced two more pre-existing failures: `python/tools/measure_presets.py` failed `ruff format --check` (fixed here, whitespace only, the emitted json is unchanged), and `exact.p95_ms` fails its latency ceiling.
+
+the latency gate compares an absolute p95 in milliseconds against a figure recorded on whatever machine wrote `dat/measure/baseline.json`, so it fails on any slower machine regardless of the code. it was confirmed to be independent of this change: measured on the pre-change binary, `exact` p95 is 6.894 ms; on the post-change binary, 6.827 ms; the ceiling is 4.707 ms. `drift_max` for `exact` is 0.000000, so the scores are bit-identical to the baseline, and all 11 size and recall gates pass. the baseline was NOT re-recorded to make it green, since that would only hide the mismatch. this needs either a machine-relative latency gate or a deliberate re-baseline by the maintainer.
+
+### note (2026-08-05): image corpus ruler provenance
+
+the first draft of this feature reported `recall@10 = 1.00` at ~20x compression on PH2. that number was measured on a self-retrieval ruler: the query image is the source of the very frame being looked for, so the corpus contains the answer and the score mostly reports that the codec did not destroy it. run on the UNCOMPRESSED control the same ruler returns exactly 1.000 at every k, which is what it is worth. it is the same ruler class already flagged for the text ladder above.
+
+measured numbers, PH2 dermoscopy (n=200, 3 classes, DermLIP ViT-B-16, av1 crf 35, canvas 766x576, 1 fps), all 200 images as queries embedded from the ORIGINAL pixels:
+
+- media 74.70 MB of source jpeg to 1.89 MB, 39.5x. the whole shippable corpus, index included, is 2.10 MB, 35.5x.
+- identity ruler (self-retrieval, inflated by construction): compressed `recall@1` 0.860, `@5` 0.985, `@10` 0.995, against an uncompressed control that is 1.000 everywhere.
+- label ruler (the query's own frame excluded, score is the share of remaining neighbours sharing its diagnosis): compressed `precision@1` 0.695, `@10` 0.576; uncompressed control `precision@1` 0.730, `@10` 0.611; random-pick baseline for this label distribution 0.357.
+
+the finding is the delta, not either column. at 39.5x, av1 costs 3.5 points of label `precision@10`, bootstrap 95 percent CI [-6.1, -1.1] over 5000 paired resamples of the 200 queries, so the cost is real and not a sampling artifact. what remains is still far clear of the random baseline. single dataset, single codec setting, no claim beyond that.
+
+### note (2026-08-07): two corrections to the numbers published two days ago
+
+both were found by controls that should have been run before publishing, and both change what the earlier note claimed.
+
+**the ratio was understated, because the pipeline was upscaling.** `canvas_size` treated `--width` as a target rather than a ceiling, so the 1024 default resized a 765-wide source UP by 34 percent and paid av1 to encode interpolated pixels. `--width` is now a ceiling clamped to the median source width, and nothing else changed:
+
+| canvas | media | ratio | single-frame decode | label `precision@10` |
+| ------ | ----- | ----- | ------------------- | -------------------- |
+| 1024x768 (upscaled) | 2.89 MB | 25.9x | 124 ms | 0.593 |
+| 766x576 (source) | 1.89 MB | 39.5x | 79 ms | 0.576 |
+
+35 percent off the file and 36 percent off random access. the `precision@10` difference between those two rows is 1.7 points with a 95 percent CI of [-3.8, +0.4], so at n=200 it is not distinguishable from noise: the smaller file is not measurably paid for.
+
+**the earlier "av1 costs 1.9 points of `precision@10`" was not a supported claim.** that delta's CI is [-4.2, +0.5] and crosses zero. at 25.9x the codec's cost was simply below what 200 queries can resolve, and reporting a point estimate without an interval implied a precision the experiment did not have. the cost only becomes measurable once the ratio goes past roughly 26x:
+
+| setting | ratio | label `precision@10` | delta vs uncompressed control | verdict |
+| ------- | ----- | -------------------- | ----------------------------- | ------- |
+| uncompressed control | 1.0x | 0.611 | - | - |
+| 1024 canvas, gop 161 | 25.9x | 0.593 | -1.8 pts, CI [-4.2, +0.5] | within noise |
+| source canvas, gop 161 | 39.5x | 0.576 | -3.5 pts, CI [-6.1, -1.1] | real |
+| source canvas, all-intra | 44.7x | 0.570 | -4.1 pts, CI [-7.0, -1.1] | real |
+
+`--all-intra` (`keyint=1`) stays a lever, default off. it follows from the upstream finding that reordering images changes the ratio by only ~6 percent, so the gain is intra-frame: unrelated images give motion estimation nothing to find and the bits it spends searching are wasted. it buys another 5.2x for 0.6 points of `precision@10`, a difference well inside the interval, and every frame becomes a keyframe so random access has nothing to seek back to.
+
+for the codec-vs-codec question, at matched source resolution and measured on the same 200 images: source jpeg 74.70 MB (6.8 bits/pixel, stored near-lossless), a fair jpeg q95 re-encode 31.87 MB, webp q90 19.44 MB, jpeg q85 16.20 MB, av1 crf35 1.94 MB. so av1 is ~16x smaller than a fair jpeg q95 baseline, and roughly 2.3x of the headline 39.5x is the source having been stored wastefully rather than anything the codec did.
+
+
 ## [0.3.0] - 2026-06-10
 
 additive release within frozen format v1. extends v0.2.0 with the int4 sub-int8 lever and the published preset ladder, the g1 graph pillar, matryoshka prefix truncation, and the forge-core ingestion workspace. existing v0.2 files load unchanged in v0.3 readers.
@@ -66,7 +125,7 @@ forge-core (FORGE-0a): the ingestion layer's frozen .fci schema, in a separate w
 
 - 288 rust tests in the sovereign workspace (`cargo test --release --workspace`, 35 suites; was 134 in v0.2.0), plus 6 forge-core tests on its own manifest (`cargo test --manifest-path forge-core/Cargo.toml`).
 - new groups since v0.2.0: txt_streams roundtrip plus negatives, zstd_dict roundtrip plus negatives, fsst roundtrip plus negatives, dedup roundtrip plus order-invariant, content_hash_dict_fsst_dedup, graph_adjacency roundtrip plus negatives, int4 roundtrip plus negatives, mrl_truncate, manifest_additivity, reserved_ids, the expanded rerank_contract (graph path, SearchExplain, stored-precision disclosure), and forge-core serialize.
-- python: the 3 test scripts (`test_e2e.py` incl the flagship retrieve guard, `test_builder.py`, `test_search_text_model_hash.py`) plus the self-test scripts under `python/forge/` (potion, lexical floor, retrieve), which are not run by `release_check.sh`.
+- python: the 4 test scripts run by `release_check.sh` (`test_e2e.py` incl the flagship retrieve guard, `test_builder.py`, `test_search_text_model_hash.py`, `test_image_corpus.py` at 15 cases) plus the self-test scripts under `python/forge/` (potion, lexical floor, retrieve), which are not.
 
 ### compatibility
 

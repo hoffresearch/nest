@@ -68,8 +68,7 @@ _RULER_PROVENANCE = {
         "recall@10 here is easier than real retrieval and is likely inflated"
     ),
     "real_ruler": (
-        "pending gate-zero (real-query labeled harness); see "
-        "the ruler note in doc/changelog.md"
+        "pending gate-zero (real-query labeled harness); see the ruler note in doc/changelog.md"
     ),
 }
 

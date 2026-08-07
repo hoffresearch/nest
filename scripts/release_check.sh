@@ -4,7 +4,7 @@
 # Runs every CI gate end-to-end:
 #   1. cargo build/test/clippy/fmt (release profile)
 #   2. rebuild PyO3 extension (.so)
-#   3. python tests: e2e, builder, search-text model_hash
+#   3. python tests: e2e, builder, search-text model_hash, image corpus
 #   4. measure_presets --json on the LFS-tracked corpus
 #   5. compare_measure regression gates vs dat/measure/baseline.json
 #
@@ -106,6 +106,12 @@ step "python tests/test_search_text_model_hash.py"
 "$PY" tests/test_search_text_model_hash.py
 ok "search-text model_hash gate (5 cases)"
 
+# builds its own dataset, so it needs no demo corpus; the compressed cases
+# skip themselves when ffmpeg/libsvtav1 is absent.
+step "python tests/test_image_corpus.py"
+"$PY" tests/test_image_corpus.py
+ok "image corpus pipeline (15 cases)"
+
 # ---- ruff (best-effort) ----
 if "$PY" -c "import ruff" 2>/dev/null || "$PY" -m ruff --version 2>/dev/null | head -1 >/dev/null; then
   step "ruff check / format on the files we own"
@@ -115,7 +121,14 @@ if "$PY" -c "import ruff" 2>/dev/null || "$PY" -m ruff --version 2>/dev/null | h
     python/builder.py
     python/tools/measure_presets.py
     python/tools/compare_measure.py
+    python/forge/embed_image.py
+    python/forge/image_items.py
+    python/forge/image_media.py
+    python/tools/nest_build_image_corpus.py
+    python/tools/nest_search_image.py
+    python/tools/nest_image_eval.py
     tests/test_search_text_model_hash.py
+    tests/test_image_corpus.py
   )
   "$PY" -m ruff check "${RUFF_TARGETS[@]}"
   "$PY" -m ruff format --check "${RUFF_TARGETS[@]}"
