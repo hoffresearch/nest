@@ -134,6 +134,8 @@ if "$PY" -c "import ruff" 2>/dev/null || "$PY" -m ruff --version 2>/dev/null | h
     python/tools/nest_image_sweep.py
     tests/test_search_text_model_hash.py
     tests/test_image_corpus.py
+    tests/test_blob_bridge.py
+    tests/test_space_bridge.py
   )
   "$PY" -m ruff check "${RUFF_TARGETS[@]}"
   "$PY" -m ruff format --check "${RUFF_TARGETS[@]}"
