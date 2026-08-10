@@ -110,7 +110,7 @@ ok "search-text model_hash gate (5 cases)"
 # skip themselves when ffmpeg/libsvtav1 is absent.
 step "python tests/test_image_corpus.py"
 "$PY" tests/test_image_corpus.py
-ok "image corpus pipeline (29 cases)"
+ok "image corpus pipeline (37 cases)"
 
 # ---- ruff (best-effort) ----
 if "$PY" -c "import ruff" 2>/dev/null || "$PY" -m ruff --version 2>/dev/null | head -1 >/dev/null; then
@@ -127,6 +127,8 @@ if "$PY" -c "import ruff" 2>/dev/null || "$PY" -m ruff --version 2>/dev/null | h
     python/forge/image_encode.py
     python/forge/image_decode.py
     python/forge/image_backends.py
+    python/forge/image_order.py
+    python/forge/image_corpus.py
     python/tools/nest_build_image_corpus.py
     python/tools/nest_search_image.py
     python/tools/nest_image_eval.py

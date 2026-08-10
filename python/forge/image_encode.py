@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -142,6 +143,64 @@ def encode_av1(
         "media_sha256": image_media.sha256_file(output_path),
         "toolchain": toolchain,
         "provenance_sha256": provenance_sha256(toolchain),
+    }
+
+
+def probe_gop(
+    image_paths: Sequence[Path],
+    canvas: tuple[int, int],
+    *,
+    crf: int = 35,
+    preset: int = 8,
+    pix_fmt: str = "yuv420p",
+    n_samples: int = 32,
+) -> dict:
+    """Encode a spaced sample both ways and let the bytes decide the gop.
+
+    Cosine similarity of the embeddings did NOT separate intra-favouring
+    from inter-favouring corpora in fase 0 (CP-0.5), so the policy is
+    decided by the only thing that actually pays: a probe encode at the
+    target crf. The sample is evenly spaced, so scan-ordered sources (wsi
+    tiles) cannot hide their redundancy in one neighbourhood. Ties go
+    intra: random access is O(1) there and costs nothing extra.
+
+    Both probe encodes go through `encode_av1`, so the frame-count and
+    pix_fmt guards apply to the probe exactly as they do to the build.
+    """
+    paths = list(image_paths)
+    n = len(paths)
+    if n < 2:
+        return {
+            "policy": "auto",
+            "n_samples": n,
+            "crf": crf,
+            "decision": "intra",
+            "reason": "single frame",
+        }
+    take = min(n_samples, n)
+    idx = sorted(set(np.linspace(0, n - 1, take).round().astype(int).tolist()))
+    sample = [paths[i] for i in idx]
+    with tempfile.TemporaryDirectory(prefix="nest-gop-probe-") as tmp:
+        intra = encode_av1(
+            sample,
+            Path(tmp) / "intra.mp4",
+            canvas=canvas,
+            crf=crf,
+            preset=preset,
+            keyint=1,
+            pix_fmt=pix_fmt,
+        )
+        inter = encode_av1(
+            sample, Path(tmp) / "inter.mp4", canvas=canvas, crf=crf, preset=preset, pix_fmt=pix_fmt
+        )
+    decision = "intra" if intra["output_bytes"] <= inter["output_bytes"] else "inter"
+    return {
+        "policy": "auto",
+        "n_samples": len(sample),
+        "crf": crf,
+        "intra_bytes": intra["output_bytes"],
+        "inter_bytes": inter["output_bytes"],
+        "decision": decision,
     }
 
 

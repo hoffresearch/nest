@@ -6,7 +6,12 @@ sweep reports carries the full battery from `_image_metrics.py`: paired
 bootstrap interval, sign test, per-class floor (CP-0.6: the mean is not the
 gate, the worst class is), cosine drift distribution, and ranking agreement.
 
-Variant spec: `av1-inter:30,35;av1-intra:35;avif:25,35;avif444:35`
+Variant spec: `av1-inter:30,35;av1-intra:35;avif:25,35;avif444:35;dtype:f16,int8,int4`
+
+`dtype` variants ride on the sweep's `--preset` base and override only the
+vector dtype, so the ladder isolates quantization. Note (fase 5, F5.3):
+DermLIP is not mrl-trained, so prefix truncation degrades more than on an
+mrl model; pca is the fallback lever if int4/int8 collapse.
 
 Usage:
     python/tools/nest_image_sweep.py --input-dir dat/demo/derm/ph2/images \
@@ -38,19 +43,32 @@ from tools._image_metrics import (  # noqa: E402
     sign_test,
 )
 
+_DTYPES = {"f32": "float32", "f16": "float16", "int8": "int8", "int4": "int4"}
+
 
 def parse_variants(spec: str) -> list[dict]:
-    """`av1-inter:30,35;avif:25` -> per-variant build kwargs."""
+    """`av1-inter:30,35;avif:25;dtype:int8` -> per-variant build kwargs."""
     variants = []
     for chunk in spec.split(";"):
         kind, _, values = chunk.partition(":")
         for value in values.split(","):
             if kind == "av1-inter":
-                variants.append({"name": f"{kind}-{value}", "backend": "av1", "crf": int(value)})
+                variants.append(
+                    {
+                        "name": f"{kind}-{value}",
+                        "backend": "av1",
+                        "crf": int(value),
+                        "gop_policy": "inter",
+                    }
+                )
             elif kind == "av1-intra":
                 variants.append(
-                    {"name": f"{kind}-{value}", "backend": "av1", "crf": int(value),
-                     "all_intra": True}
+                    {
+                        "name": f"{kind}-{value}",
+                        "backend": "av1",
+                        "crf": int(value),
+                        "gop_policy": "intra",
+                    }
                 )
             elif kind == "avif":
                 variants.append(
@@ -58,9 +76,17 @@ def parse_variants(spec: str) -> list[dict]:
                 )
             elif kind == "avif444":
                 variants.append(
-                    {"name": f"{kind}-{value}", "backend": "avif", "avif_quality": int(value),
-                     "pix_fmt": "yuv444p"}
+                    {
+                        "name": f"{kind}-{value}",
+                        "backend": "avif",
+                        "avif_quality": int(value),
+                        "pix_fmt": "yuv444p",
+                    }
                 )
+            elif kind == "dtype":
+                if value not in _DTYPES:
+                    raise ValueError(f"unknown dtype: {value} (one of {sorted(_DTYPES)})")
+                variants.append({"name": f"{kind}-{value}", "dtype": _DTYPES[value]})
             else:
                 raise ValueError(f"unknown variant kind: {kind}")
     return variants
