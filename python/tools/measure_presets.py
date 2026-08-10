@@ -218,6 +218,16 @@ def main():
         action="store_true",
         help="Emit results as JSON to stdout (table to stderr) for regression gates.",
     )
+    ap.add_argument(
+        "--reuse",
+        action="store_true",
+        help=(
+            "Reuse an existing variant build when the .nest opens and validates "
+            "cleanly (builds are deterministic, so the bytes are identical). "
+            "build_s is recorded as 0.0 and the log line says reused=true. "
+            "Default off: every variant is rebuilt."
+        ),
+    )
     args = ap.parse_args()
 
     base_path = Path(args.baseline)
@@ -270,7 +280,17 @@ def main():
             continue
         out_path = OUT_DIR / f"corpus_{preset}.nest"
         print(f"\n→ building preset={preset} → {out_path}", file=log)
-        build_time = build_variant(chunks, meta, preset, out_path)
+        reused = False
+        build_time = 0.0
+        if args.reuse and out_path.exists():
+            try:
+                probe = nest.open(str(out_path))
+                probe.validate()
+                reused = True
+            except Exception:
+                reused = False  # partial or stale build: fall through to rebuild
+        if not reused:
+            build_time = build_variant(chunks, meta, preset, out_path)
         size = out_path.stat().st_size
         db_v = nest.open(str(out_path))
         db_v.validate()
@@ -284,7 +304,7 @@ def main():
         print(
             f"  size={size / 1e6:.2f} MB ({size / base_size:.3f}× baseline)  "
             f"dtype={db_v.dtype}  has_ann={db_v.has_ann}  has_bm25={db_v.has_bm25}  "
-            f"search_mode={mode}  build={build_time:.1f}s",
+            f"search_mode={mode}  build={build_time:.1f}s  reused={reused}",
             file=log,
         )
         # lmatryoshka: the stored vectors are truncated to mrl_dim, so the
