@@ -133,12 +133,18 @@ class ImageCorpusTest(unittest.TestCase):
         all_intra=False,
         backend="av1",
         control=False,
+        gop_policy="auto",
+        shard_size=None,
+        order_similarity=False,
+        dtype=None,
+        preset="compressed",
+        src=None,
     ) -> dict:
         from tools import nest_build_image_corpus as builder
 
         return builder.build_corpus(
             all_intra=all_intra,
-            input_dir=self.src,
+            input_dir=src or self.src,
             output_path=self.tmp / name / f"{name}.nest",
             dataset_name=dataset or name,
             embedder=StubEmbedder(),
@@ -149,6 +155,11 @@ class ImageCorpusTest(unittest.TestCase):
             width=256,
             backend=backend,
             control=control,
+            gop_policy=gop_policy,
+            shard_size=shard_size,
+            order_similarity=order_similarity,
+            dtype=dtype,
+            preset=preset,
         )
 
     # ---- frame alignment: the bug class that silently shifts every uri ----
@@ -669,6 +680,172 @@ class ImageCorpusTest(unittest.TestCase):
             )
         args = search.parse_args(["--index", "x.nest", "--query-text", "blue nevus"])
         self.assertEqual(args.query_text, "blue nevus")
+
+    # ---- fase 5: gop policy probe, similarity order, sharding, dtype ladder ----
+
+    def test_auto_gop_policy_records_the_probe_and_applies_the_decision(self):
+        """The probe runs at build time and the keyint follows its bytes.
+
+        Fase 0 (CP-0.5) showed embedding cosine does not separate the
+        regimes, so the policy is a measured encode decision, and the probe
+        statistics go to the manifest with it. The decision itself is not
+        asserted on this synthetic set (flat colour blocks are a regime
+        where either side can win on bytes); what is asserted is the
+        wiring: the probe is recorded whole, and the encoded stream obeys
+        it. The decision's quality is guarded by the redundancy test below
+        and measured on real corpora in fase 6.
+        """
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        result = self._build("gopauto", compress=True)
+        media = result["media"]
+        gop = media["gop"]
+        self.assertEqual(gop["policy"], "auto")
+        self.assertIn(gop["decision"], ("intra", "inter"))
+        self.assertGreater(gop["intra_bytes"], 0)
+        self.assertGreater(gop["inter_bytes"], 0)
+        self.assertGreater(gop["n_samples"], 1)
+        expected_keyint = 1 if gop["decision"] == "intra" else None
+        self.assertEqual(media["keyint"], expected_keyint)
+
+    def test_auto_gop_policy_finds_redundancy(self):
+        """Near-identical frames: inter wins, and the probe must say so."""
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        from PIL import Image, ImageDraw
+
+        src = self.tmp / "redundant"
+        src.mkdir()
+        for i in range(10):
+            img = Image.new("RGB", (320, 240), (200, 100, 50))
+            draw = ImageDraw.Draw(img)
+            draw.rectangle([40 + i, 60, 100 + i, 120], fill=(0, 0, 0))
+            img.save(src / f"frame{i:03d}.png")
+
+        result = self._build("gopred", compress=True, src=src)
+        gop = result["media"]["gop"]
+        self.assertEqual(gop["decision"], "inter")
+        self.assertLess(gop["inter_bytes"], gop["intra_bytes"])
+        self.assertIsNone(result["media"]["keyint"])
+
+    def test_gop_policy_inter_forces_the_default_gop(self):
+        """`inter` is the lever for material the probe has not seen."""
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        result = self._build("gopinter", compress=True, gop_policy="inter")
+        self.assertIsNone(result["media"]["keyint"])
+        self.assertEqual(result["media"]["gop"]["decision"], "inter")
+        self.assertEqual(result["media"]["frame_count"], result["n_items"])
+
+    def test_similarity_order_preserves_item_mapping(self):
+        """A permuted stream must still hand every item its own frame.
+
+        The stream is encoded in greedy nearest-neighbour order, but uris,
+        vectors, and frame hashes are un-permuted back to item order. The
+        assertion is the strongest form of that contract: decode the frame
+        each uri names and its content hash must equal the manifest hash
+        recorded for THAT item.
+        """
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        from forge import image_decode, image_media
+
+        result = self._build("ordered", compress=True, order_similarity=True)
+        manifest = json.loads(Path(result["manifest"]).read_text())
+        media = manifest["media"]
+        media_dir = image_media.media_dir_for(Path(result["nest"]))
+        canvas = tuple(media["canvas"])
+        frame_ids = []
+        for item in manifest["items"]:
+            name, ordinal = image_media.parse_media_uri(item["source_uri"])
+            frame_ids.append(ordinal)
+            frame = image_decode.decode_frame(media_dir / name, canvas, ordinal)
+            self.assertEqual(
+                image_decode.frame_sha256(frame),
+                manifest["frame_sha256"][item["ordinal"]],
+                f"item {item['ordinal']} resolved to another item's frame",
+            )
+        self.assertEqual(
+            sorted(frame_ids),
+            list(range(result["n_items"])),
+            "frame pointers are not a permutation of the stream",
+        )
+
+    def test_sharding_splits_the_stream_and_every_uri_resolves(self):
+        """Segments of ~`shard_size` frames, indexed in the manifest."""
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        import nest
+        from forge import image_decode, image_media
+
+        result = self._build("sharded", compress=True, shard_size=5)
+        manifest = json.loads(Path(result["manifest"]).read_text())
+        media = manifest["media"]
+        segments = media["segments"]
+        self.assertEqual(len(segments), 3, "12 frames at shard_size 5")
+        self.assertEqual(sum(s["n_frames"] for s in segments), result["n_items"])
+        self.assertEqual(media["frame_count"], result["n_items"])
+        media_dir = image_media.media_dir_for(Path(result["nest"]))
+        canvas = tuple(media["canvas"])
+        for seg in segments:
+            self.assertTrue((media_dir / seg["uri"]).exists(), seg["uri"])
+            self.assertTrue(seg["media_sha256"].startswith("sha256:"))
+        for item in manifest["items"]:
+            name, ordinal = image_media.parse_media_uri(item["source_uri"])
+            frame = image_decode.decode_frame(media_dir / name, canvas, ordinal)
+            self.assertEqual(
+                image_decode.frame_sha256(frame),
+                manifest["frame_sha256"][item["ordinal"]],
+                f"item {item['ordinal']} resolved to another item's frame",
+            )
+        db = nest.open(result["nest"])
+        self.assertEqual(db.n_embeddings, result["n_items"])
+        db.validate()
+
+    def test_order_and_sharding_compose(self):
+        """Both levers together: the mapping contract must still hold."""
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        from forge import image_decode, image_media
+
+        result = self._build("both", compress=True, shard_size=5, order_similarity=True)
+        manifest = json.loads(Path(result["manifest"]).read_text())
+        media = manifest["media"]
+        self.assertEqual(len(media["segments"]), 3)
+        media_dir = image_media.media_dir_for(Path(result["nest"]))
+        canvas = tuple(media["canvas"])
+        seen = []
+        for item in manifest["items"]:
+            name, ordinal = image_media.parse_media_uri(item["source_uri"])
+            seen.append((name, ordinal))
+            frame = image_decode.decode_frame(media_dir / name, canvas, ordinal)
+            self.assertEqual(
+                image_decode.frame_sha256(frame),
+                manifest["frame_sha256"][item["ordinal"]],
+            )
+        self.assertEqual(len(set(seen)), result["n_items"])
+
+    def test_dtype_override_reaches_the_built_corpus(self):
+        """The dtype lever (F5.3) is a build kwarg, not a preset swap."""
+        import nest
+
+        result = self._build("int8corpus", compress=False, dtype="int8", preset="exact")
+        db = nest.open(result["nest"])
+        self.assertEqual(db.n_embeddings, result["n_items"])
+        db.validate()
+
+    def test_sweep_dtype_ladder_and_gop_kinds(self):
+        """`dtype:` variants isolate quantization; av1 kinds pin the policy."""
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
+        import nest_image_sweep as sweep
+
+        variants = sweep.parse_variants("dtype:f16,int8,int4")
+        self.assertEqual([v["dtype"] for v in variants], ["float16", "int8", "int4"])
+        with self.assertRaises(ValueError):
+            sweep.parse_variants("dtype:fp8")
+        pair = sweep.parse_variants("av1-inter:30;av1-intra:35")
+        self.assertEqual(pair[0]["gop_policy"], "inter")
+        self.assertEqual(pair[1]["gop_policy"], "intra")
 
     # ---- fase 3: the measurement battery beyond the bootstrap ----
 
