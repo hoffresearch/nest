@@ -51,13 +51,17 @@ def _letterbox_all(
 
 def _control(render_paths, output_path, dataset_name, canvas) -> dict:
     """Letterbox-lossless control corpus: the ruler the codec cost is
-    measured against (fase 0, CP-0.1)."""
+    measured against (fase 0, CP-0.1). Its byte size is recorded so every
+    variant can be reported against the SAME ruler; the per-backend
+    `source_bytes` are not comparable (av1 sums the original files, avif
+    sums its letterboxed png inputs)."""
     png_dir = image_media.media_dir_for(output_path) / f"{dataset_name}-png"
-    _letterbox_all(render_paths, canvas, png_dir)
+    written = _letterbox_all(render_paths, canvas, png_dir)
     media = {
         "backend": "png-lossless",
         "canvas": [canvas[0], canvas[1]],
         "frame_count": len(render_paths),
+        "output_bytes": sum(p.stat().st_size for p in written),
     }
     uris = [f"media://{dataset_name}-png/{i:06d}.png" for i in range(len(render_paths))]
     frames = lambda batch_size=32: _png_frames(png_dir, batch_size)  # noqa: E731

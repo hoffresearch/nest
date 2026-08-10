@@ -70,6 +70,20 @@ def parse_variants(spec: str) -> list[dict]:
                         "gop_policy": "intra",
                     }
                 )
+            elif kind == "av1-order":
+                # ordering is only visible to inter prediction (all-intra
+                # encodes every frame alone, so permuting them changes
+                # nothing), so the kind pins the gop to inter: it is the
+                # measurement cell fase 0 left open for wsi tiles.
+                variants.append(
+                    {
+                        "name": f"{kind}-{value}",
+                        "backend": "av1",
+                        "crf": int(value),
+                        "gop_policy": "inter",
+                        "order_similarity": True,
+                    }
+                )
             elif kind == "avif":
                 variants.append(
                     {"name": f"{kind}-{value}", "backend": "avif", "avif_quality": int(value)}
@@ -147,6 +161,10 @@ def run_sweep(args: argparse.Namespace, embedder) -> dict:
         "control": {
             "label": control_eval.get("label"),
             "identity": control_eval["identity"],
+            # the one ruler every variant is compared against: the
+            # letterbox-lossless corpus size, and the control index size.
+            "media_bytes": (control["media"] or {}).get("output_bytes"),
+            "nest_bytes": Path(control["nest"]).stat().st_size,
         },
         "variants": {},
     }
@@ -161,6 +179,7 @@ def run_sweep(args: argparse.Namespace, embedder) -> dict:
         entry: dict = {
             "build": variant,
             "media_bytes": media.get("output_bytes"),
+            "nest_bytes": Path(result["nest"]).stat().st_size,
             "compression_ratio": media.get("compression_ratio"),
             "label": variant_eval.get("label"),
             "identity": variant_eval["identity"],
