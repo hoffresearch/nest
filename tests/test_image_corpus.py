@@ -843,9 +843,12 @@ class ImageCorpusTest(unittest.TestCase):
         self.assertEqual([v["dtype"] for v in variants], ["float16", "int8", "int4"])
         with self.assertRaises(ValueError):
             sweep.parse_variants("dtype:fp8")
-        pair = sweep.parse_variants("av1-inter:30;av1-intra:35")
+        pair = sweep.parse_variants("av1-inter:30;av1-intra:35;av1-order:35")
         self.assertEqual(pair[0]["gop_policy"], "inter")
         self.assertEqual(pair[1]["gop_policy"], "intra")
+        self.assertTrue(pair[2]["order_similarity"])
+        # ordering is invisible to all-intra, so the measurement cell pins inter
+        self.assertEqual(pair[2]["gop_policy"], "inter")
 
     # ---- fase 3: the measurement battery beyond the bootstrap ----
 
@@ -940,6 +943,11 @@ class ImageCorpusTest(unittest.TestCase):
         report = sweep.run_sweep(args, StubEmbedder())
         self.assertIn("control", report)
         self.assertEqual(set(report["variants"]), {"av1-intra-35", "avif-35"})
+        # the shared ruler: the control's lossless media size, and every
+        # variant's index size, must be reported or a published number
+        # cannot be reproduced.
+        self.assertGreater(report["control"]["media_bytes"], 0)
+        self.assertGreater(report["control"]["nest_bytes"], 0)
         for variant in report["variants"].values():
             self.assertIn("bootstrap", variant["delta_vs_control"]["precision@10"])
             self.assertIn("sign_test", variant["delta_vs_control"]["precision@10"])
@@ -947,6 +955,7 @@ class ImageCorpusTest(unittest.TestCase):
             self.assertIn("kendall_tau_b", variant["delta_vs_control"]["ranking"])
             self.assertIn("median", variant["drift"])
             self.assertGreater(variant["media_bytes"], 0)
+            self.assertGreater(variant["nest_bytes"], 0)
 
 
 if __name__ == "__main__":
