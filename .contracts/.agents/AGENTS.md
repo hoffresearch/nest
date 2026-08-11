@@ -28,9 +28,13 @@ abi3 targets python 3.12+ (not 3.14). python tests need the built `.so` first:
 python tests/test_e2e.py
 python tests/test_builder.py
 python tests/test_search_text_model_hash.py
+python tests/test_offline_guard.py
+python tests/test_blob_bridge.py
+python tests/test_space_bridge.py
+python tests/test_image_corpus.py
 ```
 
-no pytest. tests are plain scripts with `if __name__ == "__main__"`. `pytest tests/` does not work.
+no pytest. tests are plain scripts with `if __name__ == "__main__"`. `pytest tests/` does not work. `test_image_corpus.py` (37 cases) exercises the forge image-corpus pillar (encode/decode, gop probe, sharding, ordering) and skips cleanly when ffmpeg's av1/avif encoders are unavailable; it does not need the vision model itself. building an actual image corpus (`python/forge/embed_image.py`) needs `open_clip` + torch, not part of the default forge dependency group.
 
 the forge build-side default embedder is now the REAL SEMANTIC one: a vendored model2vec/potion-base-8M static table (`python/forge/embed_potion.py`), offline, no torch, no network. its self-test needs numpy + tokenizers and the vendored table (git-lfs): `python python/forge/test_embed_potion.py` (run with `.venv/bin/python`; install the deps with `uv pip install numpy tokenizers`, declared in `pyproject.toml` under `[dependency-groups] forge`). it proves the semantic jump (car ~ automobile >> car ~ banana), determinism, f32-stability, and that no socket is opened at embed time; `python python/forge/recall_harness.py` shows per-query recall vs the floor. the table (`python/forge/models/potion-base-8M/model.safetensors`, ~30mb) is git-lfs; run `git lfs pull` if it is a pointer. the #04 lexical bag-of-words stays as the stdlib-only zero-dep FLOOR with its own self-test (no `.so`, no deps): `python python/forge/test_embed_default.py`. both self-fingerprint to a `model_hash` recorded in provenance; neither is run by `release_check.sh`.
 
@@ -109,7 +113,7 @@ identify temporary scripts and possible dead-code files in incorrect folders. un
 
 - rust edition 2024, resolver 3, `thiserror` for errors (never panic in library code).
 - `repr(C)` structs for binary layout; all integers LE unsigned.
-- Wip feature study/progress (not final resolutiom) binary format v1 is frozen. v0.2 added encodings 1/2/3 (zstd, float16, int8) and optional sections 0x07 (HNSW) and 0x08 (BM25).
+- Wip feature study/progress (not final resolutiom) binary format v1 is frozen. v0.2 added encodings 1/2/3 (zstd, float16, int8) and optional sections 0x07 (HNSW) and 0x08 (BM25). v0.3 added encoding 7 (int4) and the graph pillar (section 0x0C). since then the media blob pillar (0x14 blob_refs, 0x16 blob_span_overlay) and the multimodal space pillar (0x15 space_table + the 0x20-0x2F embedding band) shipped, all additive and content_hash-excluded; see `doc/arc/arc.yaml`'s `contract` array for the full section-id map.
 - hash format: always `sha256:<64 lowercase hex>`.
 - four hashes: `header_checksum`, per-section `checksum` (physical bytes), `file_hash` (whole file), `content_hash` (decoded canonical sections, stable across encodings).
 - `NestFileBuilder` is a consuming builder (`add_chunk(self) -> Self`). presets via `.text_encoding()` + `.embedding_dtype()`.
