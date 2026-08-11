@@ -52,8 +52,8 @@ publish-jobs = ["homebrew"]
 # binary passes `nest doctor` with no network and no repo checkout.
 [[workspace.metadata.dist.extra-artifacts]]
 build = [
-    "python3 scripts/stage_embedder_payload.py target/dist-payload/share",
-    "tar -czf target/nest-embedder-payload.tar.gz -C target/dist-payload share",
+    ["python3", "scripts/stage_embedder_payload.py", "target/dist-payload/share"],
+    ["tar", "-czf", "target/nest-embedder-payload.tar.gz", "-C", "target/dist-payload", "share"],
 ]
 artifacts = ["target/nest-embedder-payload.tar.gz"]
 

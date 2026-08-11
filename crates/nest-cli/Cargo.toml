@@ -12,6 +12,15 @@ homepage.workspace = true
 name = "nest"
 path = "src/main.rs"
 
+# cargo-binstall: `cargo binstall nest-cli` fetches the prebuilt binary from
+# the github release instead of compiling (issue #75). names match the
+# cargo-dist archive layout; windows ships a .zip, everything else .tar.xz.
+[package.metadata.binstall]
+pkg-fmt = "txz"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
+
 [dependencies]
 nest-format = { workspace = true }
 nest-runtime = { workspace = true }
