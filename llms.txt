@@ -9,7 +9,7 @@ single-file sovereign vector database. the .nest file IS the database: chunks, e
 ## project snapshot
 
 - language stack: rust workspace (format, runtime, cli, pyo3 bindings) + python tooling (builder, embedders, measurement).
-- architecture docs: doc/arc/arc.md (human), doc/arc/arc.yaml (machine), doc/arc/arc.mmd (visual mermaid). the trio is the source of truth.
+- architecture docs: doc/arc/arc.yaml (human and machine reference), doc/arc/arc.mmd (visual mermaid). the pair is the source of truth.
 - .contracts/.agents/AGENTS.md is the agent and contributor operating contract and the single agent instruction source; use/update/init only .contracts/.agents/AGENTS.md, no per-tool instruction files.
 - forge-core/ is a SEPARATE cargo workspace (ingestion layer, frozen .fci schema); not in the sovereign --workspace set, build it via --manifest-path forge-core/Cargo.toml.
 
@@ -80,7 +80,6 @@ prefer release_check.sh before merge, it is the project gate. forge-core carries
 - README.md
 - .contracts/.agents/AGENTS.md (the single agent instruction source)
 - CONTRIBUTING.md
-- doc/arc/arc.md
 - doc/arc/arc.yaml
 - doc/arc/arc.mmd
 - doc/usage.md

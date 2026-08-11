@@ -1,11 +1,13 @@
 %% nest visual architecture reference
-%% companion to doc/arc/arc.md (human) and doc/arc/arc.yaml (machine).
+%% companion to doc/arc/arc.yaml (the machine-readable and human-readable
+%% architecture reference). the pair is the source of truth; there is no
+%% separate human-prose architecture doc.
 %%
 %% design note:
 %%   this is a sequenceDiagram, not a flowchart with subgraphs. structured
 %%   diagram types lay out deterministically and render cleanly on github;
 %%   subgraph flowcharts with cross-cluster edges do not. the file inventory
-%%   in arc.md and arc.yaml is the authoritative module breakdown.
+%%   in arc.yaml is the authoritative module breakdown.
 %%
 %%   it traces the two flows that define nest: build (python writes the file)
 %%   and query (rust serves from the file). the .nest file is the only

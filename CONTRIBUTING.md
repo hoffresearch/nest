@@ -8,7 +8,7 @@
 2. branch from `dev`: `git checkout -b feature/short-description`.
 3. keep each pr focused on one concern. small is better.
 4. add or update tests for the change. new behavior needs a new test. write real tests against real artifacts (built .nest files, golden fixtures, real corpora), no mocks; cover the happy path, the error path, and one edge case.
-5. if the change alters architecture, module boundaries, data flow, or doc locations, update the arc trio (`doc/arc/arc.md`, `doc/arc/arc.yaml`, `doc/arc/arc.mmd`) in the same pr. keep all three concise and pragmatic. do not add a second human architecture doc.
+5. if the change alters architecture, module boundaries, data flow, or doc locations, update the arc pair (`doc/arc/arc.yaml`, `doc/arc/arc.mmd`) in the same pr. keep both concise and pragmatic. do not add a separate human architecture doc; `arc.yaml` is both the machine map and the human reference.
 6. run `./scripts/release_check.sh` locally before pushing. that script is the same gate ci runs on the pr.
 7. commit with a clear message in plain english. no conventional commits prefix.
 8. open a pr against `dev`. the maintainer squashes or rebases into `main` at release time.
@@ -100,7 +100,7 @@ python tests/test_search_text_model_hash.py
 
 - bugs and feature requests: [github issues](https://github.com/hoffresearch/nest/issues).
 - security vulns: do not open a public issue. email [brenner@hoffresearch.com](mailto:brenner@hoffresearch.com). target ack within 72 hours.
-- questions about the format: open a discussion, or read `doc/arc/arc.md`, `doc/arc/arc.yaml`, and `doc/arc/arc.mmd`.
+- questions about the format: open a discussion, or read `doc/arc/arc.yaml` and `doc/arc/arc.mmd`.
 
 bug reports should include the `.nest` `file_hash` and `content_hash` (from `nest stats <file>`), the runtime `simd_backend` (also in `nest stats`), the exact cli or python invocation, and the error output.
 
