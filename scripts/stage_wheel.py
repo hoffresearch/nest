@@ -34,6 +34,7 @@ COPIES = [
     (ROOT / "packaging" / "pyproject.toml", STAGING / "pyproject.toml"),
     (ROOT / "README.md", STAGING / "README.md"),
     (ROOT / "python" / "nest.py", STAGING / "nest" / "__init__.py"),
+    (ROOT / "python" / "nest_cli.py", STAGING / "nest" / "_cli.py"),
 ]
 
 MODEL_SRC = ROOT / "python" / "forge" / "models" / "potion-base-8M"
