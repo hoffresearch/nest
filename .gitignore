@@ -36,9 +36,6 @@ Thumbs.db
 *.swo
 *~
 
-# claude personal config
-.claude/
-
 # Project specific
 # demo datasets are local-only and intentionally not tracked.
 dat/demo/corpus-combined/
@@ -88,3 +85,4 @@ dat/hoff.db
 
 dat/demo/
 !dat/demo/README.md
+.env
