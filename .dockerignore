@@ -1,0 +1,16 @@
+# docker build context: the Dockerfile copies only Cargo.toml, Cargo.lock,
+# and crates/; keep everything else out so the context stays tiny.
+target/
+dat/
+.git/
+.gitignore
+packaging/staging/
+tmp/
+doc/
+examples/
+python/
+forge-core/
+scripts/
+tests/
+*.md
+.env

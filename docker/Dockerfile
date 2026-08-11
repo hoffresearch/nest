@@ -6,20 +6,27 @@
 # build:  docker build --platform=linux/amd64 -f docker/Dockerfile -t nest .
 # run:    docker run --rm -v "$PWD/dat:/dat:ro" nest validate /dat/corpus_next.v1.nest
 #
-# x86_64 only for now: debian's musl-tools cross toolchain covers
-# x86_64-unknown-linux-musl; aarch64 needs a second toolchain and is left
-# to the multi-arch follow-up.
+# TARGET is a build arg: x86_64-unknown-linux-musl (default) or
+# aarch64-unknown-linux-musl. on apple silicon, build the aarch64 variant
+# natively (qemu user emulation crashes rustc mid-build):
+#   docker build -f docker/Dockerfile --build-arg TARGET=aarch64-unknown-linux-musl -t nest .
+# debian's musl-tools provides musl-gcc for the host arch on both, which is
+# why the recipe stays single-file; a multi-arch manifest is the follow-up.
 
 FROM rust:1-bookworm AS build
-RUN rustup target add x86_64-unknown-linux-musl \
+ARG TARGET=x86_64-unknown-linux-musl
+ENV CC_x86_64_unknown_linux_musl=musl-gcc \
+    CC_aarch64_unknown_linux_musl=musl-gcc
+RUN rustup target add ${TARGET} \
     && apt-get update \
     && apt-get install -y --no-install-recommends musl-tools \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
-RUN cargo build --profile dist -p nest-cli --target x86_64-unknown-linux-musl
+RUN cargo build --profile dist -p nest-cli --target ${TARGET}
 
 FROM scratch
-COPY --from=build /src/target/x86_64-unknown-linux-musl/dist/nest /nest
+ARG TARGET=x86_64-unknown-linux-musl
+COPY --from=build /src/target/${TARGET}/dist/nest /nest
 ENTRYPOINT ["/nest"]
