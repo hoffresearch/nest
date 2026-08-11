@@ -77,9 +77,10 @@ pub fn default_embedder_path() -> PathBuf {
 /// sentence-transformers path that `search-text` keeps).
 ///
 /// resolution order: the repo layout first (dev checkout), then the installed
-/// data dir (`$XDG_DATA_HOME/nest/forge/` or `~/.local/share/nest/forge/`)
-/// where the one-liner installer / package tarballs place the embedder
-/// payload next to the potion table (issue #75).
+/// data dir (`$XDG_DATA_HOME/nest/forge/` or `~/.local/share/nest/forge/`),
+/// then `<exe>/../share/nest/forge/` (homebrew and tarball layouts), where
+/// the one-liner installer / package tarballs place the embedder payload
+/// next to the potion table (issue #75).
 pub fn default_potion_embedder_path() -> PathBuf {
     let rel = PathBuf::from("python")
         .join("forge")
@@ -92,12 +93,17 @@ pub fn default_potion_embedder_path() -> PathBuf {
                 .ok()
                 .map(|h| PathBuf::from(h).join(".local").join("share"))
         });
+    let exe_share = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(|p| p.to_path_buf()))
+        .map(|bin| bin.join("..").join("share"));
     let candidates = [
         std::env::current_dir().ok().map(|p| p.join(&rel)),
         std::env::current_dir()
             .ok()
             .map(|p| p.join("..").join(&rel)),
         data_home.map(|d| d.join("nest").join("forge").join("embed_query_potion.py")),
+        exe_share.map(|s| s.join("nest").join("forge").join("embed_query_potion.py")),
     ];
     for c in candidates.into_iter().flatten() {
         if c.exists() {
