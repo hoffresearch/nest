@@ -71,7 +71,7 @@ pub const SECTION_ENCODING_FLOAT16: u32 = 2;
 pub const SECTION_ENCODING_INT8: u32 = 3;
 
 // reserved additive wire encodings. ids 4-255 are reserved within frozen
-// format v1 (see doc/arc/arc.md). claimed here as named
+// format v1 (see doc/arc/arc.yaml). claimed here as named
 // constants so each future codec ships as a small additive diff. NOT yet
 // implemented: decode_payload rejects them with UnsupportedSectionEncoding
 // until their codec module lands, so old and new readers agree.
@@ -113,7 +113,7 @@ pub const SECTION_HNSW_INDEX: u32 = 0x07;
 pub const SECTION_BM25_INDEX: u32 = 0x08;
 
 // reserved additive optional sections. ids 0x09+ are reserved within frozen
-// format v1 (see doc/arc/arc.md). all are EXCLUDED from
+// format v1 (see doc/arc/arc.yaml). all are EXCLUDED from
 // content_hash (which covers the canonical six only), so adding any of them
 // never invalidates a nest:// citation. claimed as named constants; NOT yet
 // emitted or read until each feature ships its section codec and a manifest
@@ -127,7 +127,7 @@ pub const SECTION_TOKENIZER_MODEL: u32 = 0x0E;
 pub const SECTION_EDIT_JOURNAL: u32 = 0x0F;
 pub const SECTION_REPRO_MANIFEST: u32 = 0x10;
 
-// reconciled additive optional sections past 0x10 (see doc/arc/arc.md).
+// reconciled additive optional sections past 0x10 (see doc/arc/arc.yaml).
 // the four redesign pillars each independently proposed
 // 0x11; this is the single disjoint map that resolves that collision in one
 // pass, BEFORE any feature edits this file. ALL are EXCLUDED from
