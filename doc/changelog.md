@@ -370,6 +370,6 @@ single python entry point: no subprocess CLI fallback inside `python/`.
 
 - golden fixture: `crates/nest-format/tests/fixtures/golden_v1_minimal.nest` (1366 bytes; regenerate with `cargo run -p nest-format --example regen_golden`).
 - legacy SQLite-based dataset: `dat/truw_ptbr.nest` (28 MB) to `dat/truw_ptbr.v1.nest` (73.73 MB, 19,769 chunks dim 384) via `python/convert_legacy.py`.
-- architecture references: `doc/arc/arc.md` and `doc/arc/arc.yaml`.
+- architecture references: `doc/arc/arc.yaml` and `doc/arc/arc.mmd`.
 
 [0.1.0]: https://github.com/hoffresearch/nest/releases/tag/v0.1.0

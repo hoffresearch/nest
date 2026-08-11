@@ -66,7 +66,7 @@ four crates plus a python tooling layer:
 - `nest-python` is the pyo3 bridge that exposes the runtime to python (incl the agent-native `NestFile.retrieve`).
 - `python/` holds the writer pipeline, model fingerprint, the query-time embedder used by `search-text`, and the offline potion embedder + retrieve convenience the flagship verbs use.
 
-full visual map: [doc/arc/arc.mmd](doc/arc/arc.mmd). human reference: [doc/arc/arc.md](doc/arc/arc.md). machine map: [doc/arc/arc.yaml](doc/arc/arc.yaml).
+full visual map: [doc/arc/arc.mmd](doc/arc/arc.mmd). human and machine reference: [doc/arc/arc.yaml](doc/arc/arc.yaml).
 
 ## install
 
@@ -218,8 +218,7 @@ with `reproducible=True` (the script default) two operators get byte-identical `
 ## reference
 
 - `dat/demo/README.md` for what each upstream dataset is and how to rebuild the corpus
-- `doc/arc/arc.md` for architecture, binary layout, API surface, errors, and versioning
-- `doc/arc/arc.yaml` for the machine-readable architecture map used by agents and tooling
+- `doc/arc/arc.yaml` for architecture, binary layout, API surface, errors, and versioning; the machine-readable map used by agents and tooling, and the human reference
 - `doc/arc/arc.mmd` for the mermaid sequence diagram of the build and query flows
 - `doc/usage.md` for the engine subcommands, the ask/retrieve flagship verbs, presets, offline mode, citations
 - `doc/changelog.md` for v0.1.0, v0.2.0, and unreleased deltas
