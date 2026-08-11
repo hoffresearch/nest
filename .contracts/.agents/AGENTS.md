@@ -14,7 +14,7 @@ operating notes for ai agents and human contributors working in this repo. the p
 
 # pyo3 extension
 
-no maturin. build manually:
+dev build is still manual:
 
 ```
 cargo build --release -p nest-python
@@ -22,7 +22,14 @@ cp target/release/lib_nest.dylib python/_nest.so   # macOS
 cp target/release/lib_nest.so   python/_nest.so    # linux
 ```
 
-abi3 targets python 3.12+ (not 3.14). python tests need the built `.so` first:
+the published wheel is maturin, staged (never edit `packaging/staging/` by hand):
+
+```
+python scripts/stage_wheel.py
+(cd packaging/staging && maturin build --release)   # wheel lands in target/wheels/
+```
+
+`packaging/pyproject.toml` is the single source for the wheel project; the staging script copies it plus `python/nest.py` (as `nest/__init__.py`), `python/nest_cli.py` (as `nest/_cli.py`), `python/forge/embed_potion.py`, and the potion table. abi3 targets python 3.12+ (not 3.14). python tests need the built `.so` first:
 
 ```
 python tests/test_e2e.py
