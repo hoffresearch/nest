@@ -226,7 +226,6 @@ with `reproducible=True` (the script default) two operators get byte-identical `
 ## license
 
 made it simple, but signifcant
-Hoff Research   hoffresearch.com
+Hoff Research - hoffresearch.com
 Brenner Cruvinel
-(∂μfμν = jν)
 MIT
