@@ -96,13 +96,13 @@ impl SymbolTable {
     /// deterministic: candidate substrings are counted in a sorted map and
     /// selected by (count desc, bytes asc), so two builds match exactly.
     fn build(corpus: &[u8]) -> Self {
-        use std::collections::HashMap;
+        use std::collections::BTreeMap;
         let t0 = std::time::Instant::now();
-        // count every 1..=MAX_SYMBOL_LEN substring occurrence. a hashmap is
-        // much faster than a BTreeMap for counting; the final ranking uses an
-        // explicit deterministic comparator, so iteration order does not affect
-        // the resulting symbol table or encoded output.
-        let mut counts: HashMap<Vec<u8>, u64> = HashMap::new();
+        // count every 1..=MAX_SYMBOL_LEN substring occurrence. a BTreeMap
+        // keyed by the bytes gives a deterministic iteration order, and the
+        // gain heuristic (saved bytes = (len-1)*count) ranks longer frequent
+        // substrings first, the core fsst idea.
+        let mut counts: BTreeMap<Vec<u8>, u64> = BTreeMap::new();
         for len in 1..=MAX_SYMBOL_LEN {
             if corpus.len() < len {
                 break;
