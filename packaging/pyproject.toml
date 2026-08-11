@@ -26,6 +26,12 @@ classifiers = [
 ]
 dynamic = ["version"]
 
+# offline text embedding with the bundled potion table (nest.embed_potion).
+# optional: the core library surface (open/search/validate/...) needs nothing
+# beyond the wheel itself.
+[project.optional-dependencies]
+embed = ["numpy>=1.26", "tokenizers>=0.20"]
+
 [project.urls]
 Repository = "https://github.com/hoffresearch/nest"
 Issues = "https://github.com/hoffresearch/nest/issues"
