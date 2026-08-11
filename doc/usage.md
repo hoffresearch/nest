@@ -312,3 +312,15 @@ nest cite my_corpus.nest 'nest://sha256:1aa9.../sha256:8f314...'
 ```
 
 runs the full pipeline: cargo test, clippy, fmt, all 3 python test suites, ruff, `measure_presets.py`, `compare_measure.py` against the committed baseline. exits non-zero on any failure.
+
+## 11. install health check (`nest doctor`)
+
+`doctor` takes no file. it validates the install surface after a one-liner / tarball install (see `doc/install.md`): nest and format versions, the detected simd backend, the python interpreter the embedder will run under, the numpy + tokenizers deps, the potion embedder script, the potion table (a git-lfs pointer is rejected), and one real offline embed of a fixed probe string.
+
+```sh
+nest doctor
+```
+
+the exit code is typed so installers and ci branch on codes, not text: `0` ok, `2` python interpreter missing, `3` python deps missing, `4` potion embedder script not found, `5` potion table missing or a git-lfs pointer, `6` embedder run failed. a scalar simd fallback prints a warning but still exits `0`. the embedder check opens no socket, so doctor itself stays offline-by-construction.
+
+the embedder script resolves in this order: the repo layout (`python/forge/embed_query_potion.py`, dev checkout), then `${XDG_DATA_HOME:-~/.local/share}/nest/forge/` (one-liner installs), then `<exe>/../share/nest/forge/` (tarball and homebrew-style layouts).
