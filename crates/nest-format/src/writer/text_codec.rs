@@ -46,23 +46,15 @@ pub(super) struct TextChoice {
 pub(super) fn choose(texts: &[String]) -> crate::Result<TextChoice> {
     let t0 = std::time::Instant::now();
     let canonical_raw = encode_chunks_canonical(texts)?;
-    eprintln!(
-        "text_codec choose: encode_chunks_canonical took {:?}",
-        t0.elapsed()
-    );
+    eprintln!("text_codec choose: encode_chunks_canonical took {:?}", t0.elapsed());
     // candidate 1: single-frame zstd (the existing form, always the floor).
     let t1 = std::time::Instant::now();
-    let c1 = maybe_zstd(
+    let mut best = Candidate::plain(maybe_zstd(
         SECTION_CHUNKS_CANONICAL,
         SectionEncoding::Zstd,
         canonical_raw.clone(),
-    )?;
-    let mut best = Candidate::plain(c1.clone());
-    eprintln!(
-        "text_codec choose: candidate 1 (plain zstd) took {:?} size={}",
-        t1.elapsed(),
-        c1.2.len()
-    );
+    )?);
+    eprintln!("text_codec choose: candidate 1 (plain zstd) took {:?}", t1.elapsed());
 
     // candidate 2: txt_streams cold (per-chunk zstd + intpack offset table).
     let t2 = std::time::Instant::now();
@@ -72,10 +64,7 @@ pub(super) fn choose(texts: &[String]) -> crate::Result<TextChoice> {
         SECTION_ENCODING_TXT_STREAMS,
         streams,
     )));
-    eprintln!(
-        "text_codec choose: candidate 2 (txt_streams) took {:?}",
-        t2.elapsed()
-    );
+    eprintln!("text_codec choose: candidate 2 (txt_streams) took {:?}", t2.elapsed());
 
     // candidate 3: txt_streams + trained dict. the dict is a separate
     // optional section (0x0A), excluded from content_hash; its size counts
@@ -90,10 +79,7 @@ pub(super) fn choose(texts: &[String]) -> crate::Result<TextChoice> {
             total,
         });
     }
-    eprintln!(
-        "text_codec choose: candidate 3 (zstd_dict) took {:?}",
-        t3.elapsed()
-    );
+    eprintln!("text_codec choose: candidate 3 (zstd_dict) took {:?}", t3.elapsed());
 
     // candidate 4: txt_streams + fsst (self-contained static symbol table).
     let t4 = std::time::Instant::now();
@@ -103,10 +89,7 @@ pub(super) fn choose(texts: &[String]) -> crate::Result<TextChoice> {
         SECTION_ENCODING_FSST,
         fsst,
     )));
-    eprintln!(
-        "text_codec choose: candidate 4 (fsst) took {:?}",
-        t4.elapsed()
-    );
+    eprintln!("text_codec choose: candidate 4 (fsst) took {:?}", t4.elapsed());
 
     // candidate 5: dedup + single-frame zstd. the dedup pass runs on the
     // DECOMPRESSED canonical texts (the nix/ipfs order rule), then the UNIQUE
@@ -127,10 +110,7 @@ pub(super) fn choose(texts: &[String]) -> crate::Result<TextChoice> {
             total,
         });
     }
-    eprintln!(
-        "text_codec choose: candidate 5 (dedup) took {:?}",
-        t5.elapsed()
-    );
+    eprintln!("text_codec choose: candidate 5 (dedup) took {:?}", t5.elapsed());
     eprintln!("text_codec choose: total {:?}", t0.elapsed());
 
     Ok(TextChoice {
