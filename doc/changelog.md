@@ -66,6 +66,8 @@ both were found by controls that should have been run before publishing, and bot
 
 `--all-intra` (`keyint=1`) stays a lever, default off. it follows from the upstream finding that reordering images changes the ratio by only ~6 percent, so the gain is intra-frame: unrelated images give motion estimation nothing to find and the bits it spends searching are wasted. it buys another 5.2x for 0.6 points of `precision@10`, a difference well inside the interval, and every frame becomes a keyframe so random access has nothing to seek back to.
 
+for the codec-vs-codec question, at matched source resolution and measured on the same 200 images: source jpeg 74.70 MB (6.8 bits/pixel, stored near-lossless), a fair jpeg q95 re-encode 31.87 MB, webp q90 19.44 MB, jpeg q85 16.20 MB, av1 crf35 1.94 MB. so av1 is ~16x smaller than a fair jpeg q95 baseline, and roughly 2.3x of the headline 39.5x is the source having been stored wastefully rather than anything the codec did.
+
 ### changed (2026-08-10, supersedes one line of the 2026-08-07 note)
 
 - the gop is no longer a flag the caller must guess. `gop_policy="auto"` is the builder default: an evenly spaced sample (32 frames) is probe-encoded both ways at the target crf and the smaller stream wins, because fase 0 measured that embedding cosine does not separate intra-favouring from inter-favouring corpora, so the policy is a measured encode decision. the probe statistics (n_samples, intra_bytes, inter_bytes, decision) land in the manifest next to the toolchain provenance. `--gop-policy intra|inter` forces a side, and `--all-intra` keeps working as the explicit intra override. the 2026-08-07 note's "lever, default off" described the flag era.
@@ -104,11 +106,6 @@ the claim that survives verification: nest is, to our knowledge and checked agai
 
 - 340 rust tests in the sovereign workspace (`cargo test --release --workspace`; was 288 in v0.3.0), including the blob_refs and space_table roundtrips, their negative fuzz suites, reserved_ids band disjointness, the runtime blob overlay and space isolation cases, and the content_hash-equality assertions that keep citations stable.
 - python: `tests/test_image_corpus.py` at 37 cases (was 15 in v0.3.0), plus `tests/test_blob_bridge.py` (5) and `tests/test_space_bridge.py` (5), all run by `release_check.sh`; the full gate is green on this change.
-
-## [0.3.0] - 2026-06-10
-
-for the codec-vs-codec question, at matched source resolution and measured on the same 200 images: source jpeg 74.70 MB (6.8 bits/pixel, stored near-lossless), a fair jpeg q95 re-encode 31.87 MB, webp q90 19.44 MB, jpeg q85 16.20 MB, av1 crf35 1.94 MB. so av1 is ~16x smaller than a fair jpeg q95 baseline, and roughly 2.3x of the headline 39.5x is the source having been stored wastefully rather than anything the codec did.
-
 
 ## [0.3.0] - 2026-06-10
 
