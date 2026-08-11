@@ -79,8 +79,13 @@ prefer release_check.sh before merge, it is the project gate. forge-core carries
 
 - README.md
 - .contracts/.agents/AGENTS.md (the single agent instruction source)
-- CONTRIBUTING.md
+- doc/CONTRIBUTING.md
 - doc/arc/arc.yaml
 - doc/arc/arc.mmd
 - doc/usage.md
 - doc/changelog.md
+
+made it simple, but signifcant.
+Hoff Research - hoffresearch.com
+Brenner Cruvinel.
+MIT.
