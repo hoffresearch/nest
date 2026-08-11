@@ -97,6 +97,7 @@ impl SymbolTable {
     /// selected by (count desc, bytes asc), so two builds match exactly.
     fn build(corpus: &[u8]) -> Self {
         use std::collections::BTreeMap;
+        let t0 = std::time::Instant::now();
         // count every 1..=MAX_SYMBOL_LEN substring occurrence. a BTreeMap
         // keyed by the bytes gives a deterministic iteration order, and the
         // gain heuristic (saved bytes = (len-1)*count) ranks longer frequent
@@ -110,13 +111,16 @@ impl SymbolTable {
                 *counts.entry(w.to_vec()).or_insert(0) += 1;
             }
         }
+        eprintln!("fsst build: count substrings took {:?}", t0.elapsed());
         // rank by estimated saved bytes desc, then bytes asc for determinism.
+        let t1 = std::time::Instant::now();
         let mut ranked: Vec<(Vec<u8>, u64)> = counts.into_iter().collect();
         ranked.sort_by(|a, b| {
             let gain_a = (a.0.len() as u64 - 1) * a.1;
             let gain_b = (b.0.len() as u64 - 1) * b.1;
             gain_b.cmp(&gain_a).then_with(|| a.0.cmp(&b.0))
         });
+        eprintln!("fsst build: rank took {:?}", t1.elapsed());
         // always include every single byte that appears, so no input ever
         // needs more escapes than necessary; then fill the rest with the
         // highest-gain multi-byte symbols up to N_CODES.
