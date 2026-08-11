@@ -45,6 +45,13 @@ targets = [
 install-path = "~/.local/bin"
 pr-run-mode = "plan"
 publish-jobs = ["homebrew"]
+# sigstore keyless provenance for every release artifact, verifiable with
+# `gh attestation verify` (issue #75).
+github-attestations = true
+
+# the embedder payload stages the git-lfs potion table, so release builds
+# must fetch lfs objects first (checkout only pulls pointers by default).
+github-build-setup = "dist-build-setup.yml"
 
 # the offline embedder payload (staged by scripts/stage_embedder_payload.py
 # and packed as one artifact) ships next to the binary archives so the
@@ -52,10 +59,16 @@ publish-jobs = ["homebrew"]
 # binary passes `nest doctor` with no network and no repo checkout.
 [[workspace.metadata.dist.extra-artifacts]]
 build = [
-    ["python3", "scripts/stage_embedder_payload.py", "target/dist-payload/share"],
-    ["tar", "-czf", "target/nest-embedder-payload.tar.gz", "-C", "target/dist-payload", "share"],
+    "python3",
+    "scripts/stage_embedder_payload.py",
+    "target/dist-payload",
+    "--tar",
+    "target/nest-embedder-payload.tar.gz",
 ]
-artifacts = ["target/nest-embedder-payload.tar.gz"]
+artifacts = [
+    "target/nest-embedder-payload.tar.gz",
+    "target/nest-embedder-payload.tar.gz.sha256",
+]
 
 # cargo-dist builds with this profile (thin lto over release).
 [profile.dist]
