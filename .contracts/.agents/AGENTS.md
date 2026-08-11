@@ -103,6 +103,7 @@ python entry: `sys.path.insert(0, "python"); import nest`. dynamic loader finds 
 - branches: `main` is release; `dev` is integration. work happens in `dev` (or feature branches off `dev`).
 - PRs target `dev` from feature branches. release PRs target `main` from `dev`. squash merge into `main` to keep history linear.
 - tags on `main` only (`v0.2.0` is current). `Cargo.toml` workspace version tracks the latest released tag.
+- pushing a `v*` tag on `main` runs the full release: `.github/workflows/release.yml` (cargo-dist: cli tarballs for 5 targets, checksums, sigstore attestations, homebrew formula, the embedder payload artifact) and `.github/workflows/pypi.yml` (maturin abi3 wheels for 4 platforms, OIDC trusted publishing). `.github/workflows/install-test.yml` then tests the INSTALLED product per platform. maintainer one-time setup for these channels is in `doc/install.md` > maintainer checklist.
 - git lfs tracks `*.nest`, `*.safetensors`, datasets, and the vendored potion table (including `dat/corpus_next.v1.nest`); golden fixtures under `crates/nest-format/tests/fixtures/` stay in regular git. run `git lfs pull` if a binary is a pointer.
 - demo datasets under `dat/demo/` are intentionally gitignored and downloaded locally from upstream sources listed in `dat/demo/README.md`.
 - tests run without the demo datasets (the unit and golden-fixture tests avoid depend on them); only `measure_presets.py` and `release_check.sh` need the baseline corpus.
@@ -175,7 +176,7 @@ these are documented honest limitations of the current code, not bugs to silentl
 
 - **`search-text` boot overhead (~300-500ms)**: each invocation forks a python process, imports sentence-transformers, embeds the query, then exits. the latency table in the README and `doc/usage.md` measures the search path AFTER the vector is ready, not end-to-end. python-driven workloads (`nest.NestFile.search` in a loop) avoid this.
 - **BM25 tokenizer is word-segmented-only**: `crates/nest-runtime/src/bm25/tokenize.rs` splits on non-alphanumeric Unicode boundaries. correct for latin, cyrillic, greek, devanagari. degrades for CJK, thai, lao (each character becomes a token, posting lists explode, recall drops). hybrid search on those languages should disable BM25 (`with_bm25=False`) until a language-aware tokenizer ships.
-- **no PyPI / maturin**: distribution is manual `cargo build` + `cp .dylib`. fine for the current audience (engineers embedding into a pipeline), real friction for casual adopters. maturin + PyPI publish is on the v0.3 backlog.
+- **homebrew formula installs the binary only**: the dist-generated formula in the `hoffresearch/homebrew-nest` tap does not lay down the embedder payload, so a brew-installed `nest` reports exit 4 from `nest doctor` until the user also runs the one-liner (or copies `python/forge/` into the data dir by hand). fixing this means a custom formula, deferred until the tap sees real use.
 - **the semantic default embedder is english**: `potion-base-8M` is distilled from `bge-base-en-v1.5`, so english synonyms cluster tightly (car ~ automobile +0.78 vs car ~ banana +0.04) but non-english text rides english subword rows and the semantic signal is weak (carro ~ automovel +0.08 vs carro ~ banana -0.05: right direction, small margin). for a primarily non-english corpus, bring a multilingual sentence-transformers model (the ceiling path) or a multilingual potion table. the lexical floor is language-agnostic but captures literal token overlap only.
 
 # things to avoid
@@ -192,6 +193,7 @@ these are documented honest limitations of the current code, not bugs to silentl
 # documentation
 
 - `README.md`: project overview, install, CLI summary, presets, v0.2 highlights, embedded mermaid system view.
+- `doc/install.md`: every install channel (one-liner, pypi `nestdb`, brew, binstall, docker), verification (sha256 + attestations), offline notes, and the maintainer one-time checklist.
 - `doc/arc/arc.yaml`: the single architecture reference, machine-readable for agents and tooling and the human-readable inventory plus runtime contract summary.
 - `doc/arc/arc.mmd`: mermaid sequence diagram of the build and query flows.
 - `doc/usage.md`: how-to for the nine engine subcommands plus the ask/retrieve flagship verbs, presets, offline mode, citations.
