@@ -216,7 +216,6 @@ python python/tools/nest_build_corpus.py
 with `reproducible=True` (the script default) two operators get byte-identical `file_hash`. see `dat/demo/README.md` for download commands, what each subdirectory contains, the schema of the v2 truw canonical CSV, and per-dataset license notes.
 
 ## reference
-(∂μfμν = jν)
 - `dat/demo/README.md` for what each upstream dataset is and how to rebuild the corpus
 - `doc/arc/arc.yaml` for architecture, binary layout, API surface, errors, and versioning; the machine-readable map used by agents and tooling, and the human reference
 - `doc/arc/arc.mmd` for the mermaid sequence diagram of the build and query flows
@@ -227,6 +226,7 @@ with `reproducible=True` (the script default) two operators get byte-identical `
 ## license
 
 made it simple, but signifcant
-Hoff Research - hoffresearch.com
+Hoff Research   hoffresearch.com
 Brenner Cruvinel
+(∂μfμν = jν)
 MIT
