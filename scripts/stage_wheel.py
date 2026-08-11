@@ -35,6 +35,10 @@ COPIES = [
     (ROOT / "README.md", STAGING / "README.md"),
     (ROOT / "python" / "nest.py", STAGING / "nest" / "__init__.py"),
     (ROOT / "python" / "nest_cli.py", STAGING / "nest" / "_cli.py"),
+    # the offline potion embedder is self-contained (stdlib + numpy +
+    # tokenizers) and resolves its model dir relative to __file__, so it
+    # drops into the package unchanged next to the bundled table.
+    (ROOT / "python" / "forge" / "embed_potion.py", STAGING / "nest" / "embed_potion.py"),
 ]
 
 MODEL_SRC = ROOT / "python" / "forge" / "models" / "potion-base-8M"
