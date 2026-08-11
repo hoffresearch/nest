@@ -4,6 +4,7 @@
 pub mod ask;
 pub mod benchmark;
 pub mod cite;
+pub mod doctor;
 pub mod inspect;
 pub mod pyenv;
 pub mod retrieve;

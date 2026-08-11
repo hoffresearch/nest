@@ -167,6 +167,11 @@ enum Commands {
         #[arg(long)]
         model_path: Option<PathBuf>,
     },
+    /// lPost-install health check: versions, simd backend, python deps, and
+    /// one real offline potion embed. exits with a typed code (0 ok, 2 python
+    /// missing, 3 python deps missing, 4 embedder missing, 5 potion table
+    /// missing, 6 embedder run failed).
+    Doctor,
 }
 
 fn main() -> Result<()> {
@@ -227,5 +232,6 @@ fn main() -> Result<()> {
             candidates,
             model_path,
         } => cmd::retrieve::run(file, query, k, format, embedder, candidates, model_path),
+        Commands::Doctor => cmd::doctor::run(),
     }
 }

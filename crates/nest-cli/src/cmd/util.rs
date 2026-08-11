@@ -75,15 +75,29 @@ pub fn default_embedder_path() -> PathBuf {
 /// table, NEVER sentence-transformers, so an offline corpus gets a cited answer
 /// with no network. distinct from `default_embedder_path` (the legacy
 /// sentence-transformers path that `search-text` keeps).
+///
+/// resolution order: the repo layout first (dev checkout), then the installed
+/// data dir (`$XDG_DATA_HOME/nest/forge/` or `~/.local/share/nest/forge/`)
+/// where the one-liner installer / package tarballs place the embedder
+/// payload next to the potion table (issue #75).
 pub fn default_potion_embedder_path() -> PathBuf {
     let rel = PathBuf::from("python")
         .join("forge")
         .join("embed_query_potion.py");
+    let data_home = std::env::var("XDG_DATA_HOME")
+        .ok()
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var("HOME")
+                .ok()
+                .map(|h| PathBuf::from(h).join(".local").join("share"))
+        });
     let candidates = [
         std::env::current_dir().ok().map(|p| p.join(&rel)),
         std::env::current_dir()
             .ok()
             .map(|p| p.join("..").join(&rel)),
+        data_home.map(|d| d.join("nest").join("forge").join("embed_query_potion.py")),
     ];
     for c in candidates.into_iter().flatten() {
         if c.exists() {
