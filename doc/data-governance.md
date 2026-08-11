@@ -62,7 +62,7 @@ These properties make a `.nest` a strong evidentiary artifact:
   land, verify artifacts out-of-band. `Cargo.lock` is committed so the Rust
   dependency set is pinned; Python deps are declared in `pyproject.toml`.
 - The on-disk checksums are unkeyed SHA-256 (integrity, not authenticity); see
-  [`SECURITY.md`](../SECURITY.md).
+  [`SECURITY.md`](SECURITY.md).
 
 ## 4. corpus licensing
 
