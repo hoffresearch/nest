@@ -44,25 +44,32 @@ pub(super) struct TextChoice {
 /// `compressed` must be true (the caller only invokes this under a zstd-text
 /// preset); the cold single-frame zstd is the never-regress floor.
 pub(super) fn choose(texts: &[String]) -> crate::Result<TextChoice> {
+    let t0 = std::time::Instant::now();
     let canonical_raw = encode_chunks_canonical(texts)?;
+    eprintln!("text_codec choose: encode_chunks_canonical took {:?}", t0.elapsed());
     // candidate 1: single-frame zstd (the existing form, always the floor).
+    let t1 = std::time::Instant::now();
     let mut best = Candidate::plain(maybe_zstd(
         SECTION_CHUNKS_CANONICAL,
         SectionEncoding::Zstd,
         canonical_raw.clone(),
     )?);
+    eprintln!("text_codec choose: candidate 1 (plain zstd) took {:?}", t1.elapsed());
 
     // candidate 2: txt_streams cold (per-chunk zstd + intpack offset table).
+    let t2 = std::time::Instant::now();
     let streams = encode_txt_streams(texts)?;
     best.consider(Candidate::plain((
         SECTION_CHUNKS_CANONICAL,
         SECTION_ENCODING_TXT_STREAMS,
         streams,
     )));
+    eprintln!("text_codec choose: candidate 2 (txt_streams) took {:?}", t2.elapsed());
 
     // candidate 3: txt_streams + trained dict. the dict is a separate
     // optional section (0x0A), excluded from content_hash; its size counts
     // toward the candidate total so the chooser is honest about the dict cost.
+    let t3 = std::time::Instant::now();
     if let Some(dict) = train_dict(&sorted_unique(texts)) {
         let framed = encode_zstd_dict(texts, &dict)?;
         let total = framed.len() + dict.len();
@@ -72,20 +79,24 @@ pub(super) fn choose(texts: &[String]) -> crate::Result<TextChoice> {
             total,
         });
     }
+    eprintln!("text_codec choose: candidate 3 (zstd_dict) took {:?}", t3.elapsed());
 
     // candidate 4: txt_streams + fsst (self-contained static symbol table).
+    let t4 = std::time::Instant::now();
     let fsst = encode_fsst(texts)?;
     best.consider(Candidate::plain((
         SECTION_CHUNKS_CANONICAL,
         SECTION_ENCODING_FSST,
         fsst,
     )));
+    eprintln!("text_codec choose: candidate 4 (fsst) took {:?}", t4.elapsed());
 
     // candidate 5: dedup + single-frame zstd. the dedup pass runs on the
     // DECOMPRESSED canonical texts (the nix/ipfs order rule), then the UNIQUE
     // pool is zstd-compressed; the back-references live in section 0x0B,
     // excluded from content_hash. only competes when the corpus actually
     // repeats (else unique == texts and it can only lose to candidate 1).
+    let t5 = std::time::Instant::now();
     let d = dedup(texts);
     if d.unique.len() < texts.len() {
         let unique_raw = encode_chunks_canonical(&d.unique)?;
@@ -99,6 +110,8 @@ pub(super) fn choose(texts: &[String]) -> crate::Result<TextChoice> {
             total,
         });
     }
+    eprintln!("text_codec choose: candidate 5 (dedup) took {:?}", t5.elapsed());
+    eprintln!("text_codec choose: total {:?}", t0.elapsed());
 
     Ok(TextChoice {
         canonical: best.canonical,
