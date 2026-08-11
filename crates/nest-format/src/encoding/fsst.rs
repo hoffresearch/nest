@@ -107,8 +107,64 @@ impl SymbolTable {
             if corpus.len() < len {
                 break;
             }
-            for w in corpus.windows(len) {
-                *counts.entry(w.to_vec()).or_insert(0) += 1;
+        }
+        best
+    }
+}
+
+/// frequency trie for counting every 1..=MAX_SYMBOL_LEN substring without
+/// allocating per-substring keys. each node records the number of times the
+/// byte sequence that ends at it was seen as a full substring.
+#[derive(Default)]
+struct FreqTrie {
+    next: Vec<[Option<u32>; 256]>,
+    count: Vec<u64>,
+}
+
+impl FreqTrie {
+    fn new() -> Self {
+        Self {
+            next: vec![[None; 256]],
+            count: vec![0],
+        }
+    }
+
+    fn count_substrings(&mut self, corpus: &[u8], max_len: usize) {
+        let n = corpus.len();
+        for start in 0..n {
+            let max = (start + max_len).min(n);
+            let mut node = 0usize;
+            for end in start..max {
+                let b = corpus[end] as usize;
+                let child = self.next[node][b];
+                let child = match child {
+                    Some(c) => c as usize,
+                    None => {
+                        let idx = self.next.len() as u32;
+                        self.next.push([None; 256]);
+                        self.count.push(0);
+                        self.next[node][b] = Some(idx);
+                        idx as usize
+                    }
+                };
+                self.count[child] += 1;
+                node = child;
+            }
+        }
+    }
+
+    /// collect all substrings with their counts. `path` is a reusable buffer
+    /// passed through recursion; results are deterministic because children
+    /// are visited in ascending byte order.
+    fn collect(&self, out: &mut Vec<(Vec<u8>, u64)>, path: &mut Vec<u8>, node: usize) {
+        if self.count[node] > 0 {
+            out.push((path.clone(), self.count[node]));
+        }
+        for b in 0..256u16 {
+            if let Some(child) = self.next[node][b as usize] {
+                path.push(b as u8);
+                self.collect(out, path, child as usize);
+                path.pop();
             }
         }
         eprintln!("fsst build: count substrings took {:?}", t0.elapsed());
