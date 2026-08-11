@@ -17,6 +17,7 @@
 //! as surfaced by duckdb's research (255-entry table, 1-8 byte symbols ->
 //! 1-byte codes, 0xFF escape). NO code is vendored.
 
+use super::fsst_table::{SymbolTable, parse_table, serialize_table};
 use super::intpack::{IntpackReader, pack_u64s};
 use super::txt_streams::{build_canonical, malformed, write_container};
 
@@ -327,8 +328,6 @@ pub fn encode(texts: &[String]) -> crate::Result<Vec<u8>> {
 /// `sections::encode_chunks_canonical`, so `content_hash` is preserved.
 pub fn decode(bytes: &[u8]) -> crate::Result<Vec<u8>> {
     let (count, offsets, framed) = parse_v3(bytes)?;
-    // framed = u32 table_len + serialized table + streams region. the offset
-    // table indexes into the streams region (past the table blob).
     if framed.len() < 4 {
         return Err(malformed("fsst: truncated region header"));
     }

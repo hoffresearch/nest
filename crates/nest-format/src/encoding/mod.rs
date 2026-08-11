@@ -20,6 +20,7 @@
 mod dedup;
 mod float16;
 mod fsst;
+mod fsst_table;
 mod int4;
 mod int8;
 mod intpack;
