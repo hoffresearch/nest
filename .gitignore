@@ -87,3 +87,4 @@ dat/hoff.db
 !dat/measure/fakerecogna_exact.nest
 
 dat/demo/
+!dat/demo/README.md
