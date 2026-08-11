@@ -7,21 +7,24 @@ one-liner installer carry this payload and lay it down where the cli looks
 (`<exe>/../share/nest/forge/` or `$XDG_DATA_HOME/nest/forge/`; see
 crates/nest-cli/src/cmd/util.rs `default_potion_embedder_path`).
 
-usage:  python scripts/stage_embedder_payload.py <dest>
+usage:  python scripts/stage_embedder_payload.py <dest> [--tar <out.tar.gz>]
 writes: <dest>/nest/forge/__init__.py
         <dest>/nest/forge/embed_default.py
         <dest>/nest/forge/embed_potion.py
         <dest>/nest/forge/embed_query_potion.py
         <dest>/nest/forge/models/potion-base-8M/...
 
-git-lfs pointer files are rejected; run `git lfs pull` first. `nest doctor`
-validates exactly this layout post-install.
+with --tar, also packs the staged `nest/` tree as a single gzipped tarball
+(the release artifact the one-liner installer downloads and extracts into
+the data dir). git-lfs pointer files are rejected; run `git lfs pull`
+first. `nest doctor` validates exactly this layout post-install.
 """
 
 from __future__ import annotations
 
 import shutil
 import sys
+import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,9 +44,15 @@ def fail(msg: str) -> None:
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
-        fail("usage: stage_embedder_payload.py <dest>")
-    dest = Path(sys.argv[1]).resolve() / "nest" / "forge"
+    args = sys.argv[1:]
+    tar_out: Path | None = None
+    if "--tar" in args:
+        i = args.index("--tar")
+        tar_out = Path(args[i + 1]).resolve()
+        del args[i : i + 2]
+    if len(args) != 1:
+        fail("usage: stage_embedder_payload.py <dest> [--tar <out.tar.gz>]")
+    dest = Path(args[0]).resolve() / "nest" / "forge"
     if dest.exists():
         shutil.rmtree(dest)
     dest.mkdir(parents=True)
@@ -63,6 +72,19 @@ def main() -> None:
                     fail(f"{f} is a git-lfs pointer; run `git lfs pull` first")
     total = sum(f.stat().st_size for f in dest.rglob("*") if f.is_file())
     print(f"staged embedder payload at {dest} ({total / 1e6:.1f} MB)")
+    if tar_out is not None:
+        tar_out.parent.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(tar_out, "w:gz") as tar:
+            tar.add(dest.parent, arcname="nest")
+        # the one-liner installer verifies this against the downloaded file,
+        # in the same `<hex> *<name>` format sha256sum emits.
+        import hashlib
+
+        digest = hashlib.sha256(tar_out.read_bytes()).hexdigest()
+        sha_path = tar_out.with_name(tar_out.name + ".sha256")
+        sha_path.write_text(f"{digest} *{tar_out.name}\n")
+        print(f"wrote {tar_out} ({tar_out.stat().st_size / 1e6:.1f} MB)")
+        print(f"wrote {sha_path}")
 
 
 if __name__ == "__main__":

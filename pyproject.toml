@@ -1,13 +1,15 @@
 # Python tooling configuration.
 #
-# This project does NOT publish a Python package — the PyO3 extension is
+# The DEV flow does NOT install a Python package — the PyO3 extension is
 # built by `cargo build --release -p nest-python` and copied into
 # `python/_nest.so`. The Python source under `python/` and `tests/` is
-# imported directly by adding `python/` to `sys.path`. No setuptools /
-# poetry / pip install path is provided.
+# imported directly by adding `python/` to `sys.path`.
 #
-# This file exists so `ruff` (and any other PEP 518 tool) finds a
-# canonical config at the workspace root.
+# The PUBLISHED package is the `nestdb` wheel, a maturin project owned by
+# `packaging/pyproject.toml` and staged by `scripts/stage_wheel.py` (see
+# doc/install.md). This root file stays the dev-tooling config: it exists
+# so `ruff` (and any other PEP 518 tool) finds a canonical config at the
+# workspace root.
 #
 # The one exception to "no install path" is the forge SEMANTIC default
 # embedder (python/forge/embed_potion.py): it loads a vendored, offline
