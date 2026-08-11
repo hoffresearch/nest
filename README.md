@@ -70,6 +70,28 @@ full visual map: [doc/arc/arc.mmd](doc/arc/arc.mmd). human and machine reference
 
 ## install
 
+one command, verified, offline after install:
+
+```
+curl -sSf https://raw.githubusercontent.com/hoffresearch/nest/main/scripts/install.sh | sh
+nest doctor
+```
+
+windows: `irm https://raw.githubusercontent.com/hoffresearch/nest/main/scripts/install.ps1 | iex`. the installer fetches the release tarball for your platform (linux x86_64/aarch64 static musl, macOS x86_64/arm64, windows x86_64), verifies the sha256 against the release checksums, installs the binary to `~/.local/bin`, and lays the offline embedder payload (the potion table) under the xdg data dir. `--version vX.Y.Z` pins a release, `--uninstall` removes. every release artifact carries a sigstore keyless attestation: `gh attestation verify nest-cli-aarch64-apple-darwin.tar.xz --repo hoffresearch/nest`.
+
+python:
+
+```
+pip install "nestdb[embed]"                          # import nest; embeds offline via the bundled potion table
+uvx --from nestdb nest validate corpus.nest
+```
+
+the wheel ships one `cp312-abi3` build per platform (linux x86_64/aarch64, macOS universal2, windows amd64) with the potion table bundled (~30 mb), so `import nest` works and text embedding runs offline right after install. without the `embed` extra the library surface (open/search/validate/...) needs nothing beyond the wheel.
+
+also: homebrew tap (`brew install hoffresearch/nest/nest-cli`), `cargo binstall nest-cli`, and a minimal docker image (`docker/Dockerfile`, static musl binary on scratch). the full guide with verification steps, offline notes, and the per-channel status lives in `doc/install.md`. all of this takes effect with the first dist-driven tag release.
+
+dev build (unchanged):
+
 requires rust edition 2024 and python 3.12+.
 
 ```
