@@ -60,6 +60,52 @@ impl NestView<'_> {
         Ok(())
     }
 
+    /// lWhen a space_table (0x15) is present, every listed space must have
+    /// its band section (0x20 + space_index) present with exactly the size
+    /// its (n_vectors, dim, dtype) imply, and n_vectors must match the
+    /// corpus chunk count (the bands are parallel per-chunk embeddings).
+    /// runs after the structural parse, so the band encoding is already
+    /// known legal (dtype encodings only, never zstd).
+    pub(super) fn validate_space_bands(&self) -> crate::Result<()> {
+        use crate::layout::{SECTION_SPACE_EMBEDDINGS_BASE, SECTION_SPACE_TABLE};
+        use crate::sections::decode_space_table;
+        if self.entry(SECTION_SPACE_TABLE).is_err() {
+            return Ok(());
+        }
+        let entries = decode_space_table(&self.decoded_section(SECTION_SPACE_TABLE)?)?;
+        let n_chunks = self.header.n_chunks;
+        for e in &entries {
+            if e.n_vectors != n_chunks {
+                return Err(NestError::ManifestInvalid(format!(
+                    "space {} lists {} vectors but the corpus has {} chunks",
+                    e.name, e.n_vectors, n_chunks
+                )));
+            }
+            let band_id = SECTION_SPACE_EMBEDDINGS_BASE + e.space_index as u32;
+            let band = self.entry(band_id).map_err(|_| {
+                NestError::ManifestInvalid(format!(
+                    "space {} lists band {:#x} but the section is missing",
+                    e.name, band_id
+                ))
+            })?;
+            let want =
+                expected_embeddings_size(e.dtype_str(), e.n_vectors as usize, e.dim as usize)
+                    .ok_or_else(|| {
+                        NestError::UnsupportedDType(format!(
+                            "space {} dtype code {}",
+                            e.name, e.dtype
+                        ))
+                    })?;
+            if band.size as usize != want {
+                return Err(NestError::EmbeddingSizeMismatch {
+                    expected: want,
+                    got: band.size as usize,
+                });
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn validate_search_contract(&self) -> crate::Result<()> {
         let bytes = self.decoded_section(SECTION_SEARCH_CONTRACT)?;
         let contract = decode_search_contract(&bytes)?;
@@ -162,7 +208,9 @@ impl NestView<'_> {
 
 /// lEncoding rules: the embeddings section gets dtype-specific encodings
 /// (float16, int8, int4) and rejects zstd (we want SIMD-friendly mmap
-/// reads). lAll other sections accept raw, zstd, intpack (the
+/// reads). the per-space vector bands (0x20-0x2F and the fp rerank band
+/// 0x30-0x3F) follow the SAME rule: fixed-stride slabs scored by the simd
+/// kernels, NEVER zstd. lAll other sections accept raw, zstd, intpack (the
 /// content_hash-preserving repack for chunk_ids / spans), txt_streams (the
 /// per-chunk-streams repack for chunks_canonical), zstd_dict (the
 /// trained-dictionary per-chunk-streams variant, decoded against section
@@ -170,7 +218,15 @@ impl NestView<'_> {
 /// non-embedding codec decodes byte-identically to the raw payload, so
 /// content_hash stays stable.
 pub(super) fn validate_encoding_for_section(section_id: u32, encoding: u32) -> crate::Result<()> {
-    let allowed = if section_id == SECTION_EMBEDDINGS {
+    use crate::layout::{
+        SECTION_SPACE_EMBEDDINGS_BASE, SECTION_SPACE_EMBEDDINGS_FP_BASE, SPACE_BAND_LEN,
+    };
+    let is_space_band = (SECTION_SPACE_EMBEDDINGS_BASE
+        ..SECTION_SPACE_EMBEDDINGS_BASE + SPACE_BAND_LEN)
+        .contains(&section_id)
+        || (SECTION_SPACE_EMBEDDINGS_FP_BASE..SECTION_SPACE_EMBEDDINGS_FP_BASE + SPACE_BAND_LEN)
+            .contains(&section_id);
+    let allowed = if section_id == SECTION_EMBEDDINGS || is_space_band {
         matches!(
             encoding,
             SECTION_ENCODING_RAW

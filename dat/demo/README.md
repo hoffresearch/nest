@@ -19,23 +19,37 @@ dat/demo/
 ├── portuguese-fake-news-classifier-bilstm-combined/      2.2k rows  (parquet, used as test split)
 ├── corpus-combined/                                       (merge of FakeTrue.Br + Fake.br, v2)
 ├── corpus-next/embed_cache.sqlite                        (sentence-transformers cache, ~63 MB)
-└── truw-built/                                            v2 canonical CSVs + npy embeddings
+├── truw-built/                                            v2 canonical CSVs + npy embeddings
+├── derm/ph2 + derm/ham10000                               dermoscopy images for the image benchmark
+├── wsi/CMU-1.svs + wsi/cmu1-tiles                         whole-slide scan and derived tiles
+└── pdf/birdcraft-1907.pdf                                 scanned book, public domain
 ```
 
 each upstream dataset keeps its original license file and structure. see the README inside each subdirectory for citation requirements.
 
-## image corpora (experimental)
+## image corpora
 
-`dat/demo/derm/` holds the dermatology images used to measure the experimental image corpus path. like everything else here it is local-only and gitignored.
+`dat/demo/derm/` holds the dermatology images used to measure the image corpus path. like everything else here it is local-only and gitignored.
 
 ```
 dat/demo/derm/
-└── ph2/images/          200 dermoscopy images + PH2_simple_dataset.csv (diagnosis labels)
+├── ph2/images/              200 dermoscopy images + PH2_simple_dataset.csv (diagnosis labels)
+└── ham10000/images/         10,015 dermatoscopic images + labels.csv (dx labels), phase 6 used a 2000-sample seed 42
+dat/demo/wsi/
+├── CMU-1.svs                aperio whole-slide scan (openslide test data)
+└── cmu1-tiles/              1210 tiles rendered from CMU-1.svs
+dat/demo/pdf/
+└── birdcraft-1907.pdf       508-page scanned book, public domain (published 1907)
 ```
 
-PH2 (Mendonca et al., ADDI project, Universidade do Porto) is 200 dermoscopy images labelled Common Nevus, Atypical Nevus, or Melanoma. it is the reference dataset for the image benchmark in `doc/changelog.md` because it is small, labelled, and visually homogeneous, which is the case av1 inter-frame coding is supposed to be good at. it is research-use only, so check the upstream terms before redistributing it.
+four sources, four media regimes, which is what makes the measurement honest:
 
-rebuild the benchmark:
+- PH2 (Mendonca et al., ADDI project, Universidade do Porto): 200 dermoscopy images labelled Common Nevus, Atypical Nevus, or Melanoma. small, labelled, visually homogeneous. research-use only, check the upstream terms before redistributing.
+- HAM10000 (Tschandl et al., Harvard Dataverse, doi:10.7910/DVN/DBW86T): 10,015 dermatoscopic images across seven diagnostic classes. CC BY-NC 4.0, so any derived corpus is non-commercial and must carry attribution.
+- CMU-1.svs (openslide test data, Carnegie Mellon): one whole-slide scan tiled into 1210 tiles. freely redistributable test data; the tiles are a derived artifact produced here.
+- birdcraft-1907 (Wright, "Birdcraft", 1907): scanned book in the public domain; the pdf pages are the image items.
+
+rebuild the benchmark (the control index is not optional: the compressed numbers mean nothing without it):
 
 ```sh
 .venv/bin/python python/tools/nest_build_image_corpus.py \
@@ -43,13 +57,13 @@ rebuild the benchmark:
     --output tmp/ph2/ph2.nest --labels dat/demo/derm/ph2/PH2_simple_dataset.csv
 .venv/bin/python python/tools/nest_build_image_corpus.py \
     --input-dir dat/demo/derm/ph2/images --dataset ph2 \
-    --output tmp/ph2-raw/ph2-raw.nest --labels dat/demo/derm/ph2/PH2_simple_dataset.csv \
-    --no-compress
+    --output tmp/ph2-control/ph2-control.nest --labels dat/demo/derm/ph2/PH2_simple_dataset.csv \
+    --control
 .venv/bin/python python/tools/nest_image_eval.py \
-    --index tmp/ph2/ph2.nest --baseline tmp/ph2-raw/ph2-raw.nest -k 1 5 10
+    --index tmp/ph2/ph2.nest --baseline tmp/ph2-control/ph2-control.nest -k 1 5 10
 ```
 
-the control index (`--no-compress`) is not optional: the compressed numbers mean nothing without it.
+the full variant matrix (av1 crf ladder, avif444, control, dtype rungs, ordering) is one command per dataset with `python/tools/nest_image_sweep.py`; see `doc/usage.md` for the flags and `doc/changelog.md` for the measured matrix with confidence intervals.
 
 ## offline demo (no downloads)
 
@@ -152,6 +166,8 @@ deduplication by sha256 collapses the inevitable overlap (FakeRecogna re-publish
 ## licenses
 
 each subdirectory inherits its upstream license. some are CC-BY-SA, some are MIT, some are unspecified academic distributions. if you redistribute a built `.nest` derived from this directory, the license of the resulting corpus is the union of all upstream licenses (most restrictive wins). check each `README` inside the subdirectories.
+
+the image sources carry their own terms: PH2 is research-use only (ADDI project, Universidade do Porto), HAM10000 is CC BY-NC 4.0 (Tschandl et al., doi:10.7910/DVN/DBW86T, non-commercial with attribution), CMU-1.svs is freely redistributable openslide test data, and birdcraft-1907 is public domain. a `.nest` derived from ph2 or ham10000 is therefore non-commercial and attribution-carrying at best; do not ship one as a product artifact.
 
 ### corpus license bill of materials
 

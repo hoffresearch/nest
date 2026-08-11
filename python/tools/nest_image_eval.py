@@ -41,11 +41,10 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import nest
+from _image_metrics import bootstrap_delta
 from forge import embed_image, image_items
 
-# bootstrap resamples. fixed rather than a flag so two runs of the harness are
-# comparable, and published intervals are reproducible from the shipped tool.
-RESAMPLES = 5000
+__all__ = ["bootstrap_delta"]
 
 
 def load_manifest(index_path: Path) -> dict:
@@ -81,33 +80,6 @@ def random_label_precision(items: list[dict]) -> float | None:
     return sum((n / total) * ((n - 1) / (total - 1)) for n in counts.values())
 
 
-def bootstrap_delta(sample: np.ndarray, control: np.ndarray, *, seed: int = 42) -> dict:
-    """Percentile bootstrap on a paired per-query difference.
-
-    A point estimate alone is not a result. An earlier draft of this work
-    published "av1 costs 1.9 points of precision@10" from a difference whose
-    interval crossed zero, which at n=200 meant the codec's cost was simply
-    below what the sample could resolve. Reporting the interval, and a plain
-    `significant` flag, is what stops that being written down again.
-
-    Paired because both indexes answer the SAME queries: resampling the pairs
-    removes the query-difficulty variance that dominates the raw spread.
-    """
-    diff = np.asarray(sample, dtype=np.float64) - np.asarray(control, dtype=np.float64)
-    n = len(diff)
-    if n == 0:
-        raise ValueError("bootstrap_delta needs at least one paired observation")
-    rng = np.random.default_rng(seed)
-    means = diff[rng.integers(0, n, (RESAMPLES, n))].mean(axis=1)
-    lo, hi = (float(v) for v in np.percentile(means, [2.5, 97.5]))
-    return {
-        "mean": round(float(diff.mean()), 4),
-        "ci95": [round(lo, 4), round(hi, 4)],
-        "significant": not (lo <= 0.0 <= hi),
-        "n": n,
-    }
-
-
 def evaluate(index_path: Path, queries: list[dict], ks: list[int]) -> dict:
     """Run both rulers over one index."""
     db = nest.open(str(index_path))
@@ -121,12 +93,16 @@ def evaluate(index_path: Path, queries: list[dict], ks: list[int]) -> dict:
     # kept per query, in query order, so a paired bootstrap against another
     # index can resample the same queries rather than two aggregates.
     per_query: dict[int, list[float]] = {k: [] for k in ks}
+    # the raw top-max_k ordinals per query, so ranking agreement (overlap@k,
+    # kendall tau-b) can be computed against another index's rankings.
+    rankings: list[list[int]] = []
 
     for query in queries:
         # search one extra so removing the query's own frame still leaves k
         # neighbours for the label ruler.
         hits = db.search(query["_vector"], min(max_k + 1, n_indexed))
         ordinals = [h.offset_start for h in hits]
+        rankings.append(ordinals[:max_k])
         others = [o for o in ordinals if o != query["ordinal"]]
         for k in ks:
             if query["ordinal"] in ordinals[:k]:
@@ -156,6 +132,7 @@ def evaluate(index_path: Path, queries: list[dict], ks: list[int]) -> dict:
             **{f"hit@{k}": round(label_any[k] / n_l, 4) for k in ks},
         }
         report["_per_query"] = per_query
+    report["_rankings"] = rankings
     return report
 
 
@@ -265,6 +242,7 @@ def main() -> int:
             }
     for section in ("compressed", "uncompressed"):
         report.get(section, {}).pop("_per_query", None)
+        report.get(section, {}).pop("_rankings", None)
 
     text = json.dumps(report, indent=2)
     print(text)

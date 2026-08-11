@@ -16,4 +16,15 @@ pub enum RuntimeError {
     ZeroNormQuery,
     #[error("NaN or Inf in query")]
     InvalidQueryValue,
+    #[error("embedding space not found: {0}")]
+    SpaceNotFound(String),
+    #[error(
+        "model_hash mismatch in space {space}: the query was embedded with {expected}, \
+         but the space vectors were embedded with {actual}"
+    )]
+    SpaceModelMismatch {
+        space: String,
+        expected: String,
+        actual: String,
+    },
 }

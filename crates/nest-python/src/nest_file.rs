@@ -3,6 +3,7 @@
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 
 #[pyclass]
 pub struct NestFile {
@@ -110,6 +111,44 @@ impl NestFile {
         )
     }
 
+    /// lExact search over one named multimodal space (e.g. "vision").
+    /// the query must be embedded with the model the space's model_hash
+    /// fingerprints and have the space's dim: a text-tower query fails
+    /// loudly instead of silently scoring the vision band. falls back to
+    /// nothing: an unknown space is a typed error, never a silent text
+    /// search.
+    #[pyo3(signature = (name, query, k, expected_model_hash=None))]
+    fn search_space(
+        &self,
+        name: &str,
+        query: &Bound<PyAny>,
+        k: i32,
+        expected_model_hash: Option<String>,
+    ) -> PyResult<Vec<SearchHitPy>> {
+        let qvec: Vec<f32> = query
+            .extract()
+            .map_err(|e| PyValueError::new_err(format!("invalid query vector: {}", e)))?;
+        let res = self
+            .rt
+            .search_space(name, &qvec, k, expected_model_hash.as_deref())
+            .map_err(|e| PyValueError::new_err(format!("{}", e)))?;
+        Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
+    }
+
+    #[getter]
+    fn has_spaces(&self) -> bool {
+        self.rt.has_spaces()
+    }
+
+    #[getter]
+    fn space_names(&self) -> Vec<String> {
+        self.rt
+            .space_names()
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
+    }
+
     #[getter]
     fn embedding_dim(&self) -> usize {
         self.rt.embedding_dim()
@@ -143,6 +182,35 @@ impl NestFile {
     #[getter]
     fn has_graph(&self) -> bool {
         self.rt.has_graph()
+    }
+
+    #[getter]
+    fn has_blobs(&self) -> bool {
+        self.rt.has_blobs()
+    }
+
+    /// lThe blob_refs (0x14) table as a list of dicts (empty when the file
+    /// has no blob capability): content_hash as "sha256:<hex>", the uri
+    /// hint, original byte length, and the inlined flag.
+    fn blob_refs(&self) -> Vec<pyo3::Py<PyDict>> {
+        Python::attach(|py| {
+            self.rt
+                .blob_refs()
+                .unwrap_or(&[])
+                .iter()
+                .map(|r| {
+                    let d = PyDict::new(py);
+                    let _ = d.set_item(
+                        "content_hash",
+                        format!("sha256:{}", hex::encode(r.content_hash)),
+                    );
+                    let _ = d.set_item("original_uri", &r.original_uri);
+                    let _ = d.set_item("byte_len", r.byte_len);
+                    let _ = d.set_item("inlined", r.inlined);
+                    d.unbind()
+                })
+                .collect()
+        })
     }
 
     #[getter]

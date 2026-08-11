@@ -144,6 +144,7 @@ impl<'a> NestView<'a> {
         // ---- semantic validation (delegates to super::validate) ----
         view.check_required_sections()?;
         view.validate_embeddings_layout()?;
+        view.validate_space_bands()?;
         view.validate_search_contract()?;
 
         Ok(view)

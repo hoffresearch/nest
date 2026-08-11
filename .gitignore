@@ -86,3 +86,5 @@ dat/hoff.db
 !crates/nest-format/tests/fixtures/golden_v1_minimal.nest
 !dat/measure/fakerecogna_exact.nest
 
+dat/demo/
+!dat/demo/README.md

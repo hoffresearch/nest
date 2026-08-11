@@ -12,10 +12,11 @@ use crate::chunk::{chunk_id, validate_chunk};
 use crate::error::NestError;
 use crate::layout::{
     NEST_FOOTER_SIZE, NEST_HEADER_SIZE, NEST_SECTION_ENTRY_SIZE, NestFooter, NestHeader,
-    REQUIRED_SECTIONS, SECTION_ALIGNMENT, SECTION_BM25_INDEX, SECTION_CHUNK_IDS,
-    SECTION_CHUNKS_CANONICAL, SECTION_CHUNKS_ORIGINAL_SPANS, SECTION_EMBEDDINGS,
-    SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_GRAPH_ADJACENCY, SECTION_HNSW_INDEX,
-    SECTION_PROVENANCE, SECTION_SEARCH_CONTRACT, SectionEntry, align_up,
+    REQUIRED_SECTIONS, SECTION_ALIGNMENT, SECTION_BLOB_REFS, SECTION_BLOB_SPAN_OVERLAY,
+    SECTION_BM25_INDEX, SECTION_CHUNK_IDS, SECTION_CHUNKS_CANONICAL, SECTION_CHUNKS_ORIGINAL_SPANS,
+    SECTION_EMBEDDINGS, SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_GRAPH_ADJACENCY,
+    SECTION_HNSW_INDEX, SECTION_PROVENANCE, SECTION_SEARCH_CONTRACT, SECTION_SPACE_TABLE,
+    SectionEntry, align_up,
 };
 use crate::sections::{
     OriginalSpan, SearchContract, encode_chunk_ids, encode_chunk_ids_intpack,
@@ -176,6 +177,31 @@ impl NestFileBuilder {
             // it stays RAW so the runtime mmaps it directly. it is OPTIONAL and
             // EXCLUDED from content_hash (not in CANONICAL_SECTIONS).
             sections.push((SECTION_GRAPH_ADJACENCY, SECTION_ENCODING_RAW, payload));
+        }
+        if let Some(payload) = self.blob_refs.take() {
+            // lblob_refs (0x14) is a small content-hash reference table the
+            // runtime decodes eagerly at open; RAW like hnsw/graph. OPTIONAL
+            // and EXCLUDED from content_hash.
+            sections.push((SECTION_BLOB_REFS, SECTION_ENCODING_RAW, payload));
+        }
+        if let Some(payload) = self.blob_span_overlay.take() {
+            // lblob_span_overlay (0x16) is the per-chunk blob-relative span
+            // overlay; RAW like its 0x14 table. OPTIONAL and EXCLUDED from
+            // content_hash, so the overlay never invalidates a citation.
+            sections.push((SECTION_BLOB_SPAN_OVERLAY, SECTION_ENCODING_RAW, payload));
+        }
+        if let Some(payload) = self.space_table.take() {
+            // lspace_table (0x15) is the small multimodal directory the
+            // runtime decodes eagerly at open; RAW like blob_refs. OPTIONAL
+            // and EXCLUDED from content_hash.
+            sections.push((SECTION_SPACE_TABLE, SECTION_ENCODING_RAW, payload));
+        }
+        for (band_id, encoding, payload) in std::mem::take(&mut self.space_bands) {
+            // lspace bands are fixed-stride vector slabs scored by the simd
+            // kernels straight off mmap; they carry their dtype encoding
+            // (raw f32 / float16 / int8 / int4), NEVER zstd. OPTIONAL and
+            // EXCLUDED from content_hash.
+            sections.push((band_id, encoding, payload));
         }
 
         // lSanity: every required section is present (writer never drops one).

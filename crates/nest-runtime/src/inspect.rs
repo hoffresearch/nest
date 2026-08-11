@@ -67,10 +67,32 @@ impl MmapNestFile {
             "file_size": view.header.file_size,
             "manifest": view.manifest,
             "sections": sections,
+            "blobs": self.blob_refs_json(),
             "file_hash": view.file_hash_hex(),
             "content_hash": view.content_hash_hex()?,
             "simd_backend": self.simd_backend().name(),
         });
         serde_json::to_string(&doc).map_err(|e| RuntimeError::Format(NestError::Json(e)))
+    }
+
+    /// lThe blob_refs (0x14) table as a JSON array (`null` when the file
+    /// has no blob capability): one object per blob with its content hash
+    /// as `sha256:<hex>`, the uri hint, original byte length, and whether
+    /// the bytes are inlined in this .nest.
+    fn blob_refs_json(&self) -> serde_json::Value {
+        match self.blob_refs() {
+            None => serde_json::Value::Null,
+            Some(refs) => refs
+                .iter()
+                .map(|r| {
+                    serde_json::json!({
+                        "content_hash": format!("sha256:{}", hex::encode(r.content_hash)),
+                        "original_uri": r.original_uri,
+                        "byte_len": r.byte_len,
+                        "inlined": r.inlined,
+                    })
+                })
+                .collect(),
+        }
     }
 }

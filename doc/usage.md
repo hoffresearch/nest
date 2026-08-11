@@ -39,9 +39,11 @@ for real-world examples: `python/convert_legacy.py` (SQLite to `.nest`) and `pyt
 
 ### image and pdf corpora
 
-experimental, and python-only: image corpora live in the forge tooling layer because a vision tower needs torch, which the sovereign runtime does not take. the `.nest` they emit is an ordinary `.nest`.
+image corpora live in the forge tooling layer because a vision tower needs torch, which the sovereign runtime does not take. the `.nest` they emit is an ordinary `.nest`, served by the same rust runtime from mmap.
 
-`python/tools/nest_build_image_corpus.py` letterboxes every image onto one canvas, encodes the sequence as a single AV1 stream, embeds the DECODED frames, and writes one chunk per image or pdf page. embedding the decoded frames rather than the source pixels is deliberate: the index has to describe what a reader can actually get back.
+the media travels inside the file. the encoded stream is stored as content-addressed blobs (section 0x14), each chunk carries the exact byte span it was embedded from (overlay 0x16), and the image vectors sit in their own named space (registry 0x15, slab in the 0x20-0x2F band) behind the `supports_multimodal` capability, gated by their own `model_hash` in isolation. these sections are excluded from `content_hash`, so adding media never moves an existing citation.
+
+`python/tools/nest_build_image_corpus.py` letterboxes every image onto one canvas, encodes the sequence, embeds the DECODED frames, and writes one chunk per image or pdf page. embedding the decoded frames rather than the source pixels is deliberate: the index has to describe what a reader can actually get back.
 
 ```sh
 .venv/bin/python python/tools/nest_build_image_corpus.py \
@@ -51,31 +53,29 @@ experimental, and python-only: image corpora live in the forge tooling layer bec
     --labels labels.csv
 ```
 
-a corpus is a pair, not a file:
-
-```
-corpora/my-derm.nest            the searchable index
-corpora/my-derm.media/          the encoded stream
-corpora/my-derm.manifest.json   ordinals, origins, labels, media sha256
-```
-
-frame uris are relative to that pair (`media://my-derm-av1.mp4#frame=51`), so copying both together moves the corpus intact. an absolute path in a `source_uri` would not survive the copy.
+a corpus is one file. `corpora/my-derm.nest` carries the index, the media blobs, the span overlay, and the space registry; copying it moves the corpus intact. provenance (ordinals, origins, labels, media digests) rides inside as well.
 
 `--width` is a ceiling, not a target: the canvas is clamped to the dataset's median source width, so a corpus is never upscaled. lower it to trade quality for size; raising it above the source does nothing but make the encoder pay for interpolated pixels.
 
-`--all-intra` makes every frame a keyframe. try it whenever the images are unrelated to each other, which is the normal case for a photo dataset: inter-frame prediction has nothing to find and the bits it spends looking are wasted. on PH2 it bought another 5.2x (44.7x against 39.5x) for 0.6 points of label `precision@10`, a difference inside the noise at n=200. it is off by default because that is one dataset.
+`--gop-policy auto` (the default) probes a spaced sample of frames and lets the bytes decide between all-intra and inter coding. on every corpus measured so far (ph2, ham10000, wsi tiles, scanned pdf) the probe chose intra: unrelated images give inter-frame prediction nothing to find. inter stays available for genuinely sequential media. `--all-intra` forces every frame a keyframe and overrides the probe.
+
+`--shard-size N` splits the stream into consecutive segments of about N frames, one blob per shard, which caps decode memory and improves cold seek on large corpora. `--order-similarity` tries a greedy nearest-neighbour frame order before encoding; measured on 1210 wsi tiles it cost 0.15 percent instead of helping, so it stays off by default.
+
+`--backend av1` (the default) won the size-matched matrix; `--backend avif` writes one avif per image and is the only backend that accepts `--pix-fmt yuv444p`. `--crf` (default 35) sets the av1 rate, `--avif-quality` (default 35) the avif one. `--control` builds the letterbox-lossless png control corpus that codec cost is measured against.
+
+`--dtype float32|float16|int8|int4` overrides the preset's vector dtype for the image space (int4 needs the dim divisible by 64). measured: quantization was not the driver of quality loss (the melanoma delta is identical at f16 and int8, and similar at int4), while the vectors themselves shrink 214 KB to 112.6 KB to 63.8 KB on ph2.
 
 add `--pdf` to render pdf pages as the images; page numbers are kept in the manifest and in the citable text. for a non-dermatology domain pass `--model ViT-B-32 --pretrained openai`. the pretrained tag is required for bare architecture names, because open_clip answers a missing tag with random weights.
 
-search with a query image, and optionally decode the matched frames back out:
+search with a query image or a clinical description, and optionally decode the matched frames back out:
 
 ```sh
 .venv/bin/python python/tools/nest_search_image.py \
     --index corpora/my-derm.nest --query-image lesion.jpg -k 10 \
-    --save-frames hits/
+    --letterbox-query --save-frames hits/
 ```
 
-queries route through `retrieve`, so the embedder's `model_hash` is checked against the manifest before anything is scored.
+`--query-text "..."` searches with a clinical description instead of an image, and `--letterbox-query` normalizes the query onto the corpus canvas before embedding. queries route through `search_space`, so the image space's own `model_hash` is checked against the manifest, in isolation from the default text space, before anything is scored. `--skip-model-check` bypasses that gate explicitly.
 
 ### measuring an image corpus
 
@@ -84,16 +84,25 @@ queries route through `retrieve`, so the embedder's `model_hash` is checked agai
 - `identity` asks whether a source image retrieves its own frame. it measures rank stability under the codec and is inflated by construction, since the corpus contains the answer. on an uncompressed index it returns 1.000 by definition.
 - `label` removes the query's own frame and scores how many of the remaining neighbours share its label. nothing in the corpus is the answer, so this is the one that reports retrieval quality. it is printed next to the random-pick baseline for the same label distribution, without which the number cannot be read.
 
-neither means much alone. pass `--baseline` with an uncompressed control index (`--no-compress` at build time) to get the delta, which is what the codec actually cost:
+neither means much alone. pass `--baseline` with the uncompressed control index (`--control` at build time) to get the delta, which is what the codec actually cost:
 
 ```sh
 .venv/bin/python python/tools/nest_image_eval.py \
     --index corpora/my-derm.nest \
-    --baseline corpora/my-derm-raw.nest \
+    --baseline corpora/my-derm-control.nest \
     -k 1 5 10 --out eval.json
 ```
 
-measured on PH2 (n=200): 39.5x on the media, costing 3.5 points of label `precision@10` with a bootstrap 95 percent CI of [-6.1, -1.1]. report the interval, not just the point: at this sample size a difference under ~2.5 points cannot be told from noise, which is how an earlier draft came to publish a codec cost that was not actually there. see `doc/changelog.md` for the full table.
+measured in phase 6 (full matrix and intervals in `doc/changelog.md`): on ph2 (n=200) av1-intra crf35 compresses the media 86x for a mean label `precision@10` delta of -3.4 to -4.7 points whose interval crosses zero, but the melanoma class alone drops 16.9 points with a significant interval ([-25, -10]); on ham10000 (2000-sample) the media shrinks 151x for a mean delta of -1.5 [-3.5, +0.6], again with a significant melanoma cost (-10.7). the text-to-image ruler is harsher and honest: 44/60 correct top-10 clinical queries on the control falls to 22/60 at crf35, and the loss does not recover with rate. per-class floors matter more than the mean: report the interval and the worst class, not just the point.
+
+`python/tools/nest_image_sweep.py` runs the variant matrix for you (av1-intra crf ladder, avif444, control, `dtype:` rungs, `av1-order`), records `nest_bytes` and the control's `media_bytes` per variant, and writes one consolidated comparison json:
+
+```sh
+.venv/bin/python python/tools/nest_image_sweep.py \
+    --input-dir /path/to/images --dataset my-derm \
+    --variants av1-intra-crf35,av1-intra-crf40,control,dtype:int8 \
+    --labels labels.csv --out-dir sweep/ --out sweep/summary.json
+```
 
 direct API (no chunker): `nest.build(output_path, embedding_model, embedding_dim, chunker_version, model_hash, chunks, preset="exact", reproducible=True)`.
 
