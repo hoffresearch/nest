@@ -49,13 +49,12 @@ pub(super) fn choose(texts: &[String]) -> crate::Result<TextChoice> {
     eprintln!("text_codec choose: encode_chunks_canonical took {:?}", t0.elapsed());
     // candidate 1: single-frame zstd (the existing form, always the floor).
     let t1 = std::time::Instant::now();
-    let c1 = maybe_zstd(
+    let mut best = Candidate::plain(maybe_zstd(
         SECTION_CHUNKS_CANONICAL,
         SectionEncoding::Zstd,
         canonical_raw.clone(),
-    )?;
-    let mut best = Candidate::plain(c1.clone());
-    eprintln!("text_codec choose: candidate 1 (plain zstd) took {:?} size={}", t1.elapsed(), c1.2.len());
+    )?);
+    eprintln!("text_codec choose: candidate 1 (plain zstd) took {:?}", t1.elapsed());
 
     // candidate 2: txt_streams cold (per-chunk zstd + intpack offset table).
     let t2 = std::time::Instant::now();
