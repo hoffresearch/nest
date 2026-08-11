@@ -86,3 +86,6 @@ dat/hoff.db
 dat/demo/
 !dat/demo/README.md
 .env
+
+# wheel staging (scripts/stage_wheel.py output)
+packaging/staging/
