@@ -5,7 +5,7 @@ operating notes for ai agents and human contributors working in this repo. the p
 # build and test
 
 - `cargo build --workspace` / `cargo build --release --workspace`
-- `cargo test --workspace`: all rust tests (unit + integration + golden), 288/288 on the current unreleased state (`forge-core` adds 6 more on its own manifest)
+- `cargo test --workspace`: all rust tests (unit + integration + golden), 340/340 on the current unreleased state (`forge-core` adds 6 more on its own manifest)
 - `cargo fmt --all --check`: formatting check
 - `cargo clippy --workspace --all-targets -- -D warnings`: linting (warnings are errors)
 - `ruff check .` / `ruff format --check .`: python linting and formatting (config in `pyproject.toml`)
@@ -87,13 +87,12 @@ build folders, files, and codebase items following apl-style 3-char tokens that 
 
 write in diataxis style. all lowercase. no emojis. no em-dash. no decorative markdown. pragmatic, professional, objective. every doc starts with a yaml header for semantic resolution (helps llm, agentic, vector search): project, audience, status, last-updated, domain. design notes that turn out wrong get a note on top. they are not deleted.
 
-architecture references live as a trio under `doc/arc/`:
+architecture references live as a pair under `doc/arc/`:
 
-- `doc/arc/arc.md` is the single human architecture reference.
-- `doc/arc/arc.yaml` is the machine-readable architecture map.
+- `doc/arc/arc.yaml` is the single architecture reference: machine-readable for agents and tooling, and the human-readable inventory plus contract narrative (system_view, contract, quality, risks, inventory).
 - `doc/arc/arc.mmd` is the visual architecture map (mermaid).
 
-at task start, read `doc/arc/arc.yaml` and `doc/arc/arc.mmd` in a short pass to preserve structure and naming pattern. after any implementation, refactor, rename, or doc move that changes architecture, boundaries, data flow, module layout, public contracts, storage, or runtime behavior, update `arc.md`, `arc.yaml`, and `arc.mmd` in the same change. keep them concise and pragmatic. do not keep a parallel second architecture document.
+at task start, read `doc/arc/arc.yaml` and `doc/arc/arc.mmd` in a short pass to preserve structure and naming pattern. after any implementation, refactor, rename, or doc move that changes architecture, boundaries, data flow, module layout, public contracts, storage, or runtime behavior, update `arc.yaml` and `arc.mmd` in the same change. keep them concise and pragmatic. do not keep a parallel second architecture document.
 # file hygiene
 
 hard limit is 333 lines per file. operational target for new files is 220 lines. human working memory holds 4 plus or minus 1 chunks at once (cowan 2001, refining miller). neural networks also work better that way. a file that does not fit the "mental window" forces internal context switching, degrading comprehension and raising bug rates. this is unnecessary cognitive load, the same principle applied in ux.
@@ -166,8 +165,7 @@ these are documented honest limitations of the current code, not bugs to silentl
 # documentation
 
 - `README.md`: project overview, install, CLI summary, presets, v0.2 highlights, embedded mermaid system view.
-- `doc/arc/arc.md`: single human architecture inventory and runtime contract summary.
-- `doc/arc/arc.yaml`: machine-readable architecture map for agents and tooling.
+- `doc/arc/arc.yaml`: the single architecture reference, machine-readable for agents and tooling and the human-readable inventory plus runtime contract summary.
 - `doc/arc/arc.mmd`: mermaid sequence diagram of the build and query flows.
 - `doc/usage.md`: how-to for the nine engine subcommands plus the ask/retrieve flagship verbs, presets, offline mode, citations.
 - `doc/changelog.md`: v0.1.0, v0.2.0, and unreleased deltas.

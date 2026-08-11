@@ -2,7 +2,7 @@ diga # nest
 
 sovereign embedded vector database. a single `.nest` file carries chunks, embeddings, source spans, optional HNSW/BM25/chunk-graph indices, and a search contract, all hash-verified and memory-mapped. python builds, rust serves, the `.nest` file is the only artifact that crosses between them. there is no server: queries are answered from mmap, offline by construction.
 
-this file is the entry summary for ai coding agents. the authoritative operating contract (workflow, gotchas, known gaps, things to avoid) lives in `.contracts/.agents/AGENTS.md` and is the single agent instruction source; read it before non-trivial work. the architecture source of truth is the trio under `doc/arc/`: `arc.md` (human), `arc.yaml` (machine), `arc.mmd` (mermaid).
+this file is the entry summary for ai coding agents. the authoritative operating contract (workflow, gotchas, known gaps, things to avoid) lives in `.contracts/.agents/AGENTS.md` and is the single agent instruction source; read it before non-trivial work. the architecture source of truth is the pair under `doc/arc/`: `arc.yaml` (human and machine reference), `arc.mmd` (mermaid).
 
 ## tech stack
 
@@ -102,7 +102,7 @@ build flow (python, offline, reproducible): `builder.py` chunks, embeds, fingerp
 - file hygiene: hard limit 333 lines per file, target 220 for new files. rust sources under `crates/**/src/**` and first-party python modules are capped at 300 lines (enforced by release_check for rust); test files and `crates/nest-format/tests/roundtrip.rs` are exempt.
 - naming: directories/docs/assets in kebab-case english; source files idiomatic to the language.
 - docs follow diataxis, all lowercase, no emoji, no em-dash, short paragraphs, yaml header (project, audience, status, last-updated, domain). commit messages are plain english without Conventional Commits prefixes; the body explains the why.
-- after any change to architecture, boundaries, data flow, module layout, or public contracts, update `doc/arc/arc.md`, `arc.yaml`, and `arc.mmd` in the same change.
+- after any change to architecture, boundaries, data flow, module layout, or public contracts, update `doc/arc/arc.yaml` and `arc.mmd` in the same change.
 - base formatting via `.editorconfig`: utf-8, lf, 4-space indent (2 for toml/yaml/json), final newline.
 
 ## git and release flow
@@ -134,7 +134,7 @@ build flow (python, offline, reproducible): `builder.py` chunks, embeds, fingerp
 
 - `README.md`: overview, install, CLI, presets, v0.2 highlights.
 - `.contracts/.agents/AGENTS.md`: the operating contract and single agent instruction source.
-- `doc/arc/arc.md` / `arc.yaml` / `arc.mmd`: architecture trio, source of truth.
+- `doc/arc/arc.yaml` / `arc.mmd`: architecture pair, source of truth.
 - `doc/usage.md`: engine subcommands, flagship verbs, presets, offline mode, citations.
 - `doc/changelog.md`: v0.1.0, v0.2.0, unreleased deltas.
 - `dat/demo/README.md`: upstream datasets and corpus rebuild.
