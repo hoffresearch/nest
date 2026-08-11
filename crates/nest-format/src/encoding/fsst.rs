@@ -34,6 +34,61 @@ const N_CODES: usize = 255;
 /// expands to. at most 255 entries. round-trips through [`serialize_table`].
 struct SymbolTable {
     symbols: Vec<Vec<u8>>,
+    /// trie over the symbols for O(1)-per-byte longest-match encoding.
+    /// each node maps a next byte to (child index, code if this node is a
+    /// terminal symbol). the trie is built from the same deterministic
+    /// `symbols` vector, so the encode output is byte-identical.
+    trie: Trie,
+}
+
+/// a compact byte trie for greedy longest-match encoding. `next[byte]` gives
+/// an optional child index, and `code` records the symbol code (if any) at
+/// this node. the trie is rebuilt from the deterministic symbol table, so it
+/// does not affect byte-identicality of the encoded output.
+#[derive(Default)]
+struct Trie {
+    next: Vec<[Option<u16>; 256]>,
+    code: Vec<Option<u8>>,
+}
+
+impl Trie {
+    fn new() -> Self {
+        Self {
+            next: vec![[None; 256]],
+            code: vec![None],
+        }
+    }
+
+    fn insert(&mut self, sym: &[u8], code: u8) {
+        let mut node = 0usize;
+        for &b in sym {
+            let b = b as usize;
+            let child = self.next[node][b];
+            let child = child.unwrap_or_else(|| {
+                let idx = self.next.len() as u16;
+                self.next.push([None; 256]);
+                self.code.push(None);
+                self.next[node][b] = Some(idx);
+                idx
+            });
+            node = child as usize;
+        }
+        self.code[node] = Some(code);
+    }
+
+    /// longest symbol match starting at `input`. returns `(code, length)`.
+    fn longest_match(&self, input: &[u8]) -> Option<(u8, usize)> {
+        let mut node = 0usize;
+        let mut best: Option<(u8, usize)> = None;
+        for (i, &b) in input.iter().enumerate().take(MAX_SYMBOL_LEN) {
+            let child = self.next[node][b as usize]?;
+            node = child as usize;
+            if let Some(code) = self.code[node] {
+                best = Some((code, i + 1));
+            }
+        }
+        best
+    }
 }
 
 impl SymbolTable {
@@ -75,23 +130,18 @@ impl SymbolTable {
                 symbols.push(sym.clone());
             }
         }
-        Self { symbols }
+        let mut trie = Trie::new();
+        for (code, sym) in symbols.iter().enumerate() {
+            trie.insert(sym, code as u8);
+        }
+        Self { symbols, trie }
     }
 
     /// longest table symbol matching `input` at its start, returning
     /// `(code, length)`, or `None` if no multi/single-byte symbol matches
     /// (then the caller escapes the single raw byte).
     fn longest_match(&self, input: &[u8]) -> Option<(u8, usize)> {
-        let mut best: Option<(u8, usize)> = None;
-        for (code, sym) in self.symbols.iter().enumerate() {
-            if input.len() >= sym.len()
-                && &input[..sym.len()] == sym.as_slice()
-                && best.is_none_or(|(_, l)| sym.len() > l)
-            {
-                best = Some((code as u8, sym.len()));
-            }
-        }
-        best
+        self.trie.longest_match(input)
     }
 }
 
