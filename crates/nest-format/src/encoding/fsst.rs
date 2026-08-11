@@ -91,36 +91,84 @@ impl Trie {
     }
 }
 
-impl SymbolTable {
-    /// greedily build a static table from a frequency pass over `corpus`.
-    /// deterministic: candidate substrings are counted in a sorted map and
-    /// selected by (count desc, bytes asc), so two builds match exactly.
-    fn build(corpus: &[u8]) -> Self {
-        use std::collections::HashMap;
-        let t0 = std::time::Instant::now();
-        // count every 1..=MAX_SYMBOL_LEN substring occurrence. a hashmap is
-        // much faster than a BTreeMap for counting; the final ranking uses an
-        // explicit deterministic comparator, so iteration order does not affect
-        // the resulting symbol table or encoded output.
-        let mut counts: HashMap<Vec<u8>, u64> = HashMap::new();
-        for len in 1..=MAX_SYMBOL_LEN {
-            if corpus.len() < len {
-                break;
-            }
-            for w in corpus.windows(len) {
-                *counts.entry(w.to_vec()).or_insert(0) += 1;
+/// frequency trie for counting every 1..=MAX_SYMBOL_LEN substring without
+/// allocating per-substring keys. each node records the number of times the
+/// byte sequence that ends at it was seen as a full substring.
+#[derive(Default)]
+struct FreqTrie {
+    next: Vec<[Option<u32>; 256]>,
+    count: Vec<u64>,
+}
+
+impl FreqTrie {
+    fn new() -> Self {
+        Self {
+            next: vec![[None; 256]],
+            count: vec![0],
+        }
+    }
+
+    fn count_substrings(&mut self, corpus: &[u8], max_len: usize) {
+        let n = corpus.len();
+        for start in 0..n {
+            let max = (start + max_len).min(n);
+            let mut node = 0usize;
+            for end in start..max {
+                let b = corpus[end] as usize;
+                let child = self.next[node][b];
+                let child = match child {
+                    Some(c) => c as usize,
+                    None => {
+                        let idx = self.next.len() as u32;
+                        self.next.push([None; 256]);
+                        self.count.push(0);
+                        self.next[node][b] = Some(idx);
+                        idx as usize
+                    }
+                };
+                self.count[child] += 1;
+                node = child;
             }
         }
-        eprintln!("fsst build: count substrings took {:?}", t0.elapsed());
+    }
+
+    /// collect all substrings with their counts. `path` is a reusable buffer
+    /// passed through recursion; results are deterministic because children
+    /// are visited in ascending byte order.
+    fn collect(&self, out: &mut Vec<(Vec<u8>, u64)>, path: &mut Vec<u8>, node: usize) {
+        if self.count[node] > 0 {
+            out.push((path.clone(), self.count[node]));
+        }
+        for b in 0..256u16 {
+            if let Some(child) = self.next[node][b as usize] {
+                path.push(b as u8);
+                self.collect(out, path, child as usize);
+                path.pop();
+            }
+        }
+    }
+}
+
+impl SymbolTable {
+    /// greedily build a static table from a frequency pass over `corpus`.
+    /// deterministic: candidate substrings are counted and selected by
+    /// (count desc, bytes asc), so two builds match exactly.
+    fn build(corpus: &[u8]) -> Self {
+        // count every 1..=MAX_SYMBOL_LEN substring occurrence with a byte trie
+        // to avoid per-substring allocations. the collector visits children in
+        // ascending byte order, so the resulting ranking is deterministic.
+        let mut freq = FreqTrie::new();
+        freq.count_substrings(corpus, MAX_SYMBOL_LEN);
+        let mut ranked: Vec<(Vec<u8>, u64)> = Vec::new();
+        let mut path: Vec<u8> = Vec::new();
+        freq.collect(&mut ranked, &mut path, 0);
+
         // rank by estimated saved bytes desc, then bytes asc for determinism.
-        let t1 = std::time::Instant::now();
-        let mut ranked: Vec<(Vec<u8>, u64)> = counts.into_iter().collect();
         ranked.sort_by(|a, b| {
             let gain_a = (a.0.len() as u64 - 1) * a.1;
             let gain_b = (b.0.len() as u64 - 1) * b.1;
             gain_b.cmp(&gain_a).then_with(|| a.0.cmp(&b.0))
         });
-        eprintln!("fsst build: rank took {:?}", t1.elapsed());
         // always include every single byte that appears, so no input ever
         // needs more escapes than necessary; then fill the rest with the
         // highest-gain multi-byte symbols up to N_CODES.
