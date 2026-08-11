@@ -30,6 +30,12 @@ dynamic = ["version"]
 Repository = "https://github.com/hoffresearch/nest"
 Issues = "https://github.com/hoffresearch/nest/issues"
 
+# `uvx --from nestdb nest ...` / `pipx run`: read-only verbs (validate,
+# inspect, stats, search) over the library api. the full cli (ask, retrieve,
+# doctor, ...) is the rust binary from scripts/install.sh.
+[project.scripts]
+nest = "nest._cli:main"
+
 [tool.maturin]
 manifest-path = "../../crates/nest-python/Cargo.toml"
 module-name = "nest._nest"
