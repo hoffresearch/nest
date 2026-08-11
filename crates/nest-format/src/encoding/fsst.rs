@@ -91,6 +91,27 @@ impl Trie {
     }
 }
 
+impl SymbolTable {
+    /// greedily build a static table from a frequency pass over `corpus`.
+    /// deterministic: candidate substrings are counted in a sorted map and
+    /// selected by (count desc, bytes asc), so two builds match exactly.
+    fn build(corpus: &[u8]) -> Self {
+        use std::collections::BTreeMap;
+        let t0 = std::time::Instant::now();
+        // count every 1..=MAX_SYMBOL_LEN substring occurrence. a BTreeMap
+        // keyed by the bytes gives a deterministic iteration order, and the
+        // gain heuristic (saved bytes = (len-1)*count) ranks longer frequent
+        // substrings first, the core fsst idea.
+        let mut counts: BTreeMap<Vec<u8>, u64> = BTreeMap::new();
+        for len in 1..=MAX_SYMBOL_LEN {
+            if corpus.len() < len {
+                break;
+            }
+        }
+        best
+    }
+}
+
 /// frequency trie for counting every 1..=MAX_SYMBOL_LEN substring without
 /// allocating per-substring keys. each node records the number of times the
 /// byte sequence that ends at it was seen as a full substring.
@@ -146,29 +167,16 @@ impl FreqTrie {
                 path.pop();
             }
         }
-    }
-}
-
-impl SymbolTable {
-    /// greedily build a static table from a frequency pass over `corpus`.
-    /// deterministic: candidate substrings are counted and selected by
-    /// (count desc, bytes asc), so two builds match exactly.
-    fn build(corpus: &[u8]) -> Self {
-        // count every 1..=MAX_SYMBOL_LEN substring occurrence with a byte trie
-        // to avoid per-substring allocations. the collector visits children in
-        // ascending byte order, so the resulting ranking is deterministic.
-        let mut freq = FreqTrie::new();
-        freq.count_substrings(corpus, MAX_SYMBOL_LEN);
-        let mut ranked: Vec<(Vec<u8>, u64)> = Vec::new();
-        let mut path: Vec<u8> = Vec::new();
-        freq.collect(&mut ranked, &mut path, 0);
-
+        eprintln!("fsst build: count substrings took {:?}", t0.elapsed());
         // rank by estimated saved bytes desc, then bytes asc for determinism.
+        let t1 = std::time::Instant::now();
+        let mut ranked: Vec<(Vec<u8>, u64)> = counts.into_iter().collect();
         ranked.sort_by(|a, b| {
             let gain_a = (a.0.len() as u64 - 1) * a.1;
             let gain_b = (b.0.len() as u64 - 1) * b.1;
             gain_b.cmp(&gain_a).then_with(|| a.0.cmp(&b.0))
         });
+        eprintln!("fsst build: rank took {:?}", t1.elapsed());
         // always include every single byte that appears, so no input ever
         // needs more escapes than necessary; then fill the rest with the
         // highest-gain multi-byte symbols up to N_CODES.
