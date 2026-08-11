@@ -37,22 +37,28 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from builder import BuildConfig, ChunkSpec, Pipeline
-from forge import embed_image, image_items, image_media
+from forge import embed_image, image_encode, image_items, image_media
+from forge.image_decode import frame_sha256
 
 CHUNKER_VERSION = "image-v1"
 
 
-def _embed_compressed(embedder, media_path: Path, canvas, expected: int) -> np.ndarray:
-    batches = [
-        embedder.embed_arrays(batch)
-        for batch in image_media.decode_frames(
-            media_path, canvas, batch_size=max(1, embedder.batch_size)
-        )
-    ]
+def _embed_compressed(embedder, frames_fn, expected: int) -> tuple[np.ndarray, list[str]]:
+    """Embed the DECODED frames and hash them in the same pass.
+
+    The decode already walks every frame, so the per-frame sha256 costs
+    nothing here; recorded in the manifest, the hashes are what catch a
+    REORDERED stream, which the frame-count guard cannot see.
+    """
+    batches: list[np.ndarray] = []
+    hashes: list[str] = []
+    for batch in frames_fn(batch_size=max(1, embedder.batch_size)):
+        batches.append(embedder.embed_arrays(batch))
+        hashes.extend(frame_sha256(frame) for frame in batch)
     vectors = np.vstack(batches) if batches else np.zeros((0, embedder.dim), dtype=np.float32)
     if len(vectors) != expected:
         raise RuntimeError(f"decoded {len(vectors)} frames for {expected} items")
-    return vectors
+    return vectors, hashes
 
 
 def build_corpus(
@@ -70,6 +76,10 @@ def build_corpus(
     crf: int = 35,
     speed: int = 8,
     all_intra: bool = False,
+    backend: str = "av1",
+    pix_fmt: str = "yuv420p",
+    avif_quality: int = 35,
+    control: bool = False,
     scratch_db: str | None = None,
     preset: str = "compressed",
 ) -> dict:
@@ -90,21 +100,26 @@ def build_corpus(
 
         render_paths = [Path(item.render_path) for item in items]
         media_info = None
+        frame_hashes: list[str] = []
         if compress:
             canvas = image_media.canvas_size(render_paths, width)
-            media_dir = image_media.media_dir_for(output_path)
-            media_name = f"{dataset_name}-av1.mp4"
-            media_path = media_dir / media_name
-            media_info = image_media.encode_av1(
+            built = image_encode.build_media(
                 render_paths,
-                media_path,
+                output_path,
+                dataset_name,
+                backend=backend,
                 canvas=canvas,
                 crf=crf,
-                preset=speed,
-                keyint=1 if all_intra else None,
+                speed=speed,
+                all_intra=all_intra,
+                pix_fmt=pix_fmt,
+                avif_quality=avif_quality,
+                control=control,
             )
-            uris = [f"media://{media_name}#frame={i}" for i in range(len(items))]
-            embeddings = _embed_compressed(embedder, media_path, canvas, len(items))
+            media_info, uris = built["media"], built["uris"]
+            embeddings, frame_hashes = _embed_compressed(
+                embedder, built["frames"], len(items)
+            )
         else:
             uris = [Path(p).resolve().as_uri() for p in render_paths]
             embeddings = embedder.embed_paths(render_paths)
