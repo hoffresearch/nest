@@ -44,6 +44,20 @@ pub struct NestFileBuilder {
     /// lOptional graph_adjacency (0x0C) csr payload, fully encoded by the
     /// caller (chunk-to-chunk edges). additive, excluded from content_hash.
     pub(super) graph_adjacency: Option<Vec<u8>>,
+    /// lOptional blob_refs (0x14) payload, fully encoded by the caller
+    /// (`encode_blob_refs`). additive, excluded from content_hash.
+    pub(super) blob_refs: Option<Vec<u8>>,
+    /// lOptional blob_span_overlay (0x16) payload, fully encoded by the
+    /// caller (`encode_blob_span_overlay`). additive, excluded from
+    /// content_hash; the runtime prefers it over 0x03 spans for cite.
+    pub(super) blob_span_overlay: Option<Vec<u8>>,
+    /// lOptional space_table (0x15) payload, fully encoded by the caller
+    /// (`encode_space_table`). additive, excluded from content_hash.
+    pub(super) space_table: Option<Vec<u8>>,
+    /// lPer-space vector band payloads: (band section id, encoding,
+    /// payload). section id is 0x20 + space_index; encoding is one of the
+    /// dtype encodings (raw/f16/int8/int4), never zstd.
+    pub(super) space_bands: Vec<(u32, u32, Vec<u8>)>,
 }
 
 impl NestFileBuilder {
@@ -58,6 +72,10 @@ impl NestFileBuilder {
             hnsw_index: None,
             bm25_index: None,
             graph_adjacency: None,
+            blob_refs: None,
+            blob_span_overlay: None,
+            space_table: None,
+            space_bands: Vec::new(),
         }
     }
 
@@ -131,6 +149,64 @@ impl NestFileBuilder {
         self.graph_adjacency = Some(payload);
         let mut ext = self.manifest.capabilities_ext.take().unwrap_or_default();
         ext.graph_present = Some(true);
+        self.manifest.capabilities_ext = Some(ext);
+        self
+    }
+
+    /// lAttach a blob_refs (0x14) payload (already encoded by
+    /// `encode_blob_refs`): the content-hash reference table for source
+    /// media blobs. Sets the additive `capabilities_ext.blobs_present`
+    /// flag so the runtime opens the section behind a capability, exactly
+    /// like hnsw/bm25/graph. The section is EXCLUDED from content_hash, so
+    /// a self-contained media corpus keeps the content_hash (and the
+    /// nest:// citations) of its text-only twin. Emitted raw, like hnsw.
+    pub fn blob_refs(mut self, payload: Vec<u8>) -> Self {
+        self.blob_refs = Some(payload);
+        let mut ext = self.manifest.capabilities_ext.take().unwrap_or_default();
+        ext.blobs_present = Some(true);
+        self.manifest.capabilities_ext = Some(ext);
+        self
+    }
+
+    /// lAttach a blob_span_overlay (0x16) payload (already encoded by
+    /// `encode_blob_span_overlay`): per-chunk blob-relative spans that the
+    /// runtime prefers over chunks_original_spans (0x03) for cite/retrieve,
+    /// so 0x03 never has to carry an ordinal disguised as a byte range.
+    /// additive and EXCLUDED from content_hash; also implies
+    /// `blobs_present` (the overlay indexes the 0x14 table).
+    pub fn blob_span_overlay(mut self, payload: Vec<u8>) -> Self {
+        self.blob_span_overlay = Some(payload);
+        let mut ext = self.manifest.capabilities_ext.take().unwrap_or_default();
+        ext.blobs_present = Some(true);
+        self.manifest.capabilities_ext = Some(ext);
+        self
+    }
+
+    /// lAttach a space_table (0x15) payload (already encoded by
+    /// `encode_space_table`): the multimodal per-space directory. Sets the
+    /// additive `capabilities_ext.supports_multimodal` flag so the runtime
+    /// opens the space bands behind a capability, exactly like the other
+    /// optional sections. EXCLUDED from content_hash, so a multimodal
+    /// corpus keeps the citations of its text-only twin. Emitted raw.
+    pub fn space_table(mut self, payload: Vec<u8>) -> Self {
+        self.space_table = Some(payload);
+        let mut ext = self.manifest.capabilities_ext.take().unwrap_or_default();
+        ext.supports_multimodal = Some(true);
+        self.manifest.capabilities_ext = Some(ext);
+        self
+    }
+
+    /// lAttach one per-space vector band: the fixed-stride slab at section
+    /// 0x20 + `space_index`. `encoding` is the dtype encoding
+    /// (`SECTION_ENCODING_RAW` for f32, or float16/int8/int4), NEVER zstd
+    /// (the reader rejects it for band ids). EXCLUDED from content_hash;
+    /// also implies `supports_multimodal` (a band without a table is still
+    /// a multimodal file, though the runtime only opens listed spaces).
+    pub fn space_band(mut self, space_index: u8, encoding: u32, payload: Vec<u8>) -> Self {
+        let band_id = crate::layout::SECTION_SPACE_EMBEDDINGS_BASE + space_index as u32;
+        self.space_bands.push((band_id, encoding, payload));
+        let mut ext = self.manifest.capabilities_ext.take().unwrap_or_default();
+        ext.supports_multimodal = Some(true);
         self.manifest.capabilities_ext = Some(ext);
         self
     }

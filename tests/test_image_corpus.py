@@ -39,6 +39,10 @@ def have_ffmpeg() -> bool:
     return "libsvtav1" in out.stdout
 
 
+def have_avif() -> bool:
+    return bool(shutil.which("avifenc") and shutil.which("avifdec"))
+
+
 class StubEmbedder:
     """Deterministic 64-dim embedder: 8x8 grayscale, flattened, normalized.
 
@@ -127,12 +131,20 @@ class ImageCorpusTest(unittest.TestCase):
         dataset=None,
         sample=None,
         all_intra=False,
+        backend="av1",
+        control=False,
+        gop_policy="auto",
+        shard_size=None,
+        order_similarity=False,
+        dtype=None,
+        preset="compressed",
+        src=None,
     ) -> dict:
         from tools import nest_build_image_corpus as builder
 
         return builder.build_corpus(
             all_intra=all_intra,
-            input_dir=self.src,
+            input_dir=src or self.src,
             output_path=self.tmp / name / f"{name}.nest",
             dataset_name=dataset or name,
             embedder=StubEmbedder(),
@@ -141,6 +153,13 @@ class ImageCorpusTest(unittest.TestCase):
             scratch_db=scratch_db,
             sample=sample,
             width=256,
+            backend=backend,
+            control=control,
+            gop_policy=gop_policy,
+            shard_size=shard_size,
+            order_similarity=order_similarity,
+            dtype=dtype,
+            preset=preset,
         )
 
     # ---- frame alignment: the bug class that silently shifts every uri ----
@@ -185,15 +204,15 @@ class ImageCorpusTest(unittest.TestCase):
         """The alignment guard leans on this count, so it is checked directly."""
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
-        from forge import image_media
+        from forge import image_decode, image_encode, image_media
 
         paths = sorted(self.src.glob("*.png"))
         canvas = image_media.canvas_size(paths, 256)
         out = self.tmp / "probe.mp4"
-        info = image_media.encode_av1(paths, out, canvas=canvas)
+        info = image_encode.encode_av1(paths, out, canvas=canvas)
         self.assertEqual(info["frame_count"], len(paths))
         self.assertEqual(image_media.probe_frame_count(out), len(paths))
-        decoded = sum(len(b) for b in image_media.decode_frames(out, canvas, batch_size=5))
+        decoded = sum(len(b) for b in image_decode.decode_frames(out, canvas, batch_size=5))
         self.assertEqual(decoded, len(paths), "decode yielded a different frame count")
 
     def test_sampling_renumbers_ordinals_densely(self):
@@ -279,7 +298,7 @@ class ImageCorpusTest(unittest.TestCase):
     def test_corpus_is_relocatable(self):
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
-        from forge import image_media
+        from forge import image_decode, image_media
 
         result = self._build("portable", compress=True)
         manifest = json.loads(Path(result["manifest"]).read_text())
@@ -292,7 +311,7 @@ class ImageCorpusTest(unittest.TestCase):
         shutil.copy(result["nest"], moved / "portable.nest")
         shutil.copytree(image_media.media_dir_for(Path(result["nest"])), moved / "portable.media")
         name, ordinal = image_media.parse_media_uri(manifest["items"][3]["source_uri"])
-        frame = image_media.decode_frame(
+        frame = image_decode.decode_frame(
             image_media.media_dir_for(moved / "portable.nest") / name,
             tuple(manifest["media"]["canvas"]),
             ordinal,
@@ -440,6 +459,503 @@ class ImageCorpusTest(unittest.TestCase):
         Image.new("RGB", (4000, 3000), (0, 0, 255)).save(mixed / "huge.png")
         canvas = image_media.canvas_size(sorted(mixed.glob("*.png")), 1024)
         self.assertLessEqual(canvas[0], 200, f"one outlier set the canvas: {canvas}")
+
+    # ---- F2.1: random access is seek, and it returns the same frame ----
+
+    def test_seek_decode_matches_sequential_decode(self):
+        """`decode_frame` must return the frame the ordinal names, by seek.
+
+        Measured on PH2 (fase 0, CP-0.4): input seeking is <= the legacy
+        select scan at every ordinal and much cheaper away from keyframes
+        (gop161 ordinal 199: 67 ms against 189 ms; all-intra 100/199: ~42 ms
+        against 97-154 ms), and the frames are byte-identical. The seek path
+        is only worth having if that identity holds, so it is the assertion.
+        """
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        from forge import image_decode
+
+        for name, intra in (("seekgop", False), ("seekintra", True)):
+            result = self._build(name, compress=True, all_intra=intra)
+            media = result["media"]
+            video = self.tmp / name / f"{name}.media" / f"{name}-av1.mp4"
+            canvas = tuple(media["canvas"])
+            sequential = [f for batch in image_decode.decode_frames(video, canvas) for f in batch]
+            for ordinal in (0, 5, 11):
+                sought = image_decode.decode_frame(video, canvas, ordinal)
+                np.testing.assert_array_equal(
+                    sought, sequential[ordinal], f"{name} frame {ordinal} diverged"
+                )
+
+    def test_decode_frames_at_returns_the_requested_frames(self):
+        """One invocation resolves k ordinals, and the frames are the right ones."""
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        from forge import image_decode
+
+        result = self._build("batch", compress=True)
+        video = self.tmp / "batch" / "batch.media" / "batch-av1.mp4"
+        canvas = tuple(result["media"]["canvas"])
+        wanted = [1, 5, 11]
+        frames = image_decode.decode_frames_at(video, canvas, wanted)
+        self.assertEqual(len(frames), len(wanted))
+        for ordinal, frame in zip(wanted, frames, strict=True):
+            single = image_decode.decode_frame(video, canvas, ordinal)
+            np.testing.assert_array_equal(frame, single, f"batch frame {ordinal} diverged")
+
+    # ---- F2.2: the codec toolchain is part of provenance ----
+
+    def test_toolchain_provenance_is_recorded_and_sensitive(self):
+        """Decoded pixels depend on ffmpeg + encoder + params; that is recorded.
+
+        Another encoder version produces other pixels, other embeddings, and
+        the index silently stops matching the media. The manifest now carries
+        the toolchain and a provenance hash, and the hash must change when a
+        parameter changes.
+        """
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        first = self._build("prov1", compress=True)
+        media = first["media"]
+        self.assertIn("toolchain", media)
+        self.assertIn("ffmpeg", media["toolchain"])
+        self.assertTrue(media["provenance_sha256"].startswith("sha256:"))
+
+        from tools import nest_build_image_corpus as builder
+
+        second = builder.build_corpus(
+            input_dir=self.src,
+            output_path=self.tmp / "prov2" / "prov2.nest",
+            dataset_name="prov2",
+            embedder=StubEmbedder(),
+            compress=True,
+            width=256,
+            crf=40,
+        )
+        self.assertNotEqual(
+            media["provenance_sha256"],
+            second["media"]["provenance_sha256"],
+            "provenance did not change when the codec parameters changed",
+        )
+
+    # ---- F2.3: per-frame hashes catch reordering, not just loss ----
+
+    def test_frame_hashes_verify_and_detect_tampering(self):
+        """Counting frames catches loss, not reordering; hashes catch both."""
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        from forge import image_decode, image_media
+
+        result = self._build("hashed", compress=True)
+        manifest = json.loads(Path(result["manifest"]).read_text())
+        hashes = manifest["frame_sha256"]
+        self.assertEqual(len(hashes), result["n_items"])
+        self.assertTrue(all(h.startswith("sha256:") for h in hashes))
+
+        video = image_media.media_dir_for(Path(result["nest"])) / "hashed-av1.mp4"
+        canvas = tuple(manifest["media"]["canvas"])
+        image_decode.verify_frame_hashes(video, canvas, hashes)
+
+        tampered = list(hashes)
+        tampered[3] = tampered[5]
+        with self.assertRaises(ValueError):
+            image_decode.verify_frame_hashes(video, canvas, tampered)
+
+    # ---- F2.4: pix_fmt is verified, and 444 really carries more chroma ----
+
+    def test_pix_fmt_silent_fallback_is_rejected(self):
+        """Asking for 444 from an encoder that cannot emit it must fail.
+
+        This ffmpeg's libsvtav1 converts 444 to 420 SILENTLY and writes a
+        byte-identical file (found in fase 0): a flag without a probe is a
+        lie. The encoder output is probed and the lie raises.
+        """
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        from forge import image_encode, image_media
+
+        paths = sorted(self.src.glob("*.png"))
+        canvas = image_media.canvas_size(paths, 256)
+        with self.assertRaises(RuntimeError):
+            image_encode.encode_av1(paths, self.tmp / "x444.mp4", canvas=canvas, pix_fmt="yuv444p")
+
+    def test_444_preserves_more_chroma_than_420(self):
+        """Red edge on black: chroma subsampling blurs it, 444 blurs less."""
+        if not have_avif():
+            self.skipTest("avifenc/avifdec not available")
+        from forge import image_decode, image_encode
+        from PIL import Image
+
+        pattern = self.tmp / "edge.png"
+        img = Image.new("RGB", (128, 128), (0, 0, 0))
+        for x in range(64, 128):
+            for y in range(128):
+                img.putpixel((x, y), (255, 0, 0))
+        img.save(pattern)
+        src = np.asarray(img, dtype=np.int16)
+
+        err = {}
+        for yuv in ("420", "444"):
+            out_dir = self.tmp / f"avif{yuv}"
+            image_encode.encode_avif([pattern], out_dir, quality=40, yuv=yuv)
+            decoded = image_decode.decode_avif(sorted(out_dir.glob("*.avif"))[0])
+            err[yuv] = float(np.abs(decoded.astype(np.int16) - src).mean())
+        self.assertLess(err["444"], err["420"])
+
+    # ---- F2.7: the avif backend is a first-class corpus ----
+
+    def test_avif_backend_roundtrip_and_relocates(self):
+        if not have_avif():
+            self.skipTest("avifenc/avifdec not available")
+        import nest
+        from forge import image_media
+
+        result = self._build("avicorpus", compress=True, backend="avif")
+        manifest = json.loads(Path(result["manifest"]).read_text())
+        self.assertEqual(manifest["media"]["backend"], "avif")
+        for item in manifest["items"]:
+            self.assertTrue(item["source_uri"].startswith("media://avicorpus-avif/"))
+            self.assertNotIn(str(self.tmp), item["source_uri"])
+
+        db = nest.open(result["nest"])
+        self.assertEqual(db.n_embeddings, result["n_items"])
+        db.validate()
+
+        # a hit resolves to real pixels out of the per-image media
+        from tools import nest_search_image as search
+
+        out_dir = self.tmp / "hits"
+        saved = search.save_frame(
+            Path(result["nest"]), manifest, manifest["items"][2]["source_uri"], out_dir
+        )
+        self.assertTrue(saved and Path(saved).exists())
+
+    # ---- F2.8: the letterbox-lossless control is a build mode ----
+
+    def test_control_corpus_indexes_letterboxed_lossless_pixels(self):
+        """The control the fase 0 measurements need, as a first-class mode.
+
+        CP-0.1 decomposed the codec cost against a control that is the corpus
+        canvas applied LOSSLESSLY. That used to be scratch; it is now a build
+        flag, and the index it emits must describe exactly those pixels.
+        """
+        if not have_ffmpeg():
+            self.skipTest("PIL decode only, but keep the skip symmetric")
+        import nest
+        from forge import image_media
+
+        result = self._build("ctrlcorpus", compress=True, control=True)
+        manifest = json.loads(Path(result["manifest"]).read_text())
+        self.assertEqual(manifest["media"]["backend"], "png-lossless")
+        media_dir = image_media.media_dir_for(Path(result["nest"]))
+        pngs = sorted(media_dir.rglob("*.png"))
+        self.assertEqual(len(pngs), result["n_items"])
+
+        # the index answers the letterboxed query with itself
+        from PIL import Image
+
+        canvas = tuple(manifest["media"]["canvas"])
+        with Image.open(manifest["items"][4]["render_path"]) as img:
+            query = image_media.letterbox(img, canvas)
+        vec = StubEmbedder()._vector(query).tolist()
+        hits = nest.open(result["nest"]).search(vec, 3)
+        self.assertEqual(hits[0].offset_start, 4)
+
+    # ---- F2.6: the text tower is plumbed through the search cli ----
+
+    def test_query_text_and_query_image_are_exclusive(self):
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
+        import nest_search_image as search
+
+        with self.assertRaises(SystemExit):
+            search.parse_args(
+                [
+                    "--index",
+                    "x.nest",
+                    "--query-image",
+                    "a.png",
+                    "--query-text",
+                    "blue nevus",
+                ]
+            )
+        args = search.parse_args(["--index", "x.nest", "--query-text", "blue nevus"])
+        self.assertEqual(args.query_text, "blue nevus")
+
+    # ---- fase 5: gop policy probe, similarity order, sharding, dtype ladder ----
+
+    def test_auto_gop_policy_records_the_probe_and_applies_the_decision(self):
+        """The probe runs at build time and the keyint follows its bytes.
+
+        Fase 0 (CP-0.5) showed embedding cosine does not separate the
+        regimes, so the policy is a measured encode decision, and the probe
+        statistics go to the manifest with it. The decision itself is not
+        asserted on this synthetic set (flat colour blocks are a regime
+        where either side can win on bytes); what is asserted is the
+        wiring: the probe is recorded whole, and the encoded stream obeys
+        it. The decision's quality is guarded by the redundancy test below
+        and measured on real corpora in fase 6.
+        """
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        result = self._build("gopauto", compress=True)
+        media = result["media"]
+        gop = media["gop"]
+        self.assertEqual(gop["policy"], "auto")
+        self.assertIn(gop["decision"], ("intra", "inter"))
+        self.assertGreater(gop["intra_bytes"], 0)
+        self.assertGreater(gop["inter_bytes"], 0)
+        self.assertGreater(gop["n_samples"], 1)
+        expected_keyint = 1 if gop["decision"] == "intra" else None
+        self.assertEqual(media["keyint"], expected_keyint)
+
+    def test_auto_gop_policy_finds_redundancy(self):
+        """Near-identical frames: inter wins, and the probe must say so."""
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        from PIL import Image, ImageDraw
+
+        src = self.tmp / "redundant"
+        src.mkdir()
+        for i in range(10):
+            img = Image.new("RGB", (320, 240), (200, 100, 50))
+            draw = ImageDraw.Draw(img)
+            draw.rectangle([40 + i, 60, 100 + i, 120], fill=(0, 0, 0))
+            img.save(src / f"frame{i:03d}.png")
+
+        result = self._build("gopred", compress=True, src=src)
+        gop = result["media"]["gop"]
+        self.assertEqual(gop["decision"], "inter")
+        self.assertLess(gop["inter_bytes"], gop["intra_bytes"])
+        self.assertIsNone(result["media"]["keyint"])
+
+    def test_gop_policy_inter_forces_the_default_gop(self):
+        """`inter` is the lever for material the probe has not seen."""
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        result = self._build("gopinter", compress=True, gop_policy="inter")
+        self.assertIsNone(result["media"]["keyint"])
+        self.assertEqual(result["media"]["gop"]["decision"], "inter")
+        self.assertEqual(result["media"]["frame_count"], result["n_items"])
+
+    def test_similarity_order_preserves_item_mapping(self):
+        """A permuted stream must still hand every item its own frame.
+
+        The stream is encoded in greedy nearest-neighbour order, but uris,
+        vectors, and frame hashes are un-permuted back to item order. The
+        assertion is the strongest form of that contract: decode the frame
+        each uri names and its content hash must equal the manifest hash
+        recorded for THAT item.
+        """
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        from forge import image_decode, image_media
+
+        result = self._build("ordered", compress=True, order_similarity=True)
+        manifest = json.loads(Path(result["manifest"]).read_text())
+        media = manifest["media"]
+        media_dir = image_media.media_dir_for(Path(result["nest"]))
+        canvas = tuple(media["canvas"])
+        frame_ids = []
+        for item in manifest["items"]:
+            name, ordinal = image_media.parse_media_uri(item["source_uri"])
+            frame_ids.append(ordinal)
+            frame = image_decode.decode_frame(media_dir / name, canvas, ordinal)
+            self.assertEqual(
+                image_decode.frame_sha256(frame),
+                manifest["frame_sha256"][item["ordinal"]],
+                f"item {item['ordinal']} resolved to another item's frame",
+            )
+        self.assertEqual(
+            sorted(frame_ids),
+            list(range(result["n_items"])),
+            "frame pointers are not a permutation of the stream",
+        )
+
+    def test_sharding_splits_the_stream_and_every_uri_resolves(self):
+        """Segments of ~`shard_size` frames, indexed in the manifest."""
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        import nest
+        from forge import image_decode, image_media
+
+        result = self._build("sharded", compress=True, shard_size=5)
+        manifest = json.loads(Path(result["manifest"]).read_text())
+        media = manifest["media"]
+        segments = media["segments"]
+        self.assertEqual(len(segments), 3, "12 frames at shard_size 5")
+        self.assertEqual(sum(s["n_frames"] for s in segments), result["n_items"])
+        self.assertEqual(media["frame_count"], result["n_items"])
+        media_dir = image_media.media_dir_for(Path(result["nest"]))
+        canvas = tuple(media["canvas"])
+        for seg in segments:
+            self.assertTrue((media_dir / seg["uri"]).exists(), seg["uri"])
+            self.assertTrue(seg["media_sha256"].startswith("sha256:"))
+        for item in manifest["items"]:
+            name, ordinal = image_media.parse_media_uri(item["source_uri"])
+            frame = image_decode.decode_frame(media_dir / name, canvas, ordinal)
+            self.assertEqual(
+                image_decode.frame_sha256(frame),
+                manifest["frame_sha256"][item["ordinal"]],
+                f"item {item['ordinal']} resolved to another item's frame",
+            )
+        db = nest.open(result["nest"])
+        self.assertEqual(db.n_embeddings, result["n_items"])
+        db.validate()
+
+    def test_order_and_sharding_compose(self):
+        """Both levers together: the mapping contract must still hold."""
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        from forge import image_decode, image_media
+
+        result = self._build("both", compress=True, shard_size=5, order_similarity=True)
+        manifest = json.loads(Path(result["manifest"]).read_text())
+        media = manifest["media"]
+        self.assertEqual(len(media["segments"]), 3)
+        media_dir = image_media.media_dir_for(Path(result["nest"]))
+        canvas = tuple(media["canvas"])
+        seen = []
+        for item in manifest["items"]:
+            name, ordinal = image_media.parse_media_uri(item["source_uri"])
+            seen.append((name, ordinal))
+            frame = image_decode.decode_frame(media_dir / name, canvas, ordinal)
+            self.assertEqual(
+                image_decode.frame_sha256(frame),
+                manifest["frame_sha256"][item["ordinal"]],
+            )
+        self.assertEqual(len(set(seen)), result["n_items"])
+
+    def test_dtype_override_reaches_the_built_corpus(self):
+        """The dtype lever (F5.3) is a build kwarg, not a preset swap."""
+        import nest
+
+        result = self._build("int8corpus", compress=False, dtype="int8", preset="exact")
+        db = nest.open(result["nest"])
+        self.assertEqual(db.n_embeddings, result["n_items"])
+        db.validate()
+
+    def test_sweep_dtype_ladder_and_gop_kinds(self):
+        """`dtype:` variants isolate quantization; av1 kinds pin the policy."""
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
+        import nest_image_sweep as sweep
+
+        variants = sweep.parse_variants("dtype:f16,int8,int4")
+        self.assertEqual([v["dtype"] for v in variants], ["float16", "int8", "int4"])
+        with self.assertRaises(ValueError):
+            sweep.parse_variants("dtype:fp8")
+        pair = sweep.parse_variants("av1-inter:30;av1-intra:35;av1-order:35")
+        self.assertEqual(pair[0]["gop_policy"], "inter")
+        self.assertEqual(pair[1]["gop_policy"], "intra")
+        self.assertTrue(pair[2]["order_similarity"])
+        # ordering is invisible to all-intra, so the measurement cell pins inter
+        self.assertEqual(pair[2]["gop_policy"], "inter")
+
+    # ---- fase 3: the measurement battery beyond the bootstrap ----
+
+    def test_sign_test_pairs_with_the_bootstrap(self):
+        """The bootstrap answers "how big"; the sign test answers "how often".
+
+        A paired sign test is assumption-free: identical samples must give
+        p=1, and a consistent 30-point drop on every query must clear 0.05.
+        """
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
+        import _image_metrics as met
+
+        rng = np.random.default_rng(0)
+        same = rng.normal(0.6, 0.2, 200)
+        self.assertEqual(met.sign_test(same, same.copy())["p_value"], 1.0)
+        worse = np.clip(same - 0.3, 0, 1)
+        self.assertLess(met.sign_test(worse, same)["p_value"], 0.05)
+
+    def test_ranking_agreement_reads_identity_and_reversal(self):
+        """overlap@k counts shared hits; kendall tau-b reads their order."""
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
+        import _image_metrics as met
+
+        a = [[3, 1, 4, 0, 2], [0, 1, 2, 3, 4]]
+        same = met.ranking_agreement(a, a, k=3)
+        self.assertEqual(same["overlap@3"], 1.0)
+        self.assertEqual(same["kendall_tau_b"], 1.0)
+        b = [[2, 0, 4, 1, 3], [4, 3, 2, 1, 0]]
+        rev = met.ranking_agreement(a, b, k=5)
+        self.assertLess(rev["kendall_tau_b"], 0.0)
+
+    def test_cosine_drift_distribution(self):
+        """Per-image drift between source-pixel and decoded-frame vectors."""
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
+        import _image_metrics as met
+
+        rng = np.random.default_rng(0)
+        base = rng.normal(size=(50, 32)).astype(np.float32)
+        base /= np.linalg.norm(base, axis=1, keepdims=True)
+        identical = met.cosine_drift(base, base.copy())
+        self.assertEqual(identical["median"], 1.0)
+        drifted = met.cosine_drift(base, -base)
+        self.assertEqual(drifted["median"], -1.0)
+        self.assertIn("p05", drifted)
+
+    def test_per_class_floor_catches_a_collapsed_class(self):
+        """CP-0.6: a mean can hide one destroyed class; the floor cannot."""
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
+        import _image_metrics as met
+
+        labels = ["nev"] * 80 + ["mel"] * 20
+        rng = np.random.default_rng(0)
+        control = rng.normal(0.6, 0.1, 100)
+        sample = control.copy()
+        sample[80:] -= 0.3  # melanoma collapses, the mean barely moves
+        out = met.per_class_delta(sample, control, labels, seed=1)
+        self.assertTrue(out["mel"]["significant"])
+        self.assertFalse(out["nev"]["significant"])
+        self.assertFalse(met.class_floor_ok(out, floor=0.05))
+        self.assertTrue(met.class_floor_ok({"nev": out["nev"]}, floor=0.05))
+
+    def test_sweep_runs_end_to_end_on_a_tiny_corpus(self):
+        """One model load, a control and two variants, the full battery out."""
+        if not have_avif() or not have_ffmpeg():
+            self.skipTest("sweep needs ffmpeg+libsvtav1 and avifenc/avifdec")
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
+        import argparse
+
+        import nest_image_sweep as sweep
+
+        labels_csv = self.tmp / "labels.csv"
+        labels_csv.write_text(
+            "image_id,label\n"
+            + "\n".join(f"img{i:03d},{'even' if i % 2 == 0 else 'odd'}" for i in range(12))
+            + "\n"
+        )
+        args = argparse.Namespace(
+            input_dir=self.src,
+            dataset="sweeptest",
+            out_dir=self.tmp / "sweep",
+            variants="av1-intra:35;avif:35",
+            labels=labels_csv,
+            pdf=False,
+            sample=None,
+            queries=None,
+            seed=42,
+            width=256,
+            preset="compressed",
+            class_floor=0.05,
+            k=[1, 5, 10],
+        )
+        report = sweep.run_sweep(args, StubEmbedder())
+        self.assertIn("control", report)
+        self.assertEqual(set(report["variants"]), {"av1-intra-35", "avif-35"})
+        # the shared ruler: the control's lossless media size, and every
+        # variant's index size, must be reported or a published number
+        # cannot be reproduced.
+        self.assertGreater(report["control"]["media_bytes"], 0)
+        self.assertGreater(report["control"]["nest_bytes"], 0)
+        for variant in report["variants"].values():
+            self.assertIn("bootstrap", variant["delta_vs_control"]["precision@10"])
+            self.assertIn("sign_test", variant["delta_vs_control"]["precision@10"])
+            self.assertIn("even", variant["delta_vs_control"]["per_class"])
+            self.assertIn("kendall_tau_b", variant["delta_vs_control"]["ranking"])
+            self.assertIn("median", variant["drift"])
+            self.assertGreater(variant["media_bytes"], 0)
+            self.assertGreater(variant["nest_bytes"], 0)
 
 
 if __name__ == "__main__":

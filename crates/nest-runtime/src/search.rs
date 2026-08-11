@@ -260,7 +260,7 @@ impl MmapNestFile {
         })
     }
 
-    fn materialize_hits(
+    pub(crate) fn materialize_hits(
         &self,
         scored: &[(usize, f32)],
         index_type: &'static str,
@@ -291,7 +291,7 @@ impl MmapNestFile {
 }
 
 #[inline]
-fn sort_scores_desc(scores: &mut [(usize, f32)]) {
+pub(crate) fn sort_scores_desc(scores: &mut [(usize, f32)]) {
     scores.sort_by(|a, b| {
         b.1.partial_cmp(&a.1)
             .unwrap_or(std::cmp::Ordering::Equal)

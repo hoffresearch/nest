@@ -13,12 +13,14 @@
 //! All multi-byte integers are little-endian. Strings are raw UTF-8 bytes
 //! prefixed by a u32 length (no NUL terminators).
 
+pub mod blob;
 mod canonical;
 mod chunk_ids;
 mod codec;
 mod contract;
 pub mod graph;
 mod provenance;
+mod space_table;
 mod spans;
 
 /// `intpack` (encoding id 4) repack kinds. the kind byte leads the
@@ -29,12 +31,21 @@ mod spans;
 pub const REPACK_KIND_CHUNK_IDS: u8 = 0;
 pub const REPACK_KIND_SPANS: u8 = 1;
 
+pub use blob::{
+    BLOB_REF_NONE, BLOB_REFS_PAYLOAD_VERSION, BLOB_SPAN_OVERLAY_PAYLOAD_VERSION, BlobRefRecord,
+    BlobSpanEntry, decode_blob_refs, decode_blob_span_overlay, encode_blob_refs,
+    encode_blob_span_overlay,
+};
 pub use canonical::{decode_chunks_canonical, encode_chunks_canonical};
 pub use chunk_ids::{
     decode_chunk_ids, decode_chunk_ids_intpack, encode_chunk_ids, encode_chunk_ids_intpack,
 };
 pub use contract::{SearchContract, decode_search_contract, encode_search_contract};
 pub use provenance::{decode_provenance, encode_provenance};
+pub use space_table::{
+    SPACE_DTYPE_F16, SPACE_DTYPE_F32, SPACE_DTYPE_I4, SPACE_DTYPE_I8, SPACE_TABLE_PAYLOAD_VERSION,
+    SpaceEntry, decode_space_table, encode_space_table,
+};
 pub use spans::{
     OriginalSpan, decode_chunks_original_spans, decode_chunks_original_spans_intpack,
     encode_chunks_original_spans, encode_chunks_original_spans_intpack,

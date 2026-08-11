@@ -172,6 +172,23 @@ class ImageEmbedder:
     def embed_one(self, image_path: str | Path) -> np.ndarray:
         return self.embed_paths([image_path])[0]
 
+    def embed_texts(self, texts: Sequence[str]) -> np.ndarray:
+        """Embed texts through the model's TEXT tower, same joint space.
+
+        The space is an image-text set: a clinical description searches the
+        corpus directly, and the `model_hash` gate applies unchanged because
+        the weights behind both towers are the ones fingerprinted.
+        """
+        self._load()
+        import open_clip
+        import torch
+
+        tokenizer = open_clip.get_tokenizer(self.model_id)
+        with torch.no_grad():
+            feats = self._model.encode_text(tokenizer(list(texts)).to(self.device))
+            feats = feats / feats.norm(dim=-1, keepdim=True)
+        return feats.cpu().numpy().astype(np.float32)
+
 
 def list_images(root: Path, extensions: Sequence[str] | None = None) -> list[Path]:
     """Every image under `root`, in a stable sorted order.

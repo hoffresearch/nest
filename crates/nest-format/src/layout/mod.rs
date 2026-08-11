@@ -17,6 +17,8 @@
 mod footer;
 mod header;
 mod section_entry;
+#[cfg(test)]
+mod tests;
 
 pub use footer::NestFooter;
 pub use header::NestHeader;
@@ -178,9 +180,29 @@ pub const OPTIONAL_SECTIONS: &[(u32, &str)] = &[
     // graph_adjacency (0x0C, G1): additive chunk-to-chunk csr. resolves via
     // section_name but stays OUT of CANONICAL_SECTIONS (content_hash-excluded).
     (SECTION_GRAPH_ADJACENCY, "graph_adjacency"),
+    // blob_refs (0x14) + blob_span_overlay (0x16): content-hash references to
+    // source media blobs and the per-chunk blob-relative span overlay. both
+    // resolve via section_name and stay OUT of CANONICAL_SECTIONS, so a
+    // self-contained media corpus keeps the content_hash of its text twin.
+    (SECTION_BLOB_REFS, "blob_refs"),
+    (SECTION_BLOB_SPAN_OVERLAY, "blob_span_overlay"),
+    // space_table (0x15): the multimodal per-space directory. resolves via
+    // section_name and stays OUT of CANONICAL_SECTIONS; the vector bands it
+    // describes (0x20-0x2F / 0x30-0x3F) resolve through the range check in
+    // section_name below and are likewise content_hash-excluded.
+    (SECTION_SPACE_TABLE, "space_table"),
 ];
 
 pub fn section_name(id: u32) -> Option<&'static str> {
+    if (SECTION_SPACE_EMBEDDINGS_BASE..SECTION_SPACE_EMBEDDINGS_BASE + SPACE_BAND_LEN).contains(&id)
+    {
+        return Some("space_embeddings");
+    }
+    if (SECTION_SPACE_EMBEDDINGS_FP_BASE..SECTION_SPACE_EMBEDDINGS_FP_BASE + SPACE_BAND_LEN)
+        .contains(&id)
+    {
+        return Some("space_embeddings_fp");
+    }
     CANONICAL_SECTIONS
         .iter()
         .chain(OPTIONAL_SECTIONS.iter())
@@ -193,108 +215,3 @@ pub fn section_name(id: u32) -> Option<&'static str> {
 ///   u64 entry_count (LE)
 pub const SECTION_PAYLOAD_PREFIX_SIZE: usize = 12;
 pub const SECTION_PAYLOAD_VERSION: u32 = 1;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn header_size_is_128() {
-        assert_eq!(std::mem::size_of::<NestHeader>(), 128);
-    }
-
-    #[test]
-    fn section_entry_size_is_32() {
-        assert_eq!(std::mem::size_of::<SectionEntry>(), 32);
-    }
-
-    #[test]
-    fn footer_size_is_40() {
-        assert_eq!(std::mem::size_of::<NestFooter>(), 40);
-    }
-
-    #[test]
-    fn header_roundtrip_checksum() {
-        let mut h = NestHeader::new(384, 100, 100, 1024, 128, 5, 288, 200);
-        assert!(h.validate_checksum().is_ok());
-        h.n_chunks = 99;
-        assert!(h.validate_checksum().is_err());
-    }
-
-    #[test]
-    fn canonical_sections_are_alphabetical_by_name() {
-        let names: Vec<&str> = CANONICAL_SECTIONS.iter().map(|(_, n)| *n).collect();
-        let mut sorted = names.clone();
-        sorted.sort_unstable();
-        assert_eq!(names, sorted);
-    }
-
-    #[test]
-    fn section_name_lookup() {
-        assert_eq!(section_name(SECTION_CHUNK_IDS), Some("chunk_ids"));
-        assert_eq!(section_name(SECTION_EMBEDDINGS), Some("embeddings"));
-        assert_eq!(section_name(0xFFFF), None);
-    }
-
-    #[test]
-    fn reserved_additive_ids_are_in_range_and_distinct() {
-        // reserved wire encodings occupy 4..=10, above the four implemented
-        // base ids (raw/zstd/float16/int8 are 0..=3).
-        let enc = [
-            SECTION_ENCODING_INTPACK,
-            SECTION_ENCODING_ZSTD_DICT,
-            SECTION_ENCODING_FRONTCODE,
-            SECTION_ENCODING_INT4,
-            SECTION_ENCODING_RABITQ,
-            SECTION_ENCODING_FSST,
-            SECTION_ENCODING_TXT_STREAMS,
-        ];
-        for (i, &e) in enc.iter().enumerate() {
-            assert_eq!(e, 4 + i as u32);
-            assert!(e > SECTION_ENCODING_INT8);
-        }
-        // reserved optional sections occupy 0x09..=0x10, above the implemented eight.
-        let sec = [
-            SECTION_EMBEDDINGS_FP,
-            SECTION_DICTIONARY,
-            SECTION_DEDUP_MAP,
-            SECTION_GRAPH_ADJACENCY,
-            SECTION_CHUNK_SCALARS,
-            SECTION_TOKENIZER_MODEL,
-            SECTION_EDIT_JOURNAL,
-            SECTION_REPRO_MANIFEST,
-        ];
-        for (i, &s) in sec.iter().enumerate() {
-            assert_eq!(s, 0x09 + i as u32);
-            assert!(s > SECTION_BM25_INDEX);
-        }
-        // reconciled additive ids past 0x10 are contiguous 0x11..=0x16; the
-        // per-space bands start at 0x20 and 0x30 with 16 ids each. the
-        // exhaustive disjointness + content_hash-exclusion check lives in
-        // tests/reserved_ids.rs.
-        let recon = [
-            SECTION_GRAPH_NODES,
-            SECTION_GRAPH_EDGE_PROPS,
-            SECTION_GRAPH_ENTITY_MAP,
-            SECTION_BLOB_REFS,
-            SECTION_SPACE_TABLE,
-            SECTION_BLOB_SPAN_OVERLAY,
-        ];
-        for (i, &s) in recon.iter().enumerate() {
-            assert_eq!(s, 0x11 + i as u32);
-        }
-        assert_eq!(SECTION_SPACE_EMBEDDINGS_BASE, 0x20);
-        assert_eq!(SECTION_SPACE_EMBEDDINGS_FP_BASE, 0x30);
-        assert_eq!(SPACE_BAND_LEN, 0x10);
-        // reserved sections stay section_name-unresolved until their feature
-        // ships. EXCEPTION: graph_adjacency (0x0C, G1) resolves yet stays
-        // content_hash-excluded (see reserved_ids.rs).
-        for &s in sec.iter().chain(recon.iter()) {
-            if s == SECTION_GRAPH_ADJACENCY {
-                assert_eq!(section_name(s), Some("graph_adjacency"));
-            } else {
-                assert!(section_name(s).is_none());
-            }
-        }
-    }
-}
