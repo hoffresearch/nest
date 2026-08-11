@@ -45,10 +45,17 @@ targets = [
 install-path = "~/.local/bin"
 pr-run-mode = "plan"
 publish-jobs = ["homebrew"]
+
 # the offline embedder payload (staged by scripts/stage_embedder_payload.py
-# in CI before the build) rides inside every archive so a released binary
-# passes `nest doctor` with no network and no repo checkout.
-include = ["target/dist-payload/share/**"]
+# and packed as one artifact) ships next to the binary archives so the
+# one-liner installer can lay it down under the data dir and a released
+# binary passes `nest doctor` with no network and no repo checkout.
+[[workspace.metadata.dist.extra-artifacts]]
+build = [
+    "python3 scripts/stage_embedder_payload.py target/dist-payload/share",
+    "tar -czf target/nest-embedder-payload.tar.gz -C target/dist-payload share",
+]
+artifacts = ["target/nest-embedder-payload.tar.gz"]
 
 # cargo-dist builds with this profile (thin lto over release).
 [profile.dist]
