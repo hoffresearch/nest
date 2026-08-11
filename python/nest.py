@@ -28,17 +28,31 @@ import importlib.util
 import os
 
 
-def _find_extension() -> str | None:
+def _load_extension():
+    """Load the `_nest` PyO3 extension.
+
+    Two layouts share this file:
+      - installed wheel: `nest` is a package and `_nest` is a proper
+        submodule (`nest._nest`, named `_nest.abi3.so`), so a relative
+        import resolves it.
+      - dev repo: `nest.py` is a top-level module under `python/` and the
+        extension sits next to it as `_nest.so` (see README > install);
+        the relative import fails and we fall back to file-based loading.
+    """
+    try:
+        from . import _nest
+
+        return _nest
+    except ImportError:
+        pass
     base = os.path.dirname(os.path.abspath(__file__))
-    for name in ("_nest.so", "_nest.dylib", "lib_nest.dylib"):
+    for name in ("_nest.so", "_nest.abi3.so", "_nest.dylib", "lib_nest.dylib"):
         candidate = os.path.join(base, name)
         if os.path.exists(candidate):
-            return candidate
-    return None
-
-
-_ext_path = _find_extension()
-if _ext_path is None:
+            spec = importlib.util.spec_from_file_location("_nest", candidate)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
     raise ImportError(
         "Cannot find _nest extension. Run "
         "`cargo build --release -p nest-python && "
@@ -46,9 +60,8 @@ if _ext_path is None:
         "from the repo root."
     )
 
-_spec = importlib.util.spec_from_file_location("_nest", _ext_path)
-_mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_mod)
+
+_mod = _load_extension()
 
 NestFile = _mod.NestFile
 SearchHit = _mod.SearchHitPy
@@ -62,4 +75,25 @@ def open(path: str):
     return NestFile.open(path)
 
 
-__all__ = ["NestFile", "SearchHit", "RetrieveHit", "open", "build", "chunk_id"]
+def potion_model_path() -> str | None:
+    """Path to the bundled potion-base-8M model dir, or None.
+
+    The wheel bundles the offline potion static table under
+    `nest/models/potion-base-8M/` so `ask`/`retrieve`-style embedding works
+    with no network after install. the dev repo keeps the table at
+    `python/forge/models/potion-base-8M/` (git-lfs) and this returns None.
+    """
+    base = os.path.dirname(os.path.abspath(__file__))
+    candidate = os.path.join(base, "models", "potion-base-8M")
+    return candidate if os.path.isdir(candidate) else None
+
+
+__all__ = [
+    "NestFile",
+    "SearchHit",
+    "RetrieveHit",
+    "open",
+    "build",
+    "chunk_id",
+    "potion_model_path",
+]
