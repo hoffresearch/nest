@@ -1,0 +1,37 @@
+# maturin project for the official `nestdb` wheel (issue #75).
+#
+# scripts/stage_wheel.py copies this file VERBATIM into packaging/staging/;
+# every relative path below resolves from staging/, not from packaging/.
+# the dev flow (cargo build + cp into python/_nest.so) is unchanged; this
+# file only feeds the published package.
+
+[build-system]
+requires = ["maturin>=1.4,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "nestdb"
+description = "sovereign embedded vector database: single-file .nest container with content-addressable citations, offline-first"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "hoff research", email = "brenner@hoffresearch.com" }]
+keywords = ["vector-database", "embeddings", "offline-first", "rag", "citations"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Topic :: Database :: Database Engines/Servers",
+]
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/hoffresearch/nest"
+Issues = "https://github.com/hoffresearch/nest/issues"
+
+[tool.maturin]
+manifest-path = "../../crates/nest-python/Cargo.toml"
+module-name = "nest._nest"
+python-source = "."
+features = ["pyo3/extension-module"]
