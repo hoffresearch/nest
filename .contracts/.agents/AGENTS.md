@@ -69,10 +69,16 @@ forge-core/            SEPARATE cargo workspace at the repo root, OUTSIDE crates
                        the sovereign crates; not in the `--workspace` set. .fci is versioned independently.
 
 python/                writer pipeline (builder.py), model fingerprint, query embedders, forge/ tools
+python/tools/          measure_presets.py + compare_measure.py (the regression ladder), corpus and
+                       image-corpus builders, image eval tools
 tests/                 python test scripts (plain scripts, not pytest)
 doc/                   arc/ architecture pair, usage.md, changelog.md, data-governance.md
 dat/                   corpus_next.v1.nest (LFS demo corpus), measure/ regression baselines, demo/ sources
-scripts/               release_check.sh (the merge gate), pre-commit (PHI/data backstop hook)
+scripts/               release_check.sh (the merge gate), pre-commit (PHI/data backstop hook),
+                       install.sh / install.ps1, stage_wheel.py, stage_embedder_payload.py
+packaging/             pyproject.toml, single source for the published wheel (staging/ is generated)
+docker/                minimal image: static musl nest binary on scratch
+examples/              fastapi, flask, jupyter integration examples
 .contracts/.agents/    AGENTS.md, the single agent instruction source
 ```
 
