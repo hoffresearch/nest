@@ -19,7 +19,6 @@ from pathlib import Path
 
 import numpy as np
 
-from . import image_media
 from .image_media import _read_exact
 
 

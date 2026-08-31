@@ -16,9 +16,7 @@ Doesn't require real sentence-transformers — the fake embedder is a
 
 from __future__ import annotations
 
-import json
 import os
-import struct
 import subprocess
 import sys
 import tempfile

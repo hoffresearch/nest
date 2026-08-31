@@ -24,7 +24,6 @@ if not CLI.exists():
 os.environ["NEST_ENABLE_FAKE_PRESET"] = "1"
 
 import nest
-import numpy as np
 from forge import model_registry as mr
 
 
