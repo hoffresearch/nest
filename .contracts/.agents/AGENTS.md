@@ -84,7 +84,11 @@ python/                writer pipeline (builder.py), model fingerprint, query em
 tests/                 python test scripts (plain scripts, not pytest)
 doc/                   arc/ architecture pair, usage.md, changelog.md, data-governance.md
 dat/                   corpus_next.v1.nest (LFS demo corpus), measure/ regression baselines, demo/ sources
-scripts/               release_check.sh (the merge gate), pre-commit (PHI/data backstop hook)
+scripts/               release_check.sh (the merge gate), pre-commit (PHI/data backstop hook),
+                       install.sh / install.ps1, stage_wheel.py, stage_embedder_payload.py
+packaging/             pyproject.toml, single source for the published wheel (staging/ is generated)
+docker/                minimal image: static musl nest binary on scratch
+examples/              fastapi, flask, jupyter integration examples
 .contracts/.agents/    AGENTS.md, the single agent instruction source
 ```
 
