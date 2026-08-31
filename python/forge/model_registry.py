@@ -18,7 +18,6 @@ passes its name in `allow_remote_code` AND every code file matches the pinned
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import os
 from dataclasses import dataclass, field

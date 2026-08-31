@@ -11,8 +11,6 @@ import json
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 
-from forge import model_registry
-
 
 class SpecError(ValueError):
     """Spec violation; message names the offending key."""
@@ -228,4 +226,17 @@ def _parse(data: dict, spec_path: str) -> CorpusSpec:
 
 
 # re-exported rules: callers import the whole contract from build_spec.
-from forge.spec_rules import default_model, emitted_spaces, validate  # noqa: E402, F401
+from forge.spec_rules import default_model, emitted_spaces, validate  # noqa: E402
+
+__all__ = [
+    "CorpusSpec",
+    "SourceSpec",
+    "MediaSpec",
+    "ModelSpec",
+    "SpecError",
+    "MAX_SPACES",
+    "load_spec",
+    "default_model",
+    "emitted_spaces",
+    "validate",
+]

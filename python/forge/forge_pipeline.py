@@ -14,7 +14,6 @@ cached vectors; space 0 of every file is the one text="default" model (N14).
 from __future__ import annotations
 
 import json
-import os
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -22,10 +21,9 @@ from pathlib import Path
 import numpy as np
 
 from forge import image_media, model_registry
-from forge.build_spec import CorpusSpec, ModelSpec, default_model, emitted_spaces, validate
+from forge.build_spec import CorpusSpec, ModelSpec, validate
 from forge.corpus_sources import Row, corpus_input_hash, load_rows
 from forge.forge_cache import EmbedCache, atomic_write_json, canonical_hash
-from forge.forge_manifest import build_lock, check_lock, redact_path, write_manifest
 
 ADAPTER_VERSION = 1
 

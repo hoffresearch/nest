@@ -11,8 +11,6 @@ import os
 import time
 from pathlib import Path
 
-import numpy as np
-
 from forge import image_media, model_registry
 from forge.build_spec import default_model, emitted_spaces
 from forge.forge_cache import atomic_write_json
