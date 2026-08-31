@@ -18,7 +18,7 @@ four properties, all enforced by the format itself, not by policy.
 
 **self-contained.** a `.nest` file is the entire knowledge base. chunks, embeddings, source spans, search contract, indices. you copy it like you copy a SQLite db. no schema migrations, no companion files, no external service to look up.
 
-**cryptographically verifiable.** every section has its own SHA-256 over the physical bytes. the file has a SHA-256 footer. the canonical content has a third hash, computed over the decoded bytes, that survives compression and lets two builds of the same logical content prove they are the same content. every hit comes back with a `nest://content_hash/chunk_id` citation that resolves (via `nest cite`) to the stored canonical text of that chunk plus its recorded source offsets and verifying hashes — tier-1, not a reopen of the original source document (which the self-contained file does not carry).
+**cryptographically verifiable.** every section has its own SHA-256 over the physical bytes. the file has a SHA-256 footer. the canonical content has a third hash, computed over the decoded bytes, that survives compression and lets two builds of the same logical content prove they are the same content. every hit comes back with a `nest://content_hash/chunk_id` citation that resolves (via `nest cite`) to the stored canonical text of that chunk plus its recorded source offsets and verifying hashes; tier-1, not a reopen of the original source document (which the self-contained file does not carry).
 
 **reproducible.** same chunks plus same model fingerprint plus `reproducible=True` produce byte-identical files. two operators on two machines build the same `file_hash`. this is what makes the citation URI useful: it points at content, not at a copy.
 
@@ -62,7 +62,7 @@ four crates plus a python tooling layer:
 
 - `nest-format` owns the frozen v1 container: layout, manifest, sections, encodings, hashes.
 - `nest-runtime` owns the mmap, the simd dispatcher, hnsw, bm25, and the search path with mandatory exact rerank.
-- `nest-cli` is a thin clap surface with the nine engine subcommands plus the agent-native flagship verbs `ask` and `retrieve` layered over the same engine.
+- `nest-cli` is a thin clap surface with twelve engine subcommands (incl `search-space` over named vector bands and the declarative `build` launcher) plus the agent-native flagship verbs `ask` and `retrieve` layered over the same engine, and `doctor` for install health.
 - `nest-python` is the pyo3 bridge that exposes the runtime to python (incl the agent-native `NestFile.retrieve`).
 - `python/` holds the writer pipeline, model fingerprint, the query-time embedder used by `search-text`, and the offline potion embedder + retrieve convenience the flagship verbs use.
 
@@ -96,25 +96,32 @@ requires rust edition 2024 and python 3.12+.
 
 ```
 cargo build --release --workspace
+cargo build --release -p nest-python --features pyo3/extension-module
 cp target/release/lib_nest.dylib python/_nest.so   # macOS
 cp target/release/lib_nest.so   python/_nest.so    # linux
 ```
 
+the `pyo3/extension-module` feature keeps libpython out of the cdylib; without it the extension segfaults under statically-embedded interpreters (uv's python builds) by loading a second runtime.
+
 ## CLI
 
 ```
+nest build       --spec corpus.toml [--sample N] [--dry-run]        declarative corpus build
 nest ask         <file> "query" -k K [--disclose answer|explain]   flagship: cited answer
 nest retrieve    <file> "query" -k K [--format jsonl|json]          flagship: cited answer-pack
-nest inspect     <file>                       header, manifest, hashes (--json available)
+nest inspect     <file>                       header, manifest, hashes, spaces (--json)
 nest validate    <file>                       full integrity check
-nest stats       <file>                       sizes, counts, dtype, model, simd backend
+nest stats       <file>                       sizes, counts, dtype, model, spaces, simd
 nest search      <file> <qvec> -k K           exact top-k, query is a JSON array of f32
 nest search-ann  <file> <qvec> -k K --ef N    HNSW path with exact rerank
 nest search-graph <file> <qvec> -k K --hops N --ef N   chunk-graph bfs with exact rerank
+nest search-space <file> <qvec> --space NAME -k K      exact search over one named space
 nest search-text <file> "query" -k K [--model-path PATH] [--skip-model-hash-check]
-nest benchmark   <file> -q N -k K [--ann EF] [--madvise-cold]
+nest benchmark   <file> -q N -k K [--ann EF] [--space NAME] [--madvise-cold]
 nest cite        <file> nest://<content_hash>/<chunk_id>
 ```
+
+`build` is the declarative front door: one TOML describes the source (a sqlite query with joins and a text template, csv/jsonl, or an image directory), the media (av1/avif/jxl, `crf="auto"` with a dual quality gate; stratified SSIMULACRA2 floors AND an embedding-drift floor; dedup of identical images, still-picture tune), and one or SEVERAL embedding models from the registry (`potion`, `clip-vit-b32`, `siglip2`, `jina-v5-omni-nano`, `wemm-2b`, ...; each an extra named space, mrl-sliceable to the model's validated dims), emitted as one multi-space file and/or one file per model from a single embed pass. builds are transactional and cache-keyed by a three-hash identity (model / content / recipe); every build emits a versioned manifest and a `build.lock.json`, and byte-identical rebuilds are claimable only under a matching lock. `doc/usage.md` §12-14 and `dat/copusMTG/spellbook.toml` carry the full contract.
 
 `ask` and `retrieve` are the agent-native flagship: text query in, cited answer out. they embed the query OFFLINE with the default potion static table (never sentence-transformers, so they work offline-by-construction), validate the embedder's `model_hash` against the manifest, and route by manifest capability. `ask --disclose answer` (default) prints the cited canonical text and a `nest://` citation; `--disclose explain` adds the rerank-source honesty line ("real cosine" vs "real cosine at stored precision"). `retrieve` emits a json/jsonl answer-pack where every hit's score IS the exact-cosine rerank value, with the tier-1 stored canonical text + verifying hashes + the citation. `cite` is tier-1: it returns the stored canonical text + verifying hashes, never an original-byte reopen.
 
@@ -235,10 +242,10 @@ python tests/test_search_text_model_hash.py
 python python/tools/nest_build_corpus.py
 ```
 
-with `reproducible=True` (the script default) two operators get byte-identical `file_hash`. see `dat/demo/README.md` for download commands, what each subdirectory contains, the schema of the v2 truw canonical CSV, and per-dataset license notes.
+with `reproducible=True` (the script default) two operators get byte-identical `file_hash`. see `dat/demo/Instructions.md` for download commands, what each subdirectory contains, the schema of the v2 truw canonical CSV, and per-dataset license notes.
 
 ## reference
-- `dat/demo/README.md` for what each upstream dataset is and how to rebuild the corpus
+- `dat/demo/Instructions.md` for what each upstream dataset is and how to rebuild the corpus
 - `doc/arc/arc.yaml` for architecture, binary layout, API surface, errors, and versioning; the machine-readable map used by agents and tooling, and the human reference
 - `doc/arc/arc.mmd` for the mermaid sequence diagram of the build and query flows
 - `doc/usage.md` for the engine subcommands, the ask/retrieve flagship verbs, presets, offline mode, citations

@@ -171,9 +171,18 @@ seeds from the exact-cosine top-`ef`, expands a bounded breadth-first walk over 
 nest search-graph my_corpus.nest "[0.1, 0.2, ...]" -k 10 --hops 2 --ef 100
 ```
 
+### search a named space (multimodal)
+
+`search-space` runs the per-space exact search over one named vector band (0x15 + 0x20+): image spaces, extra text spaces, mrl-sliced spaces. the query vector must be embedded with the space's model at the space's dim; an unknown space, a wrong dim, or (with `--expect-model-hash`) a wrong model are typed errors; never a silent fallback to the text path. the space names come from `nest stats` (the `spaces:` block) or `inspect --json` (the `spaces[]` array).
+
+```sh
+nest search-space my_corpus.nest "[0.1, ...]" --space "wemm-2b@256" -k 5
+nest benchmark my_corpus.nest -q 100 -k 10 --space "wemm-2b@256"
+```
+
 ### the flagship: ask and retrieve
 
-`ask` and `retrieve` are the agent-native front door: text query in, cited answer out, no flags needed. they embed the query OFFLINE with the default potion static table (`python/forge/embed_query_potion.py`), NOT sentence-transformers, so they work offline-by-construction; they validate the embedder's `model_hash` against the manifest exactly like `search-text`; and they route by manifest capability (exact if only embeddings, hnsw/hybrid/graph as the file advertises). every printed score IS the exact-cosine rerank value.
+`ask` and `retrieve` are the agent-native front door: text query in, cited answer out, no flags needed. they embed the query OFFLINE and route the embedder BY THE MANIFEST MODEL: a potion corpus keeps the potion static table (`python/forge/embed_query_potion.py`, the unchanged fast path), and a corpus whose default text space is any registry model (wemm, jina, clip; see §12) goes through `python/forge/embed_query_model.py`, which encodes the query with that model's query route and, for an mrl-truncated default space, slices + renormalizes to the manifest dim (`--mrl-dim`, passed automatically). both paths validate the embedder's `model_hash` against the manifest exactly like `search-text`, and route by manifest capability (exact if only embeddings, hnsw/hybrid/graph as the file advertises). every printed score IS the exact-cosine rerank value.
 
 `ask` prints one low-cognitive-load cited answer:
 
@@ -191,7 +200,7 @@ nest retrieve my_corpus.nest "can I use this offline" -k 5 --format jsonl
 
 each hit is `{chunk_id, score, score_type=cosine, source_uri, offset_start, offset_end, citation_id, text, file_hash, content_hash, rerank_source}`. the `score` is the exact rerank value (never a candidate-generator proxy), `text` is the tier-1 stored canonical text, and `citation_id` round-trips through `nest cite`. `--format json` emits a single pretty array instead of one object per line.
 
-the embedder picks its interpreter in a fixed order: `NEST_PYTHON` if set, else the repo's `.venv/bin/python` (which carries the forge deps: numpy + tokenizers + the vendored potion table) discovered by walking up from the cwd, else `python3` on PATH. so the repo `.venv` is used automatically; set `NEST_PYTHON` only to force a specific interpreter. the selected interpreter is printed to stderr — and since discovery executes the nearest ancestor `.venv/bin/python`, set `NEST_PYTHON` explicitly if you run `nest` from inside an untrusted directory tree. point `--model-path` at a copied potion table dir for a fully sealed offline run.
+the embedder picks its interpreter in a fixed order: `NEST_PYTHON` if set, else the repo's `.venv/bin/python` (which carries the forge deps: numpy + tokenizers + the vendored potion table) discovered by walking up from the cwd, else `python3` on PATH. so the repo `.venv` is used automatically; set `NEST_PYTHON` only to force a specific interpreter. the selected interpreter is printed to stderr; and since discovery executes the nearest ancestor `.venv/bin/python`, set `NEST_PYTHON` explicitly if you run `nest` from inside an untrusted directory tree. point `--model-path` at a copied potion table dir for a fully sealed offline run.
 
 the python convenience is `python python/forge/retrieve.py`: it builds a `.nest` from the cc0 demo corpus with the potion embedder, asks a question, and prints the cited answer with a `nest://` citation, all offline and deterministic (the one-gif demo).
 
@@ -324,3 +333,57 @@ nest doctor
 the exit code is typed so installers and ci branch on codes, not text: `0` ok, `2` python interpreter missing, `3` python deps missing, `4` potion embedder script not found, `5` potion table missing or a git-lfs pointer, `6` embedder run failed. a scalar simd fallback prints a warning but still exits `0`. the embedder check opens no socket, so doctor itself stays offline-by-construction.
 
 the embedder script resolves in this order: the repo layout (`python/forge/embed_query_potion.py`, dev checkout), then `${XDG_DATA_HOME:-~/.local/share}/nest/forge/` (one-liner installs), then `<exe>/../share/nest/forge/` (tarball and homebrew-style layouts).
+
+## 12. model registry and multi-model spaces
+
+embedding models are DATA, not per-project code: `python/forge/model_registry.py` holds named presets, each declaring what the model is (ids, dim, the VALIDATED matryoshka ladder), what it needs (deps with the exact pip fix line), and how it is used by default (the asymmetric query/document contract). the build spec (§13) selects one or several presets per build.
+
+| preset | kind | dim | mrl dims | modalities |
+|---|---|---|---|---|
+| `potion` | static table (offline, no torch) | 256 |; | text |
+| `clip-vit-b32` | open_clip ViT-B-32/openai | 512 |; | text, image |
+| `siglip2` | open_clip ViT-B-16-SigLIP2/webli | 768 |; | text, image |
+| `jina-v5-omni-nano` / `-small` | sentence-transformers | 768 / 1024 | 32–768 / 32–1024 | text, image, video |
+| `wemm-2b` | sentence-transformers | 2048 | 128–2048 | text, image, video |
+| `wemm-4b` / `wemm-9b` | sentence-transformers | 2560 / 4096 | idem | registered; `--allow-heavy` required |
+
+three rules the registry enforces, loudly:
+
+- **mrl is a ladder, not a slider.** `dims=[256]` is accepted only when the preset's model card validates 256 (`mrl.method="prefix_slice_l2"`). slicing at an unvalidated dim is refused; mathematically possible is not semantically supported.
+- **remote code is an opt-in plus a pin.** presets with `trust_remote_code` load only when the spec lists them in `output.allow_remote_code` AND every model-repo code file matches the pinned sha256 allowlist. a hash identifies a version; the opt-in is the consent. build in an isolated environment when the model dir is not fully trusted.
+- **three hashes, never conflated.** `model_hash` identifies the model (weights + tokenizer + processor + remote code + pooling/normalize/dtype policy). the per-item `input_hash` identifies the content (canonical text ⊕ image bytes ⊕ label ⊕ chunker). the `embedding_recipe_hash` identifies the usage (prompts, query/document modes, preprocess version, `image_max_side`, device class, decoder fingerprint when embedding decoded media). the embed cache key is the triad, so a retranslated text or a re-exported image invalidates exactly what changed.
+
+known limitation: the siglip2 TEXT tower resolves its hf tokenizer through transformers' AutoTokenizer, which probes optional files that 404 online; a fresh process in strict offline mode can fail that probe even with the snapshot cached. the image tower and every other preset are unaffected; for a sealed offline run either query siglip2 spaces by image, or use the wemm/jina text towers.
+
+model dirs resolve explicit `model_path` > `NEST_MODEL_DIR_<PRESET>` env > the preset's `local_dir` > the hf cache; a hub download requires `NEST_ALLOW_DOWNLOAD=1` explicitly. dtype defaults are measured, not assumed: bf16 on cuda, fp16 on mps (wemm-2b image embeds 0.5s vs 23s in fp32 on this class of machine), fp32 on cpu; override with `dtype=` in the spec or `NEST_ST_DTYPE`.
+
+## 13. declarative corpus builds (`nest build --spec`)
+
+one toml describes the whole corpus; nobody writes a build script per project. `nest build` is a launcher over `python/tools/nest_forge.py` (the build is officially a python frontend; torch and ffmpeg live there).
+
+```sh
+nest build --spec dat/copusMTG/spellbook.toml --dry-run     # plan + dep status, loads nothing
+nest build --spec dat/copusMTG/spellbook.toml --sample 1500
+```
+
+`dat/copusMTG/spellbook.toml` is the working example: a sqlite query + a pt-br join + a text template + per-row image paths, five models, media with the dual quality gate. the contract highlights:
+
+- **source**: `sqlite` (query, `[[source.joins]]`, `[source.derive]` helpers, text template whose lines drop when ALL their placeholders are empty, `path_template`/`label_template` for images) | `csv` | `jsonl` | `image_dir`. `order_by` must be a TOTAL order; the composite key's uniqueness is verified against the loaded rows, because `ORDER BY x` with duplicate x is not deterministic.
+- **models**: each `[[models]]` names a preset and its role; `text = "default" | "space" | "none"` (exactly ONE default; it is space 0 of every emitted file, never injected implicitly), `image = "space" | "none"`, `dims = [256, 512]` (one named space per dim: `wemm-2b@256`), `space_dtype`, plus the recipe fields (`image_prompt`, `text_query_mode`, `image_max_side`, `encode_kwargs`).
+- **media** (§14 for the levers): `backend`, `crf` (int or `"auto"`), `tune`, `speed`, `fps`, `gop`, `order`, `shard_size`, `dedup` (identical source images stored once; duplicate rows share the frame through the 0x16 overlay).
+- **embedding.image_input**: `mode = "decoded_media"` (default with media: the index describes what the file serves) | `"source"` (measures the model, not the codec). the decoder fingerprint joins the recipe hash in decoded mode; the two modes answer different questions and are never mixed.
+- **output**: `mode = "single" | "per-model" | "both"` (one media encode, one embed pass per model, shared across outputs; chunk_ids are content-addressed so citations agree across modes), `provenance = "minimal" | "standard" | "full"` (path/sql/label redaction), `allow_remote_code`.
+
+every build emits `<name>.manifest.json` (`manifest_schema_version = 1`, canonical serialization; a versioned contract, not an ad-hoc log) and `<name>.build.lock.json` (package versions, tool binaries with sha256, model hashes, the materialized spec). reproduction has three declared levels: L1 = same top-k anywhere; L2 = per-vector cosine within 1e-5 on the same device class; L3 = byte-identical `file_hash`, claimable ONLY under a matching lock (`--rebuild-only` re-emits from the triad-keyed caches and compares the lock; `--strict-env` turns divergence into an error). builds are transactional: per-stage state under `.forge-state/`, outputs staged in `.tmp/` and committed by atomic rename, `--resume` continues from the last intact stage; embed caches are flock'd with checksum sidecars, and a torn cache is recomputed, never reused.
+
+## 14. dataset compression levers and the dual quality gate
+
+the media section is where the compression research became knobs. all decisions land in the manifest and provenance:
+
+- `tune = "still"`: svt-av1's still-picture tune, PROBED against the local encoder (the numeric value varies by version); unsupported ⇒ stderr warning + recorded fallback, never a silently ignored flag. `speed = 6` buys quality per byte over the default 8 at ~2x encode time. `fps` changes playback timestamps only (frames are 1:1 with items; verified, no duplication).
+- `crf = "auto"`: the dual gate. a stratified sample (deterministic, versioned bucket heuristics: resolution / entropy / has_text / alpha / source_format) is encoded at every ladder crf and must clear BOTH floors: ssimulacra2 per-bucket p10 ≥ `visual_floor_p10` and global min ≥ `visual_floor_min` (a global average would let one whole stratum degrade), and embedding drift p10 ≥ `drift_floor_p10` measured by the declared `gate_model`; an image can look fine to humans and still move in retrieval space, which is what the corpus actually serves. the largest passing crf wins; none passing ⇒ smallest + a loud warning (measured on the spellbook cards: the default floors correctly refused the whole [30,45] ladder; fine card text at 488x680 does not reach p10 ≥ 85). full retrieval recall lives in the sweep, outside this loop, where it costs O(1) per variant.
+- `dedup = true`: content-hash dedup of source images; n rows → one frame via the span overlay, zero format change. on the full scryfall printings set the potential is ~48% of the media (100,452 printings, 51,870 unique arts).
+- `order = "cluster"`: greedy cosine clustering (deterministic tie-breaks) makes near-duplicates adjacent so per-segment inter coding has something to predict; measured before recommended; on a 1-per-card corpus the honest expectation is ~0.
+- `backend = "jxl"` / `"jxl-transcode"`: the ONLY truly lossless modes. `jxl` is lossless of the source pixels; `jxl-transcode` repacks jpegs reversibly (~20% smaller, round-trip verified by reconstructing the jpeg and comparing sha256). non-transcodable inputs follow `on_unsupported_jpeg = error | copy-source | lossless-jxl`, per-file decisions recorded. preservation contract: decoded pixels (jxl) / original jpeg bytes (verified transcode); exif/icc/xmp only with `keep_metadata`; timestamps and filenames live in the manifest. needs `cjxl`/`djxl` (`brew install jpeg-xl`, which also ships `ssimulacra2` for the gate).
+
+measure everything with `python/tools/nest_image_sweep.py` (variants now include `av1-tune`, `jxl`, `jxl-transcode`) and compare models with the three-tier `python/tools/nest_model_bench.py`: T1 pipeline stability (identity self-retrieval, inflated by construction and labeled as such), T2 codec cost (embedding drift), T3 task utility (label-template text→image as declared weak ground truth, plus `--queries-file` with real operator queries: hit@k, mrr, negative leakage). the tiers answer different questions and are never aggregated into one number.

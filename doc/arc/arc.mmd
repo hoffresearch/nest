@@ -24,6 +24,7 @@ sequenceDiagram
     participant P as embed_query_potion.py
     participant A as ask / retrieve
     participant I as image corpus tooling
+    participant D as nest_forge.py (spec)
 
     note over B,N: build · offline · reproducible
     B->>B: chunk + embed + model_hash
@@ -44,6 +45,14 @@ sequenceDiagram
     F->>F: optional blob_refs 0x14 + span overlay 0x16 + space_table 0x15 + band slab 0x20+ (all excluded from content_hash)
     F->>N: deterministic emit + four hashes (media travels inside the file)
 
+    note over D,N: declarative build · one toml, many models · transactional
+    D->>D: load spec (typed SpecError; order_by must be a total order)
+    D->>D: load rows + per-item input_hash; dedup identical images
+    D->>I: media via backends (crf=auto dual gate: ssimulacra2 strata + embedding drift; tune/jxl levers)
+    D->>D: embed each registry model once (triad-keyed cache; st models in isolated workers)
+    D->>F: nest.build per output (single / per-model / both; space 0 = the ONE default text model)
+    F->>N: deterministic emit + manifest v1 + build.lock.json
+
     note over R,Q: query · offline · mmap
     Q->>E: search-text spawns embedder
     E-->>Q: query vector + model_hash
@@ -55,7 +64,7 @@ sequenceDiagram
     R-->>Q: hits + nest://content_hash/chunk_id
 
     note over A,N: flagship · agent-native · offline by construction
-    A->>P: ask / retrieve embed query OFFLINE (potion table, no socket)
+    A->>P: ask / retrieve embed query OFFLINE (embed_gate routes by manifest model: potion table, or embed_query_model.py for registry models)
     P-->>A: query vector + model_hash
     A->>R: route by manifest capability, search (score IS the exact rerank)
     R-->>A: hits + SearchExplain (rerank_source: real cosine vs stored precision)

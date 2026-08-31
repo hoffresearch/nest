@@ -84,8 +84,10 @@ dat/hoff.db
 !dat/measure/fakerecogna_exact.nest
 
 dat/demo/
-!dat/demo/README.md
+!dat/demo/Instructions.md
 .env
 
 # wheel staging (scripts/stage_wheel.py output)
 packaging/staging/
+dat/copusMTG/*
+!dat/copusMTG/spellbook.toml

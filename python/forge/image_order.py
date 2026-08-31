@@ -41,3 +41,42 @@ def similarity_order(vectors: np.ndarray) -> list[int]:
         visited[current] = True
         order.append(current)
     return order
+
+
+def cluster_order(vectors: np.ndarray, threshold: float = 0.92) -> list[int]:
+    """Greedy threshold clustering, deterministic by construction.
+
+    Items are visited in ordinal order; an item joins the existing cluster
+    whose centroid is most similar IF that similarity >= threshold (ties
+    break to the LOWEST cluster index via argmax-first-occurrence), else it
+    opens a new cluster. The emitted order concatenates clusters by (size
+    desc, first-ordinal asc), members in ordinal order — near-duplicates
+    become adjacent so per-segment inter coding has something to predict.
+
+    O(n * n_clusters * d) time, O(n) memory. Callers cap n (~50k) with a
+    warning; approximate-NN clustering is a registered evolution, not this.
+    """
+    n = len(vectors)
+    if n < 3:
+        return list(range(n))
+    v = np.asarray(vectors, dtype=np.float32)
+    norms = np.linalg.norm(v, axis=1, keepdims=True)
+    v = v / np.where(norms == 0, 1.0, norms)
+    centroids: list[np.ndarray] = []
+    sums: list[np.ndarray] = []
+    members: list[list[int]] = []
+    for i in range(n):
+        if centroids:
+            sims = np.stack(centroids) @ v[i]
+            best = int(np.argmax(sims))  # first occurrence wins ties: deterministic
+            if sims[best] >= threshold:
+                members[best].append(i)
+                sums[best] += v[i]
+                c = sums[best] / np.linalg.norm(sums[best])
+                centroids[best] = c
+                continue
+        centroids.append(v[i].copy())
+        sums.append(v[i].copy())
+        members.append([i])
+    members.sort(key=lambda m: (-len(m), m[0]))
+    return [i for cluster in members for i in cluster]
