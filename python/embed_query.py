@@ -92,8 +92,12 @@ def _resolve_local_path(model, fallback: str) -> str:
         if nop and Path(nop).is_dir():
             return str(Path(nop).resolve())
     # hF cache fallback: resolve the revision refs/main points to (the one
-    # actually loaded), NOT an arbitrary alphabetical snapshot.
+    # actually loaded), NOT an arbitrary alphabetical snapshot. A bare name
+    # with no org ("all-MiniLM-L6-v2") is loaded by sentence-transformers
+    # from its own org, so retry with that prefix before giving up.
     snap = hf_cache_snapshot(fallback)
+    if snap is None and "/" not in fallback:
+        snap = hf_cache_snapshot(f"sentence-transformers/{fallback}")
     if snap is not None:
         return str(snap)
     return fallback
