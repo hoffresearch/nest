@@ -11,21 +11,36 @@ pub fn run(
     k: i32,
     ann_ef: Option<usize>,
     madvise_cold: bool,
+    space: Option<String>,
 ) -> Result<()> {
     let runtime = nest_runtime::MmapNestFile::open(&file)?;
-    let dim = runtime.embedding_dim();
 
-    let mut queries = Vec::with_capacity(n_queries);
-    for _ in 0..n_queries {
-        let mut q: Vec<f32> = (0..dim).map(|_| rand::random::<f32>()).collect();
-        let norm = q.iter().map(|x| x * x).sum::<f32>().sqrt();
-        if norm > 0.0 {
-            for x in &mut q {
-                *x /= norm;
-            }
-        }
-        queries.push(q);
+    // l--space NAME: bench the named band through search_space at ITS dim.
+    if let Some(name) = space {
+        let data = std::fs::read(&file)?;
+        let view = nest_format::NestView::from_bytes(&data)?;
+        let payload = view.decoded_section(nest_format::layout::SECTION_SPACE_TABLE)?;
+        let entry = nest_format::sections::decode_space_table(&payload)?
+            .into_iter()
+            .find(|s| s.name == name)
+            .ok_or_else(|| anyhow::anyhow!("space '{}' not found in the space_table", name))?;
+        let queries = random_unit_queries(n_queries, entry.dim as usize);
+        let times = run_bench(&runtime, &queries, false, |rt, q| {
+            rt.search_space(&name, q, k, None)
+        })?;
+        println!(
+            "Space '{}' ({} queries, dim={}, dtype={}) [hot]:",
+            name,
+            n_queries,
+            entry.dim,
+            entry.dtype_str()
+        );
+        print_latency(&times);
+        return Ok(());
     }
+
+    let dim = runtime.embedding_dim();
+    let queries = random_unit_queries(n_queries, dim);
 
     let header = format!(
         "Exact ({} queries, dim={}, dtype={}, simd={})",
@@ -118,4 +133,19 @@ fn print_latency(times: &[f64]) {
     println!("  p50:    {:.3} ms", p(0.50));
     println!("  p95:    {:.3} ms", p(0.95));
     println!("  p99:    {:.3} ms", p(0.99));
+}
+
+fn random_unit_queries(n: usize, dim: usize) -> Vec<Vec<f32>> {
+    let mut queries = Vec::with_capacity(n);
+    for _ in 0..n {
+        let mut q: Vec<f32> = (0..dim).map(|_| rand::random::<f32>()).collect();
+        let norm = q.iter().map(|x| x * x).sum::<f32>().sqrt();
+        if norm > 0.0 {
+            for x in &mut q {
+                *x /= norm;
+            }
+        }
+        queries.push(q);
+    }
+    queries
 }
