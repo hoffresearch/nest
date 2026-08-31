@@ -97,6 +97,23 @@ def parse_variants(spec: str) -> list[dict]:
                         "pix_fmt": "yuv444p",
                     }
                 )
+            elif kind == "av1-tune":
+                # SVT-AV1 Still Picture tune (probed; unsupported = recorded
+                # fallback to default) at the given crf, all-intra.
+                variants.append(
+                    {
+                        "name": f"{kind}-{value}",
+                        "backend": "av1",
+                        "crf": int(value),
+                        "gop_policy": "intra",
+                        "tune": "still",
+                    }
+                )
+            elif kind in ("jxl", "jxl-transcode"):
+                # lossless rungs: source-pixel lossless / reversible jpeg
+                # repack. the value is unused (lossless has no quality knob)
+                # but kept for the kind:value grammar.
+                variants.append({"name": kind, "backend": kind})
             elif kind == "dtype":
                 if value not in _DTYPES:
                     raise ValueError(f"unknown dtype: {value} (one of {sorted(_DTYPES)})")
