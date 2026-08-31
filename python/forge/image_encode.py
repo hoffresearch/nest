@@ -37,6 +37,39 @@ def provenance_sha256(payload: dict) -> str:
     return "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
 
 
+def probe_tune_still(cache: dict = {}) -> int | None:  # noqa: B006
+    """Resolve the SVT-AV1 'Still Picture' tune number for the local encoder.
+
+    The number varies by SVT-AV1 version, so it is probed (a 16x16
+    one-frame encode) instead of assumed: an unsupported value must become
+    a loud warning and a recorded fallback, never a silently ignored flag.
+    Cached per process.
+    """
+    if "value" in cache:
+        return cache["value"]
+    import sys
+
+    for candidate in (3, 4):
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as tmp:
+            # fmt: off
+            cmd = [
+                "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                "-f", "lavfi", "-i", "color=black:size=16x16:rate=1",
+                "-frames:v", "1", "-c:v", "libsvtav1",
+                "-svtav1-params", f"tune={candidate}", tmp.name,
+            ]
+            # fmt: on
+            if subprocess.run(cmd, capture_output=True).returncode == 0:
+                cache["value"] = candidate
+                return candidate
+    print(
+        "[forge] warning: local SVT-AV1 has no Still Picture tune; using default tune",
+        file=sys.stderr,
+    )
+    cache["value"] = None
+    return None
+
+
 def encode_av1(
     image_paths: Sequence[Path],
     output_path: Path,
@@ -48,6 +81,7 @@ def encode_av1(
     lp: int = 2,
     keyint: int | None = None,
     pix_fmt: str = "yuv420p",
+    tune: str = "default",
 ) -> dict:
     """Encode an ordered image list to one AV1 mp4 through a rawvideo pipe.
 
@@ -71,6 +105,11 @@ def encode_av1(
     source_bytes = sum(p.stat().st_size for p in image_paths)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     svt_params = f"lp={lp}" + (f":keyint={keyint}" if keyint else "")
+    tune_resolved: int | None = None
+    if tune == "still":
+        tune_resolved = probe_tune_still()
+        if tune_resolved is not None:
+            svt_params += f":tune={tune_resolved}"
 
     # fmt: off
     cmd = [
@@ -124,6 +163,8 @@ def encode_av1(
             "lp": lp,
             "keyint": keyint,
             "pix_fmt": actual_fmt,
+            "tune": tune,
+            "tune_resolved": tune_resolved,
         },
     }
     output_bytes = output_path.stat().st_size
@@ -133,6 +174,7 @@ def encode_av1(
         "crf": crf,
         "preset": preset,
         "fps": fps,
+        "tune": tune,
         "keyint": keyint,
         "pix_fmt": actual_fmt,
         "canvas": [width, height],
@@ -265,3 +307,100 @@ def encode_avif(
         "toolchain": toolchain,
         "provenance_sha256": provenance_sha256(toolchain),
     }
+
+
+_JPEG_SUFFIXES = {".jpg", ".jpeg"}
+
+
+def encode_jxl_dir(
+    image_paths: Sequence[Path],
+    out_dir: Path,
+    *,
+    transcode: bool,
+    on_unsupported_jpeg: str = "copy-source",
+    verify_roundtrip: bool = True,
+) -> dict:
+    """One .jxl per source image: `transcode` = bit-exact reversible JPEG
+    repack (--lossless_jpeg=1), else lossless of the source pixels (-d 0).
+
+    Preservation contract: transcode preserves the original JPEG BYTES
+    (verified by reconstructing with djxl and comparing sha256 when
+    `verify_roundtrip`); lossless preserves decoded pixels. Timestamps and
+    filenames live in the manifest only. A JPEG the encoder refuses follows
+    `on_unsupported_jpeg` (error | copy-source | lossless-jxl) and the
+    per-file decision is recorded — a silent fallback would claim a
+    reversibility the corpus does not have.
+    """
+    import shutil
+
+    for tool in ("cjxl",) + (("djxl",) if (transcode and verify_roundtrip) else ()):
+        if shutil.which(tool) is None:
+            raise RuntimeError(f"jxl backend needs '{tool}' on PATH: brew install jpeg-xl")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    files: list[str] = []
+    decisions: list[dict] = []
+    source_bytes = 0
+
+    def run_cjxl(src: Path, dst: Path, args: list[str]) -> bool:
+        return (
+            subprocess.run(["cjxl", str(src), str(dst), *args], capture_output=True).returncode == 0
+        )
+
+    for i, path in enumerate(image_paths):
+        source_bytes += path.stat().st_size
+        name = f"{i:06d}.jxl"
+        action, verified = "lossless", None
+        if transcode:
+            supported = path.suffix.lower() in _JPEG_SUFFIXES and run_cjxl(
+                path, out_dir / name, ["--lossless_jpeg=1"]
+            )
+            if supported:
+                action = "transcode"
+                if verify_roundtrip:
+                    verified = _verify_jpeg_roundtrip(path, out_dir / name)
+                    if not verified:
+                        (out_dir / name).unlink(missing_ok=True)
+                        supported = False
+            if not supported:
+                if on_unsupported_jpeg == "error":
+                    raise RuntimeError(
+                        f"jxl-transcode: {path} is not a reversibly-transcodable jpeg"
+                    )
+                if on_unsupported_jpeg == "copy-source":
+                    name = f"{i:06d}{path.suffix.lower()}"
+                    (out_dir / name).write_bytes(path.read_bytes())
+                    action, verified = "copied", True
+                else:  # lossless-jxl
+                    if not run_cjxl(path, out_dir / name, ["-d", "0"]):
+                        raise RuntimeError(f"cjxl -d 0 failed for {path}")
+                    action, verified = "lossless", None
+        else:
+            if not run_cjxl(path, out_dir / name, ["-d", "0"]):
+                raise RuntimeError(f"cjxl -d 0 failed for {path}")
+        files.append(name)
+        decisions.append({"file": name, "action": action, "verified": verified})
+
+    output_bytes = sum((out_dir / f).stat().st_size for f in files)
+    toolchain = {"cjxl": _tool_version(["cjxl", "--version"]), "transcode": transcode}
+    return {
+        "backend": "jxl-transcode" if transcode else "jxl",
+        "canvas": None,
+        "frame_count": len(files),
+        "files": files,
+        "decisions": decisions,
+        "source_bytes": source_bytes,
+        "output_bytes": output_bytes,
+        "compression_ratio": round(source_bytes / output_bytes, 2) if output_bytes else 0.0,
+        "toolchain": toolchain,
+        "provenance_sha256": provenance_sha256(toolchain),
+    }
+
+
+def _verify_jpeg_roundtrip(original: Path, jxl_path: Path) -> bool:
+    """Reconstruct the JPEG from the .jxl and compare bytes exactly."""
+    with tempfile.NamedTemporaryFile(suffix=".jpg") as tmp:
+        proc = subprocess.run(["djxl", str(jxl_path), tmp.name], capture_output=True)
+        if proc.returncode != 0:
+            return False
+        rebuilt = hashlib.sha256(Path(tmp.name).read_bytes()).hexdigest()
+    return rebuilt == hashlib.sha256(original.read_bytes()).hexdigest()
