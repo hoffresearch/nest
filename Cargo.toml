@@ -51,7 +51,7 @@ github-attestations = true
 
 # the embedder payload stages the git-lfs potion table, so release builds
 # must fetch lfs objects first (checkout only pulls pointers by default).
-github-build-setup = "dist-build-setup.yml"
+github-build-setup = "../dist-build-setup.yml"
 
 # the offline embedder payload (staged by scripts/stage_embedder_payload.py
 # and packed as one artifact) ships next to the binary archives so the
