@@ -13,12 +13,18 @@ use std::process::Command as ProcCommand;
 /// installed data-dir/share layouts (same ladder as the embedder scripts).
 fn forge_tool_path() -> PathBuf {
     let rel: PathBuf = ["python", "tools", "nest_forge.py"].iter().collect();
+    let mut bases: Vec<PathBuf> = Vec::new();
     if let Ok(cwd) = std::env::current_dir() {
-        for base in [cwd.clone(), cwd.join("..")] {
-            let c = base.join(&rel);
-            if c.exists() {
-                return c;
-            }
+        bases.push(cwd.clone());
+        bases.push(cwd.join(".."));
+    }
+    if let Some(repo) = super::embed_gate::exe_repo_root() {
+        bases.push(repo);
+    }
+    for base in bases {
+        let c = base.join(&rel);
+        if c.exists() {
+            return c;
         }
     }
     let data_home = std::env::var("XDG_DATA_HOME")
