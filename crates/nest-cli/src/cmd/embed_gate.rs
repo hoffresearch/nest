@@ -53,14 +53,35 @@ pub fn default_registry_embedder_path() -> PathBuf {
 
 fn repo_script(rel: &[&str]) -> Option<PathBuf> {
     let rel: PathBuf = rel.iter().collect();
-    let cwd = std::env::current_dir().ok()?;
-    for base in [cwd.clone(), cwd.join("..")] {
+    let mut bases: Vec<PathBuf> = Vec::new();
+    if let Ok(cwd) = std::env::current_dir() {
+        bases.push(cwd.clone());
+        bases.push(cwd.join(".."));
+    }
+    // a dev-built binary lives at <repo>/target/release/nest; resolve against
+    // its own checkout too, so the binary works when invoked from another
+    // repository (e.g. as a git submodule's toolchain).
+    if let Some(repo) = exe_repo_root() {
+        bases.push(repo);
+    }
+    for base in bases {
         let c = base.join(&rel);
         if c.exists() {
             return Some(c);
         }
     }
     None
+}
+
+/// l<repo> for a dev-built binary at <repo>/target/<profile>/nest.
+pub(crate) fn exe_repo_root() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let repo = exe.parent()?.parent()?.parent()?;
+    if repo.join("python").is_dir() {
+        Some(repo.to_path_buf())
+    } else {
+        None
+    }
 }
 
 fn installed_script(name: &str) -> PathBuf {
