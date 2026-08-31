@@ -18,7 +18,7 @@
 use anyhow::Result;
 use std::path::PathBuf;
 
-use super::util::embed_and_search;
+use super::embed_gate::embed_and_search;
 
 /// ldisclosure level for `ask`. mirrors the lens design's progressive
 /// disclosure dial, scoped to what `ask` needs pre-gate (answer | explain).

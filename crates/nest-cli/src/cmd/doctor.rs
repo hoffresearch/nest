@@ -198,7 +198,7 @@ pub fn run() -> anyhow::Result<()> {
         );
     }
 
-    let embedder = super::util::default_potion_embedder_path();
+    let embedder = super::embed_gate::default_potion_embedder_path();
     if !embedder.exists() {
         rep.fail(
             codes::EMBEDDER_MISSING,
