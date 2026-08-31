@@ -1,0 +1,94 @@
+# spellbook: 38k magic cards from a local sqlite + scryfall images.
+# the working example for `nest build --spec`; five models, media with the
+# dual quality gate, dedup, and every capability in one file.
+#
+#   nest build --spec dat/copusMTG/spellbook.toml --sample 1500
+
+[corpus]
+name = "spellbook"
+title = "Spellbook MTG corpus"
+chunker_version = "spellbook/1"
+reproducible = true
+
+[source]
+kind = "sqlite"
+db = "/Users/nn/Library/Application Support/Spellbook/data/mtg.sqlite"
+query = """
+SELECT oracle_id, name, mana_cost, type_line, oracle_text, rarity, set_code, image_uri
+FROM cards WHERE image_uri IS NOT NULL
+"""
+order_by = ["img_id", "oracle_id"]   # total order: img_id + unique tiebreaker
+
+[source.derive]
+img_id = "basename_stem(image_uri)"
+
+[[source.joins]]
+query = "SELECT oracle_id, printed_name AS pt_name FROM names_localized WHERE lang='pt' AND lang_rank=1"
+on = "oracle_id"
+
+[source.text]
+template = """
+{name} ({pt_name})
+{mana_cost}; {type_line}
+[{rarity}, {set_code}]
+{oracle_text}
+"""
+
+[source.image]
+path_template = "/Users/nn/Library/Application Support/Spellbook/data/images/normal/front/{img_id[0]}/{img_id[1]}/{img_id}.jpg"
+label_template = "{name}"
+
+[media]
+backend = "av1"
+crf = "auto"                 # dual gate: stratified ssimulacra2 + embedding drift
+tune = "still"
+speed = 6
+shard_size = 2048
+dedup = true
+
+[media.quality]
+gate_model = "clip-vit-b32"
+visual_floor_p10 = 85
+visual_floor_min = 72
+drift_floor_p10 = 0.98
+crf_ladder = [30, 35, 40, 45]
+sample_per_bucket = 12
+buckets = ["resolution", "entropy", "has_text"]
+
+[[models]]
+preset = "potion"
+text = "default"             # espaço 0: ask/retrieve/bm25/graph, offline e instantâneo
+
+[[models]]
+preset = "clip-vit-b32"
+image = "space"
+
+[[models]]
+preset = "siglip2"
+image = "space"
+
+[[models]]
+preset = "jina-v5-omni-nano"
+image = "space"
+text = "space"
+dims = [256]
+batch_size = 16
+
+[[models]]
+preset = "wemm-2b"
+image = "space"
+text = "space"
+dims = [256]
+model_path = "/Users/nn/models/modelsdownload/WeMM-Embedding-2B"
+batch_size = 8
+
+[build]
+preset = "hybrid"
+dtype = "int8"
+with_graph = true
+
+[output]
+mode = "single"
+dir = "out/spellbook"
+provenance = "standard"
+allow_remote_code = ["jina-v5-omni-nano", "wemm-2b"]

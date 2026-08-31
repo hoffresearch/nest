@@ -68,11 +68,36 @@ impl MmapNestFile {
             "manifest": view.manifest,
             "sections": sections,
             "blobs": self.blob_refs_json(),
+            "spaces": self.spaces_json(),
             "file_hash": view.file_hash_hex(),
             "content_hash": view.content_hash_hex()?,
             "simd_backend": self.simd_backend().name(),
         });
         serde_json::to_string(&doc).map_err(|e| RuntimeError::Format(NestError::Json(e)))
+    }
+
+    /// lThe space_table (0x15) as a JSON array (`null` when the file has no
+    /// multimodal capability): one object per named space with its band
+    /// geometry, so `inspect --json` consumers (stats, the model bench)
+    /// see every queryable space without opening the bands.
+    fn spaces_json(&self) -> serde_json::Value {
+        match &self.spaces {
+            None => serde_json::Value::Null,
+            Some(spaces) => spaces
+                .iter()
+                .map(|s| {
+                    serde_json::json!({
+                        "name": s.entry.name,
+                        "space_index": s.entry.space_index,
+                        "dim": s.entry.dim,
+                        "dtype": s.entry.dtype_str(),
+                        "model_hash": s.entry.model_hash,
+                        "n_vectors": s.entry.n_vectors,
+                        "band_bytes": s.size,
+                    })
+                })
+                .collect(),
+        }
     }
 
     /// lThe blob_refs (0x14) table as a JSON array (`null` when the file

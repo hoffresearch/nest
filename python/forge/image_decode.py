@@ -190,3 +190,24 @@ def verify_frame_hashes(video_path: Path, canvas: tuple[int, int], expected: Seq
     for i, (got, want) in enumerate(zip(actual, expected, strict=True)):
         if got != want:
             raise ValueError(f"frame {i} hash mismatch: media and manifest disagree")
+
+
+def decode_jxl(path: Path) -> np.ndarray:
+    """Decode one .jxl (or a copied source image) to an RGB array via djxl.
+
+    Copied fallbacks from the jxl-transcode policy keep their source suffix
+    and are opened directly; only real .jxl files go through djxl.
+    """
+    from PIL import Image
+
+    if path.suffix != ".jxl":
+        with Image.open(path) as img:
+            return np.asarray(img.convert("RGB"), dtype=np.uint8)
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
+        proc = subprocess.run(["djxl", str(path), tmp.name], capture_output=True)
+        if proc.returncode != 0:
+            raise RuntimeError(f"djxl failed for {path}: {proc.stderr.decode()[:200]}")
+        with Image.open(tmp.name) as img:
+            return np.asarray(img.convert("RGB"), dtype=np.uint8)

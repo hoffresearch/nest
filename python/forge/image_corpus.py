@@ -78,6 +78,7 @@ def build_corpus(
     scratch_db: str | None = None,
     preset: str = "compressed",
     dtype: str | None = None,
+    tune: str = "default",
     return_embeddings: bool = False,
 ) -> dict:
     input_dir, output_path = Path(input_dir), Path(output_path)
@@ -120,6 +121,7 @@ def build_corpus(
                 gop_policy=gop_policy,
                 order=order,
                 shard_size=shard_size,
+                tune=tune,
             )
             media_info, uris = built["media"], built["uris"]
             embeddings, frame_hashes = _embed_compressed(embedder, built["frames"], len(items))

@@ -85,7 +85,13 @@ step "rebuild python/_nest.so"
 # build the extension against the SAME interpreter that runs the tests, so a
 # .venv that differs from the default build python can never load a mismatched
 # _nest.so (that mismatch segfaults test_e2e). PYO3_PYTHON pins it to $PY.
-PYO3_PYTHON="$PY" cargo build --release -p nest-python >/dev/null
+# pyo3/extension-module keeps libpython OUT of the dylib (extension modules
+# resolve symbols from the host process): without it the .so hard-links a
+# libpython path and segfaults under statically-embedded interpreters (uv's
+# python-build-standalone) by loading a second runtime. maturin builds the
+# published wheel the same way.
+PYO3_PYTHON="$PY" cargo build --release -p nest-python \
+  --features pyo3/extension-module >/dev/null
 case "$(uname)" in
   Darwin) cp target/release/lib_nest.dylib python/_nest.so ;;
   Linux)  cp target/release/lib_nest.so    python/_nest.so ;;
@@ -111,6 +117,25 @@ ok "search-text model_hash gate (5 cases)"
 step "python tests/test_image_corpus.py"
 "$PY" tests/test_image_corpus.py
 ok "image corpus pipeline (37 cases)"
+
+# declarative builds: spec validation, fake-preset e2e, triad cache, dedup,
+# output modes, L3 rebuild. no heavy ML deps; media legs skip without ffmpeg.
+step "python tests/test_forge_spec.py"
+"$PY" tests/test_forge_spec.py
+ok "forge spec + pipeline"
+
+# dual quality gate + jxl round-trip; skips cleanly without ssimulacra2/cjxl.
+step "python tests/test_quality_gate.py"
+"$PY" tests/test_quality_gate.py
+ok "quality gate + jxl"
+
+step "python tests/test_cli_space.py"
+"$PY" tests/test_cli_space.py
+ok "cli space verbs (8 cases)"
+
+step "python tests/test_query_embedder_routing.py"
+"$PY" tests/test_query_embedder_routing.py
+ok "query embedder routing (4 cases)"
 
 # ---- ruff (best-effort) ----
 if "$PY" -c "import ruff" 2>/dev/null || "$PY" -m ruff --version 2>/dev/null | head -1 >/dev/null; then
@@ -138,6 +163,21 @@ if "$PY" -c "import ruff" 2>/dev/null || "$PY" -m ruff --version 2>/dev/null | h
     tests/test_image_corpus.py
     tests/test_blob_bridge.py
     tests/test_space_bridge.py
+    python/forge/model_registry.py
+    python/forge/embed_st.py
+    python/forge/build_spec.py
+    python/forge/corpus_sources.py
+    python/forge/forge_pipeline.py
+    python/forge/forge_cache.py
+    python/forge/forge_manifest.py
+    python/forge/quality_gate.py
+    python/forge/embed_query_model.py
+    python/tools/nest_forge.py
+    python/tools/nest_model_bench.py
+    tests/test_forge_spec.py
+    tests/test_quality_gate.py
+    tests/test_cli_space.py
+    tests/test_query_embedder_routing.py
   )
   "$PY" -m ruff check "${RUFF_TARGETS[@]}"
   "$PY" -m ruff format --check "${RUFF_TARGETS[@]}"

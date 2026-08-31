@@ -15,8 +15,8 @@ from pathlib import Path
 import numpy as np
 
 from . import image_media
-from .image_decode import decode_avif, decode_frames
-from .image_encode import encode_av1, encode_avif, probe_gop
+from .image_decode import decode_avif, decode_frames, decode_jxl
+from .image_encode import encode_av1, encode_avif, encode_jxl_dir, probe_gop
 
 
 def _png_frames(png_dir: Path, batch_size: int = 32) -> Iterator[list[np.ndarray]]:
@@ -111,7 +111,17 @@ def _resolve_keyint(paths, canvas, crf, speed, pix_fmt, gop_policy, all_intra):
 
 
 def _av1_sharded(
-    paths, output_path, dataset_name, canvas, crf, speed, keyint, pix_fmt, shard_size
+    paths,
+    output_path,
+    dataset_name,
+    canvas,
+    crf,
+    speed,
+    keyint,
+    pix_fmt,
+    shard_size,
+    tune="default",
+    fps=1,
 ) -> dict:
     """Consecutive ~`shard_size`-frame segments with an index in the manifest.
 
@@ -134,6 +144,8 @@ def _av1_sharded(
             preset=speed,
             keyint=keyint,
             pix_fmt=pix_fmt,
+            tune=tune,
+            fps=fps,
         )
         first = first or info
         segments.append(
@@ -178,6 +190,8 @@ def _av1(
     gop_policy,
     order,
     shard_size,
+    tune="default",
+    fps=1,
 ) -> dict:
     n = len(render_paths)
     order = list(order) if order is not None else list(range(n))
@@ -186,7 +200,17 @@ def _av1(
     media_dir = image_media.media_dir_for(output_path)
     if shard_size and n > shard_size:
         media = _av1_sharded(
-            paths, output_path, dataset_name, canvas, crf, speed, keyint, pix_fmt, shard_size
+            paths,
+            output_path,
+            dataset_name,
+            canvas,
+            crf,
+            speed,
+            keyint,
+            pix_fmt,
+            shard_size,
+            tune=tune,
+            fps=fps,
         )
         seg_names = [s["uri"] for s in media["segments"]]
     else:
@@ -199,11 +223,23 @@ def _av1(
             preset=speed,
             keyint=keyint,
             pix_fmt=pix_fmt,
+            tune=tune,
+            fps=fps,
         )
+        media["segments"] = [
+            {
+                "uri": media_name,
+                "start_frame": 0,
+                "n_frames": media["frame_count"],
+                "output_bytes": media["output_bytes"],
+                "media_sha256": media["media_sha256"],
+            }
+        ]
         seg_names = [media_name]
     media["gop"] = gop_record
     if any(a != b for a, b in zip(order, range(n), strict=True)):
         media["order"] = "similarity-greedy"
+        media["order_permutation"] = list(order)
 
     # uris are returned in ITEM order: item i names the stream position the
     # permutation carried it to. vectors/hashes come back in stream order
@@ -238,6 +274,9 @@ def build_media(
     gop_policy: str = "auto",
     order: Sequence[int] | None = None,
     shard_size: int | None = None,
+    tune: str = "default",
+    fps: int = 1,
+    jxl_transcode=None,
 ) -> dict:
     """Build the media side of a corpus and return its manifest record."""
     assert canvas is not None
@@ -245,6 +284,10 @@ def build_media(
         return _control(render_paths, output_path, dataset_name, canvas)
     if backend == "avif":
         return _avif(render_paths, output_path, dataset_name, canvas, pix_fmt, avif_quality)
+    if backend in ("jxl", "jxl-transcode"):
+        return _jxl(
+            render_paths, output_path, dataset_name, backend == "jxl-transcode", jxl_transcode
+        )
     return _av1(
         render_paths,
         output_path,
@@ -257,4 +300,77 @@ def build_media(
         gop_policy,
         order,
         shard_size,
+        tune=tune,
+        fps=fps,
     )
+
+
+def _jxl(render_paths, output_path, dataset_name, transcode: bool, policy) -> dict:
+    """One .jxl per SOURCE image, no letterbox: the whole point is losslessness.
+
+    `jxl` mode is lossless of the source pixels; `jxl-transcode` is the
+    bit-exact reversible JPEG repack. Decoded frames vary in size, which the
+    embed pass handles; the uniform-canvas contract belongs to the lossy
+    stream backends.
+    """
+    jxl_dir = image_media.media_dir_for(output_path) / f"{dataset_name}-jxl"
+    media = encode_jxl_dir(
+        render_paths,
+        jxl_dir,
+        transcode=transcode,
+        on_unsupported_jpeg=getattr(policy, "on_unsupported_jpeg", "copy-source"),
+        verify_roundtrip=getattr(policy, "verify_roundtrip", True),
+    )
+    uris = [f"media://{dataset_name}-jxl/{name}" for name in media["files"]]
+
+    def jxl_frames(batch_size: int = 32) -> Iterator[list[np.ndarray]]:
+        batch: list[np.ndarray] = []
+        for name in media["files"]:
+            batch.append(decode_jxl(jxl_dir / name))
+            if len(batch) == batch_size:
+                yield batch
+                batch = []
+        if batch:
+            yield batch
+
+    return {"media": media, "uris": uris, "frames": jxl_frames}
+
+
+def decoded_frames_fn(media_dir: Path, media: dict, frame_uris: Sequence[str]):
+    """Rebuild the decoded-frames iterator for an EXISTING media set (resume
+    path): what `build_media` hands back at encode time, reconstructed from
+    the manifest record. av1 yields STREAM order (the caller un-permutes
+    with `order_permutation`); per-image backends yield item order."""
+    backend = media.get("backend", "")
+    if backend == "av1":
+        canvas = tuple(media["canvas"])
+        seg_names = [s["uri"] for s in media["segments"]]
+
+        def frames(batch_size: int = 32) -> Iterator[list[np.ndarray]]:
+            for name in seg_names:
+                yield from decode_frames(media_dir / name, canvas, batch_size=batch_size)
+
+        return frames
+
+    rel_paths = [u.removeprefix("media://") for u in frame_uris]
+
+    def per_image_frames(batch_size: int = 32) -> Iterator[list[np.ndarray]]:
+        from PIL import Image
+
+        batch: list[np.ndarray] = []
+        for rel in rel_paths:
+            path = media_dir / rel
+            if path.suffix == ".jxl":
+                batch.append(decode_jxl(path))
+            elif path.suffix == ".avif":
+                batch.append(decode_avif(path))
+            else:
+                with Image.open(path) as img:
+                    batch.append(np.asarray(img.convert("RGB"), dtype=np.uint8))
+            if len(batch) == batch_size:
+                yield batch
+                batch = []
+        if batch:
+            yield batch
+
+    return per_image_frames

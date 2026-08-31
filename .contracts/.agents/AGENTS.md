@@ -17,10 +17,12 @@ operating notes for ai agents and human contributors working in this repo. the p
 dev build is still manual:
 
 ```
-cargo build --release -p nest-python
+cargo build --release -p nest-python --features pyo3/extension-module
 cp target/release/lib_nest.dylib python/_nest.so   # macOS
 cp target/release/lib_nest.so   python/_nest.so    # linux
 ```
+
+the `pyo3/extension-module` feature keeps libpython out of the cdylib. without it the .so hard-links a libpython path and segfaults under statically-embedded interpreters (uv's python-build-standalone) by loading a second runtime; `release_check.sh` builds with the feature.
 
 the published wheel is maturin, staged (never edit `packaging/staging/` by hand):
 
@@ -39,6 +41,10 @@ python tests/test_offline_guard.py
 python tests/test_blob_bridge.py
 python tests/test_space_bridge.py
 python tests/test_image_corpus.py
+python tests/test_forge_spec.py
+python tests/test_quality_gate.py
+python tests/test_cli_space.py
+python tests/test_query_embedder_routing.py
 ```
 
 no pytest. tests are plain scripts with `if __name__ == "__main__"`. `pytest tests/` does not work. `test_image_corpus.py` (37 cases) exercises the forge image-corpus pillar (encode/decode, gop probe, sharding, ordering) and skips cleanly when ffmpeg's av1/avif encoders are unavailable; it does not need the vision model itself. building an actual image corpus (`python/forge/embed_image.py`) needs `open_clip` + torch, not part of the default forge dependency group.
@@ -60,17 +66,21 @@ crates/nest-format    frozen v1 container: layout, manifest, sections, encodings
 crates/nest-runtime   depends on nest-format: mmap open, SIMD dispatcher, MmapNestFile, ann::HnswIndex,
                        bm25::Bm25Index, graph::CsrIndex, exact/ann/graph/hybrid search with mandatory
                        exact rerank
-crates/nest-cli        depends on nest-format + nest-runtime: clap binary `nest`, 9 engine subcommands
-                       + the ask/retrieve flagship verbs
+crates/nest-cli        depends on nest-format + nest-runtime: clap binary `nest`, twelve engine
+                       subcommands (incl search-space, the declarative build launcher) + the
+                       ask/retrieve flagship verbs + doctor; the clap surface lives in cli.rs,
+                       the one three-layer model gate in cmd/embed_gate.rs
 crates/nest-python     depends on nest-format + nest-runtime: cdylib _nest, PyO3 abi3-py312
 
 forge-core/            SEPARATE cargo workspace at the repo root, OUTSIDE crates/ (ingestion layer,
                        FORGE-0a: the frozen .fci canonical-intermediate schema). its deps never enter
                        the sovereign crates; not in the `--workspace` set. .fci is versioned independently.
 
-python/                writer pipeline (builder.py), model fingerprint, query embedders, forge/ tools
-python/tools/          measure_presets.py + compare_measure.py (the regression ladder), corpus and
-                       image-corpus builders, image eval tools
+python/                writer pipeline (builder.py), model fingerprint, query embedders, forge/
+                       tools incl the declarative build surface (build_spec + spec_rules +
+                       corpus_sources + forge_pipeline + forge_emit + forge_cache + forge_manifest),
+                       the model registry (model_registry + model_adapters + embed_st +
+                       embed_st_worker) and the dual quality gate (quality_gate)
 tests/                 python test scripts (plain scripts, not pytest)
 doc/                   arc/ architecture pair, usage.md, changelog.md, data-governance.md
 dat/                   corpus_next.v1.nest (LFS demo corpus), measure/ regression baselines, demo/ sources
@@ -84,7 +94,7 @@ examples/              fastapi, flask, jupyter integration examples
 
 key rust deps: memmap2 (mmap), rayon (parallel build), zstd / half / bytemuck (encodings), sha2 (hashing), thiserror (typed errors), clap (cli), serde / serde_json (manifest).
 
-CLI binary: `nest`. nine engine subcommands: `inspect`, `validate`, `search`, `search-ann`, `search-graph`, `search-text`, `benchmark`, `stats`, `cite`. plus two agent-native flagship verbs layered over the same engine: `ask` (text query in, cited answer out, `--disclose answer|explain`) and `retrieve` (json/jsonl answer-pack of cited spans where score IS the exact rerank value). the flagship keeps the nine subcommands as-is under the hood; verb-collapse, the `nest dev` namespace, and the nest-profile crate are deferred (churn with no user value pre-users).
+CLI binary: `nest`. twelve engine subcommands: `inspect`, `validate`, `search`, `search-ann`, `search-graph`, `search-space` (exact search over one named multimodal band), `search-text`, `benchmark` (incl `--space`), `stats`, `cite`, `build` (declarative corpus build, a launcher over `python/tools/nest_forge.py`), `doctor`. plus two agent-native flagship verbs layered over the same engine: `ask` (text query in, cited answer out, `--disclose answer|explain`) and `retrieve` (json/jsonl answer-pack of cited spans where score IS the exact rerank value). the flagship embeds offline and routes the query embedder BY THE MANIFEST MODEL: potion corpora keep the potion script, any registry model goes through `python/forge/embed_query_model.py` (with `--mrl-dim` for truncated default spaces). one or several embedding models per build come from the preset registry (`python/forge/model_registry.py`); the build contract with every user-selectable knob is `doc/usage.md` sections 12-14 and the working example `dat/copusMTG/spellbook.toml`. verb-collapse, the `nest dev` namespace, and the nest-profile crate stay deferred.
 
 python entry: `sys.path.insert(0, "python"); import nest`. dynamic loader finds `_nest.so` or `lib_nest.dylib`.
 
@@ -111,7 +121,7 @@ python entry: `sys.path.insert(0, "python"); import nest`. dynamic loader finds 
 - tags on `main` only (`v0.2.0` is current). `Cargo.toml` workspace version tracks the latest released tag.
 - pushing a `v*` tag on `main` runs the full release: `.github/workflows/release.yml` (cargo-dist: cli tarballs for 5 targets, checksums, sigstore attestations, homebrew formula, the embedder payload artifact) and `.github/workflows/pypi.yml` (maturin abi3 wheels for 4 platforms, OIDC trusted publishing). `.github/workflows/install-test.yml` then tests the INSTALLED product per platform. maintainer one-time setup for these channels is in `doc/install.md` > maintainer checklist.
 - git lfs tracks `*.nest`, `*.safetensors`, datasets, and the vendored potion table (including `dat/corpus_next.v1.nest`); golden fixtures under `crates/nest-format/tests/fixtures/` stay in regular git. run `git lfs pull` if a binary is a pointer.
-- demo datasets under `dat/demo/` are intentionally gitignored and downloaded locally from upstream sources listed in `dat/demo/README.md`.
+- demo datasets under `dat/demo/` are intentionally gitignored and downloaded locally from upstream sources listed in `dat/demo/Instructions.md`.
 - tests run without the demo datasets (the unit and golden-fixture tests avoid depend on them); only `measure_presets.py` and `release_check.sh` need the baseline corpus.
 - `dat/measure/corpus_*.nest` and `*.nest-*` are gitignored: regeneration artifacts, not assets. the JSON files next to them ARE tracked (regression baselines).
 - `scripts/pre-commit` is a PHI/data backstop that aborts commits staging non-allow-listed data artifacts; install per clone with `cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit` (copy, not `core.hooksPath`, so git-lfs hooks keep working).
@@ -173,7 +183,7 @@ documentation, comments, and commit messages follow the README's tone.
 - **PT-BR fingerprint corpus**: the model fingerprint is computed against the local sentence-transformers cache. first-time builders must `python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')"` to populate the cache, otherwise `nest_build_corpus.py` and the fingerprint test fail.
 - **squash merge breaks `dev` history**: when a PR squash-merges into `main`, the squashed commit hash differs from the originals on `dev`. subsequent merges of `main` into `dev` will conflict on any files the squash touched. resolve by `git checkout --ours` from `dev` (dev is always the source of truth post-squash; main is just a flat snapshot).
 - **avoid run `cargo clean` casually**: rebuild times are 30-60s for the full workspace. incremental compilation handles most edits.
-- **`ask`/`retrieve` embed OFFLINE with potion, NOT sentence-transformers**: the flagship verbs shell out to `python/forge/embed_query_potion.py` (the default potion static table, numpy + tokenizers, no torch, no socket), so they stay offline-by-construction. only `search-text` uses `python/embed_query.py` (sentence-transformers, network on first use). the embedder runs under `python3` unless `NEST_PYTHON` is set; point `NEST_PYTHON` at a venv that carries the forge deps (numpy + tokenizers + the git-lfs potion table) or the embed step fails with `ModuleNotFoundError`. the two flagship e2e tests in `cli_e2e.rs` and `python/forge/test_retrieve.py` need those deps and skip cleanly when absent; they are not run by `release_check.sh`.
+- **`ask`/`retrieve` embed OFFLINE, routed by the manifest model**: a potion corpus uses `python/forge/embed_query_potion.py` (static table, numpy + tokenizers, no torch, no socket); a corpus whose default text space is a registry model (wemm, clip, jina) routes through `python/forge/embed_query_model.py`, which loads that model locally (network only with `NEST_ALLOW_DOWNLOAD=1`). only `search-text` uses `python/embed_query.py` (sentence-transformers, network on first use). the embedder runs under `python3` unless `NEST_PYTHON` is set; point `NEST_PYTHON` at a venv that carries the forge deps (numpy + tokenizers + the git-lfs potion table) or the embed step fails with `ModuleNotFoundError`. the two flagship e2e tests in `cli_e2e.rs` and `python/forge/test_retrieve.py` need those deps and skip cleanly when absent; they are not run by `release_check.sh`.
 - **`cite` is tier-1 only**: it returns the stored canonical text + verifying hashes, NEVER an original-byte reopen. `ask`/`retrieve` print the same tier-1 text. do not let help text or docs claim original-byte reopen (that is net-new tier-2 catalog work, post-gate).
 
 # known gaps
@@ -183,6 +193,7 @@ these are documented honest limitations of the current code, not bugs to silentl
 - **`search-text` boot overhead (~300-500ms)**: each invocation forks a python process, imports sentence-transformers, embeds the query, then exits. the latency table in the README and `doc/usage.md` measures the search path AFTER the vector is ready, not end-to-end. python-driven workloads (`nest.NestFile.search` in a loop) avoid this.
 - **BM25 tokenizer is word-segmented-only**: `crates/nest-runtime/src/bm25/tokenize.rs` splits on non-alphanumeric Unicode boundaries. correct for latin, cyrillic, greek, devanagari. degrades for CJK, thai, lao (each character becomes a token, posting lists explode, recall drops). hybrid search on those languages should disable BM25 (`with_bm25=False`) until a language-aware tokenizer ships.
 - **homebrew formula installs the binary only**: the dist-generated formula in the `hoffresearch/homebrew-nest` tap does not lay down the embedder payload, so a brew-installed `nest` reports exit 4 from `nest doctor` until the user also runs the one-liner (or copies `python/forge/` into the data dir by hand). fixing this means a custom formula, deferred until the tap sees real use.
+- **st registry models have measured cost cliffs**: wemm-2b runs fp16 on mps with `image_max_side=768` (~0.6 img/s); jina-v5-omni-nano has no `image_max_side` default yet and embeds at native resolution (~0.3 img/s); changing either invalidates that model's cache by design (the knob is recipe-hashed). the siglip2 TEXT tower resolves an hf tokenizer whose optional-file probes can fail in strict offline mode even with the snapshot cached (usage section 12 has the workaround); its image tower is unaffected.
 - **the semantic default embedder is english**: `potion-base-8M` is distilled from `bge-base-en-v1.5`, so english synonyms cluster tightly (car ~ automobile +0.78 vs car ~ banana +0.04) but non-english text rides english subword rows and the semantic signal is weak (carro ~ automovel +0.08 vs carro ~ banana -0.05: right direction, small margin). for a primarily non-english corpus, bring a multilingual sentence-transformers model (the ceiling path) or a multilingual potion table. the lexical floor is language-agnostic but captures literal token overlap only.
 
 # things to avoid
@@ -202,9 +213,11 @@ these are documented honest limitations of the current code, not bugs to silentl
 - `doc/install.md`: every install channel (one-liner, pypi `nestdb`, brew, binstall, docker), verification (sha256 + attestations), offline notes, and the maintainer one-time checklist.
 - `doc/arc/arc.yaml`: the single architecture reference, machine-readable for agents and tooling and the human-readable inventory plus runtime contract summary.
 - `doc/arc/arc.mmd`: mermaid sequence diagram of the build and query flows.
-- `doc/usage.md`: how-to for the nine engine subcommands plus the ask/retrieve flagship verbs, presets, offline mode, citations.
+- `doc/usage.md`: how-to for the twelve engine subcommands plus the ask/retrieve flagship verbs, presets, offline mode, citations, the model registry and multi-model spaces (section 12), declarative builds (section 13), and the compression levers with the dual quality gate (section 14).
 - `doc/changelog.md`: v0.1.0, v0.2.0, and unreleased deltas.
-- `dat/demo/README.md`: what each upstream PT-BR dataset is and how to rebuild the unified corpus.
+- `dat/demo/Instructions.md`: what each upstream PT-BR dataset is and how to rebuild the unified corpus.
+- `dat/copusMTG/spellbook.toml`: the working declarative build spec (the corpus artifacts beside it are gitignored; only the spec is tracked).
+- `doc/data-governance.md`: provenance, licensing, and personal-data posture for distributed `.nest` files.
 - `doc/CONTRIBUTING.md`: external contributor flow.
 - `doc/CODE_OF_CONDUCT.md`: contributor covenant 2.1, lowercase plain-style.
 - `doc/SECURITY.md`: reporting channel, supported versions, security scope.

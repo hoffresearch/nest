@@ -18,7 +18,7 @@
 use anyhow::Result;
 use std::path::PathBuf;
 
-use super::util::embed_and_search;
+use super::embed_gate::embed_and_search;
 
 /// loutput format for the answer-pack: `jsonl` (one json object per line, the
 /// agent-native streaming shape, default) or `json` (a single pretty array).
