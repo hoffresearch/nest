@@ -47,6 +47,27 @@ pub fn run(file: PathBuf) -> Result<()> {
             entry.section_id, name, enc, entry.size
         );
     }
+    // lnamed multimodal spaces (0x15): each is a separately queryable vector
+    // band with its own model_hash gate; surfaced here so an operator can see
+    // what `search-space` can address without `inspect --json`.
+    if let Ok(entry) = view.entry(nest_format::layout::SECTION_SPACE_TABLE) {
+        let _ = entry;
+        if let Ok(payload) = view.decoded_section(nest_format::layout::SECTION_SPACE_TABLE) {
+            if let Ok(spaces) = nest_format::sections::decode_space_table(&payload) {
+                println!("spaces:       {}", spaces.len());
+                for s in &spaces {
+                    println!(
+                        "  {:<24} dim={:<5} dtype={:<8} n={:<7} model_hash={}",
+                        s.name,
+                        s.dim,
+                        s.dtype_str(),
+                        s.n_vectors,
+                        s.model_hash
+                    );
+                }
+            }
+        }
+    }
     println!("file_hash:    {}", view.file_hash_hex());
     println!("content_hash: {}", view.content_hash_hex()?);
     Ok(())
