@@ -29,7 +29,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install ruff sentence-transformers pandas zstandard pyarrow
 ```
 
-`dat/corpus_next.v1.nest` is tracked via git lfs. demo datasets under `dat/demo/` are local-only and gitignored; fetch them with the commands documented in `dat/demo/README.md`. without those datasets, runtime unit tests still pass.
+`dat/corpus_next.v1.nest` is tracked via git lfs. demo datasets under `dat/demo/` are local-only and gitignored; fetch them with the commands documented in `dat/demo/Instructions.md`. without those datasets, runtime unit tests still pass.
 
 ## conventions and writing style
 
