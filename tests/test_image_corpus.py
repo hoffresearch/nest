@@ -608,7 +608,6 @@ class ImageCorpusTest(unittest.TestCase):
         if not have_avif():
             self.skipTest("avifenc/avifdec not available")
         import nest
-        from forge import image_media
 
         result = self._build("avicorpus", compress=True, backend="avif")
         manifest = json.loads(Path(result["manifest"]).read_text())

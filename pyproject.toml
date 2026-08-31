@@ -43,10 +43,11 @@ extend-exclude = [
 # UP  = pyupgrade
 # SIM = flake8-simplify
 select = ["E", "F", "W", "I", "B", "UP", "SIM"]
-# `nest` is the package name and is detected by `sys.path.insert`, not
-# by a regular install — silence the unused-import false positives that
-# come from re-exporting a C extension.
-ignore = ["E402", "F401"]
+# `nest` is the package name and is detected by `sys.path.insert`, not by a
+# regular install. E402 stays ignored for the path-bootstrap idiom; unused
+# imports (F401) are enforced, with intentional re-exports declared via
+# __all__ or a targeted noqa.
+ignore = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"
