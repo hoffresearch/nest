@@ -6,7 +6,6 @@ Run: .venv/bin/python tests/test_cli_space.py  (needs target/release/nest)
 """
 
 import json
-import os
 import subprocess
 import sys
 import tempfile
