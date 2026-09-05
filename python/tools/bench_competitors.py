@@ -33,7 +33,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import _bench_systems as systems  # noqa: E402
 
-
 # one note per line; wrapped here only for the 100-column rule.
 NOTES = (
     "\n".join(
