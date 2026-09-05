@@ -35,8 +35,16 @@ import _bench_systems as systems  # noqa: E402
 
 
 def make_rows(n: int, dim: int, seed: int) -> np.ndarray:
+    """clustered rows, not i.i.d. gaussians: real embeddings live near
+    topics. at 384 dims i.i.d. gaussian rows have no neighbourhood structure
+    (every distance concentrates on the same value) and EVERY hnsw
+    implementation collapses to ~0.3 recall@10, which says nothing about the
+    stores. one of `n // 50` centers plus 35% isotropic noise, l2-normalized."""
     rng = np.random.default_rng(seed)
-    rows = rng.standard_normal((n, dim), dtype=np.float32)
+    n_centers = max(8, n // 50)
+    centers = rng.standard_normal((n_centers, dim), dtype=np.float32)
+    assign = rng.integers(0, n_centers, size=n)
+    rows = centers[assign] + 0.35 * rng.standard_normal((n, dim), dtype=np.float32)
     rows /= np.linalg.norm(rows, axis=1, keepdims=True)
     return rows
 
@@ -189,15 +197,19 @@ def main() -> None:
 
     header = (
         f"measured {meta['date']} on {meta['machine']}, python {meta['python']}, single "
-        f"thread, n={args.n:,} synthetic l2-normalized rows x {args.dim} dims, "
+        f"thread, n={args.n:,} synthetic clustered l2-normalized rows x {args.dim} dims "
+        f"({max(8, args.n // 50)} centers), "
         f"{args.queries} queries, k={args.k}, seed {args.seed}. reproduce: "
         f"`.venv/bin/python python/tools/bench_competitors.py --n {args.n} --dim {args.dim} "
         f"--queries {args.queries}`."
     )
     notes = [
         "- `cold open + 1st query`: wall time of a fresh interpreter that opens the store and "
-        "answers one query, minus an interpreter doing nothing (3 runs, min). the mmap stores "
-        "(nest, usearch view) pay for the pages they touch, not the file.",
+        "answers one query, minus an interpreter doing nothing (3 runs, min). nest's number is "
+        "dominated by `open` verifying every section checksum and the footer hash over the whole "
+        "file before serving anything; the other stores trust their bytes.",
+        "- `build (s)`: single-threaded everywhere (hnswlib and usearch are told threads=1); "
+        "nest's hnsw build is the slow row, tracked as doc/hardening-plan.md item 4.11.",
         "- `p50 / p99`: warm, single-threaded, one query at a time, from python. python call "
         "overhead is inside every number.",
         "- `recall@k` is against brute force over the same rows; exact paths are asserted at 1.0.",
