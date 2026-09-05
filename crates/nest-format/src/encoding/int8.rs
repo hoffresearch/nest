@@ -12,23 +12,24 @@
 //! We pick per-vector scales so a single outlier vector cannot crush
 //! resolution for the whole corpus.
 
+use crate::bytes::le_u32;
 use crate::error::NestError;
 
 pub const INT8_PAYLOAD_VERSION: u32 = 1;
 pub const INT8_SCALE_KIND_PER_VECTOR: u32 = 0;
 pub const INT8_PREFIX_SIZE: usize = 8;
 
-/// lQuantize an L2-normalized float32 embedding to int8 with a per-vector
+/// Quantize an L2-normalized float32 embedding to int8 with a per-vector
 /// scale. Returns `(scale, i8_bytes)` where `f32_value ≈ i8 * scale`.
 ///
-/// lL2-normalized vectors live in `[-1, 1]`; in practice the largest
+/// L2-normalized vectors live in `[-1, 1]`; in practice the largest
 /// component is well below 1 so we map `max(|v|)` to 127 to use the
 /// full int8 range. Re-normalization at query time accumulates in f32.
 pub fn quantize_f32_to_i8(values: &[f32]) -> (f32, Vec<i8>) {
     let max_abs = values.iter().fold(0.0f32, |acc, &v| acc.max(v.abs()));
     if max_abs == 0.0 {
-        // lPathological zero vector — quantize to all zeros with scale 1.
-        // lThe reader's zero-norm guard will reject queries against this.
+        // Pathological zero vector — quantize to all zeros with scale 1.
+        // The reader's zero-norm guard will reject queries against this.
         return (1.0, vec![0i8; values.len()]);
     }
     let scale = max_abs / 127.0;
@@ -43,7 +44,7 @@ pub fn quantize_f32_to_i8(values: &[f32]) -> (f32, Vec<i8>) {
     (scale, q)
 }
 
-/// lEncode the int8 embeddings section payload. Layout matches
+/// Encode the int8 embeddings section payload. Layout matches
 /// `INT8_PAYLOAD_VERSION` / `INT8_SCALE_KIND_PER_VECTOR`.
 ///
 /// `embeddings` is `n * dim` row-major f32 values. Returns a buffer
@@ -74,7 +75,7 @@ pub fn encode_int8_embeddings(embeddings: &[f32], n: usize, dim: usize) -> crate
     Ok(out)
 }
 
-/// lDecoded view over an int8 embeddings payload. The slices borrow
+/// Decoded view over an int8 embeddings payload. The slices borrow
 /// from the input bytes (no copy).
 pub struct Int8EmbeddingsView<'a> {
     pub scales: &'a [u8], // n * 4 bytes (f32 LE)
@@ -85,21 +86,23 @@ pub struct Int8EmbeddingsView<'a> {
 
 impl<'a> Int8EmbeddingsView<'a> {
     pub fn parse(bytes: &'a [u8], n: usize, dim: usize) -> crate::Result<Self> {
-        let want = INT8_PREFIX_SIZE + n * 4 + n * dim;
+        // checked: `n` / `dim` are header-controlled; an overflowed product
+        // must be a typed mismatch, never a wrapped "match".
+        let want = super::expected_embeddings_size("int8", n, dim).unwrap_or(usize::MAX);
         if bytes.len() != want {
             return Err(NestError::EmbeddingSizeMismatch {
                 expected: want,
                 got: bytes.len(),
             });
         }
-        let version = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
+        let version = le_u32(&bytes[0..4])?;
         if version != INT8_PAYLOAD_VERSION {
             return Err(NestError::UnsupportedSectionVersion {
                 section_id: crate::layout::SECTION_EMBEDDINGS,
                 version,
             });
         }
-        let kind = u32::from_le_bytes(bytes[4..8].try_into().unwrap());
+        let kind = le_u32(&bytes[4..8])?;
         if kind != INT8_SCALE_KIND_PER_VECTOR {
             return Err(NestError::MalformedSectionPayload {
                 section_id: crate::layout::SECTION_EMBEDDINGS,
@@ -115,7 +118,7 @@ impl<'a> Int8EmbeddingsView<'a> {
         })
     }
 
-    /// lRead scale[i] as f32.
+    /// Read scale[i] as f32.
     #[inline]
     pub fn scale(&self, i: usize) -> f32 {
         let off = i * 4;
@@ -127,14 +130,13 @@ impl<'a> Int8EmbeddingsView<'a> {
         ])
     }
 
-    /// lBorrow row[i] as `&[i8]`.
+    /// Borrow row[i] as `&[i8]`.
     #[inline]
     pub fn row(&self, i: usize) -> &'a [i8] {
         let start = i * self.dim;
         let end = start + self.dim;
-        // i8 has the same layout as u8 (one-byte signed).
-        unsafe {
-            std::slice::from_raw_parts(self.bodies[start..end].as_ptr() as *const i8, self.dim)
-        }
+        // i8 has the same size and alignment as u8; bytemuck checks both at
+        // compile time, so this reinterpretation carries no `unsafe`.
+        bytemuck::cast_slice(&self.bodies[start..end])
     }
 }

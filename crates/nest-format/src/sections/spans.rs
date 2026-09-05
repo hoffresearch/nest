@@ -116,6 +116,13 @@ pub fn decode_chunks_original_spans_intpack(rest: &[u8]) -> crate::Result<Vec<u8
     let mut c = Cursor::new(rest, SECTION_CHUNKS_ORIGINAL_SPANS);
     let count = c.read_u32()? as usize;
     let n_uris = c.read_u32()? as usize;
+    // bound the claim against the bytes before allocating: every pooled uri
+    // costs at least its 4-byte length prefix, so a hostile `n_uris` of 1.3G
+    // (a real cargo-fuzz finding: a 90-byte payload asked for 31 GB) is a
+    // typed error instead of an allocation abort.
+    if n_uris > (rest.len() - c.pos) / 4 {
+        return Err(c.malformed("spans intpack: uri pool count exceeds payload"));
+    }
     let mut pool: Vec<String> = Vec::with_capacity(n_uris);
     for _ in 0..n_uris {
         pool.push(c.read_lp_str()?);

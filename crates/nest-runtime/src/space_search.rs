@@ -15,7 +15,7 @@ use crate::search::sort_scores_desc;
 use crate::{RerankSourceKind, SearchExplain, SearchResult};
 
 impl MmapNestFile {
-    /// lExact flat search over one named multimodal space (e.g. "vision").
+    /// Exact flat search over one named multimodal space (e.g. "vision").
     /// the query must be embedded with the model the space's
     /// `model_hash` fingerprints and have the space's dim; both are
     /// checked up front (the per-space honesty gate), so a text-tower
@@ -71,7 +71,7 @@ impl MmapNestFile {
 
         let dtype = DType::from_str(entry.dtype_str())?;
         let n = entry.n_vectors as usize;
-        let src = RerankSource::new(dtype, band, n, entry.dim as usize)?;
+        let mut src = RerankSource::new(dtype, band, n, entry.dim as usize)?;
         let mut scores: Vec<(usize, f32)> = Vec::with_capacity(n);
         for i in 0..n {
             scores.push((i, src.score(&qnorm, i)));

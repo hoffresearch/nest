@@ -9,6 +9,7 @@
 
 use super::REPACK_KIND_CHUNK_IDS;
 use super::codec::{Cursor, read_prefix, write_lp_str, write_prefix};
+use crate::bytes::le_u32;
 use crate::error::NestError;
 use crate::layout::SECTION_CHUNK_IDS;
 
@@ -82,7 +83,7 @@ pub fn decode_chunk_ids_intpack(rest: &[u8]) -> crate::Result<Vec<u8>> {
     if rest.len() < 4 {
         return Err(malformed("chunk_ids intpack: truncated count"));
     }
-    let count = u32::from_le_bytes(rest[0..4].try_into().unwrap()) as usize;
+    let count = le_u32(&rest[0..4])? as usize;
     let body = &rest[4..];
     if body.len() != count * DIGEST_LEN {
         return Err(malformed("chunk_ids intpack: digest body size mismatch"));

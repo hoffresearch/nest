@@ -1,15 +1,17 @@
-//! CLI subcommand implementations. One module per subcommand,
-//! orchestrated by `main::Commands`. Shared helpers in `util`.
+//! CLI subcommand implementations. One module per engine subcommand,
+//! orchestrated by `main::Commands`; the agent verbs (`ask`, `retrieve`,
+//! `build`) live under `agent/`. Shared helpers: `util` (output),
+//! `embed_gate` (the ONE query-embedder spawn + model gate, used by
+//! search-text, ask, retrieve and doctor), `pyenv` (interpreter lookup).
 
-pub mod ask;
+pub mod agent;
 pub mod benchmark;
-pub mod build;
 pub mod cite;
 pub mod doctor;
 pub mod embed_gate;
 pub mod inspect;
+pub mod media;
 pub mod pyenv;
-pub mod retrieve;
 pub mod search;
 pub mod search_ann;
 pub mod search_graph;

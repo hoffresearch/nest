@@ -4,6 +4,11 @@
 //! the same sorted samples give a byte-identical dict, and a wrong-dict
 //! decode errors cleanly (never a panic).
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::encoding::{decode_zstd_dict_payload, encode_zstd_dict, train_dict};
 use nest_format::sections::encode_chunks_canonical;
 

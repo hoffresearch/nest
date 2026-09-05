@@ -42,6 +42,11 @@
 //!   [last-40)    footer (u64 footer_size + 32-byte file_hash)
 //! ```
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::layout::*;
 use nest_format::sections::{
     decode_chunk_ids, decode_chunks_canonical, decode_chunks_original_spans, decode_search_contract,
@@ -88,7 +93,7 @@ fn golden_file_parses_with_full_validation() {
     assert_eq!(view.header.n_chunks, 1);
     assert_eq!(view.header.n_embeddings, 1);
     assert_eq!(view.section_table.len(), 6);
-    // lEvery section payload starts on a SECTION_ALIGNMENT (64B) boundary.
+    // Every section payload starts on a SECTION_ALIGNMENT (64B) boundary.
     for entry in &view.section_table {
         assert_eq!(
             entry.offset % SECTION_ALIGNMENT,

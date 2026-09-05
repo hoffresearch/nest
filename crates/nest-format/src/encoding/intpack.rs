@@ -15,6 +15,7 @@
 //! payload holds at most a few GiB of packed body (the block directory uses
 //! u32 byte offsets); that is far above any real index or metadata column.
 
+use crate::bytes::{le_u32, le_u64};
 use crate::error::NestError;
 
 /// values per frame-of-reference block.
@@ -53,8 +54,10 @@ pub fn pack_u64s(values: &[u64]) -> Vec<u8> {
     let mut blocks: Vec<u8> = Vec::new();
     for chunk in values.chunks(INTPACK_BLOCK) {
         dir.push((blocks_start + blocks.len()) as u32);
-        let min = *chunk.iter().min().unwrap();
-        let max = *chunk.iter().max().unwrap();
+        // `chunks()` never yields an empty slice, so the fold sees >= 1 value.
+        let (min, max) = chunk
+            .iter()
+            .fold((u64::MAX, 0u64), |(lo, hi), &v| (lo.min(v), hi.max(v)));
         let width = bit_width(max - min);
         blocks.extend_from_slice(&min.to_le_bytes());
         blocks.push(width);
@@ -96,7 +99,7 @@ fn read_u32(bytes: &[u8], pos: usize) -> Result<u32, NestError> {
     if end > bytes.len() {
         return Err(malformed("intpack: truncated u32"));
     }
-    Ok(u32::from_le_bytes(bytes[pos..end].try_into().unwrap()))
+    le_u32(&bytes[pos..end])
 }
 
 #[inline]
@@ -105,7 +108,7 @@ fn read_u64(bytes: &[u8], pos: usize) -> Result<u64, NestError> {
     if end > bytes.len() {
         return Err(malformed("intpack: truncated u64"));
     }
-    Ok(u64::from_le_bytes(bytes[pos..end].try_into().unwrap()))
+    le_u64(&bytes[pos..end])
 }
 
 /// number of packed value-bytes a block of `block_len` values at `width`

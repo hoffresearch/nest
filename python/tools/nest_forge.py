@@ -19,7 +19,13 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "python"))
 
 from forge import model_registry  # noqa: E402
-from forge.build_spec import SpecError, emitted_spaces, load_spec, validate  # noqa: E402
+from forge.build_spec import (  # noqa: E402
+    SpecError,
+    default_model,
+    emitted_spaces,
+    load_spec,
+    validate,
+)
 
 
 def dry_run_report(spec, allow_heavy: bool) -> dict:
@@ -48,7 +54,14 @@ def dry_run_report(spec, allow_heavy: bool) -> dict:
     if spec.output.mode in ("single", "both"):
         outputs.append(f"{spec.name}.nest")
     if spec.output.mode in ("per-model", "both"):
-        outputs.extend(f"{spec.name}-{m.preset}.nest" for m in spec.models)
+        dm = default_model(spec)
+        outputs.extend(
+            f"{spec.name}-{m.preset}.nest"
+            for m in spec.models
+            # mirror forge_emit: in pure per-model mode the default text model
+            # alone would duplicate the single file's core, so emit skips it.
+            if not (m.preset == dm.preset and m.image == "none" and spec.output.mode == "per-model")
+        )
     return {
         "name": spec.name,
         "source": {"kind": spec.source.kind},
@@ -75,7 +88,14 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--spec", required=True, type=Path)
     ap.add_argument("--sample", type=int)
-    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="reserved: --sample is evenly spaced and deterministic today, so the "
+        "seed has no effect yet; it exists so specs/scripts can pin it ahead of "
+        "stochastic sources",
+    )
     ap.add_argument("--models", help="comma-separated preset subset")
     ap.add_argument("--out-dir", help="override [output].dir")
     ap.add_argument("--resume", action="store_true")

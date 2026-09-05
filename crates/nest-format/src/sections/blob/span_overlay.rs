@@ -9,6 +9,7 @@
 //! wire encoding: `raw` (self-describing payload, no compression).
 //! all integers le.
 
+use crate::bytes::{le_u32, le_u64};
 use crate::error::NestError;
 use crate::layout::SECTION_BLOB_SPAN_OVERLAY;
 
@@ -88,7 +89,7 @@ impl<'a> Cursor<'a> {
         Self { buf, pos: 0 }
     }
     fn take(&mut self, n: usize) -> Result<&'a [u8], NestError> {
-        if self.pos + n > self.buf.len() {
+        if n > self.buf.len() - self.pos {
             return Err(malformed("unexpected EOF"));
         }
         let s = &self.buf[self.pos..self.pos + n];
@@ -96,9 +97,9 @@ impl<'a> Cursor<'a> {
         Ok(s)
     }
     fn u32(&mut self) -> Result<u32, NestError> {
-        Ok(u32::from_le_bytes(self.take(4)?.try_into().unwrap()))
+        le_u32(self.take(4)?)
     }
     fn u64(&mut self) -> Result<u64, NestError> {
-        Ok(u64::from_le_bytes(self.take(8)?.try_into().unwrap()))
+        le_u64(self.take(8)?)
     }
 }

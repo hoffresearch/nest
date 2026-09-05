@@ -39,8 +39,8 @@ if os.environ.get("NEST_ALLOW_DOWNLOAD") != "1":
     for _k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
         os.environ.setdefault(_k, "1")
 
-# lFiles whose contents affect inference output. Other files in the
-# lsnapshot dir (LICENSE, README.md, .git*) are ignored.
+# Files whose contents affect inference output. Other files in the
+# snapshot dir (LICENSE, README.md, .git*) are ignored.
 RELEVANT_FILES: tuple[str, ...] = (
     "config.json",
     "config_sentence_transformers.json",

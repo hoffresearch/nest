@@ -15,9 +15,10 @@ use nest_format::error::NestError;
 
 use super::index::{BM25_PAYLOAD_VERSION, Bm25Index, Posting, TermEntry};
 use crate::error::RuntimeError;
+use nest_format::bytes::{le_f32, le_u32};
 
 impl Bm25Index {
-    /// lEncode for storage in section `0x08` (v2).
+    /// Encode for storage in section `0x08` (v2).
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut out = Vec::new();
         out.extend_from_slice(&BM25_PAYLOAD_VERSION.to_le_bytes());
@@ -30,7 +31,7 @@ impl Bm25Index {
         let dls: Vec<u64> = self.doc_lengths.iter().map(|&x| x as u64).collect();
         write_blob(&mut out, &pack_u64s(&dls));
 
-        // lSorted by term for determinism.
+        // Sorted by term for determinism.
         let mut terms: Vec<(&String, &TermEntry)> = self.terms.iter().collect();
         terms.sort_by(|a, b| a.0.cmp(b.0));
         let mut doc_gaps: Vec<u64> = Vec::new();
@@ -70,6 +71,21 @@ impl Bm25Index {
                 }));
             }
         };
+        // semantic validation of an untrusted payload (found by the mutation
+        // fuzz harness): a posting whose doc id is outside `doc_lengths`
+        // indexed out of bounds at query time, and non-finite parameters
+        // would turn every score into NaN.
+        if !(k1.is_finite() && b.is_finite() && avgdl.is_finite()) {
+            return Err(malformed("bm25: non-finite k1 / b / avgdl"));
+        }
+        if doc_lengths.len() != n_docs {
+            return Err(malformed("bm25: doc-length count != n_docs"));
+        }
+        for entry in terms.values() {
+            if entry.postings.iter().any(|p| p.doc as usize >= n_docs) {
+                return Err(malformed("bm25: posting doc id >= n_docs"));
+            }
+        }
         Ok(Self {
             k1,
             b,
@@ -139,7 +155,7 @@ fn decode_v2(cur: &mut ByteCursor, n_docs: usize, n_terms: usize) -> Result<Deco
     for _ in 0..n_terms {
         let term = cur.term()?;
         let df = cur.u32()?;
-        total += df as usize;
+        total = total.saturating_add(df as usize);
         dict.push((term, df));
     }
     let gaps = cur.intpack_column()?;
@@ -175,15 +191,13 @@ impl<'a> ByteCursor<'a> {
         Self { buf, pos: 0 }
     }
     fn u32(&mut self) -> Result<u32, RuntimeError> {
-        let b = self.bytes(4)?;
-        Ok(u32::from_le_bytes(b.try_into().unwrap()))
+        Ok(le_u32(self.bytes(4)?)?)
     }
     fn f32(&mut self) -> Result<f32, RuntimeError> {
-        let b = self.bytes(4)?;
-        Ok(f32::from_le_bytes(b.try_into().unwrap()))
+        Ok(le_f32(self.bytes(4)?)?)
     }
     fn bytes(&mut self, n: usize) -> Result<&'a [u8], RuntimeError> {
-        if self.pos + n > self.buf.len() {
+        if n > self.buf.len() - self.pos {
             return Err(malformed(format!("bm25: unexpected EOF (need {})", n)));
         }
         let out = &self.buf[self.pos..self.pos + n];

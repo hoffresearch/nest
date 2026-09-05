@@ -12,11 +12,11 @@ use crate::chunk::{chunk_id, validate_chunk};
 use crate::error::NestError;
 use crate::layout::{
     NEST_FOOTER_SIZE, NEST_HEADER_SIZE, NEST_SECTION_ENTRY_SIZE, NestFooter, NestHeader,
-    REQUIRED_SECTIONS, SECTION_ALIGNMENT, SECTION_BLOB_REFS, SECTION_BLOB_SPAN_OVERLAY,
-    SECTION_BM25_INDEX, SECTION_CHUNK_IDS, SECTION_CHUNKS_CANONICAL, SECTION_CHUNKS_ORIGINAL_SPANS,
-    SECTION_EMBEDDINGS, SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_GRAPH_ADJACENCY,
-    SECTION_HNSW_INDEX, SECTION_PROVENANCE, SECTION_SEARCH_CONTRACT, SECTION_SPACE_TABLE,
-    SectionEntry, align_up,
+    REQUIRED_SECTIONS, SECTION_ALIGNMENT, SECTION_BLOB_DATA, SECTION_BLOB_REFS,
+    SECTION_BLOB_SPAN_OVERLAY, SECTION_BM25_INDEX, SECTION_CHUNK_IDS, SECTION_CHUNKS_CANONICAL,
+    SECTION_CHUNKS_ORIGINAL_SPANS, SECTION_EMBEDDINGS, SECTION_ENCODING_INTPACK,
+    SECTION_ENCODING_RAW, SECTION_GRAPH_ADJACENCY, SECTION_HNSW_INDEX, SECTION_PROVENANCE,
+    SECTION_SEARCH_CONTRACT, SECTION_SPACE_TABLE, SectionEntry, align_up,
 };
 use crate::sections::{
     OriginalSpan, SearchContract, encode_chunk_ids, encode_chunk_ids_intpack,
@@ -26,7 +26,7 @@ use crate::sections::{
 use sha2::{Digest, Sha256};
 
 impl NestFileBuilder {
-    /// lBuild the file in memory. Pure computation — no I/O.
+    /// Build the file in memory. Pure computation — no I/O.
     pub fn build_bytes(mut self) -> crate::Result<Vec<u8>> {
         if self.reproducible {
             self.manifest.created = Some(REPRODUCIBLE_CREATED.into());
@@ -162,49 +162,56 @@ impl NestFileBuilder {
         )?);
 
         if let Some(payload) = self.hnsw_index.take() {
-            // lHNSW is binary, mostly random — zstd would barely help and
+            // HNSW is binary, mostly random — zstd would barely help and
             // would defeat mmap-friendly reads. Always raw.
             sections.push((SECTION_HNSW_INDEX, SECTION_ENCODING_RAW, payload));
         }
         if let Some(payload) = self.bm25_index.take() {
-            // lBM25 posting lists are integer-heavy; zstd usually halves
+            // BM25 posting lists are integer-heavy; zstd usually halves
             // them. Honor text_encoding here too.
             sections.push(maybe_zstd(SECTION_BM25_INDEX, text_enc, payload)?);
         }
         if let Some(payload) = self.graph_adjacency.take() {
-            // lgraph_adjacency (0x0C) is a self-describing csr that already
+            // graph_adjacency (0x0C) is a self-describing csr that already
             // bitpacks its integer columns with intpack internally; like hnsw
             // it stays RAW so the runtime mmaps it directly. it is OPTIONAL and
             // EXCLUDED from content_hash (not in CANONICAL_SECTIONS).
             sections.push((SECTION_GRAPH_ADJACENCY, SECTION_ENCODING_RAW, payload));
         }
         if let Some(payload) = self.blob_refs.take() {
-            // lblob_refs (0x14) is a small content-hash reference table the
+            // blob_refs (0x14) is a small content-hash reference table the
             // runtime decodes eagerly at open; RAW like hnsw/graph. OPTIONAL
             // and EXCLUDED from content_hash.
             sections.push((SECTION_BLOB_REFS, SECTION_ENCODING_RAW, payload));
         }
+        if let Some(payload) = self.blob_data.take() {
+            // blob_data (0x17) carries the inlined media bytes; they are
+            // already codec-compressed, so ALWAYS raw — the runtime slices
+            // individual blobs lazily off the mmap. OPTIONAL and EXCLUDED
+            // from content_hash, like its 0x14 table.
+            sections.push((SECTION_BLOB_DATA, SECTION_ENCODING_RAW, payload));
+        }
         if let Some(payload) = self.blob_span_overlay.take() {
-            // lblob_span_overlay (0x16) is the per-chunk blob-relative span
+            // blob_span_overlay (0x16) is the per-chunk blob-relative span
             // overlay; RAW like its 0x14 table. OPTIONAL and EXCLUDED from
             // content_hash, so the overlay never invalidates a citation.
             sections.push((SECTION_BLOB_SPAN_OVERLAY, SECTION_ENCODING_RAW, payload));
         }
         if let Some(payload) = self.space_table.take() {
-            // lspace_table (0x15) is the small multimodal directory the
+            // space_table (0x15) is the small multimodal directory the
             // runtime decodes eagerly at open; RAW like blob_refs. OPTIONAL
             // and EXCLUDED from content_hash.
             sections.push((SECTION_SPACE_TABLE, SECTION_ENCODING_RAW, payload));
         }
         for (band_id, encoding, payload) in std::mem::take(&mut self.space_bands) {
-            // lspace bands are fixed-stride vector slabs scored by the simd
+            // space bands are fixed-stride vector slabs scored by the simd
             // kernels straight off mmap; they carry their dtype encoding
             // (raw f32 / float16 / int8 / int4), NEVER zstd. OPTIONAL and
             // EXCLUDED from content_hash.
             sections.push((band_id, encoding, payload));
         }
 
-        // lSanity: every required section is present (writer never drops one).
+        // Sanity: every required section is present (writer never drops one).
         debug_assert!(
             REQUIRED_SECTIONS
                 .iter()
@@ -232,7 +239,7 @@ impl NestFileBuilder {
             current_offset = align_up(after, SECTION_ALIGNMENT);
         }
 
-        // lAfter the last section we want the footer immediately, so use
+        // After the last section we want the footer immediately, so use
         // the unaligned end of the last section's data.
         let last_section_end = match (section_entries.last(), sections.last()) {
             (Some(entry), Some((_, _, data))) => entry.offset + data.len() as u64,

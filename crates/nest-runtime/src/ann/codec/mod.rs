@@ -19,9 +19,10 @@ use nest_format::error::NestError;
 use super::{HNSW_PAYLOAD_VERSION, HnswIndex, Node};
 use crate::error::RuntimeError;
 use crate::materialize::PackedVectors;
+use nest_format::bytes::le_u32;
 
 impl HnswIndex {
-    /// lEncode the index to bytes for embedding in section `0x07` (v2).
+    /// Encode the index to bytes for embedding in section `0x07` (v2).
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(7 * 4 + self.n * 4);
         out.extend_from_slice(&HNSW_PAYLOAD_VERSION.to_le_bytes());
@@ -51,7 +52,7 @@ impl HnswIndex {
         out
     }
 
-    /// lParse an HNSW payload (v1 or v2). The vectors are reconstructed
+    /// Parse an HNSW payload (v1 or v2). The vectors are reconstructed
     /// from the embeddings section by the caller; this constructor is for
     /// the on-disk graph only. Call `attach_vectors` before search.
     pub fn from_bytes(bytes: &[u8], n: usize, dim: usize) -> Result<Self, RuntimeError> {
@@ -201,7 +202,7 @@ fn decode_nodes_v2(cur: &mut ByteCursor, n_nodes: usize) -> Result<Vec<Node>, Ru
     Ok(nodes)
 }
 
-/// lLight cursor for parsing the on-disk HNSW payload.
+/// Light cursor for parsing the on-disk HNSW payload.
 struct ByteCursor<'a> {
     buf: &'a [u8],
     pos: usize,
@@ -211,17 +212,17 @@ impl<'a> ByteCursor<'a> {
         Self { buf, pos: 0 }
     }
     fn u32(&mut self) -> Result<u32, RuntimeError> {
-        if self.pos + 4 > self.buf.len() {
+        if 4 > self.buf.len() - self.pos {
             return Err(malformed("hnsw: unexpected EOF"));
         }
-        let v = u32::from_le_bytes(self.buf[self.pos..self.pos + 4].try_into().unwrap());
+        let v = le_u32(&self.buf[self.pos..self.pos + 4])?;
         self.pos += 4;
         Ok(v)
     }
     /// read a length-prefixed `intpack` blob and decode it to `u64`s.
     fn intpack_column(&mut self) -> Result<Vec<u64>, RuntimeError> {
         let len = self.u32()? as usize;
-        if self.pos + len > self.buf.len() {
+        if len > self.buf.len() - self.pos {
             return Err(malformed("hnsw: truncated intpack column"));
         }
         let blob = &self.buf[self.pos..self.pos + len];

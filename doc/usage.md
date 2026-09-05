@@ -2,7 +2,7 @@
 
 `nest` is a single-file binary container for distributing semantic knowledge bases. one file: chunks, canonical text, byte-spans, embeddings, search contract, hashes. copy it, share it, search it.
 
-this guide covers the commands you'll actually use: the agent-native flagship verbs `ask` and `retrieve` (the front door), and the engine subcommands beneath them (build via python, validate, stats, inspect, search/search-ann/search-graph/search-text, benchmark, cite).
+this guide covers the commands you'll actually use: the agent verbs `ask`, `retrieve` and `build` (the front door; they shell out to the offline python embedder or the forge), and the engine subcommands beneath them (validate, stats, inspect, media, search/search-ann/search-graph/search-space/search-text, benchmark, cite, doctor), which take a file and a vector and never run python. `nest --help` lists them in the same two groups.
 
 ## 1. build a `.nest` from chunks
 
@@ -350,7 +350,7 @@ embedding models are DATA, not per-project code: `python/forge/model_registry.py
 three rules the registry enforces, loudly:
 
 - **mrl is a ladder, not a slider.** `dims=[256]` is accepted only when the preset's model card validates 256 (`mrl.method="prefix_slice_l2"`). slicing at an unvalidated dim is refused; mathematically possible is not semantically supported.
-- **remote code is an opt-in plus a pin.** presets with `trust_remote_code` load only when the spec lists them in `output.allow_remote_code` AND every model-repo code file matches the pinned sha256 allowlist. a hash identifies a version; the opt-in is the consent. build in an isolated environment when the model dir is not fully trusted.
+- **remote code is an opt-in plus a pin.** presets with `trust_remote_code` load only when the spec lists them in `output.allow_remote_code` AND every model-repo code file matches the pinned sha256 allowlist. a hash identifies a version; the opt-in is the consent. build in an isolated environment when the model dir is not fully trusted. the QUERY side has the same rule: a manifest is data, never an authorization, so `ask`/`retrieve`/`search-text` over a remote-code corpus (and `nest_model_bench.py`) refuse to load the model until the operator opts in with `NEST_ALLOW_REMOTE_CODE="<preset>[,<preset>]"` in the environment.
 - **three hashes, never conflated.** `model_hash` identifies the model (weights + tokenizer + processor + remote code + pooling/normalize/dtype policy). the per-item `input_hash` identifies the content (canonical text ⊕ image bytes ⊕ label ⊕ chunker). the `embedding_recipe_hash` identifies the usage (prompts, query/document modes, preprocess version, `image_max_side`, device class, decoder fingerprint when embedding decoded media). the embed cache key is the triad, so a retranslated text or a re-exported image invalidates exactly what changed.
 
 known limitation: the siglip2 TEXT tower resolves its hf tokenizer through transformers' AutoTokenizer, which probes optional files that 404 online; a fresh process in strict offline mode can fail that probe even with the snapshot cached. the image tower and every other preset are unaffected; for a sealed offline run either query siglip2 spaces by image, or use the wemm/jina text towers.
@@ -362,17 +362,58 @@ model dirs resolve explicit `model_path` > `NEST_MODEL_DIR_<PRESET>` env > the p
 one toml describes the whole corpus; nobody writes a build script per project. `nest build` is a launcher over `python/tools/nest_forge.py` (the build is officially a python frontend; torch and ffmpeg live there).
 
 ```sh
-nest build --spec dat/copusMTG/spellbook.toml --dry-run     # plan + dep status, loads nothing
-nest build --spec dat/copusMTG/spellbook.toml --sample 1500
+nest build --spec corpus.toml --dry-run     # plan + dep status, loads nothing
+nest build --spec corpus.toml --sample 1500
 ```
 
-`dat/copusMTG/spellbook.toml` is the working example: a sqlite query + a pt-br join + a text template + per-row image paths, five models, media with the dual quality gate. the contract highlights:
+a complete working spec — a sqlite table with per-row images, two models, media behind the dual quality gate, one self-contained output file:
+
+```toml
+[corpus]
+name = "cards"
+chunker_version = "cards/1"     # changes ⇒ every chunk_id (citation) changes
+
+[source]
+kind = "sqlite"
+db = "~/data/cards.sqlite"
+query = "SELECT id, name, body, image_uri FROM cards WHERE image_uri IS NOT NULL"
+order_by = ["id"]               # must be a TOTAL order (verified)
+
+[source.text]
+template = """
+{name}
+{body}
+"""
+
+[source.image]
+path_template = "~/data/images/{id}.jpg"
+label_template = "{name}"
+
+[media]
+profile = "stills"              # measured recipe; explicit keys still win
+crf = "auto"                    # dual gate: ssimulacra2 strata + embedding drift
+
+[[models]]
+preset = "potion"
+text = "default"                # space 0 of every emitted file
+
+[[models]]
+preset = "clip-vit-b32"
+image = "space"                 # a named vector band over the artwork
+
+[output]
+mode = "single"
+dir = "out/cards"
+embed_media = true              # media inlined via 0x17: ONE file serves it all
+```
+
+the contract highlights:
 
 - **source**: `sqlite` (query, `[[source.joins]]`, `[source.derive]` helpers, text template whose lines drop when ALL their placeholders are empty, `path_template`/`label_template` for images) | `csv` | `jsonl` | `image_dir`. `order_by` must be a TOTAL order; the composite key's uniqueness is verified against the loaded rows, because `ORDER BY x` with duplicate x is not deterministic.
 - **models**: each `[[models]]` names a preset and its role; `text = "default" | "space" | "none"` (exactly ONE default; it is space 0 of every emitted file, never injected implicitly), `image = "space" | "none"`, `dims = [256, 512]` (one named space per dim: `wemm-2b@256`), `space_dtype`, plus the recipe fields (`image_prompt`, `text_query_mode`, `image_max_side`, `encode_kwargs`).
-- **media** (§14 for the levers): `backend`, `crf` (int or `"auto"`), `tune`, `speed`, `fps`, `gop`, `order`, `shard_size`, `dedup` (identical source images stored once; duplicate rows share the frame through the 0x16 overlay).
+- **media** (§14 for the levers): `profile` (a measured recipe resolved into knob defaults; explicit keys always win), `backend`, `crf` (int or `"auto"`), `tune`, `speed`, `fps`, `gop`, `order`, `shard_size`, `dedup` (identical source images stored once; duplicate rows share the frame through the 0x16 overlay).
 - **embedding.image_input**: `mode = "decoded_media"` (default with media: the index describes what the file serves) | `"source"` (measures the model, not the codec). the decoder fingerprint joins the recipe hash in decoded mode; the two modes answer different questions and are never mixed.
-- **output**: `mode = "single" | "per-model" | "both"` (one media encode, one embed pass per model, shared across outputs; chunk_ids are content-addressed so citations agree across modes), `provenance = "minimal" | "standard" | "full"` (path/sql/label redaction), `allow_remote_code`.
+- **output**: `mode = "single" | "per-model" | "both"` (one media encode, one embed pass per model, shared across outputs; chunk_ids are content-addressed so citations agree across modes), `provenance = "minimal" | "standard" | "full"` (path/sql/label redaction), `allow_remote_code`, `embed_media = true|false` (inline the encoded media into the `.nest` itself — section 0x17 — so the corpus is ONE self-contained file with no media sidecar at read time; `nest media <file>` lists the blobs, `nest media <file> --export DIR` writes them back out hash-verified, and `nest validate` proves every inlined blob against its `blob_refs` sha256. the sidecar `.media/` dir remains on disk as the build cache; peak build memory is roughly twice the media bytes, so prefer sidecar mode for very large corpora).
 
 every build emits `<name>.manifest.json` (`manifest_schema_version = 1`, canonical serialization; a versioned contract, not an ad-hoc log) and `<name>.build.lock.json` (package versions, tool binaries with sha256, model hashes, the materialized spec). reproduction has three declared levels: L1 = same top-k anywhere; L2 = per-vector cosine within 1e-5 on the same device class; L3 = byte-identical `file_hash`, claimable ONLY under a matching lock (`--rebuild-only` re-emits from the triad-keyed caches and compares the lock; `--strict-env` turns divergence into an error). builds are transactional: per-stage state under `.forge-state/`, outputs staged in `.tmp/` and committed by atomic rename, `--resume` continues from the last intact stage; embed caches are flock'd with checksum sidecars, and a torn cache is recomputed, never reused.
 
@@ -381,9 +422,22 @@ every build emits `<name>.manifest.json` (`manifest_schema_version = 1`, canonic
 the media section is where the compression research became knobs. all decisions land in the manifest and provenance:
 
 - `tune = "still"`: svt-av1's still-picture tune, PROBED against the local encoder (the numeric value varies by version); unsupported ⇒ stderr warning + recorded fallback, never a silently ignored flag. `speed = 6` buys quality per byte over the default 8 at ~2x encode time. `fps` changes playback timestamps only (frames are 1:1 with items; verified, no duplication).
-- `crf = "auto"`: the dual gate. a stratified sample (deterministic, versioned bucket heuristics: resolution / entropy / has_text / alpha / source_format) is encoded at every ladder crf and must clear BOTH floors: ssimulacra2 per-bucket p10 ≥ `visual_floor_p10` and global min ≥ `visual_floor_min` (a global average would let one whole stratum degrade), and embedding drift p10 ≥ `drift_floor_p10` measured by the declared `gate_model`; an image can look fine to humans and still move in retrieval space, which is what the corpus actually serves. the largest passing crf wins; none passing ⇒ smallest + a loud warning (measured on the spellbook cards: the default floors correctly refused the whole [30,45] ladder; fine card text at 488x680 does not reach p10 ≥ 85). full retrieval recall lives in the sweep, outside this loop, where it costs O(1) per variant.
+- `crf = "auto"`: the dual gate. a stratified sample (deterministic, versioned bucket heuristics: resolution / entropy / has_text / alpha / source_format) is encoded at every ladder crf and must clear BOTH floors: ssimulacra2 per-bucket p10 ≥ `visual_floor_p10` and global min ≥ `visual_floor_min` (a global average would let one whole stratum degrade), and embedding drift p10 ≥ `drift_floor_p10` measured by the declared `gate_model`; an image can look fine to humans and still move in retrieval space, which is what the corpus actually serves. the largest passing crf wins; none passing ⇒ smallest + a loud warning (measured on the mtgdataset cards: the default floors correctly refused the whole [30,45] ladder; fine card text at 488x680 does not reach p10 ≥ 85). full retrieval recall lives in the sweep, outside this loop, where it costs O(1) per variant.
 - `dedup = true`: content-hash dedup of source images; n rows → one frame via the span overlay, zero format change. on the full scryfall printings set the potential is ~48% of the media (100,452 printings, 51,870 unique arts).
-- `order = "cluster"`: greedy cosine clustering (deterministic tie-breaks) makes near-duplicates adjacent so per-segment inter coding has something to predict; measured before recommended; on a 1-per-card corpus the honest expectation is ~0.
+- `order = "cluster"`: greedy cosine clustering (deterministic tie-breaks) makes near-duplicates adjacent so per-segment inter coding has something to predict; measured before recommended; on a 1-per-card corpus the honest expectation is ~0, and on the same-artwork reprint corpus it is -29% (2026-08-31, g=16 + scd=0 vs all-intra).
+- `gop = "auto"` with sharding probes PER SEGMENT: each `shard_size` chunk runs its own intra-vs-inter probe encode and ships its own keyint (recorded per segment in the manifest, `gop.per_segment = true`). a single global probe averages regimes away — with `order = "cluster"` the near-duplicate runs concentrate in a few segments, which decide inter (bounded gop, keyint=16, scene-change detection off), while unique segments keep O(1) all-intra access. forced `gop = "intra" | "inter"` still applies to every segment alike.
+- `profile`: dataset-type presets resolved BEFORE explicit keys (an explicit key always wins, so no other use case is closed off). `"near-dup"` = cluster ordering + per-segment gop + still tune (visually similar corpora: card reprints, video frames, scans); `"stills"` = all-intra + still tune (unique images, O(1) access); `"archive"` = jxl-transcode (byte-reversible, for corpora where loss is not acceptable). the resolved knobs and the profile name both land in the manifest.
 - `backend = "jxl"` / `"jxl-transcode"`: the ONLY truly lossless modes. `jxl` is lossless of the source pixels; `jxl-transcode` repacks jpegs reversibly (~20% smaller, round-trip verified by reconstructing the jpeg and comparing sha256). non-transcodable inputs follow `on_unsupported_jpeg = error | copy-source | lossless-jxl`, per-file decisions recorded. preservation contract: decoded pixels (jxl) / original jpeg bytes (verified transcode); exif/icc/xmp only with `keep_metadata`; timestamps and filenames live in the manifest. needs `cjxl`/`djxl` (`brew install jpeg-xl`, which also ships `ssimulacra2` for the gate).
 
 measure everything with `python/tools/nest_image_sweep.py` (variants now include `av1-tune`, `jxl`, `jxl-transcode`) and compare models with the three-tier `python/tools/nest_model_bench.py`: T1 pipeline stability (identity self-retrieval, inflated by construction and labeled as such), T2 codec cost (embedding drift), T3 task utility (label-template text→image as declared weak ground truth, plus `--queries-file` with real operator queries: hit@k, mrr, negative leakage). the tiers answer different questions and are never aggregated into one number.
+
+## 15. media blobs (`nest media`)
+
+a corpus built with `[output] embed_media = true` (§13) carries its encoded media inside the file (section 0x17, an offset table parallel to the `blob_refs` records plus the raw bytes). `nest media` is the read side:
+
+```sh
+nest media corpus.nest                 # one line per blob: index, sha256, byte length, inlined or sidecar, original uri
+nest media corpus.nest --export DIR    # write every inlined blob to DIR, verifying each against its blob_refs sha256
+```
+
+`--export` fails on the first blob whose bytes do not hash to the recorded `content_hash`; `nest validate` performs the same proof over every inlined blob without writing anything. the python side reads one blob without exporting the store: `NestFile.blob_bytes(i)`. the section is content_hash-excluded, so an embedded corpus and its sidecar twin carry the same citations.

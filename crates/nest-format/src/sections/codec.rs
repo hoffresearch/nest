@@ -41,8 +41,12 @@ impl<'a> Cursor<'a> {
         }
     }
 
+    /// Bounds check written as `n > remaining` on purpose: `pos + n` with an
+    /// attacker-chosen `n` (a u64 count cast to usize) wraps in release and
+    /// passes a `pos + n > len` check, then the slice panics (found by the
+    /// mutation fuzz harness). `pos <= len` is this cursor's invariant.
     pub fn read_bytes(&mut self, n: usize) -> Result<&'a [u8], NestError> {
-        if self.pos + n > self.data.len() {
+        if n > self.data.len() - self.pos {
             return Err(self.malformed(format!(
                 "want {} bytes at offset {}, have {}",
                 n,

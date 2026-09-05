@@ -27,7 +27,9 @@ from forge.forge_pipeline import build
 HAVE_FFMPEG = shutil.which("ffmpeg") is not None
 
 
-def _fixture(base: Path, with_media: bool = True, mode: str = "both") -> Path:
+def _fixture(
+    base: Path, with_media: bool = True, mode: str = "both", embed_media: bool = False
+) -> Path:
     from PIL import Image
 
     rng = np.random.default_rng(1)
@@ -103,6 +105,7 @@ dtype = "int8"
 [output]
 mode = "{mode}"
 dir = "{base / "out"}"
+{"embed_media = true" if embed_media else ""}
 """)
     return spec
 
@@ -148,6 +151,36 @@ def test_validation_errors(base: Path) -> None:
     remote = '[[models]]\npreset="wemm-2b"\ntext="default"\n'
     _expect_spec_error(MINIMAL.format(models=remote, extra=""), "allow_remote_code", base)
     print("test_validation_errors: OK")
+
+
+def test_media_profiles(base: Path) -> None:
+    """media.profile resolves measured knob defaults; explicit keys win."""
+    from forge.build_spec import MEDIA_PROFILES
+
+    models = '[[models]]\npreset="potion"\ntext="default"\n'
+
+    def parse(extra: str):
+        p = base / "prof.toml"
+        p.write_text(MINIMAL.format(models=models, extra=extra))
+        return load_spec(p)
+
+    m = parse('[media]\nprofile = "near-dup"').media
+    assert (m.profile, m.order, m.gop, m.tune) == ("near-dup", "cluster", "auto", "still")
+    m = parse('[media]\nprofile = "near-dup"\norder = "none"').media
+    assert m.order == "none" and m.tune == "still", "explicit key must win over the profile"
+    m = parse('[media]\nprofile = "archive"').media
+    assert m.backend == "jxl-transcode"
+    m = parse('[media]\nprofile = "stills"').media
+    assert (m.gop, m.tune) == ("intra", "still")
+    m = parse("[media]").media
+    assert m.profile == "" and m.gop == "auto", "no profile keeps the schema defaults"
+    assert set(MEDIA_PROFILES) == {"near-dup", "stills", "archive"}
+    _expect_spec_error(
+        MINIMAL.format(models=models, extra='[media]\nprofile = "cards"'),
+        "media.profile",
+        base,
+    )
+    print("test_media_profiles: OK")
 
 
 def test_total_ordering(base: Path) -> None:
@@ -215,6 +248,33 @@ def test_e2e_fake(base: Path) -> None:
     print("test_e2e_fake: OK")
 
 
+def test_embed_media(base: Path) -> None:
+    if not HAVE_FFMPEG:
+        print("test_embed_media: SKIP (no ffmpeg)")
+        return
+    d = base / "embed"
+    d.mkdir()
+    spec = load_spec(_fixture(d, with_media=True, mode="single", embed_media=True))
+    build(spec)
+    out = d / "out"
+    db = nest.open(str(out / "faketest.nest"))
+    db.validate()
+    refs = db.blob_refs()
+    assert refs and all(r["inlined"] for r in refs), "embed_media must inline every blob"
+    media_bytes = sum(p.stat().st_size for p in (out / "faketest.media").glob("*") if p.is_file())
+    nest_bytes = (out / "faketest.nest").stat().st_size
+    assert nest_bytes > media_bytes, "the self-contained file must carry the media bytes"
+    manifest = json.loads((out / "faketest.manifest.json").read_text())
+    assert manifest["media"]["embedded"] is True
+    # the sidecar-mode twin of the same corpus keeps blobs out-of-line
+    d2 = base / "embed-side"
+    d2.mkdir()
+    build(load_spec(_fixture(d2, with_media=True, mode="single")))
+    side = nest.open(str(d2 / "out" / "faketest.nest"))
+    assert all(not r["inlined"] for r in side.blob_refs())
+    print("test_embed_media: OK")
+
+
 def test_triad_invalidation(base: Path) -> None:
     d = base / "triad"
     d.mkdir()
@@ -249,8 +309,10 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="nest-forge-spec-") as tmp:
         base = Path(tmp)
         test_validation_errors(base)
+        test_media_profiles(base)
         test_total_ordering(base)
         test_e2e_fake(base)
+        test_embed_media(base)
         test_triad_invalidation(base)
         test_corrupt_cache_recomputed(base)
     print("all forge spec tests passed")

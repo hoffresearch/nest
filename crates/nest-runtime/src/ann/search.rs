@@ -9,7 +9,7 @@ use super::{Candidate, HnswIndex, Node, dist_q};
 use crate::materialize::PackedVectors;
 
 impl HnswIndex {
-    /// lAttach f32 vectors as the search store. Kept for callers that
+    /// Attach f32 vectors as the search store. Kept for callers that
     /// already hold an f32 buffer (build, tests); the runtime open path
     /// uses `attach_store` to avoid an f32 expansion.
     pub fn attach_vectors(&mut self, vectors: Vec<f32>) {
@@ -17,14 +17,14 @@ impl HnswIndex {
         self.store = PackedVectors::F32(vectors);
     }
 
-    /// lAttach a packed vector store at open time. Keeps int8/f16 rows in
+    /// Attach a packed vector store at open time. Keeps int8/f16 rows in
     /// their on-disk packing so the resident footprint is the packed size,
     /// not the old `n*dim*4` f32 snapshot.
     pub(crate) fn attach_store(&mut self, store: PackedVectors) {
         self.store = store;
     }
 
-    /// lLevel-0 (densest layer) out-neighbors of node `i`, or an empty slice
+    /// Level-0 (densest layer) out-neighbors of node `i`, or an empty slice
     /// if `i` is out of range. Read-only accessor the graph build path uses to
     /// derive top-m semantic edges from the already-built hnsw graph without
     /// re-running an O(n^2) exact knn. The neighbor SET is the build-order
@@ -37,7 +37,7 @@ impl HnswIndex {
             .unwrap_or(&[])
     }
 
-    /// lSearch for the `ef` closest candidates to `q`. Returns ids only —
+    /// Search for the `ef` closest candidates to `q`. Returns ids only —
     /// the runtime reranks with the exact dot product to produce the
     /// final cosine score.
     pub fn search(&self, q: &[f32], ef: usize) -> Vec<usize> {
@@ -45,7 +45,7 @@ impl HnswIndex {
             return Vec::new();
         }
         if !self.store.is_attached() {
-            // lIndex is loaded but vectors haven't been attached. Return
+            // Index is loaded but vectors haven't been attached. Return
             // an empty candidate set; runtime falls back to exact.
             return Vec::new();
         }
@@ -67,7 +67,7 @@ impl HnswIndex {
     }
 }
 
-/// lGreedy descent on a single layer until no neighbor is closer.
+/// Greedy descent on a single layer until no neighbor is closer.
 pub(super) fn greedy_search(
     entry: u32,
     q: &[f32],
@@ -102,7 +102,7 @@ pub(super) fn greedy_search(
     }
 }
 
-/// lSearch a single layer with a candidate list of size `ef`. Returns
+/// Search a single layer with a candidate list of size `ef`. Returns
 /// the best `ef` candidates sorted ascending by distance.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn layer_search(
@@ -117,7 +117,7 @@ pub(super) fn layer_search(
 ) -> Vec<Candidate> {
     let mut scratch = store.scratch(dim);
     let mut visited: HashSet<u32> = HashSet::new();
-    // lBinaryHeap orderings:
+    // BinaryHeap orderings:
     //   `frontier` — min-heap by distance (closest first to expand).
     //   `result`   — max-heap by distance (so we can prune the farthest).
     let mut frontier: BinaryHeap<ByDistAsc> = BinaryHeap::new();
@@ -162,16 +162,12 @@ pub(super) fn layer_search(
     }
 
     let mut out: Vec<Candidate> = result.into_iter().map(|w| w.0).collect();
-    out.sort_by(|a, b| {
-        a.dist
-            .partial_cmp(&b.dist)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    out.sort_by(|a, b| crate::order::cmp_dist_asc(a.dist, b.dist));
     out
 }
 
-// lL`BinaryHeap` is a max-heap; we want closest-first / farthest-first
-// lLorderings. Define orderings explicitly.
+// `BinaryHeap` is a max-heap; we want closest-first / farthest-first
+// orderings. Define orderings explicitly.
 #[derive(Clone, Copy)]
 struct ByDistAsc(Candidate);
 #[derive(Clone, Copy)]
@@ -185,7 +181,7 @@ impl PartialEq for ByDistAsc {
 impl Eq for ByDistAsc {}
 impl Ord for ByDistAsc {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // lReverse so BinaryHeap (max-heap) pops smallest distance.
+        // Reverse so BinaryHeap (max-heap) pops smallest distance.
         other
             .0
             .dist

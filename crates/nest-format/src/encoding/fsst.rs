@@ -20,6 +20,7 @@
 use super::fsst_table::{SymbolTable, parse_table, serialize_table};
 use super::intpack::{IntpackReader, pack_u64s};
 use super::txt_streams::{build_canonical, malformed, write_container};
+use crate::bytes::{le_u32, le_u64};
 
 /// kind/version byte for the fsst-framed variant.
 pub const TXT_STREAMS_V3: u8 = 2;
@@ -111,7 +112,7 @@ pub fn decode(bytes: &[u8]) -> crate::Result<Vec<u8>> {
     if framed.len() < 4 {
         return Err(malformed("fsst: truncated region header"));
     }
-    let table_len = u32::from_le_bytes(framed[0..4].try_into().unwrap()) as usize;
+    let table_len = le_u32(&framed[0..4])? as usize;
     let region = &framed[4..];
     let (symbols, parsed_len) = parse_table(region)?;
     if parsed_len != table_len {
@@ -120,7 +121,7 @@ pub fn decode(bytes: &[u8]) -> crate::Result<Vec<u8>> {
     let streams = region
         .get(table_len..)
         .ok_or_else(|| malformed("fsst: truncated streams region"))?;
-    if *offsets.last().unwrap() as usize != streams.len() {
+    if offsets.last().copied() != Some(streams.len() as u64) {
         return Err(malformed("fsst: final offset != streams length"));
     }
     let mut bodies: Vec<Vec<u8>> = Vec::with_capacity(count);
@@ -149,7 +150,7 @@ fn parse_v3(bytes: &[u8]) -> crate::Result<(usize, Vec<u64>, &[u8])> {
     if rest.len() < 8 {
         return Err(malformed("fsst: truncated count"));
     }
-    let declared = u64::from_le_bytes(rest[0..8].try_into().unwrap());
+    let declared = le_u64(&rest[0..8])?;
     let table_bytes = &rest[8..];
     let reader = IntpackReader::parse(table_bytes)?;
     if reader.is_empty() {

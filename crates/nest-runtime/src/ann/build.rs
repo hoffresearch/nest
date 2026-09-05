@@ -12,7 +12,7 @@ use super::{Candidate, HnswIndex, Node, dist_rr};
 use crate::materialize::PackedVectors;
 
 impl HnswIndex {
-    /// lBuild an HNSW index from f32 vectors. Deterministic given the
+    /// Build an HNSW index from f32 vectors. Deterministic given the
     /// same `seed`. `vectors` is row-major `n*dim`.
     pub fn build(
         vectors: Vec<f32>,
@@ -23,7 +23,7 @@ impl HnswIndex {
         seed: u64,
     ) -> Self {
         assert_eq!(vectors.len(), n * dim);
-        // lBuild distances run over the f32 build store; `row()` borrows
+        // Build distances run over the f32 build store; `row()` borrows
         // each row directly so the graph is byte-identical to the old
         // `&[f32]` path, while the same `PackedVectors` type lets the
         // runtime search path stay packed (no f32 snapshot).
@@ -41,7 +41,7 @@ impl HnswIndex {
             nodes.push(Node { level, neighbors });
         }
 
-        // lInsert nodes in id order for determinism.
+        // Insert nodes in id order for determinism.
         let mut entry_point: u32 = 0;
         let mut max_level: u32 = 0;
 
@@ -82,8 +82,8 @@ impl HnswIndex {
                     dim,
                     i as u32,
                 );
-                // lThe new node always picks `m` neighbors (Algorithm 4 with
-                // lM=m). The asymmetry — layer 0 allowing up to `m_max0`
+                // The new node always picks `m` neighbors (Algorithm 4 with
+                // M=m). The asymmetry — layer 0 allowing up to `m_max0`
                 // neighbors per node — only kicks in via backlinks: when
                 // neighbor's list overflows `cap_layer`, we re-select with
                 // the heuristic to bring it back down to `cap_layer`.
@@ -92,7 +92,7 @@ impl HnswIndex {
                     select_neighbors_heuristic(&candidates, m, &store, dim, &mut sa, &mut sb, true);
                 nodes[i].neighbors[layer as usize] = neighbor_ids.clone();
 
-                // lBacklinks. Insert i into each neighbor's list and prune
+                // Backlinks. Insert i into each neighbor's list and prune
                 // if it overflows `cap_layer`.
                 for &nbr in &neighbor_ids {
                     let nbr_idx = nbr as usize;
@@ -101,8 +101,8 @@ impl HnswIndex {
                         continue;
                     }
                     if nodes[nbr_idx].neighbors[layer_idx].len() >= cap_layer {
-                        // lPrune: keep the cap_layer best of (existing + i).
-                        // lClone the ids first so the per-row decode borrows
+                        // Prune: keep the cap_layer best of (existing + i).
+                        // Clone the ids first so the per-row decode borrows
                         // do not collide with the later reassignment.
                         let existing = nodes[nbr_idx].neighbors[layer_idx].clone();
                         let mut all: Vec<Candidate> = Vec::with_capacity(existing.len() + 1);
@@ -120,7 +120,7 @@ impl HnswIndex {
                     }
                 }
 
-                // lNext-layer entry is the closest *selected* neighbor (post-
+                // Next-layer entry is the closest *selected* neighbor (post-
                 // heuristic). hnswlib does the same. Falls back to the raw
                 // beam closest if the heuristic returned nothing.
                 if let Some(&first) = neighbor_ids.first() {
@@ -150,7 +150,7 @@ impl HnswIndex {
         }
     }
 
-    /// lBuild from int8 quantized embeddings. Dequantizes once (lossy) and
+    /// Build from int8 quantized embeddings. Dequantizes once (lossy) and
     /// hands off to `build`. Recall ends up bounded by quantization
     /// noise; in practice still well above 0.95 @ k=10 for real corpora.
     pub fn build_from_int8(view: &Int8EmbeddingsView<'_>, m: usize, ef: usize, seed: u64) -> Self {
@@ -165,7 +165,7 @@ impl HnswIndex {
         Self::build(vectors, view.n, view.dim, m, ef, seed)
     }
 
-    /// lBuild from float16 LE bytes. Decodes once into f32 and builds.
+    /// Build from float16 LE bytes. Decodes once into f32 and builds.
     pub fn build_from_f16(
         bytes: &[u8],
         n: usize,
@@ -178,7 +178,7 @@ impl HnswIndex {
         Self::build(vectors, n, dim, m, ef, seed)
     }
 
-    /// lBuild from raw f32 LE bytes. Copies into an owned buffer.
+    /// Build from raw f32 LE bytes. Copies into an owned buffer.
     pub fn build_from_f32(
         bytes: &[u8],
         n: usize,
@@ -197,7 +197,7 @@ impl HnswIndex {
     }
 }
 
-/// lGeometric level distribution. Deterministic via the LCG state.
+/// Geometric level distribution. Deterministic via the LCG state.
 pub(super) fn sample_level(rng: &mut LcgRng, m: usize) -> u32 {
     let m_l = 1.0 / (m as f64).ln();
     let r = rng.next_f64();
@@ -208,7 +208,7 @@ pub(super) fn sample_level(rng: &mut LcgRng, m: usize) -> u32 {
     level.clamp(0, 31) as u32 // cap at 31 layers
 }
 
-/// lTiny LCG (deterministic, no rand dep). `pub(super)` so tests in
+/// Tiny LCG (deterministic, no rand dep). `pub(super)` so tests in
 /// `super::tests` can reuse it for synthetic vector generation.
 pub(super) struct LcgRng {
     state: u64,
@@ -229,7 +229,7 @@ impl LcgRng {
         self.state
     }
     pub(super) fn next_f64(&mut self) -> f64 {
-        // lMap upper 53 bits to [0, 1).
+        // Map upper 53 bits to [0, 1).
         ((self.next_u64() >> 11) as f64) * (1.0 / ((1u64 << 53) as f64))
     }
 }

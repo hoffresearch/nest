@@ -116,6 +116,12 @@ def validate(spec: CorpusSpec, *, allow_heavy: bool = False) -> None:
 
     if spec.media is not None:
         m = spec.media
+        from forge.build_spec import MEDIA_PROFILES
+
+        need(
+            m.profile in ("", *MEDIA_PROFILES),
+            f"media.profile: '' | {' | '.join(sorted(MEDIA_PROFILES))}",
+        )
         need(
             m.backend in ("av1", "avif", "jxl", "jxl-transcode", "control"),
             "media.backend: av1|avif|jxl|jxl-transcode|control",
@@ -128,16 +134,22 @@ def validate(spec: CorpusSpec, *, allow_heavy: bool = False) -> None:
             m.jxl_transcode.on_unsupported_jpeg in ("error", "copy-source", "lossless-jxl"),
             "media.jxl_transcode.on_unsupported_jpeg: error|copy-source|lossless-jxl",
         )
-        if m.crf == "auto" or m.order == "cluster":
-            gate = (
-                m.quality.gate_model
-                or m.cluster.space
-                or (image_presets[0] if image_presets else "")
-            )
-            need(bool(gate), "media.quality.gate_model: crf=auto/order=cluster need an image model")
+        # validate each knob against ITS OWN pipeline resolution: crf=auto
+        # gates on quality.gate_model, ordering clusters on cluster.space,
+        # both falling back to the first image model — never on each other.
+        if m.crf == "auto":
+            gate = m.quality.gate_model or (image_presets[0] if image_presets else "")
+            need(bool(gate), "media.quality.gate_model: crf=auto needs an image model")
             need(
                 gate in image_presets,
-                f"media gate/cluster model '{gate}' must be a spec model with image=space",
+                f"media.quality.gate_model '{gate}' must be a spec model with image=space",
+            )
+        if m.order in ("similarity", "cluster"):
+            cspace = m.cluster.space or (image_presets[0] if image_presets else "")
+            need(bool(cspace), f"media.cluster.space: order={m.order} needs an image model")
+            need(
+                cspace in image_presets,
+                f"media.cluster.space '{cspace}' must be a spec model with image=space",
             )
 
     need(spec.build.graph_space == "default", 'build.graph_space: only "default" is supported')
@@ -145,4 +157,8 @@ def validate(spec: CorpusSpec, *, allow_heavy: bool = False) -> None:
     need(
         spec.output.provenance in ("minimal", "standard", "full"),
         "output.provenance: minimal|standard|full",
+    )
+    need(
+        not (spec.output.embed_media and spec.media is None),
+        "output.embed_media requires a [media] section (there is nothing to inline)",
     )

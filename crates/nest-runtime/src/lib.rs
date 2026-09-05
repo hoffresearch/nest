@@ -19,6 +19,7 @@ mod inspect;
 mod materialize;
 mod mmap_cold;
 mod mmap_file;
+mod order;
 mod rerank;
 mod search;
 pub mod simd;
@@ -46,7 +47,7 @@ pub struct SearchHit {
     pub citation_id: String,
 }
 
-/// lWhat precision the mandatory exact-cosine rerank read its vectors from.
+/// What precision the mandatory exact-cosine rerank read its vectors from.
 /// the honesty backbone of `--disclose explain` and `retrieve()`: every
 /// returned `score` IS a real cosine, but at WHICH precision depends on
 /// whether a full-precision `embeddings_fp` (0x09) slab is present.
@@ -64,16 +65,16 @@ pub struct SearchHit {
 /// newcomer is never shown a stored-precision number as full-precision.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RerankSourceKind {
-    /// lscore recomputed against a full-precision source (0x09 fp slab, or
+    /// score recomputed against a full-precision source (0x09 fp slab, or
     /// the stored slab when the stored dtype is already float32).
     FullPrecision,
-    /// lscore recomputed against the lossy stored slab (float16/int8/int4),
+    /// score recomputed against the lossy stored slab (float16/int8/int4),
     /// no fp source present. disclosed as "real cosine at stored precision".
     StoredPrecision,
 }
 
 impl RerankSourceKind {
-    /// lclassify the precision the rerank reads from by its effective dtype
+    /// classify the precision the rerank reads from by its effective dtype
     /// (the 0x09 fp slab's dtype when present, else the stored dtype). only
     /// float32 is full-precision; float16/int8/int4 are stored-precision.
     /// this is the single source of the honesty marker.
@@ -84,14 +85,14 @@ impl RerankSourceKind {
         }
     }
 
-    /// lthe one-line honesty marker for `--disclose explain` / `retrieve()`.
+    /// the one-line honesty marker for `--disclose explain` / `retrieve()`.
     pub fn disclosure(self) -> &'static str {
         match self {
             Self::FullPrecision => "real cosine",
             Self::StoredPrecision => "real cosine at stored precision",
         }
     }
-    /// lstable machine token for the json answer-pack / SearchExplain.
+    /// stable machine token for the json answer-pack / SearchExplain.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::FullPrecision => "full_precision",
@@ -100,7 +101,7 @@ impl RerankSourceKind {
     }
 }
 
-/// lADDITIVE per-search provenance, attached to every `SearchResult`. zero
+/// ADDITIVE per-search provenance, attached to every `SearchResult`. zero
 /// format bytes, no `NEST_FORMAT_VERSION` bump: it is computed entirely in
 /// the runtime from the search path and the open file. feeds the lens
 /// `--disclose explain` honesty line and the agent-native `retrieve()`
@@ -113,29 +114,29 @@ impl RerankSourceKind {
 /// we never claim a recall we did not measure.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SearchExplain {
-    /// lthe route taken: "exact" | "hnsw" | "graph" | "hybrid".
+    /// the route taken: "exact" | "hnsw" | "graph" | "hybrid".
     pub route: &'static str,
-    /// lexact-flat candidates considered (the whole corpus on the exact path
+    /// exact-flat candidates considered (the whole corpus on the exact path
     /// and the graph seed path; 0 when the path used an ann shortlist).
     pub exact_candidates: usize,
-    /// lann shortlist size (hnsw / hybrid vector path); 0 otherwise.
+    /// ann shortlist size (hnsw / hybrid vector path); 0 otherwise.
     pub ann_candidates: usize,
-    /// lbm25 lexical shortlist size (hybrid path); 0 otherwise.
+    /// bm25 lexical shortlist size (hybrid path); 0 otherwise.
     pub bm25_candidates: usize,
-    /// lgraph bfs frontier union size (graph path); 0 otherwise.
+    /// graph bfs frontier union size (graph path); 0 otherwise.
     pub graph_candidates: usize,
-    /// lhow the candidate lists were combined: "none" | "rrf".
+    /// how the candidate lists were combined: "none" | "rrf".
     pub fusion_mode: &'static str,
-    /// lthe precision the mandatory exact rerank read from. the honesty
+    /// the precision the mandatory exact rerank read from. the honesty
     /// backbone: see `RerankSourceKind`.
     pub rerank_source: RerankSourceKind,
-    /// l`1.0` on the exact path, `NaN` on every candidate-generating path
+    /// `1.0` on the exact path, `NaN` on every candidate-generating path
     /// (we never claim a recall we did not measure).
     pub recall_estimate: f32,
 }
 
 impl SearchExplain {
-    /// lthe exact-flat path: the whole corpus scored, recall=1.0 ground
+    /// the exact-flat path: the whole corpus scored, recall=1.0 ground
     /// truth, no fusion.
     pub(crate) fn exact(n: usize, src: RerankSourceKind) -> Self {
         Self {
@@ -150,7 +151,7 @@ impl SearchExplain {
         }
     }
 
-    /// lthe hnsw path: an ann shortlist into the exact rerank, recall=NaN.
+    /// the hnsw path: an ann shortlist into the exact rerank, recall=NaN.
     pub(crate) fn hnsw(ann: usize, src: RerankSourceKind) -> Self {
         Self {
             route: "hnsw",
@@ -164,7 +165,7 @@ impl SearchExplain {
         }
     }
 
-    /// lthe graph path: exact-cosine top-ef seed, bfs frontier union into
+    /// the graph path: exact-cosine top-ef seed, bfs frontier union into
     /// the exact rerank, recall=NaN.
     pub(crate) fn graph(seed: usize, frontier: usize, src: RerankSourceKind) -> Self {
         Self {
@@ -179,7 +180,7 @@ impl SearchExplain {
         }
     }
 
-    /// lthe hybrid path: vector (ann or exact) ∪ bm25, rrf fusion into the
+    /// the hybrid path: vector (ann or exact) ∪ bm25, rrf fusion into the
     /// exact rerank, recall=NaN.
     pub(crate) fn hybrid(ann: usize, exact: usize, bm25: usize, src: RerankSourceKind) -> Self {
         Self {
@@ -204,7 +205,7 @@ pub struct SearchResult {
     pub truncated: bool,
     pub k_requested: i32,
     pub k_returned: usize,
-    /// lADDITIVE per-search provenance (route, candidate counts, fusion
+    /// ADDITIVE per-search provenance (route, candidate counts, fusion
     /// mode, rerank-source honesty marker, recall estimate). no format
     /// bytes; computed in the runtime. see `SearchExplain`.
     pub explain: SearchExplain,

@@ -32,6 +32,7 @@
 
 use super::intpack::{IntpackReader, pack_u64s};
 use super::zstd_codec::{zstd_decode, zstd_encode};
+use crate::bytes::le_u64;
 use crate::error::NestError;
 use crate::layout::{
     SECTION_CHUNKS_CANONICAL, SECTION_PAYLOAD_PREFIX_SIZE, SECTION_PAYLOAD_VERSION,
@@ -126,7 +127,7 @@ impl<'a> TxtStreams<'a> {
         if rest.len() < 8 {
             return Err(malformed("txt_streams: truncated count"));
         }
-        let declared = u64::from_le_bytes(rest[0..8].try_into().unwrap());
+        let declared = le_u64(&rest[0..8])?;
         let table_bytes = &rest[8..];
         // the offset table is itself an intpack payload; IntpackReader
         // parses its header/directory and refuses an oversized claim, so the
@@ -164,7 +165,7 @@ impl<'a> TxtStreams<'a> {
                 return Err(malformed("txt_streams: non-monotonic offsets"));
             }
         }
-        if *offsets.last().unwrap() as usize != streams.len() {
+        if offsets.last().copied() != Some(streams.len() as u64) {
             return Err(malformed("txt_streams: final offset != streams length"));
         }
         Ok(Self {

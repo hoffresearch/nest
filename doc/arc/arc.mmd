@@ -25,6 +25,7 @@ sequenceDiagram
     participant A as ask / retrieve
     participant I as image corpus tooling
     participant D as nest_forge.py (spec)
+    participant U as nest_ui_bridge.py (json)
 
     note over B,N: build · offline · reproducible
     B->>B: chunk + embed + model_hash
@@ -42,7 +43,7 @@ sequenceDiagram
     I->>I: verify frame count == item count
     I->>I: vision embed the DECODED frames (dermlip / clip)
     I->>F: nest.build(chunks, blob_refs, chunk_blob_spans, spaces=[image space], model_hash)
-    F->>F: optional blob_refs 0x14 + span overlay 0x16 + space_table 0x15 + band slab 0x20+ (all excluded from content_hash)
+    F->>F: optional blob_refs 0x14 + span overlay 0x16 + inlined blob_data 0x17 (embed_media) + space_table 0x15 + band slab 0x20+ (all excluded from content_hash)
     F->>N: deterministic emit + four hashes (media travels inside the file)
 
     note over D,N: declarative build · one toml, many models · transactional
@@ -70,3 +71,8 @@ sequenceDiagram
     R-->>A: hits + SearchExplain (rerank_source: real cosine vs stored precision)
     A->>N: decode tier-1 stored canonical text per chunk_id
     A-->>Q: cited answer (ask) / json-jsonl answer-pack (retrieve) + nest:// citation
+
+    note over U,N: json bridge · any frontend, zero engine logic outside the engine
+    U->>U: embed query via registry preset (NEST_ALLOW_REMOTE_CODE opt-in)
+    U->>R: browse / search exact·ann·hybrid·graph·space / blob_bytes(i), all via _nest
+    R-->>U: hits matched by chunk_id + media resolved to blob uri + shard-local frame (segments↔blobs by sha256) + single-blob bytes

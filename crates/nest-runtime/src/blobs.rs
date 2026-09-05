@@ -5,15 +5,105 @@
 //! the graph (0x0C) opens behind `graph_present`.
 
 use nest_format::NestError;
-use nest_format::layout::{SECTION_BLOB_REFS, SECTION_BLOB_SPAN_OVERLAY};
+use nest_format::layout::{
+    SECTION_BLOB_DATA, SECTION_BLOB_REFS, SECTION_BLOB_SPAN_OVERLAY, SECTION_ENCODING_RAW,
+};
 use nest_format::reader::NestView;
 use nest_format::sections::{
-    BLOB_REF_NONE, BlobRefRecord, OriginalSpan, decode_blob_refs, decode_blob_span_overlay,
+    BLOB_REF_NONE, BlobRefRecord, OriginalSpan, decode_blob_data_table, decode_blob_refs,
+    decode_blob_span_overlay,
 };
 
 use crate::error::RuntimeError;
 
-/// lOpen the blob pair. Returns the decoded 0x14 table (`None` when the
+/// Opened 0x17 blob_data: the offset table plus the ABSOLUTE file offset
+/// of the first data byte, so `MmapNestFile::blob_bytes` can slice one
+/// blob lazily off the mmap without ever copying the section.
+#[derive(Clone, Debug)]
+pub struct OpenBlobData {
+    pub entries: Vec<(u64, u64)>,
+    pub abs_data_start: usize,
+}
+
+/// Open the 0x17 blob_data offset table when the section is present.
+/// The table must be RAW (never compressed — lazy slicing depends on it)
+/// and must parallel the 0x14 record order, so a length mismatch against
+/// `n_refs` is a typed format error.
+pub(crate) fn open_blob_data(
+    view: &NestView,
+    n_refs: usize,
+) -> Result<Option<OpenBlobData>, RuntimeError> {
+    let Some(entry) = view
+        .section_table
+        .iter()
+        .find(|e| e.section_id == SECTION_BLOB_DATA)
+    else {
+        return Ok(None);
+    };
+    if entry.encoding != SECTION_ENCODING_RAW {
+        return Err(RuntimeError::Format(NestError::MalformedSectionPayload {
+            section_id: SECTION_BLOB_DATA,
+            reason: format!("blob_data must be raw, found encoding {}", entry.encoding),
+        }));
+    }
+    let payload = view.get_section_data(SECTION_BLOB_DATA)?;
+    let table = decode_blob_data_table(payload)?;
+    if table.entries.len() != n_refs {
+        return Err(RuntimeError::Format(NestError::MalformedSectionPayload {
+            section_id: SECTION_BLOB_DATA,
+            reason: format!(
+                "blob_data has {} entries but blob_refs has {} records",
+                table.entries.len(),
+                n_refs
+            ),
+        }));
+    }
+    Ok(Some(OpenBlobData {
+        entries: table.entries,
+        abs_data_start: entry.offset as usize + table.data_start,
+    }))
+}
+
+impl crate::mmap_file::MmapNestFile {
+    /// Whether this file carries its media bytes inline (0x17 present).
+    pub fn has_blob_data(&self) -> bool {
+        self.blob_data.is_some()
+    }
+
+    /// Slice blob `index`'s bytes lazily off the mmap. Errors typed: no
+    /// 0x17 section, an out-of-range index, or a record that is not
+    /// inlined (its table entry is the (0, 0) gap).
+    pub fn blob_bytes(&self, index: usize) -> Result<&[u8], RuntimeError> {
+        let data = self
+            .blob_data
+            .as_ref()
+            .ok_or(RuntimeError::BlobNotInlined { index })?;
+        let &(offset, len) = data
+            .entries
+            .get(index)
+            .ok_or(RuntimeError::BlobNotInlined { index })?;
+        let inlined = self
+            .blob_refs
+            .as_ref()
+            .and_then(|refs| refs.get(index))
+            .is_some_and(|r| r.inlined);
+        if !inlined {
+            return Err(RuntimeError::BlobNotInlined { index });
+        }
+        let start = data.abs_data_start + offset as usize;
+        let end = start + len as usize;
+        // decode_blob_data_table bounded every entry against the section;
+        // this guards the absolute math against the physical mmap too.
+        self._mmap.get(start..end).ok_or_else(|| {
+            RuntimeError::Format(NestError::MalformedSectionPayload {
+                section_id: SECTION_BLOB_DATA,
+                reason: format!("blob {} spans past the file", index),
+            })
+        })
+    }
+}
+
+/// Open the blob pair. Returns the decoded 0x14 table (`None` when the
 /// capability or section is absent). When the 0x16 overlay is present,
 /// per-chunk spans that point into a blob REPLACE the decoded 0x03 spans
 /// in place (for a media corpus those carry ordinal placeholders), so

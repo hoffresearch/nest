@@ -14,6 +14,7 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Inspect { file, json } => cmd::inspect::run(file, json),
         Commands::Validate { file } => cmd::validate::run(file),
+        Commands::Media { file, export } => cmd::media::run(file, export),
         Commands::Search { file, query, k } => cmd::search::run(file, query, k),
         Commands::SearchText {
             file,
@@ -56,7 +57,7 @@ fn main() -> Result<()> {
             rebuild_only,
             dry_run,
             allow_heavy,
-        } => cmd::build::run(
+        } => cmd::agent::build::run(
             spec,
             sample,
             models,
@@ -84,7 +85,7 @@ fn main() -> Result<()> {
             embedder,
             candidates,
             model_path,
-        } => cmd::ask::run(file, query, k, disclose, embedder, candidates, model_path),
+        } => cmd::agent::ask::run(file, query, k, disclose, embedder, candidates, model_path),
         Commands::Retrieve {
             file,
             query,
@@ -93,7 +94,7 @@ fn main() -> Result<()> {
             embedder,
             candidates,
             model_path,
-        } => cmd::retrieve::run(file, query, k, format, embedder, candidates, model_path),
+        } => cmd::agent::retrieve::run(file, query, k, format, embedder, candidates, model_path),
         Commands::Doctor => cmd::doctor::run(),
     }
 }
