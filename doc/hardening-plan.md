@@ -66,6 +66,20 @@ is what reaches the decoders in bulk.
 - mutation soak (release): 250,000 reader mutations + 40,000 runtime
   mutations, zero panics after the four fixes; before them the first 1,500
   found #1 and #2 within a second.
+- coverage-guided fuzz (cargo-fuzz, libfuzzer + asan, nightly, 10 minutes per
+  target, seeds from the harness fixtures), 2026-09-05 on this machine:
+
+  | target | executions | result |
+  |---|---|---|
+  | `nest_view` | 47,639,167 | clean (cov 1106, corpus 861) |
+  | `section_decoders` (before fix #5) | stopped early | oom: 31 GB `with_capacity` in the spans repack |
+  | `section_decoders` (after fix #5) | 18,983,714 | clean (cov 2368, corpus 2096) |
+  | `runtime_indexes` | 3,480,290 | clean (cov 948, corpus 413) |
+  | `mmap_open_search` | 3,123,031 | clean (cov 3612, corpus 1569) |
+
+  every run wrote its corpus under `fuzz/corpus/<target>/` (gitignored); the
+  two libfuzzer artifacts of finding #5 are tracked as `fuzz/seeds/regress-*`.
+
 - int4 rerank kernel, per-row allocation vs caller scratch: see the numbers
   appended at the end of this file (measured on this machine, 50k x 384).
 

@@ -130,7 +130,7 @@ class UsearchSystem:
             expansion_add=200,
             expansion_search=100,
         )
-        idx.add(np.arange(rows.shape[0], dtype=np.uint64), rows)
+        idx.add(np.arange(rows.shape[0], dtype=np.uint64), rows, threads=1)
         idx.save(path)
 
     def open(self, path: str) -> None:
@@ -166,7 +166,7 @@ class HnswlibSystem:
         self.dim = rows.shape[1]
         idx = self.hnswlib.Index(space="cosine", dim=self.dim)
         idx.init_index(max_elements=rows.shape[0], ef_construction=200, M=16, random_seed=42)
-        idx.add_items(rows, np.arange(rows.shape[0]))
+        idx.add_items(rows, np.arange(rows.shape[0]), num_threads=1)
         idx.save_index(path)
 
     def open(self, path: str) -> None:
