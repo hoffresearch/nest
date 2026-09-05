@@ -10,8 +10,9 @@ use nest_format::reader::NestView;
 use nest_format::sections::{SpaceEntry, decode_space_table};
 
 use crate::error::RuntimeError;
+use nest_format::reader::validate_slab_values;
 
-/// lone opened space: its directory entry plus the byte range of its band
+/// one opened space: its directory entry plus the byte range of its band
 /// slab inside the mmap (resolved once at open time).
 #[derive(Clone, Debug)]
 pub(crate) struct OpenSpace {
@@ -20,7 +21,7 @@ pub(crate) struct OpenSpace {
     pub size: usize,
 }
 
-/// lOpen the space_table and resolve each listed space's band range.
+/// Open the space_table and resolve each listed space's band range.
 /// `None` when the capability or the section is absent. the band's
 /// presence and exact size were already validated by the reader
 /// (`validate_space_bands`), so a missing band here is a typed error,
@@ -40,6 +41,14 @@ pub(crate) fn open_space_sections(view: &NestView) -> Result<Option<Vec<OpenSpac
     for entry in entries {
         let band_id = SECTION_SPACE_EMBEDDINGS_BASE + entry.space_index as u32;
         let band = view.entry(band_id)?;
+        // same NaN/Inf gate the canonical embeddings pass at open: a band
+        // lane the kernels would score must be finite.
+        validate_slab_values(
+            band.encoding,
+            view.get_section_data(band_id)?,
+            entry.n_vectors as usize,
+            entry.dim as usize,
+        )?;
         spaces.push(OpenSpace {
             entry,
             offset: band.offset as usize,

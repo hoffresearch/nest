@@ -9,7 +9,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
-/// lResolve the build preset plus the explicit `text_encoding`/`dtype`
+/// Resolve the build preset plus the explicit `text_encoding`/`dtype`
 /// overrides into the concrete (SectionEncoding, EmbeddingDType, hnsw,
 /// bm25) quadruple. "nano" sits below "tiny": int4 block-64 embeddings at
 /// stored precision (~2x over int8), zstd text, hnsw shortlist.
@@ -65,7 +65,7 @@ pub(crate) fn resolve_preset(
     Ok((text_enc, dt, default_hnsw, default_bm25))
 }
 
-/// lParse the optional `blob_refs` kwarg: a list of dicts with keys
+/// Parse the optional `blob_refs` kwarg: a list of dicts with keys
 /// `content_hash` ("sha256:<64 hex>" or bare 64 hex), `original_uri`,
 /// `byte_len`, `inlined`. entry order is preserved: the 0x14 table is
 /// addressed by ordinal from the span overlay.
@@ -110,7 +110,7 @@ pub(crate) fn parse_blob_refs(refs: &Bound<PyList>) -> PyResult<Vec<nest_format:
     Ok(out)
 }
 
-/// lParse the optional `chunk_blob_spans` kwarg: a list of dicts with keys
+/// Parse the optional `chunk_blob_spans` kwarg: a list of dicts with keys
 /// `blob_ref_index` (int, or None for BLOB_REF_NONE), `byte_start`,
 /// `byte_end`. one entry per chunk, in chunk order.
 pub(crate) fn parse_blob_spans(spans: &Bound<PyList>) -> PyResult<Vec<nest_format::BlobSpanEntry>> {
@@ -152,7 +152,7 @@ pub(crate) fn parse_blob_spans(spans: &Bound<PyList>) -> PyResult<Vec<nest_forma
     Ok(out)
 }
 
-/// lTruncate each row to its first `mrl_dim` components and re-L2-normalize
+/// Truncate each row to its first `mrl_dim` components and re-L2-normalize
 /// the prefix in place (matryoshka truncate-then-renormalize). `full_dim` is
 /// the source dim; rows shorter than `full_dim` are left untouched (the
 /// builder's per-chunk validation rejects a real dim mismatch later). A zero
@@ -178,7 +178,7 @@ pub(crate) fn truncate_renormalize(
     }
 }
 
-/// lBuild the chunk-to-chunk graph_adjacency (0x0C) csr payload for `n`
+/// Build the chunk-to-chunk graph_adjacency (0x0C) csr payload for `n`
 /// chunks: NEXT_CHUNK edges (sequential ordinals, both directions so the
 /// bounded bfs can reconstruct neighbor context on either side) plus up to
 /// `top_m` SEMANTIC edges per node taken from the already-built hnsw level-0
@@ -236,7 +236,7 @@ pub(crate) fn build_graph_payload(
     Ok(Some(payload))
 }
 
-/// lBuild the hnsw index over the chunk embeddings (flattened f32 rows).
+/// Build the hnsw index over the chunk embeddings (flattened f32 rows).
 /// carved out of `build_fn.rs` (300-line guard): the index doubles as the
 /// source of top-m SEMANTIC edges for the optional graph, so it is built
 /// whenever hnsw OR the graph is wanted.

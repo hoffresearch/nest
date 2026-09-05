@@ -15,6 +15,7 @@
 //! wire encoding: `raw` (self-describing payload, no compression).
 //! all integers le.
 
+use crate::bytes::{array32, le_u32, le_u64};
 use crate::error::NestError;
 use crate::layout::SECTION_BLOB_REFS;
 
@@ -83,7 +84,7 @@ pub fn decode_blob_refs(bytes: &[u8]) -> Result<Vec<BlobRefRecord>, NestError> {
     }
     let mut records = Vec::with_capacity(n);
     for _ in 0..n {
-        let content_hash: [u8; 32] = cur.take(32)?.try_into().unwrap();
+        let content_hash: [u8; 32] = array32(cur.take(32)?)?;
         let uri_len = cur.u32()? as usize;
         if uri_len > cur.remaining() {
             return Err(malformed("blob_refs: uri length exceeds payload"));
@@ -137,9 +138,9 @@ impl<'a> Cursor<'a> {
         Ok(self.take(1)?[0])
     }
     fn u32(&mut self) -> Result<u32, NestError> {
-        Ok(u32::from_le_bytes(self.take(4)?.try_into().unwrap()))
+        le_u32(self.take(4)?)
     }
     fn u64(&mut self) -> Result<u64, NestError> {
-        Ok(u64::from_le_bytes(self.take(8)?.try_into().unwrap()))
+        le_u64(self.take(8)?)
     }
 }

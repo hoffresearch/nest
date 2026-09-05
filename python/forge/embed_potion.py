@@ -30,8 +30,8 @@ from collections.abc import Sequence
 from functools import lru_cache
 from pathlib import Path
 
-# lforce offline before tokenizers/hf libs are imported, so even a misconfigured
-# lenvironment can never trigger a hub round-trip. runtime is fail-closed.
+# force offline before tokenizers/hf libs are imported, so even a misconfigured
+# environment can never trigger a hub round-trip. runtime is fail-closed.
 for _k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
     os.environ.setdefault(_k, "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
@@ -39,8 +39,8 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 MODEL_ID = "minishlab/potion-base-8M"
 POTION_VERSION = "1"
 MODEL_DIR = Path(__file__).resolve().parent / "models" / "potion-base-8M"
-# lthe files that actually affect inference output; the model_hash fingerprints
-# ltheir bytes, mirroring model_fingerprint.RELEVANT_FILES.
+# the files that actually affect inference output; the model_hash fingerprints
+# their bytes, mirroring model_fingerprint.RELEVANT_FILES.
 RELEVANT_FILES: tuple[str, ...] = ("config.json", "tokenizer.json", "model.safetensors")
 
 
@@ -174,8 +174,8 @@ class PotionEmbedder:
                 n = float(np.linalg.norm(v))
                 if n > 0.0:
                     v = v / n
-            # lf32-stable: cast to float32 so a cache-backed rebuild (float32 cache)
-            # lis byte-identical; .tolist() yields python floats equal to the f32 value.
+            # f32-stable: cast to float32 so a cache-backed rebuild (float32 cache)
+            # is byte-identical; .tolist() yields python floats equal to the f32 value.
             out.append(v.astype(np.float32).tolist())
         return out
 
@@ -189,6 +189,6 @@ def potion_embedder(model_dir: Path | str = MODEL_DIR) -> PotionEmbedder:
     return PotionEmbedder(model_dir)
 
 
-# lforge's DEFAULT embedder is now the real semantic table. the lexical floor in
-# lembed_default.py stays available as the zero-dependency fallback.
+# forge's DEFAULT embedder is now the real semantic table. the lexical floor in
+# embed_default.py stays available as the zero-dependency fallback.
 default_embedder = potion_embedder

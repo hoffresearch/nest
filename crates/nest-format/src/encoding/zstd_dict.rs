@@ -23,6 +23,7 @@
 
 use super::intpack::{IntpackReader, pack_u64s};
 use super::txt_streams::{build_canonical, malformed, write_container};
+use crate::bytes::le_u64;
 use crate::error::NestError;
 use zstd::bulk::{Compressor, Decompressor};
 use zstd::dict::{DecoderDictionary, EncoderDictionary};
@@ -153,7 +154,7 @@ fn parse_v2(bytes: &[u8]) -> crate::Result<(usize, Vec<u64>, &[u8])> {
     if rest.len() < 8 {
         return Err(malformed("zstd_dict: truncated count"));
     }
-    let declared = u64::from_le_bytes(rest[0..8].try_into().unwrap());
+    let declared = le_u64(&rest[0..8])?;
     let table_bytes = &rest[8..];
     let reader = IntpackReader::parse(table_bytes)?;
     if reader.is_empty() {
@@ -180,7 +181,7 @@ fn parse_v2(bytes: &[u8]) -> crate::Result<(usize, Vec<u64>, &[u8])> {
             return Err(malformed("zstd_dict: non-monotonic offsets"));
         }
     }
-    if *offsets.last().unwrap() as usize != streams.len() {
+    if offsets.last().copied() != Some(streams.len() as u64) {
         return Err(malformed("zstd_dict: final offset != streams length"));
     }
     Ok((count, offsets, streams))

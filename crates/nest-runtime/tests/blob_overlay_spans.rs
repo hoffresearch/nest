@@ -5,6 +5,11 @@
 //! keep their 0x03 span. a dangling blob_ref_index fails open with a
 //! typed error, never a silent fallback.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::manifest::Manifest;
 use nest_format::writer::NestFileBuilder;
 use nest_format::{

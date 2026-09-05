@@ -8,6 +8,7 @@ not silence — a typo'd knob that silently does nothing is a lie in a config.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 
@@ -89,8 +90,26 @@ class JxlTranscodeSpec:
     keep_metadata: bool = False
 
 
+# dataset profiles: measured recipes (bench 2026-08-31) resolved into knob
+# defaults BEFORE explicit keys are applied — an explicit key always wins,
+# so no use case is closed off by choosing one.
+#   near-dup: corpora with visual near-duplicates (card reprints, frames,
+#             scans): cluster ordering + per-segment gop lets inter pay
+#             (-29% on same-artwork reprints) without losing O(1) access
+#             on unique segments.
+#   stills:   unique images: all-intra + still tune (best size at O(1) seek).
+#   archive:  byte-reversible JPEG repack (jxl-transcode, 1.12x, sha256-
+#             verified roundtrip): for corpora where loss is not acceptable.
+MEDIA_PROFILES: dict[str, dict] = {
+    "near-dup": {"order": "cluster", "gop": "auto", "tune": "still"},
+    "stills": {"gop": "intra", "tune": "still"},
+    "archive": {"backend": "jxl-transcode"},
+}
+
+
 @dataclass
 class MediaSpec:
+    profile: str = ""  # "" | near-dup | stills | archive (see MEDIA_PROFILES)
     backend: str = "av1"  # av1 | avif | jxl | jxl-transcode | control
     width: int = 1024
     crf: int | str = 35  # int | "auto"
@@ -144,6 +163,9 @@ class OutputSpec:
     dir: str = "out"
     provenance: str = "standard"  # minimal | standard | full
     allow_remote_code: list[str] = field(default_factory=list)
+    # inline the media bytes into the .nest (0x17): one self-contained file,
+    # no sidecar needed at read time. the media dir remains as build cache.
+    embed_media: bool = False
 
 
 @dataclass
@@ -187,10 +209,32 @@ def load_spec(path: str | Path) -> CorpusSpec:
         data = yaml.safe_load(raw)
     else:
         raise SpecError(f"unsupported spec extension '{path.suffix}' (use .toml or .json)")
-    return _parse(data, str(path))
+    return _parse(_expand_home(data), str(path))
+
+
+def _expand_home(node):
+    # specs stay machine-portable: "~/..." instead of a hardcoded home.
+    if isinstance(node, str):
+        return os.path.expanduser(node) if node.startswith("~/") else node
+    if isinstance(node, dict):
+        return {k: _expand_home(v) for k, v in node.items()}
+    if isinstance(node, list):
+        return [_expand_home(v) for v in node]
+    return node
+
+
+_KNOWN_TABLES = frozenset({"corpus", "source", "media", "models", "embedding", "build", "output"})
 
 
 def _parse(data: dict, spec_path: str) -> CorpusSpec:
+    unknown = sorted(set(data) - _KNOWN_TABLES)
+    if unknown:
+        raise SpecError(
+            f"unknown top-level table(s) {unknown}: valid tables are {sorted(_KNOWN_TABLES)}"
+        )
+    raw_models = data.get("models", [])
+    if not isinstance(raw_models, list) or not all(isinstance(m, dict) for m in raw_models):
+        raise SpecError("models must be an array of tables — write [[models]], not [models]")
     corpus = dict(data.get("corpus", {}))
     src = dict(data.get("source", {}))
     joins = [_section(SourceJoin, dict(j), "source.joins") for j in src.pop("joins", [])]
@@ -205,13 +249,20 @@ def _parse(data: dict, spec_path: str) -> CorpusSpec:
     media = None
     if "media" in data:
         m = dict(data["media"])
+        profile = m.pop("profile", "")
+        if profile:
+            if profile not in MEDIA_PROFILES:
+                raise SpecError(
+                    f"media.profile: unknown '{profile}' (valid: {sorted(MEDIA_PROFILES)})"
+                )
+            m = {**MEDIA_PROFILES[profile], **m, "profile": profile}
         quality = _section(QualitySpec, dict(m.pop("quality", {})), "media.quality")
         cluster = _section(ClusterSpec, dict(m.pop("cluster", {})), "media.cluster")
         jxl = _section(JxlTranscodeSpec, dict(m.pop("jxl_transcode", {})), "media.jxl_transcode")
         media = _section(MediaSpec, m, "media")
         media.quality, media.cluster, media.jxl_transcode = quality, cluster, jxl
 
-    models = [_section(ModelSpec, dict(m), "models") for m in data.get("models", [])]
+    models = [_section(ModelSpec, dict(m), "models") for m in raw_models]
     image_input = _section(
         ImageInputSpec,
         dict(data.get("embedding", {}).get("image_input", {})),
@@ -235,6 +286,7 @@ __all__ = [
     "ModelSpec",
     "SpecError",
     "MAX_SPACES",
+    "MEDIA_PROFILES",
     "load_spec",
     "default_model",
     "emitted_spaces",

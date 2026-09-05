@@ -1,3 +1,8 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -106,7 +111,7 @@ fn cli_cite_resolves_citation() {
 
     let bin = env!("CARGO_BIN_EXE_nest");
 
-    // lFirst, fetch a real citation_id by running search.
+    // First, fetch a real citation_id by running search.
     let q = "[1.0, 0.0, 0.0, 0.0]";
     let out = Command::new(bin)
         .args(["search", path.to_str().unwrap(), q, "-k", "1"])
@@ -138,7 +143,7 @@ fn cli_cite_resolves_citation() {
     assert!(stdout.contains("byte_end:"));
     assert!(stdout.contains("text_"));
 
-    // lMismatched content_hash → cite must fail loudly.
+    // Mismatched content_hash → cite must fail loudly.
     let bogus = format!("nest://sha256:{}/sha256:{}", "0".repeat(64), "0".repeat(64));
     let out = Command::new(bin)
         .args(["cite", path.to_str().unwrap(), &bogus])
@@ -161,7 +166,7 @@ fn cli_cite_resolves_citation() {
 // is unconditional. set NEST_PYTHON to point at the venv that has the deps.
 // ---------------------------------------------------------------------------
 
-/// lresolve a python interpreter that can import forge.embed_potion (numpy +
+/// resolve a python interpreter that can import forge.embed_potion (numpy +
 /// tokenizers + the vendored table). prefers $NEST_PYTHON, then .venv at the
 /// repo root, then `python3`. returns None when none can build the demo.
 fn forge_python() -> Option<(String, PathBuf)> {
@@ -189,7 +194,7 @@ fn forge_python() -> Option<(String, PathBuf)> {
     None
 }
 
-/// lbuild the cc0 demo corpus into `path` via forge.retrieve.build_demo with
+/// build the cc0 demo corpus into `path` via forge.retrieve.build_demo with
 /// the offline potion embedder. returns false (skip) when forge deps absent.
 fn build_demo_corpus(py: &str, root: &std::path::Path, path: &std::path::Path) -> bool {
     let code = format!(

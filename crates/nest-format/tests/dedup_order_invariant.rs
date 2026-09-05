@@ -5,6 +5,11 @@
 //! a single zstd window's easy reach, dedup-before-zstd shrinks more than
 //! zstd-after (the inverted order recovers almost nothing).
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::encoding::{dedup, zstd_encode};
 use nest_format::sections::encode_chunks_canonical;
 

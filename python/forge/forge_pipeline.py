@@ -45,6 +45,7 @@ class _Ctx:
     vectors: dict[str, dict[str, np.ndarray]] = field(default_factory=dict)  # preset -> arrays
     model_meta: dict[str, dict] = field(default_factory=dict)
     timings: dict[str, float] = field(default_factory=dict)
+    models_filtered: bool = False  # --models subset: never overwrite a full build.lock
 
     @property
     def state_dir(self) -> Path:
@@ -70,7 +71,7 @@ def build(
     if models_filter:
         spec.models = [m for m in spec.models if m.preset in models_filter]
         validate(spec, allow_heavy=allow_heavy)
-    ctx = _Ctx(spec=spec, out_dir=Path(spec.output.dir))
+    ctx = _Ctx(spec=spec, out_dir=Path(spec.output.dir), models_filtered=bool(models_filter))
     ctx.out_dir.mkdir(parents=True, exist_ok=True)
     ctx.state_dir.mkdir(exist_ok=True)
     ctx.tmp_dir.mkdir(exist_ok=True)
@@ -122,7 +123,7 @@ def _media_stage(ctx: _Ctx, *, resume: bool) -> None:
     media_dir = image_media.media_dir_for(ctx.out_dir / f"{spec.name}.nest")
     if resume and state_file.is_file():
         st = json.loads(state_file.read_text())
-        if st.get("params") == params and _media_files_ok(media_dir, st["media"]):
+        if st.get("params") == params and _media_files_ok(media_dir, st["media"], st["frame_uris"]):
             ctx.media, ctx.frame_uris = st["media"], st["frame_uris"]
             ctx.timings["media"] = 0.0
             return
@@ -137,10 +138,18 @@ def _media_stage(ctx: _Ctx, *, resume: bool) -> None:
     )
 
 
-def _media_files_ok(media_dir: Path, media: dict) -> bool:
-    for seg in media.get("segments", [{"uri": None}]):
-        if seg["uri"] is None:  # unsharded record
-            return any(media_dir.glob("*"))
+def _media_files_ok(media_dir: Path, media: dict, frame_uris: list[str]) -> bool:
+    segments = media.get("segments")
+    if not segments:
+        # per-image backends (jxl/avif/control): every frame's file must
+        # still exist non-empty — a bare "the dir has entries" check would
+        # let resume package deleted or truncated media.
+        for uri in frame_uris:
+            p = media_dir / uri.removeprefix("media://").split("#frame=")[0]
+            if not p.is_file() or p.stat().st_size == 0:
+                return False
+        return True
+    for seg in segments:
         p = media_dir / seg["uri"]
         if not p.is_file():
             return False
@@ -150,7 +159,9 @@ def _media_files_ok(media_dir: Path, media: dict) -> bool:
 
 
 def _gate_adapter(ctx: _Ctx, preset_name: str):
-    ms = next(m for m in ctx.spec.models if m.preset == preset_name)
+    ms = next((m for m in ctx.spec.models if m.preset == preset_name), None)
+    if ms is None:  # validate() mirrors this; keep the crash typed regardless
+        raise ForgeError(f"media gate/cluster model '{preset_name}' is not a spec model")
     return model_registry.create_embedder(
         preset_name,
         model_path=ms.model_path or None,
@@ -208,6 +219,8 @@ def _encode_media(ctx: _Ctx, media_dir: Path) -> tuple[dict, list[str]]:
         jxl_transcode=m.jxl_transcode,
     )
     media = built["media"]
+    if order is not None and media.get("order_permutation"):
+        media["order"] = m.order  # the spec's method, not the backend's generic label
     media["dedup"] = {"n_items": len(ctx.rows), "n_unique_frames": len(ctx.unique)}
     if quality_report is not None:
         media["crf_auto"] = quality_report
@@ -216,6 +229,19 @@ def _encode_media(ctx: _Ctx, media_dir: Path) -> tuple[dict, list[str]]:
 
 def _first_image_preset(spec: CorpusSpec) -> str:
     return next(m.preset for m in spec.models if m.image == "space")
+
+
+def _model_dir_fingerprint(preset, model_path: str | None) -> str | None:
+    """Cheap identity of the resolved model dir: sorted (relpath, size)
+    pairs, hashed. Catches a swapped snapshot without reading weights;
+    None for presets with no on-disk dir (vendored potion, fake)."""
+    d = model_registry.resolve_model_dir(preset, model_path)
+    if d is None or not Path(d).is_dir():
+        return None
+    listing = sorted(
+        (str(p.relative_to(d)), p.stat().st_size) for p in Path(d).rglob("*") if p.is_file()
+    )
+    return canonical_hash({"dir": listing})
 
 
 def _recipe(ctx: _Ctx, ms: ModelSpec, preset) -> dict:
@@ -270,20 +296,40 @@ def _embed_stage(ctx: _Ctx, *, rebuild_only: bool) -> None:
                 )
             return adapter
 
-        # the triad needs model_hash, which needs a loaded model; cache a probe of it
+        # the triad needs model_hash, which needs a loaded model; cache a
+        # probe of it, keyed by a cheap fingerprint of the resolved model dir
+        # so swapping the snapshot on disk invalidates the probe instead of
+        # silently emitting the old model's vectors.
+        dir_fp = _model_dir_fingerprint(preset, ms.model_path or None)
         probe_file = ctx.state_dir / f"model_hash.{ms.preset}.json"
+        model_hash = None
         if probe_file.is_file():
-            model_hash = json.loads(probe_file.read_text())["model_hash"]
-        else:
+            probed = json.loads(probe_file.read_text())
+            if probed.get("dir_fingerprint") == dir_fp:
+                model_hash = probed["model_hash"]
+        if model_hash is None:
             model_hash = get_adapter().model_hash
-            atomic_write_json(probe_file, {"model_hash": model_hash})
+            atomic_write_json(probe_file, {"model_hash": model_hash, "dir_fingerprint": dir_fp})
+        want_text = ms.text in ("default", "space")
+        want_image = ms.image == "space"
         triad = {
             "model_hash": model_hash,
             "embedding_recipe_hash": recipe_hash,
             "corpus_input_hash": ctx.input_hash,
+            # not part of the RFC-0 triad proper, but part of the cache key:
+            # WHICH arrays this spec needs, and whether dedup shaped the
+            # image rows. a spec edit that changes any of these must miss.
+            "arrays": {
+                "text": want_text,
+                "image": want_image,
+                "dedup": bool(spec.media.dedup) if spec.media else None,
+            },
         }
 
         arrays = cache.load(triad)
+        required = {k for k, want in (("text", want_text), ("image_unique", want_image)) if want}
+        if arrays is not None and not required <= set(arrays):
+            arrays = None  # pre-fix cache entry that lacks an array emit needs
         if arrays is None:
             if rebuild_only:
                 raise ForgeError(

@@ -10,8 +10,12 @@ use sha2::{Digest, Sha256};
 
 use super::SECTION_ENCODING_RAW;
 
+// `Pod` + `Zeroable` are derived, not asserted: the derive fails to
+// compile if the struct ever gains padding or a field that is not valid
+// for every bit pattern, which is exactly the invariant the on-disk
+// byte view below relies on. No `unsafe` in this file.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct SectionEntry {
     pub section_id: u32,
     pub encoding: u32,
@@ -31,14 +35,17 @@ impl SectionEntry {
         }
     }
 
+    /// The exact on-disk bytes of this record (little-endian host only,
+    /// which is every supported target; see `layout::tests`).
     pub fn as_bytes(&self) -> &[u8] {
-        let size = std::mem::size_of::<Self>();
-        unsafe { std::slice::from_raw_parts(self as *const _ as *const u8, size) }
+        bytemuck::bytes_of(self)
     }
 
+    /// Mutable view over the on-disk bytes; `from_bytes`-style readers copy
+    /// a slice in here. Sound for any content because every field accepts
+    /// every bit pattern (`Pod`).
     pub fn as_bytes_mut(&mut self) -> &mut [u8] {
-        let size = std::mem::size_of::<Self>();
-        unsafe { std::slice::from_raw_parts_mut(self as *mut _ as *mut u8, size) }
+        bytemuck::bytes_of_mut(self)
     }
 
     pub fn compute_checksum(&mut self, data: &[u8]) {

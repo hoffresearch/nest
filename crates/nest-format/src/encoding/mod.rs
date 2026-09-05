@@ -61,7 +61,7 @@ use crate::layout::{
 };
 use std::borrow::Cow;
 
-/// lThe context-free wire codecs, as a small registry. Decoding dispatches
+/// The context-free wire codecs, as a small registry. Decoding dispatches
 /// through `WireCodec::from_id`, so adding a reserved codec is a localized
 /// additive diff: a variant, a `from_id` arm, a `decode` arm, and its own
 /// `<=300`-line module. Reserved-but-unimplemented ids (and the dict codec,
@@ -111,7 +111,7 @@ impl WireCodec {
     }
 }
 
-/// lDecode a section payload from its on-disk encoding to the logical bytes
+/// Decode a section payload from its on-disk encoding to the logical bytes
 /// a reader consumes, via the wire-codec registry. For `raw` this is a
 /// borrow; for `zstd` an owned decompressed buffer. The `zstd_dict` (id 5)
 /// codec needs the shared dictionary (section 0x0A) and is decoded via
@@ -127,7 +127,7 @@ pub fn decode_payload(encoding: u32, bytes: &[u8]) -> crate::Result<Cow<'_, [u8]
     }
 }
 
-/// lDecode a chunks_canonical payload that MAY be dict-framed (`zstd_dict`,
+/// Decode a chunks_canonical payload that MAY be dict-framed (`zstd_dict`,
 /// id 5), supplying the shared dictionary from section 0x0A. all other
 /// encodings ignore the dict and route through [`decode_payload`]. the dict
 /// variant decodes BYTE-IDENTICALLY to the raw chunks_canonical payload, so
@@ -147,7 +147,7 @@ pub fn decode_payload_with_dict<'a>(
     decode_payload(encoding, bytes)
 }
 
-/// lEncode `payload` with one non-embedding wire encoding (raw or zstd).
+/// Encode `payload` with one non-embedding wire encoding (raw or zstd).
 /// The embedding dtypes (float16/int8) are not general-purpose encoders
 /// and are rejected here; they are chosen by preset on the embeddings
 /// section directly.
@@ -162,7 +162,7 @@ fn encode_wire(encoding: u32, payload: &[u8]) -> crate::Result<Vec<u8>> {
     }
 }
 
-/// lCost-driven encoder: try every candidate wire encoding and return the
+/// Cost-driven encoder: try every candidate wire encoding and return the
 /// `(encoding_id, bytes)` of the SMALLEST result, so the writer can record
 /// the chosen id in the section entry. Ties break toward the EARLIEST
 /// candidate (cheaper-to-decode wins an equal-size race). This only auto-
@@ -181,117 +181,28 @@ pub fn encode_smallest(candidates: &[u32], payload: &[u8]) -> crate::Result<(u32
     best.ok_or_else(|| NestError::InvalidInput("encode_smallest: no candidate encodings".into()))
 }
 
-/// lExpected size of the embeddings section for a given dtype. Returns
-/// `None` for unknown dtypes.
+/// Expected size of the embeddings section for a given dtype. `None` for an
+/// unknown dtype AND when `n * dim` overflows: both come from an untrusted
+/// header, and a wrapped product would let a hostile file claim a huge
+/// corpus behind a tiny section (mutation-fuzz finding).
 pub fn expected_embeddings_size(dtype: &str, n: usize, dim: usize) -> Option<usize> {
+    let cells = n.checked_mul(dim)?;
     match dtype {
-        "float32" => Some(n * dim * 4),
-        "float16" => Some(n * dim * 2),
-        "int8" => Some(INT8_PREFIX_SIZE + n * 4 + n * dim),
-        // lprefix + f16 group scales (n * dim/64) + packed nibbles (n * dim/2).
-        "int4" if dim % INT4_BLOCK == 0 => {
-            Some(INT4_PREFIX_SIZE + n * (dim / INT4_BLOCK) * 2 + n * dim / 2)
-        }
+        "float32" => cells.checked_mul(4),
+        "float16" => cells.checked_mul(2),
+        "int8" => n
+            .checked_mul(4)?
+            .checked_add(cells)?
+            .checked_add(INT8_PREFIX_SIZE),
+        // prefix + f16 group scales (n * dim/64) + packed nibbles (n * dim/2).
+        "int4" if dim % INT4_BLOCK == 0 => n
+            .checked_mul(dim / INT4_BLOCK)?
+            .checked_mul(2)?
+            .checked_add(cells / 2)?
+            .checked_add(INT4_PREFIX_SIZE),
         _ => None,
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn zstd_roundtrip_preserves_bytes() {
-        let original = b"hello hello hello world world world".repeat(64);
-        let compressed = zstd_encode(&original).unwrap();
-        assert!(
-            compressed.len() < original.len(),
-            "zstd should shrink repetitive text"
-        );
-        let decoded = decode_payload(SECTION_ENCODING_ZSTD, &compressed).unwrap();
-        assert_eq!(decoded.as_ref(), original.as_slice());
-    }
-
-    #[test]
-    fn raw_decode_borrows() {
-        let bytes = b"plain";
-        let decoded = decode_payload(SECTION_ENCODING_RAW, bytes).unwrap();
-        assert!(matches!(decoded, std::borrow::Cow::Borrowed(_)));
-    }
-
-    #[test]
-    fn unknown_encoding_rejected() {
-        let res = decode_payload(99, &[]);
-        assert!(matches!(
-            res,
-            Err(NestError::UnsupportedSectionEncoding { encoding: 99, .. })
-        ));
-    }
-
-    #[test]
-    fn intpack_decode_payload_rebuilds_canonical_bytes() {
-        // intpack (id 4) repacks chunk_ids/spans; decode_payload must
-        // rebuild the BYTE-IDENTICAL raw payload so content_hash (hashed
-        // over decoded bytes) is unchanged and citations stay stable.
-        use crate::sections::{encode_chunk_ids, encode_chunk_ids_intpack};
-        let ids: Vec<String> = (0u8..3)
-            .map(|i| format!("sha256:{}", hex::encode([i; 32])))
-            .collect();
-        let packed = encode_chunk_ids_intpack(&ids).unwrap();
-        let decoded = decode_payload(SECTION_ENCODING_INTPACK, &packed).unwrap();
-        assert_eq!(decoded.as_ref(), encode_chunk_ids(&ids).unwrap().as_slice());
-        // a malformed intpack payload is a typed error, never a panic.
-        assert!(decode_payload(SECTION_ENCODING_INTPACK, &[]).is_err());
-    }
-
-    #[test]
-    fn wire_codec_registry_maps_only_implemented_ids() {
-        use crate::layout::{
-            SECTION_ENCODING_FRONTCODE, SECTION_ENCODING_FSST, SECTION_ENCODING_INT4,
-            SECTION_ENCODING_INTPACK, SECTION_ENCODING_RABITQ, SECTION_ENCODING_RAW,
-            SECTION_ENCODING_TXT_STREAMS, SECTION_ENCODING_ZSTD, SECTION_ENCODING_ZSTD_DICT,
-        };
-        assert!(WireCodec::from_id(SECTION_ENCODING_RAW).is_some());
-        assert!(WireCodec::from_id(SECTION_ENCODING_ZSTD).is_some());
-        // intpack (id 4) is now implemented and in the registry.
-        assert!(WireCodec::from_id(SECTION_ENCODING_INTPACK).is_some());
-        // int4 (id 7) is now implemented and in the registry.
-        assert!(WireCodec::from_id(SECTION_ENCODING_INT4).is_some());
-        // txt_streams (id 10) is now implemented and in the registry.
-        assert!(WireCodec::from_id(SECTION_ENCODING_TXT_STREAMS).is_some());
-        // fsst (id 9) is now implemented and in the registry (self-contained).
-        assert!(WireCodec::from_id(SECTION_ENCODING_FSST).is_some());
-        // zstd_dict (id 5) is implemented but needs the shared dictionary
-        // from section 0x0A, so it is NOT in the context-free registry: it is
-        // decoded via `decode_payload_with_dict`, not `decode_payload`.
-        assert!(WireCodec::from_id(SECTION_ENCODING_ZSTD_DICT).is_none());
-        // still-reserved-but-unimplemented ids stay rejected: frontcode(6),
-        // rabitq(8), and any unknown id.
-        assert!(WireCodec::from_id(SECTION_ENCODING_FRONTCODE).is_none());
-        assert!(WireCodec::from_id(SECTION_ENCODING_RABITQ).is_none());
-        assert!(WireCodec::from_id(0xFF).is_none());
-    }
-
-    #[test]
-    fn encode_smallest_picks_the_winner_and_records_its_id() {
-        use crate::layout::{SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD};
-        let candidates = [SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD];
-
-        // lhighly repetitive payload: zstd wins, and the chosen id is recorded.
-        let compressible = b"abcabcabcabc".repeat(64);
-        let (id, bytes) = encode_smallest(&candidates, &compressible).unwrap();
-        assert_eq!(id, SECTION_ENCODING_ZSTD);
-        assert!(bytes.len() < compressible.len());
-
-        // ltiny payload: zstd framing overhead loses, raw wins (first on ties).
-        let (id2, _) = encode_smallest(&candidates, b"x").unwrap();
-        assert_eq!(id2, SECTION_ENCODING_RAW);
-    }
-
-    #[test]
-    fn encode_smallest_rejects_embedding_and_empty_candidates() {
-        use crate::layout::SECTION_ENCODING_INT8;
-        assert!(encode_smallest(&[SECTION_ENCODING_INT8], b"data").is_err());
-        assert!(encode_smallest(&[], b"data").is_err());
-    }
-}
+mod tests;

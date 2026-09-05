@@ -43,6 +43,12 @@ def main() -> int:
         default=None,
         help="local path to the vendored potion table dir (default: bundled).",
     )
+    p.add_argument(
+        "--mrl-dim",
+        type=int,
+        default=0,
+        help="slice+renormalize the query to this dim (corpora built with build.mrl_dim)",
+    )
     p.add_argument("model", help="manifest embedding_model name; echoed back, not for inference")
     p.add_argument("query", nargs="?", default="")
     args = p.parse_args()
@@ -59,11 +65,20 @@ def main() -> int:
         print(f"error: {e}", file=sys.stderr)
         return 3
 
+    dim = emb.embedding_dim
+    if args.mrl_dim:
+        import numpy as np
+
+        v = np.asarray(vector, dtype=np.float32)[: args.mrl_dim]
+        norm = float(np.linalg.norm(v))
+        vector = (v / norm if norm > 0 else v).tolist()
+        dim = args.mrl_dim
+
     payload = {
         "model_hash": emb.model_hash(),
         "fingerprint": emb.fingerprint(),
         "embedding_model": emb.embedding_model,
-        "embedding_dim": emb.embedding_dim,
+        "embedding_dim": dim,
         "vector": vector,
     }
     json.dump(payload, sys.stdout)

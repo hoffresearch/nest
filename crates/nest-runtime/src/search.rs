@@ -9,7 +9,7 @@ use crate::rerank::RerankSource;
 use crate::{RerankSourceKind, SearchExplain, SearchHit, SearchResult};
 
 impl MmapNestFile {
-    /// lthe honesty marker: the precision the rerank reads from, from the
+    /// the honesty marker: the precision the rerank reads from, from the
     /// `embeddings_fp` (0x09) slab dtype when present, else the stored dtype.
     fn rerank_source_kind(&self) -> RerankSourceKind {
         let dtype = self
@@ -19,7 +19,7 @@ impl MmapNestFile {
         RerankSourceKind::from_dtype(dtype)
     }
 
-    /// lValidate query, L2-normalize, return the normalized vector.
+    /// Validate query, L2-normalize, return the normalized vector.
     fn validate_query(&self, query: &[f32], k: i32) -> Result<Vec<f32>, RuntimeError> {
         if k <= 0 {
             return Err(RuntimeError::InvalidK(k));
@@ -49,7 +49,7 @@ impl MmapNestFile {
         Ok(qnorm)
     }
 
-    /// lThe single rerank source the exact-cosine recompute reads from:
+    /// The single rerank source the exact-cosine recompute reads from:
     /// the full-precision `embeddings_fp` (0x09) slab when present, else
     /// the stored dtype slab. Both `score_all` and `score_subset` route
     /// through this so every path's returned score is the SAME real
@@ -62,11 +62,11 @@ impl MmapNestFile {
         RerankSource::new(dtype, bytes, self.n_embeddings, self.embedding_dim)
     }
 
-    /// lScore every chunk against `qnorm` via the rerank source. Returns
+    /// Score every chunk against `qnorm` via the rerank source. Returns
     /// `(idx, score)` pairs in the natural index order.
     fn score_all(&self, qnorm: &[f32]) -> Result<Vec<(usize, f32)>, RuntimeError> {
         let n = self.n_embeddings;
-        let src = self.rerank_source()?;
+        let mut src = self.rerank_source()?;
         let mut scores: Vec<(usize, f32)> = Vec::with_capacity(n);
         for i in 0..n {
             scores.push((i, src.score(qnorm, i)));
@@ -74,7 +74,7 @@ impl MmapNestFile {
         Ok(scores)
     }
 
-    /// lScore a sliced subset of indices (used by ANN/BM25 rerank). The
+    /// Score a sliced subset of indices (used by ANN/BM25 rerank). The
     /// returned vector mirrors `idxs.len()` in order. This IS the exact
     /// rerank every candidate-generating path must end in.
     fn score_subset(
@@ -82,7 +82,7 @@ impl MmapNestFile {
         qnorm: &[f32],
         idxs: &[usize],
     ) -> Result<Vec<(usize, f32)>, RuntimeError> {
-        let src = self.rerank_source()?;
+        let mut src = self.rerank_source()?;
         let mut out: Vec<(usize, f32)> = Vec::with_capacity(idxs.len());
         for &i in idxs {
             out.push((i, src.score(qnorm, i)));
@@ -90,7 +90,7 @@ impl MmapNestFile {
         Ok(out)
     }
 
-    /// lExact flat search. The recall=1.0 ground truth.
+    /// Exact flat search. The recall=1.0 ground truth.
     pub fn search(&self, query: &[f32], k: i32) -> Result<SearchResult, RuntimeError> {
         let t0 = std::time::Instant::now();
         let qnorm = self.validate_query(query, k)?;
@@ -112,7 +112,7 @@ impl MmapNestFile {
         })
     }
 
-    /// lANN search. Pulls `ef_search` candidates from HNSW, reranks with
+    /// ANN search. Pulls `ef_search` candidates from HNSW, reranks with
     /// the exact dot product, returns top-k. Falls back to `search()` if
     /// no ANN section is present.
     pub fn search_ann(
@@ -138,7 +138,7 @@ impl MmapNestFile {
             hits: hits.clone(),
             query_time_ms: t0.elapsed().as_secs_f64() * 1000.0,
             index_type: "hnsw",
-            // lRecall is candidate-set dependent; runtime caller can
+            // Recall is candidate-set dependent; runtime caller can
             // measure it against `search()` directly. We don't lie here.
             recall: f32::NAN,
             truncated,
@@ -148,7 +148,7 @@ impl MmapNestFile {
         })
     }
 
-    /// lGraph search: seed from the exact-cosine top-`ef`, expand a bounded
+    /// Graph search: seed from the exact-cosine top-`ef`, expand a bounded
     /// bfs over the chunk-to-chunk csr, union seed + frontier, then run the
     /// SAME mandatory exact rerank on the union. the graph ONLY generates
     /// candidates; the returned score is real cosine, identical contract to
@@ -200,9 +200,9 @@ impl MmapNestFile {
         })
     }
 
-    /// lHybrid search: BM25 candidates ∪ ANN (or exact) candidates,
+    /// Hybrid search: BM25 candidates ∪ ANN (or exact) candidates,
     /// reciprocal-rank fusion, then exact cosine rerank on the union.
-    /// lFinal score is the real cosine.
+    /// Final score is the real cosine.
     pub fn search_hybrid(
         &self,
         query_vec: &[f32],
@@ -214,7 +214,7 @@ impl MmapNestFile {
         let qnorm = self.validate_query(query_vec, k)?;
         let src = self.rerank_source_kind();
 
-        // lVector path: ANN if available, otherwise top-`candidates`.
+        // Vector path: ANN if available, otherwise top-`candidates`.
         let has_ann = self.ann_index.is_some();
         let vec_candidates: Vec<usize> = if let Some(idx) = self.ann_index.as_ref() {
             idx.search(&qnorm, candidates_per_path.max(k as usize))
@@ -224,7 +224,7 @@ impl MmapNestFile {
             all.iter().take(candidates_per_path).map(|p| p.0).collect()
         };
 
-        // lLexical path.
+        // Lexical path.
         let lex_candidates: Vec<usize> = if let Some(bm) = self.bm25_index.as_ref() {
             bm.search(query_text, candidates_per_path)
                 .into_iter()
@@ -234,13 +234,13 @@ impl MmapNestFile {
             Vec::new()
         };
 
-        // lattribute the vector count to the generator that ran (ann vs
+        // attribute the vector count to the generator that ran (ann vs
         // exact-flat shortlist) so the explain line is honest.
         let nvec = vec_candidates.len();
         let (ann_candidates, exact_candidates) = if has_ann { (nvec, 0) } else { (0, nvec) };
         let bm25_candidates = lex_candidates.len();
 
-        // lReciprocal-rank fusion to pick a union, then exact rerank.
+        // Reciprocal-rank fusion to pick a union, then exact rerank.
         let union = bm25::rrf_union(&vec_candidates, &lex_candidates);
         let mut reranked = self.score_subset(&qnorm, &union)?;
         sort_scores_desc(&mut reranked);
@@ -292,9 +292,5 @@ impl MmapNestFile {
 
 #[inline]
 pub(crate) fn sort_scores_desc(scores: &mut [(usize, f32)]) {
-    scores.sort_by(|a, b| {
-        b.1.partial_cmp(&a.1)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| a.0.cmp(&b.0))
-    });
+    scores.sort_by(|a, b| crate::order::cmp_score_desc(*a, *b));
 }

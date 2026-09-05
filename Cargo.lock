@@ -440,12 +440,14 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
 name = "nest-format"
 version = "0.3.0"
 dependencies = [
+ "bytemuck",
  "half",
  "hex",
  "serde",

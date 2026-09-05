@@ -165,12 +165,26 @@ def _load_sqlite(spec: CorpusSpec) -> list[Row]:
         lookup = {}
         for r in con.execute(join.query):
             d = dict(r)
+            if join.on not in d:
+                raise SpecError(f"source.joins: join query has no column '{join.on}'")
             lookup[d[join.on]] = d
+        hits = 0
         for row in raw:
             extra = lookup.get(row.get(join.on))
             if extra:
+                hits += 1
                 for k, v in extra.items():
                     row.setdefault(k, v)
+        # a join that matches NOTHING is a typo or a type mismatch (TEXT vs
+        # INTEGER keys), never intent; partial misses are legitimate
+        # (sparse localizations) but the operator should see the count.
+        if raw and lookup and hits == 0:
+            raise SpecError(
+                f"source.joins on '{join.on}': 0 of {len(raw)} rows matched — "
+                "check the key name and its sqlite type on both sides"
+            )
+        if raw and hits < len(raw):
+            print(f"[forge] join on '{join.on}': {hits}/{len(raw)} rows matched")
     con.close()
     return _rows_from_dicts(spec, raw)
 

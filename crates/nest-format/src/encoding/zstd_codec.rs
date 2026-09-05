@@ -4,12 +4,12 @@
 
 use crate::error::NestError;
 
-/// lDefault zstd compression level. 19 is in the "high" tier — slow to
+/// Default zstd compression level. 19 is in the "high" tier — slow to
 /// encode but a one-time cost and yields ~30% smaller text payloads
 /// than the default level 3.
 pub const DEFAULT_ZSTD_LEVEL: i32 = 19;
 
-/// lCompress with zstd at `DEFAULT_ZSTD_LEVEL`. Returns the compressed
+/// Compress with zstd at `DEFAULT_ZSTD_LEVEL`. Returns the compressed
 /// bytes ready to write as the section payload.
 pub fn zstd_encode(bytes: &[u8]) -> crate::Result<Vec<u8>> {
     zstd::encode_all(bytes, DEFAULT_ZSTD_LEVEL)
@@ -32,7 +32,7 @@ fn decompress_cap(compressed_len: usize) -> usize {
         .max(MIN_DECOMPRESS_CAP)
 }
 
-/// lDecompress a zstd payload. Internal helper used by `decode_payload`.
+/// Decompress a zstd payload. Internal helper used by `decode_payload`.
 /// Bounded by [`decompress_cap`] so a decompression bomb cannot exhaust memory
 /// at open time: a frame that declares (or expands past) more than the cap is
 /// rejected before the large allocation, never a panic.

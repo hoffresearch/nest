@@ -5,7 +5,7 @@ use nest_format::NestError;
 
 use crate::error::RuntimeError;
 
-/// lRuntime view of the embeddings section dtype.
+/// Runtime view of the embeddings section dtype.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DType {
     Float32,
@@ -26,7 +26,7 @@ impl DType {
             ))),
         }
     }
-    /// lNominal on-disk bytes per stored embedding value. int4 packs two
+    /// Nominal on-disk bytes per stored embedding value. int4 packs two
     /// codes per byte (rounds to 0 here); the exact section size, with the
     /// f16 group scales, is `expected_embeddings_size`.
     pub fn bytes_per_value(self) -> usize {

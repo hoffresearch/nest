@@ -8,6 +8,11 @@
 //! identical (file_hash equal). They also confirm the additive manifest
 //! disclosure fields (mrl_dim/full_dim) travel through the writer/reader.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::layout::*;
 use nest_format::manifest::Manifest;
 use nest_format::{ChunkInput, NestView};
@@ -25,7 +30,7 @@ fn manifest(full_dim: u32, mrl_dim: u32, n: u64) -> Manifest {
     }
 }
 
-/// lDeterministic per-row source vector at the full dim. Spread mass across
+/// Deterministic per-row source vector at the full dim. Spread mass across
 /// dims so a prefix is not trivially the whole vector.
 fn full_vec(i: usize, full_dim: usize) -> Vec<f32> {
     let mut v = vec![0.0f32; full_dim];
@@ -39,7 +44,7 @@ fn full_vec(i: usize, full_dim: usize) -> Vec<f32> {
     v
 }
 
-/// lThe pure op the builder applies: slice to the prefix, re-L2-normalize.
+/// The pure op the builder applies: slice to the prefix, re-L2-normalize.
 fn truncate_renorm(v: &[f32], mrl_dim: usize) -> Vec<f32> {
     let mut p = v[..mrl_dim].to_vec();
     let norm: f32 = p.iter().map(|x| x * x).sum::<f32>().sqrt();
@@ -77,14 +82,14 @@ fn truncated_embeddings_section_equals_manual_prefix_renorm_byte_for_byte() {
     let bytes = build_truncated(full_dim, mrl_dim, n);
     let view = NestView::from_bytes(&bytes).unwrap();
 
-    // lheader/manifest stride by the prefix dim.
+    // header/manifest stride by the prefix dim.
     assert_eq!(view.header.embedding_dim, mrl_dim as u32);
     assert_eq!(view.manifest.embedding_dim, mrl_dim as u32);
     assert_eq!(view.manifest.mrl_dim, Some(mrl_dim as u32));
     assert_eq!(view.manifest.full_dim, Some(full_dim as u32));
     assert_eq!(view.manifest.dtype, "float32");
 
-    // lthe raw f32 embeddings section is EXACTLY the renormalized prefixes,
+    // the raw f32 embeddings section is EXACTLY the renormalized prefixes,
     // concatenated, little-endian, with no reordering.
     let section = view.get_section_data(SECTION_EMBEDDINGS).unwrap();
     let mut expected: Vec<u8> = Vec::with_capacity(n * mrl_dim * 4);
@@ -134,7 +139,7 @@ fn truncated_content_hash_differs_from_full_dim() {
 
     let vf = NestView::from_bytes(&full).unwrap();
     let vt = NestView::from_bytes(&truncated).unwrap();
-    // lcontent_hash is over the decoded embeddings bytes: a truncated file
+    // content_hash is over the decoded embeddings bytes: a truncated file
     // legitimately differs from full-dim, so citations are tied to a given
     // mrl_dim (never claimed stable across dims).
     assert_ne!(

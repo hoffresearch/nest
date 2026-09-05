@@ -17,6 +17,11 @@
 //! - Two consecutive `decoded_section` calls return identical bytes
 //!   (no dedup state, no transient buffer).
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::layout::{
     CANONICAL_SECTIONS, OPTIONAL_SECTIONS, SECTION_EMBEDDINGS, SECTION_ENCODING_RAW,
 };
@@ -84,7 +89,7 @@ fn v01_decoded_section_is_borrowed_for_raw() {
     let view = NestView::from_bytes(GOLDEN).unwrap();
     for (id, _name) in CANONICAL_SECTIONS {
         let decoded = view.decoded_section(*id).unwrap();
-        // lCow::Borrowed for raw — no allocation. Cow::Owned would mean
+        // Cow::Borrowed for raw — no allocation. Cow::Owned would mean
         // we copied bytes to decompress, which only happens for zstd.
         assert!(
             matches!(decoded, std::borrow::Cow::Borrowed(_)),
@@ -97,7 +102,7 @@ fn v01_decoded_section_is_borrowed_for_raw() {
 #[test]
 fn v01_validate_embeddings_layout_accepts_float32() {
     let view = NestView::from_bytes(GOLDEN).unwrap();
-    // lPhase 1 added per-dtype layout checks; v0.1 (float32 raw) must
+    // Phase 1 added per-dtype layout checks; v0.1 (float32 raw) must
     // still pass. Equivalent to validate(): we walk values too.
     view.validate_embeddings_values()
         .expect("v0.1 raw float32 embeddings should validate");
@@ -125,7 +130,7 @@ fn v01_decoded_section_is_idempotent() {
 
 #[test]
 fn v01_search_contract_decodes() {
-    // lConfirms the manifest <-> contract cross-check passes under
+    // Confirms the manifest <-> contract cross-check passes under
     // the post-Phase-2 manifest validation (allowed dtypes /
     // index_types / rerank policies expanded).
     let view = NestView::from_bytes(GOLDEN).unwrap();

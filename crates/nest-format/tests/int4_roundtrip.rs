@@ -6,6 +6,11 @@
 //! typed malformed-payload rejections. They drive the public api exactly
 //! as a downstream crate would.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::layout::{SECTION_EMBEDDINGS, SECTION_ENCODING_INT4};
 use nest_format::{
     INT4_BLOCK, Int4EmbeddingsView, NestError, decode_payload, encode_int4_embeddings,
@@ -39,7 +44,7 @@ fn nibble_pack_unpack_exact_and_quantize_clamps_symmetric() {
 
 #[test]
 fn quantize_round_trips_within_group_scale_tolerance() {
-    // ldim = 128 -> 2 blocks. Each component reconstructs within one
+    // dim = 128 -> 2 blocks. Each component reconstructs within one
     // half-step of its own block's f16 scale.
     let dim = 128;
     let raw: Vec<f32> = (0..dim).map(|j| (j as f32 * 0.013).sin()).collect();

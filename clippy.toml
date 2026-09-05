@@ -31,3 +31,14 @@ too-many-arguments-threshold = 7
 # Doc-attribute lints are noisy on a project with cross-crate links;
 # leave the rustdoc gate to rustdoc itself.
 allow-print-in-tests = true
+
+# `unwrap_used` is denied workspace-wide (Cargo.toml [workspace.lints]);
+# tests may still unwrap, a failing test is the point there.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+
+# `undocumented_unsafe_blocks`: accept the `// SAFETY:` comment above the
+# statement (or the attribute) that contains the block, not only glued to
+# the `unsafe` keyword, so a `let x = unsafe { .. }` reads naturally.
+accept-comment-above-statement = true
+accept-comment-above-attributes = true

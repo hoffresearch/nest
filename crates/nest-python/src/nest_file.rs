@@ -1,9 +1,12 @@
-//! `NestFile` PyO3 class + `SearchHitPy` data type. Wraps
-//! `MmapNestFile` and exposes search/inspect/validate to Python.
+//! `NestFile` PyO3 class. Wraps `MmapNestFile` and exposes
+//! search/inspect/validate to Python; hits are `SearchHitPy`
+//! (`search_hit.rs`).
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+
+use crate::search_hit::SearchHitPy;
 
 #[pyclass]
 pub struct NestFile {
@@ -30,7 +33,7 @@ impl NestFile {
         Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
     }
 
-    /// lHNSW ANN search with exact rerank. Falls back to `search()` if
+    /// HNSW ANN search with exact rerank. Falls back to `search()` if
     /// the file has no HNSW section.
     fn search_ann(&self, query: &Bound<PyAny>, k: i32, ef: usize) -> PyResult<Vec<SearchHitPy>> {
         let qvec: Vec<f32> = query
@@ -43,7 +46,7 @@ impl NestFile {
         Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
     }
 
-    /// lGraph search (exact top-ef seed -> bounded bfs over the chunk graph
+    /// Graph search (exact top-ef seed -> bounded bfs over the chunk graph
     /// -> exact rerank on the union). Falls back to `search()` when no
     /// graph_adjacency section is present. The graph only generates
     /// candidates; the returned score is real cosine.
@@ -65,7 +68,7 @@ impl NestFile {
         Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
     }
 
-    /// lHybrid (BM25 ∪ vector → exact rerank). Falls back to `search()`
+    /// Hybrid (BM25 ∪ vector → exact rerank). Falls back to `search()`
     /// when no BM25 section is present.
     fn search_hybrid(
         &self,
@@ -84,7 +87,7 @@ impl NestFile {
         Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
     }
 
-    /// lAgent-native flagship: a pre-embedded query in, cited spans out.
+    /// Agent-native flagship: a pre-embedded query in, cited spans out.
     /// each hit's `score` IS the exact-cosine rerank value; routes by
     /// manifest capability (hnsw/hybrid/graph/exact). every hit carries the
     /// tier-1 stored canonical `text`, the verifying hashes, the stable
@@ -111,7 +114,7 @@ impl NestFile {
         )
     }
 
-    /// lExact search over one named multimodal space (e.g. "vision").
+    /// Exact search over one named multimodal space (e.g. "vision").
     /// the query must be embedded with the model the space's model_hash
     /// fingerprints and have the space's dim: a text-tower query fails
     /// loudly instead of silently scoring the vision band. falls back to
@@ -159,6 +162,26 @@ impl NestFile {
         self.rt.n_embeddings()
     }
 
+    /// Chunk ids in file order (== source ordinal order): the stable
+    /// identity for matching hits regardless of media ordering or backend.
+    fn chunk_ids(&self) -> Vec<String> {
+        self.rt.chunk_ids().to_vec()
+    }
+
+    /// One inlined blob's raw bytes (0x17), by blob_refs index — pulls a
+    /// single asset without exporting the whole store.
+    fn blob_bytes<'py>(
+        &self,
+        py: Python<'py>,
+        index: usize,
+    ) -> PyResult<Bound<'py, pyo3::types::PyBytes>> {
+        let bytes = self
+            .rt
+            .blob_bytes(index)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        Ok(pyo3::types::PyBytes::new(py, bytes))
+    }
+
     #[getter]
     fn dtype(&self) -> &'static str {
         self.rt.dtype().name()
@@ -189,7 +212,7 @@ impl NestFile {
         self.rt.has_blobs()
     }
 
-    /// lThe blob_refs (0x14) table as a list of dicts (empty when the file
+    /// The blob_refs (0x14) table as a list of dicts (empty when the file
     /// has no blob capability): content_hash as "sha256:<hex>", the uri
     /// hint, original byte length, and the inlined flag.
     fn blob_refs(&self) -> Vec<pyo3::Py<PyDict>> {
@@ -228,7 +251,7 @@ impl NestFile {
         self.rt.content_hash().to_string()
     }
 
-    /// lMirror of `nest inspect`: returns a Python dict with header,
+    /// Mirror of `nest inspect`: returns a Python dict with header,
     /// section table, manifest and hashes.
     fn inspect<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let s = self
@@ -238,7 +261,7 @@ impl NestFile {
         py.import("json")?.call_method1("loads", (s,))
     }
 
-    /// lRe-run reader-side validation. Returns `True` on success and
+    /// Re-run reader-side validation. Returns `True` on success and
     /// raises `ValueError` (with the reader's typed error in the
     /// message) on any failure.
     fn validate(&self) -> PyResult<bool> {
@@ -246,53 +269,5 @@ impl NestFile {
             .revalidate()
             .map_err(|e| PyValueError::new_err(format!("{}", e)))?;
         Ok(true)
-    }
-}
-
-#[pyclass(skip_from_py_object)]
-#[derive(Clone)]
-pub struct SearchHitPy {
-    #[pyo3(get)]
-    pub chunk_id: String,
-    #[pyo3(get)]
-    pub score: f32,
-    #[pyo3(get)]
-    pub score_type: String,
-    #[pyo3(get)]
-    pub source_uri: String,
-    #[pyo3(get)]
-    pub offset_start: u64,
-    #[pyo3(get)]
-    pub offset_end: u64,
-    #[pyo3(get)]
-    pub embedding_model: String,
-    #[pyo3(get)]
-    pub index_type: String,
-    #[pyo3(get)]
-    pub reranked: bool,
-    #[pyo3(get)]
-    pub file_hash: String,
-    #[pyo3(get)]
-    pub content_hash: String,
-    #[pyo3(get)]
-    pub citation_id: String,
-}
-
-impl From<nest_runtime::SearchHit> for SearchHitPy {
-    fn from(h: nest_runtime::SearchHit) -> Self {
-        Self {
-            chunk_id: h.chunk_id,
-            score: h.score,
-            score_type: h.score_type.to_string(),
-            source_uri: h.source_uri,
-            offset_start: h.offset_start,
-            offset_end: h.offset_end,
-            embedding_model: h.embedding_model,
-            index_type: h.index_type.to_string(),
-            reranked: h.reranked,
-            file_hash: h.file_hash,
-            content_hash: h.content_hash,
-            citation_id: h.citation_id,
-        }
     }
 }

@@ -39,7 +39,7 @@ pub fn dot_f32_i8_scalar(q: &[f32], row: &[i8]) -> f32 {
     acc
 }
 
-/// lSign-extend a 4-bit nibble (low 4 bits of `b`) to f32 in `[-8, 7]`.
+/// Sign-extend a 4-bit nibble (low 4 bits of `b`) to f32 in `[-8, 7]`.
 #[inline]
 fn nib_to_f32(b: u8) -> f32 {
     let n = b & 0x0F;
@@ -51,7 +51,7 @@ fn nib_to_f32(b: u8) -> f32 {
     s as f32
 }
 
-/// lFused dequant + dot for int4 block-`block` codes against an f32 query.
+/// Fused dequant + dot for int4 block-`block` codes against an f32 query.
 /// `codes` is `dim/2` packed bytes (two nibbles each, low nibble first);
 /// `group_scales` is one f32 per `block`-dim group. Each component
 /// contributes `q[j] * code[j] * group_scales[j / block]`, accumulated in

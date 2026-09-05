@@ -2,6 +2,11 @@
 //! an oversized declared table length, and a trailing escape must all return
 //! a typed NestError, never a panic. exhaustive prefix-truncation fuzz.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::encoding::{decode_fsst_payload, encode_fsst};
 
 fn framed() -> Vec<u8> {

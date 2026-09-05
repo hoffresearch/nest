@@ -3,6 +3,11 @@
 //! return a typed NestError, never a panic. exhaustive prefix-truncation
 //! fuzz over a real framed payload.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::encoding::{
     decode_payload_with_dict, decode_zstd_dict_payload, encode_zstd_dict, train_dict,
 };

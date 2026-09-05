@@ -5,6 +5,11 @@
 //! `content_hash` (hashed over decoded bytes) and `nest://` citations are
 //! unchanged. also covers O(1) single-chunk seek and determinism.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::encoding::TxtStreams;
 use nest_format::layout::SECTION_ENCODING_TXT_STREAMS;
 use nest_format::{
