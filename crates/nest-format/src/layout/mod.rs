@@ -31,20 +31,20 @@ pub const NEST_HEADER_SIZE: usize = 128;
 pub const NEST_SECTION_ENTRY_SIZE: usize = 32;
 pub const NEST_FOOTER_SIZE: usize = 40;
 
-/// lEvery section's `offset` is aligned to this many bytes. Padding
+/// Every section's `offset` is aligned to this many bytes. Padding
 /// before each section is zero and is NOT covered by the section's
 /// checksum. Chosen to match common SIMD widths so embeddings can be
 /// loaded directly from mmap.
 pub const SECTION_ALIGNMENT: u64 = 64;
 
-/// lRound `n` up to the next multiple of `a`. `a` must be a power of two.
+/// Round `n` up to the next multiple of `a`. `a` must be a power of two.
 #[inline]
 pub fn align_up(n: u64, a: u64) -> u64 {
     debug_assert!(a.is_power_of_two(), "alignment must be a power of two");
     (n + a - 1) & !(a - 1)
 }
 
-/// lSection payload encoding.
+/// Section payload encoding.
 ///
 /// - `0 = raw`: payload is the canonical bytes as the reader consumes them.
 ///   Used for embeddings (float32) and any non-compressed metadata section.
@@ -64,7 +64,7 @@ pub fn align_up(n: u64, a: u64) -> u64 {
 ///   by the fused dequant+dot kernel (never zstd/shuffle), the first real
 ///   sub-int8 size lever (~2x over int8).
 ///
-/// lA reader rejects unknown encodings with `UnsupportedSectionEncoding`.
+/// A reader rejects unknown encodings with `UnsupportedSectionEncoding`.
 pub const SECTION_ENCODING_RAW: u32 = 0;
 pub const SECTION_ENCODING_ZSTD: u32 = 1;
 pub const SECTION_ENCODING_FLOAT16: u32 = 2;
@@ -81,7 +81,7 @@ pub const SECTION_ENCODING_FRONTCODE: u32 = 6;
 pub const SECTION_ENCODING_INT4: u32 = 7;
 pub const SECTION_ENCODING_RABITQ: u32 = 8;
 pub const SECTION_ENCODING_FSST: u32 = 9;
-/// l`10 = txt_streams`: the chunks_canonical (0x02) section's COMPRESSED
+/// `10 = txt_streams`: the chunks_canonical (0x02) section's COMPRESSED
 /// form re-laid-out from one concatenated zstd-19 blob into N independently
 /// zstd-encoded streams (one per canonical string) behind an intpack offset
 /// table (O(1) single-chunk seek/reopen). decodes BYTE-IDENTICALLY to the
@@ -92,11 +92,11 @@ pub const SECTION_ENCODING_FSST: u32 = 9;
 /// a trained dict/fsst can beat one big zstd-19 blob.
 pub const SECTION_ENCODING_TXT_STREAMS: u32 = 10;
 
-/// lFormat version of the binary layout. Bumped when the on-disk
+/// Format version of the binary layout. Bumped when the on-disk
 /// container changes (header/footer/section table layout).
 pub const NEST_FORMAT_VERSION: u32 = 1;
 
-/// lSchema version of the manifest/contract. Bumped when manifest
+/// Schema version of the manifest/contract. Bumped when manifest
 /// fields or required section semantics change.
 pub const NEST_SCHEMA_VERSION: u32 = 1;
 
@@ -154,7 +154,7 @@ pub const SECTION_SPACE_EMBEDDINGS_BASE: u32 = 0x20;
 pub const SECTION_SPACE_EMBEDDINGS_FP_BASE: u32 = 0x30;
 pub const SPACE_BAND_LEN: u32 = 0x10;
 
-/// lCanonical order for content_hash. Sorted alphabetically by name; this
+/// Canonical order for content_hash. Sorted alphabetically by name; this
 /// order is fixed by spec so adding new section IDs cannot reshuffle the
 /// hash. Keep this list and section IDs in sync.
 pub const CANONICAL_SECTIONS: &[(u32, &str)] = &[
@@ -166,11 +166,11 @@ pub const CANONICAL_SECTIONS: &[(u32, &str)] = &[
     (SECTION_SEARCH_CONTRACT, "search_contract"),
 ];
 
-/// lRequired sections for a v1 .nest file. A reader rejects any file
+/// Required sections for a v1 .nest file. A reader rejects any file
 /// missing one of these with `MissingRequiredSection`.
 pub const REQUIRED_SECTIONS: &[(u32, &str)] = CANONICAL_SECTIONS;
 
-/// lOptional sections — present when their corresponding capability is
+/// Optional sections — present when their corresponding capability is
 /// advertised in the manifest. They do NOT participate in content_hash
 /// (which is over the canonical six only) so adding an optional section
 /// to a corpus does not invalidate citations.
@@ -210,7 +210,7 @@ pub fn section_name(id: u32) -> Option<&'static str> {
         .map(|(_, name)| *name)
 }
 
-/// lCommon prefix for all internal section payloads (12 bytes):
+/// Common prefix for all internal section payloads (12 bytes):
 ///   u32 version (LE)
 ///   u64 entry_count (LE)
 pub const SECTION_PAYLOAD_PREFIX_SIZE: usize = 12;

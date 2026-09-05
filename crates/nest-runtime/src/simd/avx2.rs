@@ -32,7 +32,7 @@ pub(super) unsafe fn dot_f32_avx2(q: &[f32], row_bytes: &[u8]) -> f32 {
     }
 }
 
-/// lFused dequant + dot for int4 block-`block` codes. AVX2 unpacks the
+/// Fused dequant + dot for int4 block-`block` codes. AVX2 unpacks the
 /// nibbles 16 packed bytes (32 nibbles) at a time into an f32 scratch row,
 /// then runs the IDENTICAL per-group scalar reduction over it (float add
 /// is not associative, so a lane-parallel reduction would diverge from the
@@ -79,7 +79,7 @@ pub(super) unsafe fn dot_f32_i4_avx2(
     }
 }
 
-/// lArithmetic shift right by 4 on packed i8 lanes (AVX2 has no epi8 SRA),
+/// Arithmetic shift right by 4 on packed i8 lanes (AVX2 has no epi8 SRA),
 /// emulated via the epi16 SRA plus a byte-wise blend of even/odd lanes.
 #[target_feature(enable = "avx2,fma")]
 // This body is pure register-only intrinsics (no memory I/O). On our MSRV
@@ -107,7 +107,7 @@ unsafe fn mm_srai_epi8_4(v: std::arch::x86_64::__m128i) -> std::arch::x86_64::__
     }
 }
 
-/// lWiden an i8x16 vector to f32 and store into `out[..16]`.
+/// Widen an i8x16 vector to f32 and store into `out[..16]`.
 #[target_feature(enable = "avx2,fma")]
 unsafe fn store_i8x16_as_f32(v: std::arch::x86_64::__m128i, out: &mut [f32]) {
     unsafe {
@@ -119,7 +119,7 @@ unsafe fn store_i8x16_as_f32(v: std::arch::x86_64::__m128i, out: &mut [f32]) {
     }
 }
 
-/// lPer-group reduction over an already-dequantized f32 scratch row,
+/// Per-group reduction over an already-dequantized f32 scratch row,
 /// matching `scalar::dot_f32_i4_blocked` operation-for-operation.
 #[inline]
 fn dot_scratch_blocked(

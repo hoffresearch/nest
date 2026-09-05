@@ -31,7 +31,7 @@ use crate::dtype::DType;
 use crate::error::RuntimeError;
 use crate::simd;
 
-/// lThe optional full-precision rerank slab (`embeddings_fp`, section
+/// The optional full-precision rerank slab (`embeddings_fp`, section
 /// `0x09`): a fixed-stride 64-byte-aligned raw slab, NEVER zstd, one row
 /// per embedding. Present only when a sub-int8 candidate slab needs an
 /// honest exact rerank. The dtype (float32 or float16 only) is read back
@@ -46,7 +46,7 @@ pub(crate) struct FpSlab {
 }
 
 impl FpSlab {
-    /// lDetect an `embeddings_fp` (0x09) section in the table and infer its
+    /// Detect an `embeddings_fp` (0x09) section in the table and infer its
     /// dtype from stride: 4 bytes/value -> float32, 2 -> float16 (an fp
     /// source is never int8). A bad stride is a malformed file, not a
     /// silent skip. Returns `None` when the section is absent.
@@ -81,7 +81,7 @@ impl FpSlab {
     }
 }
 
-/// lWhere one rerank reads its vectors from. Built once per search call,
+/// Where one rerank reads its vectors from. Built once per search call,
 /// then `score`d per candidate. Borrows the mmap slab; no copy.
 pub(crate) struct RerankSource<'a> {
     rows: RerankRows<'a>,
@@ -96,7 +96,7 @@ enum RerankRows<'a> {
 }
 
 impl<'a> RerankSource<'a> {
-    /// lBuild a rerank source over a fixed-stride embeddings slab. `bytes`
+    /// Build a rerank source over a fixed-stride embeddings slab. `bytes`
     /// is the raw section payload for `dtype` (for int8 that includes the
     /// per-vector scale prefix, parsed here once).
     pub(crate) fn new(
@@ -118,7 +118,7 @@ impl<'a> RerankSource<'a> {
         Ok(Self { rows, dim })
     }
 
-    /// lReal cosine of `qnorm` against row `i` at this source's precision.
+    /// Real cosine of `qnorm` against row `i` at this source's precision.
     /// `qnorm` is L2-normalized and rows are L2-normalized at write time,
     /// so the dot product IS the cosine.
     #[inline]
@@ -168,7 +168,7 @@ mod tests {
         assert!(src.score(&q, 1).abs() < 1e-6);
     }
 
-    /// lThe handle scores whatever slab it is handed. A full-precision fp
+    /// The handle scores whatever slab it is handed. A full-precision fp
     /// slab returns the exact dot; the int8 slab over the SAME logical
     /// vector returns a quantized approximation. They differ, which is
     /// exactly why an fp rerank source makes a sub-int8 score honest.
@@ -199,7 +199,7 @@ mod tests {
         assert!((f16.score(&q, 0) - 1.0).abs() < 1e-2);
     }
 
-    /// lThe int4 rerank source scores a known row, and an fp source over the
+    /// The int4 rerank source scores a known row, and an fp source over the
     /// same logical vector is strictly more precise. int4 is the coarser
     /// stored precision, so its self-similarity drifts further from 1.0 than
     /// the exact fp source does, which is exactly why int4 must disclose

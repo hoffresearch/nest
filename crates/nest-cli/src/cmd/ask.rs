@@ -20,13 +20,13 @@ use std::path::PathBuf;
 
 use super::embed_gate::embed_and_search;
 
-/// ldisclosure level for `ask`. mirrors the lens design's progressive
+/// disclosure level for `ask`. mirrors the lens design's progressive
 /// disclosure dial, scoped to what `ask` needs pre-gate (answer | explain).
 #[derive(Clone, Copy, clap::ValueEnum)]
 pub enum Disclose {
-    /// lcited text + nest:// citation only (default).
+    /// cited text + nest:// citation only (default).
     Answer,
-    /// lanswer plus the rerank-source honesty line, route, and candidate counts.
+    /// answer plus the rerank-source honesty line, route, and candidate counts.
     Explain,
 }
 

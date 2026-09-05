@@ -23,16 +23,16 @@ use crate::error::NestError;
 pub const INT4_PAYLOAD_VERSION: u32 = 1;
 pub const INT4_SCALE_KIND_PER_GROUP: u32 = 1;
 pub const INT4_PREFIX_SIZE: usize = 8;
-/// lBlock size for the per-group absmax scale. `dim` must be a multiple.
+/// Block size for the per-group absmax scale. `dim` must be a multiple.
 pub const INT4_BLOCK: usize = 64;
 
-/// lNumber of 64-dim blocks per row. `dim` must be divisible by `INT4_BLOCK`.
+/// Number of 64-dim blocks per row. `dim` must be divisible by `INT4_BLOCK`.
 #[inline]
 pub fn int4_blocks_per_row(dim: usize) -> usize {
     dim / INT4_BLOCK
 }
 
-/// lQuantize one L2-normalized f32 row to int4 with per-64-block absmax
+/// Quantize one L2-normalized f32 row to int4 with per-64-block absmax
 /// scales. Returns `(scales, codes)` where `scales[g]` is the f16 absmax
 /// scale of block `g` and `codes[j]` in `[-7, 7]` reconstructs as
 /// `codes[j] as f32 * scales[j / 64]`. Mirrors `quantize_f32_to_i8` but per
@@ -58,7 +58,7 @@ pub fn quantize_f32_to_i4(values: &[f32], dim: usize) -> (Vec<half::f16>, Vec<i8
     (scales, codes)
 }
 
-/// lPack signed 4-bit codes (`[-7, 7]`) into bytes, two nibbles per byte,
+/// Pack signed 4-bit codes (`[-7, 7]`) into bytes, two nibbles per byte,
 /// low nibble first. The nibble is the two's-complement low 4 bits, so
 /// `-7..=7` maps to `0x9..=0x7` and unpacks back exactly via sign extension.
 #[inline]
@@ -72,7 +72,7 @@ pub fn pack_nibbles(codes: &[i8]) -> Vec<u8> {
     out
 }
 
-/// lSign-extend a 4-bit nibble (low 4 bits of `b`) to an `i8` in `[-8, 7]`.
+/// Sign-extend a 4-bit nibble (low 4 bits of `b`) to an `i8` in `[-8, 7]`.
 #[inline]
 pub fn nibble_to_i4(b: u8) -> i8 {
     let n = b & 0x0F;
@@ -83,7 +83,7 @@ pub fn nibble_to_i4(b: u8) -> i8 {
     }
 }
 
-/// lEncode the int4 embeddings section payload. `embeddings` is `n * dim`
+/// Encode the int4 embeddings section payload. `embeddings` is `n * dim`
 /// row-major f32; `dim` must be divisible by `INT4_BLOCK`.
 pub fn encode_int4_embeddings(embeddings: &[f32], n: usize, dim: usize) -> crate::Result<Vec<u8>> {
     if dim == 0 || dim % INT4_BLOCK != 0 {
@@ -116,12 +116,12 @@ pub fn encode_int4_embeddings(embeddings: &[f32], n: usize, dim: usize) -> crate
     Ok(out)
 }
 
-/// lDecoded view over an int4 embeddings payload. Slices borrow the input
+/// Decoded view over an int4 embeddings payload. Slices borrow the input
 /// bytes (no copy); accessors decode scales/codes on demand.
 pub struct Int4EmbeddingsView<'a> {
-    /// lf16 LE group scales, `n * blocks` of them, row-major.
+    /// f16 LE group scales, `n * blocks` of them, row-major.
     pub scales: &'a [u8],
-    /// lpacked nibble codes, `n * dim/2` bytes.
+    /// packed nibble codes, `n * dim/2` bytes.
     pub codes: &'a [u8],
     pub n: usize,
     pub dim: usize,
@@ -168,14 +168,14 @@ impl<'a> Int4EmbeddingsView<'a> {
         })
     }
 
-    /// lRead the f16 group scale `g` of row `i` as f32.
+    /// Read the f16 group scale `g` of row `i` as f32.
     #[inline]
     pub fn group_scale(&self, i: usize, g: usize) -> f32 {
         let off = (i * self.blocks + g) * 2;
         half::f16::from_le_bytes([self.scales[off], self.scales[off + 1]]).to_f32()
     }
 
-    /// lBorrow row `i`'s packed nibble bytes (`dim/2` of them).
+    /// Borrow row `i`'s packed nibble bytes (`dim/2` of them).
     #[inline]
     pub fn row_codes(&self, i: usize) -> &'a [u8] {
         let rs = self.dim / 2;
@@ -183,7 +183,7 @@ impl<'a> Int4EmbeddingsView<'a> {
         &self.codes[start..start + rs]
     }
 
-    /// lDecode row `i`'s f16 group scales into a fresh `Vec<f32>` (one per
+    /// Decode row `i`'s f16 group scales into a fresh `Vec<f32>` (one per
     /// 64-dim block). Used by the fused kernel and the packed ANN store.
     #[inline]
     pub fn row_scales_f32(&self, i: usize) -> Vec<f32> {

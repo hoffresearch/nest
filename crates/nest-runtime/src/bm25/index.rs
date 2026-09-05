@@ -39,7 +39,7 @@ pub struct Bm25Index {
 }
 
 impl Bm25Index {
-    /// lBuild a BM25 index from the canonical chunk texts.
+    /// Build a BM25 index from the canonical chunk texts.
     pub fn build(docs: &[String], k1: f32, b: f32) -> Self {
         let n_docs = docs.len();
         let mut doc_lengths = Vec::with_capacity(n_docs);
@@ -94,7 +94,7 @@ impl Bm25Index {
         }
     }
 
-    /// lScore `query_text` against the corpus, return the top-k `(doc, score)`
+    /// Score `query_text` against the corpus, return the top-k `(doc, score)`
     /// pairs. Empty query returns an empty vec.
     pub fn search(&self, query_text: &str, k: usize) -> Vec<(usize, f32)> {
         if k == 0 || self.n_docs == 0 {

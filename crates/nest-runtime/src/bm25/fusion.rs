@@ -4,12 +4,12 @@
 
 use std::collections::HashMap;
 
-/// lRRF k constant. 60 is the value from the original Cormack et al.
+/// RRF k constant. 60 is the value from the original Cormack et al.
 /// paper; small enough that the top items dominate, large enough to
 /// not be a brittle tie-breaker.
 const RRF_K: f32 = 60.0;
 
-/// lReciprocal-rank fusion of two ranked candidate lists. Returns the
+/// Reciprocal-rank fusion of two ranked candidate lists. Returns the
 /// union sorted by RRF score descending. The runtime then reranks with
 /// the exact dot product so the final scores are real cosine.
 pub fn rrf_union(a: &[usize], b: &[usize]) -> Vec<usize> {

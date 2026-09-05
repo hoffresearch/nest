@@ -26,7 +26,7 @@ use crate::sections::{
 use sha2::{Digest, Sha256};
 
 impl NestFileBuilder {
-    /// lBuild the file in memory. Pure computation — no I/O.
+    /// Build the file in memory. Pure computation — no I/O.
     pub fn build_bytes(mut self) -> crate::Result<Vec<u8>> {
         if self.reproducible {
             self.manifest.created = Some(REPRODUCIBLE_CREATED.into());

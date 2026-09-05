@@ -43,7 +43,7 @@ pub struct SpaceEntry {
 }
 
 impl SpaceEntry {
-    /// lthe manifest-style dtype string for this space's band slab.
+    /// the manifest-style dtype string for this space's band slab.
     pub fn dtype_str(&self) -> &'static str {
         match self.dtype {
             SPACE_DTYPE_F32 => "float32",

@@ -61,7 +61,7 @@ use crate::layout::{
 };
 use std::borrow::Cow;
 
-/// lThe context-free wire codecs, as a small registry. Decoding dispatches
+/// The context-free wire codecs, as a small registry. Decoding dispatches
 /// through `WireCodec::from_id`, so adding a reserved codec is a localized
 /// additive diff: a variant, a `from_id` arm, a `decode` arm, and its own
 /// `<=300`-line module. Reserved-but-unimplemented ids (and the dict codec,
@@ -111,7 +111,7 @@ impl WireCodec {
     }
 }
 
-/// lDecode a section payload from its on-disk encoding to the logical bytes
+/// Decode a section payload from its on-disk encoding to the logical bytes
 /// a reader consumes, via the wire-codec registry. For `raw` this is a
 /// borrow; for `zstd` an owned decompressed buffer. The `zstd_dict` (id 5)
 /// codec needs the shared dictionary (section 0x0A) and is decoded via
@@ -127,7 +127,7 @@ pub fn decode_payload(encoding: u32, bytes: &[u8]) -> crate::Result<Cow<'_, [u8]
     }
 }
 
-/// lDecode a chunks_canonical payload that MAY be dict-framed (`zstd_dict`,
+/// Decode a chunks_canonical payload that MAY be dict-framed (`zstd_dict`,
 /// id 5), supplying the shared dictionary from section 0x0A. all other
 /// encodings ignore the dict and route through [`decode_payload`]. the dict
 /// variant decodes BYTE-IDENTICALLY to the raw chunks_canonical payload, so
@@ -147,7 +147,7 @@ pub fn decode_payload_with_dict<'a>(
     decode_payload(encoding, bytes)
 }
 
-/// lEncode `payload` with one non-embedding wire encoding (raw or zstd).
+/// Encode `payload` with one non-embedding wire encoding (raw or zstd).
 /// The embedding dtypes (float16/int8) are not general-purpose encoders
 /// and are rejected here; they are chosen by preset on the embeddings
 /// section directly.
@@ -162,7 +162,7 @@ fn encode_wire(encoding: u32, payload: &[u8]) -> crate::Result<Vec<u8>> {
     }
 }
 
-/// lCost-driven encoder: try every candidate wire encoding and return the
+/// Cost-driven encoder: try every candidate wire encoding and return the
 /// `(encoding_id, bytes)` of the SMALLEST result, so the writer can record
 /// the chosen id in the section entry. Ties break toward the EARLIEST
 /// candidate (cheaper-to-decode wins an equal-size race). This only auto-
@@ -181,7 +181,7 @@ pub fn encode_smallest(candidates: &[u32], payload: &[u8]) -> crate::Result<(u32
     best.ok_or_else(|| NestError::InvalidInput("encode_smallest: no candidate encodings".into()))
 }
 
-/// lExpected size of the embeddings section for a given dtype. Returns
+/// Expected size of the embeddings section for a given dtype. Returns
 /// `None` for unknown dtypes.
 pub fn expected_embeddings_size(dtype: &str, n: usize, dim: usize) -> Option<usize> {
     match dtype {

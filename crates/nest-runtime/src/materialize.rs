@@ -15,11 +15,11 @@ use nest_format::{INT4_BLOCK, Int4EmbeddingsView, Int8EmbeddingsView, NestError,
 
 use crate::error::RuntimeError;
 
-/// lEmbedding rows in their on-disk packing, decoded to f32 one row at a
+/// Embedding rows in their on-disk packing, decoded to f32 one row at a
 /// time. `float32` is kept as-is (it is not the leak); `float16` and
 /// `int8` stay packed and decode into a scratch buffer on demand.
 pub(crate) enum PackedVectors {
-    /// lNot yet attached (graph parsed from disk, vectors pending).
+    /// Not yet attached (graph parsed from disk, vectors pending).
     Empty,
     F32(Vec<f32>),
     F16(Vec<u8>),
@@ -27,7 +27,7 @@ pub(crate) enum PackedVectors {
         data: Vec<i8>,
         scales: Vec<f32>,
     },
-    /// lint4 block-64: codes stay as i8 in `[-7, 7]` (one per dim) and the
+    /// int4 block-64: codes stay as i8 in `[-7, 7]` (one per dim) and the
     /// per-group f16 scales are kept as f32 (`blocks` per row). A row
     /// decodes to `code * group_scale`, matching the int4 view exactly.
     Int4 {
@@ -46,7 +46,7 @@ impl PackedVectors {
         !matches!(self, PackedVectors::Empty)
     }
 
-    /// lBuild a packed store from a decoded embeddings section. Copies the
+    /// Build a packed store from a decoded embeddings section. Copies the
     /// section into its packed form (compact for int8/float16); never the
     /// `n * dim * 4` f32 expansion the old `materialize_f32_vectors` did.
     pub(crate) fn from_section(
@@ -105,7 +105,7 @@ impl PackedVectors {
         }
     }
 
-    /// lA scratch buffer sized for one decoded row, or empty for the f32
+    /// A scratch buffer sized for one decoded row, or empty for the f32
     /// store (which borrows its rows directly and never touches scratch).
     pub(crate) fn scratch(&self, dim: usize) -> Vec<f32> {
         match self {
@@ -114,7 +114,7 @@ impl PackedVectors {
         }
     }
 
-    /// lRow `i` decoded to f32. For `F32` this borrows the stored slice and
+    /// Row `i` decoded to f32. For `F32` this borrows the stored slice and
     /// ignores `scratch`; for `F16`/`Int8` it decodes into `scratch` and
     /// returns that, using the SAME arithmetic the whole-buffer path used
     /// (`f16::to_f32`, `int8 as f32 * scale`) so distances are unchanged.

@@ -25,7 +25,7 @@ fn manifest(full_dim: u32, mrl_dim: u32, n: u64) -> Manifest {
     }
 }
 
-/// lDeterministic per-row source vector at the full dim. Spread mass across
+/// Deterministic per-row source vector at the full dim. Spread mass across
 /// dims so a prefix is not trivially the whole vector.
 fn full_vec(i: usize, full_dim: usize) -> Vec<f32> {
     let mut v = vec![0.0f32; full_dim];
@@ -39,7 +39,7 @@ fn full_vec(i: usize, full_dim: usize) -> Vec<f32> {
     v
 }
 
-/// lThe pure op the builder applies: slice to the prefix, re-L2-normalize.
+/// The pure op the builder applies: slice to the prefix, re-L2-normalize.
 fn truncate_renorm(v: &[f32], mrl_dim: usize) -> Vec<f32> {
     let mut p = v[..mrl_dim].to_vec();
     let norm: f32 = p.iter().map(|x| x * x).sum::<f32>().sqrt();

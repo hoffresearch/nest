@@ -13,7 +13,7 @@ use nest_format::sections::{
 
 use crate::error::RuntimeError;
 
-/// lOpen the blob pair. Returns the decoded 0x14 table (`None` when the
+/// Open the blob pair. Returns the decoded 0x14 table (`None` when the
 /// capability or section is absent). When the 0x16 overlay is present,
 /// per-chunk spans that point into a blob REPLACE the decoded 0x03 spans
 /// in place (for a media corpus those carry ordinal placeholders), so

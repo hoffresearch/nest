@@ -28,40 +28,40 @@ pub struct MmapNestFile {
     pub(crate) embedding_dim: usize,
     pub(crate) n_embeddings: usize,
     pub(crate) dtype: DType,
-    /// lByte offset (within the mmap) of the embeddings section payload.
+    /// Byte offset (within the mmap) of the embeddings section payload.
     pub(crate) embeddings_offset: usize,
-    /// lTotal physical bytes of the embeddings section.
+    /// Total physical bytes of the embeddings section.
     pub(crate) embeddings_size: usize,
-    /// lOptional full-precision rerank slab (`embeddings_fp`, 0x09): when
+    /// Optional full-precision rerank slab (`embeddings_fp`, 0x09): when
     /// present the exact rerank reads it instead of the stored dtype slab.
     pub(crate) embeddings_fp: Option<FpSlab>,
     pub(crate) chunk_ids: Vec<String>,
     pub(crate) spans: Vec<OriginalSpan>,
     pub(crate) embedding_model: String,
-    /// lManifest `model_hash`: the granular fingerprint of the model that
+    /// Manifest `model_hash`: the granular fingerprint of the model that
     /// produced the corpus embeddings. Exposed so a caller embedding a query
     /// can verify its embedder matches the corpus (the honesty gate).
     pub(crate) model_hash: String,
     pub(crate) file_hash: String,
     pub(crate) content_hash: String,
-    /// lOptional ANN index. Built from the HNSW section payload at open
+    /// Optional ANN index. Built from the HNSW section payload at open
     /// time (eager: build cost is paid once, queries get fast path).
     pub(crate) ann_index: Option<ann::HnswIndex>,
-    /// lOptional BM25 index. Mostly tiny ints; deserialized eagerly.
+    /// Optional BM25 index. Mostly tiny ints; deserialized eagerly.
     pub(crate) bm25_index: Option<bm25::Bm25Index>,
-    /// lOptional chunk-to-chunk graph (graph_adjacency 0x0C). Opened behind
+    /// Optional chunk-to-chunk graph (graph_adjacency 0x0C). Opened behind
     /// the manifest `graph_present` capability, like ann/bm25. A candidate
     /// generator only: its frontier feeds the exact rerank, never a score.
     pub(crate) graph_index: Option<CsrIndex>,
-    /// lOptional blob_refs (0x14) table, opened behind the additive
+    /// Optional blob_refs (0x14) table, opened behind the additive
     /// `blobs_present` capability. content-hash references to the source
     /// media blobs (self-contained or catalog).
     pub(crate) blob_refs: Option<Vec<BlobRefRecord>>,
-    /// lOptional multimodal spaces (0x15 + bands), opened behind the
+    /// Optional multimodal spaces (0x15 + bands), opened behind the
     /// additive `supports_multimodal` capability. each space's band slab
     /// is scored by the per-space exact search, never by the text path.
     pub(crate) spaces: Option<Vec<crate::spaces::OpenSpace>>,
-    /// lWhat the manifest says the search path is. The runtime honors
+    /// What the manifest says the search path is. The runtime honors
     /// this at search time.
     pub(crate) declared_index_type: String,
     pub(crate) declared_score_type: String,
@@ -204,7 +204,7 @@ impl MmapNestFile {
     pub fn declared_index_type(&self) -> &str {
         &self.declared_index_type
     }
-    /// lManifest `model_hash` (the model fingerprint the corpus was built
+    /// Manifest `model_hash` (the model fingerprint the corpus was built
     /// with). Callers embed the query with their own model and compare.
     pub fn model_hash(&self) -> &str {
         &self.model_hash
@@ -224,7 +224,7 @@ impl MmapNestFile {
     pub fn has_blobs(&self) -> bool {
         self.blob_refs.is_some()
     }
-    /// lThe blob_refs (0x14) table, when the file declares `blobs_present`:
+    /// The blob_refs (0x14) table, when the file declares `blobs_present`:
     /// content-hash references to the source media blobs, in table order
     /// (the overlay's `blob_ref_index` addresses this slice).
     pub fn blob_refs(&self) -> Option<&[BlobRefRecord]> {
@@ -233,7 +233,7 @@ impl MmapNestFile {
     pub fn has_spaces(&self) -> bool {
         self.spaces.is_some()
     }
-    /// lNames of the multimodal spaces listed in the space_table (empty
+    /// Names of the multimodal spaces listed in the space_table (empty
     /// when the file has no `supports_multimodal` capability).
     pub fn space_names(&self) -> Vec<&str> {
         self.spaces
@@ -243,7 +243,7 @@ impl MmapNestFile {
             .map(|s| s.entry.name.as_str())
             .collect()
     }
-    /// lOne opened space by name, with its band slab sliced off the mmap.
+    /// One opened space by name, with its band slab sliced off the mmap.
     pub(crate) fn space(&self, name: &str) -> Option<(&crate::spaces::OpenSpace, &[u8])> {
         let s = self
             .spaces
@@ -253,7 +253,7 @@ impl MmapNestFile {
         Some((s, &self._mmap[s.offset..s.offset + s.size]))
     }
 
-    /// lRe-run all reader-side validation. The file was already
+    /// Re-run all reader-side validation. The file was already
     /// validated at `open()` time, but callers can invoke this
     /// explicitly to detect tampering after the fact (e.g. the mmap
     /// pages got swapped under the runtime).
@@ -268,7 +268,7 @@ impl MmapNestFile {
         &self._mmap[self.embeddings_offset..self.embeddings_offset + self.embeddings_size]
     }
 
-    /// lThe full-precision rerank slab + its dtype, if an `embeddings_fp`
+    /// The full-precision rerank slab + its dtype, if an `embeddings_fp`
     /// (0x09) section is present. The rerank handle prefers this over the
     /// stored dtype slab so a sub-int8 corpus still returns a real cosine.
     pub(crate) fn embeddings_fp_slab(&self) -> Option<(&[u8], DType)> {

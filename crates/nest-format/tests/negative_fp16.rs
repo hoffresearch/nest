@@ -76,7 +76,7 @@ fn build_fp16(n: usize, dim: usize) -> Vec<u8> {
         .unwrap()
 }
 
-/// lRewrite the section's physical checksum (over the now-tampered
+/// Rewrite the section's physical checksum (over the now-tampered
 /// payload) and the footer's file_hash. Bypasses NestView::from_bytes
 /// because that would refuse to parse a file whose section checksum
 /// was just invalidated. Reads the section table directly from header

@@ -11,7 +11,7 @@ use nest_format::sections::{SpaceEntry, decode_space_table};
 
 use crate::error::RuntimeError;
 
-/// lone opened space: its directory entry plus the byte range of its band
+/// one opened space: its directory entry plus the byte range of its band
 /// slab inside the mmap (resolved once at open time).
 #[derive(Clone, Debug)]
 pub(crate) struct OpenSpace {
@@ -20,7 +20,7 @@ pub(crate) struct OpenSpace {
     pub size: usize,
 }
 
-/// lOpen the space_table and resolve each listed space's band range.
+/// Open the space_table and resolve each listed space's band range.
 /// `None` when the capability or the section is absent. the band's
 /// presence and exact size were already validated by the reader
 /// (`validate_space_bands`), so a missing band here is a typed error,

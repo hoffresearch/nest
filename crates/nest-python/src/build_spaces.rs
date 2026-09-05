@@ -5,7 +5,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
-/// lParse and attach the optional `spaces` kwarg: a list of dicts, one per
+/// Parse and attach the optional `spaces` kwarg: a list of dicts, one per
 /// non-text embedding space, with keys `name`, `model_hash` ("sha256:<hex>"
 /// of the model that produced THESE vectors), optional `dtype`
 /// ("float32"|"float16"|"int8"|"int4", default float32), and `vectors`

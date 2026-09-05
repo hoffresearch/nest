@@ -30,7 +30,7 @@ impl NestFile {
         Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
     }
 
-    /// lHNSW ANN search with exact rerank. Falls back to `search()` if
+    /// HNSW ANN search with exact rerank. Falls back to `search()` if
     /// the file has no HNSW section.
     fn search_ann(&self, query: &Bound<PyAny>, k: i32, ef: usize) -> PyResult<Vec<SearchHitPy>> {
         let qvec: Vec<f32> = query
@@ -43,7 +43,7 @@ impl NestFile {
         Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
     }
 
-    /// lGraph search (exact top-ef seed -> bounded bfs over the chunk graph
+    /// Graph search (exact top-ef seed -> bounded bfs over the chunk graph
     /// -> exact rerank on the union). Falls back to `search()` when no
     /// graph_adjacency section is present. The graph only generates
     /// candidates; the returned score is real cosine.
@@ -65,7 +65,7 @@ impl NestFile {
         Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
     }
 
-    /// lHybrid (BM25 ∪ vector → exact rerank). Falls back to `search()`
+    /// Hybrid (BM25 ∪ vector → exact rerank). Falls back to `search()`
     /// when no BM25 section is present.
     fn search_hybrid(
         &self,
@@ -84,7 +84,7 @@ impl NestFile {
         Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
     }
 
-    /// lAgent-native flagship: a pre-embedded query in, cited spans out.
+    /// Agent-native flagship: a pre-embedded query in, cited spans out.
     /// each hit's `score` IS the exact-cosine rerank value; routes by
     /// manifest capability (hnsw/hybrid/graph/exact). every hit carries the
     /// tier-1 stored canonical `text`, the verifying hashes, the stable
@@ -111,7 +111,7 @@ impl NestFile {
         )
     }
 
-    /// lExact search over one named multimodal space (e.g. "vision").
+    /// Exact search over one named multimodal space (e.g. "vision").
     /// the query must be embedded with the model the space's model_hash
     /// fingerprints and have the space's dim: a text-tower query fails
     /// loudly instead of silently scoring the vision band. falls back to
@@ -189,7 +189,7 @@ impl NestFile {
         self.rt.has_blobs()
     }
 
-    /// lThe blob_refs (0x14) table as a list of dicts (empty when the file
+    /// The blob_refs (0x14) table as a list of dicts (empty when the file
     /// has no blob capability): content_hash as "sha256:<hex>", the uri
     /// hint, original byte length, and the inlined flag.
     fn blob_refs(&self) -> Vec<pyo3::Py<PyDict>> {
@@ -228,7 +228,7 @@ impl NestFile {
         self.rt.content_hash().to_string()
     }
 
-    /// lMirror of `nest inspect`: returns a Python dict with header,
+    /// Mirror of `nest inspect`: returns a Python dict with header,
     /// section table, manifest and hashes.
     fn inspect<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let s = self
@@ -238,7 +238,7 @@ impl NestFile {
         py.import("json")?.call_method1("loads", (s,))
     }
 
-    /// lRe-run reader-side validation. Returns `True` on success and
+    /// Re-run reader-side validation. Returns `True` on success and
     /// raises `ValueError` (with the reader's typed error in the
     /// message) on any failure.
     fn validate(&self) -> PyResult<bool> {

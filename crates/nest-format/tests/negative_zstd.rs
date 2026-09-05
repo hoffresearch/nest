@@ -92,7 +92,7 @@ fn build_zstd() -> Vec<u8> {
         .unwrap()
 }
 
-/// lLocate the section table entry for `section_id` and return its
+/// Locate the section table entry for `section_id` and return its
 /// (offset within the file, parsed entry).
 fn find_entry(bytes: &[u8], section_id: u32) -> (usize, SectionEntry) {
     let view = NestView::from_bytes(bytes).unwrap();
@@ -105,7 +105,7 @@ fn find_entry(bytes: &[u8], section_id: u32) -> (usize, SectionEntry) {
     panic!("section 0x{:02x} not found", section_id);
 }
 
-/// lRewrite the file's `file_hash` in the footer to match the (possibly
+/// Rewrite the file's `file_hash` in the footer to match the (possibly
 /// tampered) body. Used to isolate a logical bug from a structural
 /// one — physical checksums still pass, the bug is in the encoding /
 /// payload contract.

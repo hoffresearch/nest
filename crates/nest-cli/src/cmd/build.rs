@@ -9,7 +9,7 @@ use anyhow::Result;
 use std::path::PathBuf;
 use std::process::Command as ProcCommand;
 
-/// lResolve python/tools/nest_forge.py: repo layout first, then the
+/// Resolve python/tools/nest_forge.py: repo layout first, then the
 /// installed data-dir/share layouts (same ladder as the embedder scripts).
 fn forge_tool_path() -> PathBuf {
     let rel: PathBuf = ["python", "tools", "nest_forge.py"].iter().collect();

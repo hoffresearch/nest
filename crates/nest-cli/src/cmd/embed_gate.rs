@@ -15,7 +15,7 @@ use std::process::Command as ProcCommand;
 
 use nest_runtime::{MmapNestFile, SearchResult};
 
-/// lOutput schema shared by every query embedder script: the compact
+/// Output schema shared by every query embedder script: the compact
 /// `model_hash` is the source of truth for the gate; `fingerprint` is
 /// diagnostic only.
 #[derive(serde::Deserialize)]
@@ -31,21 +31,21 @@ pub struct EmbedderOutput {
 pub const PLACEHOLDER_MODEL_HASH: &str =
     "sha256:0000000000000000000000000000000000000000000000000000000000000000";
 
-/// lWalk up from the current dir to find python/embed_query.py (the legacy
+/// Walk up from the current dir to find python/embed_query.py (the legacy
 /// sentence-transformers path that `search-text` keeps as its default).
 pub fn default_embedder_path() -> PathBuf {
     repo_script(&["python", "embed_query.py"])
         .unwrap_or_else(|| PathBuf::from("python/embed_query.py"))
 }
 
-/// lFind the OFFLINE potion embedder (`python/forge/embed_query_potion.py`):
+/// Find the OFFLINE potion embedder (`python/forge/embed_query_potion.py`):
 /// repo layout, then the installed data dir, then `<exe>/../share` (the
 /// installer/tarball layouts, issue #75).
 pub fn default_potion_embedder_path() -> PathBuf {
     installed_script("embed_query_potion.py")
 }
 
-/// lFind the registry-backed embedder (`python/forge/embed_query_model.py`),
+/// Find the registry-backed embedder (`python/forge/embed_query_model.py`),
 /// same resolution ladder as the potion script.
 pub fn default_registry_embedder_path() -> PathBuf {
     installed_script("embed_query_model.py")
@@ -73,7 +73,7 @@ fn repo_script(rel: &[&str]) -> Option<PathBuf> {
     None
 }
 
-/// l<repo> for a dev-built binary at <repo>/target/<profile>/nest.
+/// <repo> for a dev-built binary at <repo>/target/<profile>/nest.
 pub(crate) fn exe_repo_root() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let repo = exe.parent()?.parent()?.parent()?;
@@ -109,7 +109,7 @@ fn installed_script(name: &str) -> PathBuf {
     PathBuf::from("python").join("forge").join(name)
 }
 
-/// lSpawn the embedder script and parse its one-line JSON payload.
+/// Spawn the embedder script and parse its one-line JSON payload.
 /// argv: `<interp> <script> [--model-path P] [extra...] <model> <query>`.
 pub fn spawn_embedder(
     embedder: &PathBuf,
@@ -153,7 +153,7 @@ pub fn spawn_embedder(
     })
 }
 
-/// lThe three-layer gate: name (layer 1), dim (layer 2), model_hash
+/// The three-layer gate: name (layer 1), dim (layer 2), model_hash
 /// (layer 3, skippable only for legacy placeholder corpora).
 pub fn validate_gate(
     payload: &EmbedderOutput,
@@ -202,7 +202,7 @@ pub fn validate_gate(
     Ok(())
 }
 
-/// lEmbed `query` offline, gate it against the manifest, route by declared
+/// Embed `query` offline, gate it against the manifest, route by declared
 /// capability, search. Shared by `ask` and `retrieve`; `search-text` uses
 /// the pieces directly (it keeps `--skip-model-hash-check`).
 pub fn embed_and_search(

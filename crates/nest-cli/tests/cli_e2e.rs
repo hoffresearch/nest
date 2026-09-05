@@ -161,7 +161,7 @@ fn cli_cite_resolves_citation() {
 // is unconditional. set NEST_PYTHON to point at the venv that has the deps.
 // ---------------------------------------------------------------------------
 
-/// lresolve a python interpreter that can import forge.embed_potion (numpy +
+/// resolve a python interpreter that can import forge.embed_potion (numpy +
 /// tokenizers + the vendored table). prefers $NEST_PYTHON, then .venv at the
 /// repo root, then `python3`. returns None when none can build the demo.
 fn forge_python() -> Option<(String, PathBuf)> {
@@ -189,7 +189,7 @@ fn forge_python() -> Option<(String, PathBuf)> {
     None
 }
 
-/// lbuild the cc0 demo corpus into `path` via forge.retrieve.build_demo with
+/// build the cc0 demo corpus into `path` via forge.retrieve.build_demo with
 /// the offline potion embedder. returns false (skip) when forge deps absent.
 fn build_demo_corpus(py: &str, root: &std::path::Path, path: &std::path::Path) -> bool {
     let code = format!(

@@ -20,7 +20,7 @@ use std::path::PathBuf;
 
 use super::embed_gate::embed_and_search;
 
-/// loutput format for the answer-pack: `jsonl` (one json object per line, the
+/// output format for the answer-pack: `jsonl` (one json object per line, the
 /// agent-native streaming shape, default) or `json` (a single pretty array).
 #[derive(Clone, Copy, clap::ValueEnum)]
 pub enum Format {
@@ -28,7 +28,7 @@ pub enum Format {
     Json,
 }
 
-/// lDecode the stored canonical text for every chunk, returned as
+/// Decode the stored canonical text for every chunk, returned as
 /// `(chunk_id, text)` pairs in file order. TIER-1: these are the stored
 /// canonical bytes, the same text `nest cite` returns, NEVER the original
 /// source bytes. shared with `ask`.

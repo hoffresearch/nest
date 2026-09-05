@@ -60,7 +60,7 @@ impl NestView<'_> {
         Ok(())
     }
 
-    /// lWhen a space_table (0x15) is present, every listed space must have
+    /// When a space_table (0x15) is present, every listed space must have
     /// its band section (0x20 + space_index) present with exactly the size
     /// its (n_vectors, dim, dtype) imply, and n_vectors must match the
     /// corpus chunk count (the bands are parallel per-chunk embeddings).
@@ -142,7 +142,7 @@ impl NestView<'_> {
         Ok(())
     }
 
-    /// lWalk the embeddings section and reject any NaN/Inf value. Works
+    /// Walk the embeddings section and reject any NaN/Inf value. Works
     /// for all supported dtypes.
     pub fn validate_embeddings_values(&self) -> crate::Result<()> {
         self.validate_embeddings_layout()?;
@@ -206,7 +206,7 @@ impl NestView<'_> {
     }
 }
 
-/// lEncoding rules: the embeddings section gets dtype-specific encodings
+/// Encoding rules: the embeddings section gets dtype-specific encodings
 /// (float16, int8, int4) and rejects zstd (we want SIMD-friendly mmap
 /// reads). the per-space vector bands (0x20-0x2F and the fp rerank band
 /// 0x30-0x3F) follow the SAME rule: fixed-stride slabs scored by the simd

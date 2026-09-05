@@ -12,7 +12,7 @@ use super::{Candidate, HnswIndex, Node, dist_rr};
 use crate::materialize::PackedVectors;
 
 impl HnswIndex {
-    /// lBuild an HNSW index from f32 vectors. Deterministic given the
+    /// Build an HNSW index from f32 vectors. Deterministic given the
     /// same `seed`. `vectors` is row-major `n*dim`.
     pub fn build(
         vectors: Vec<f32>,
@@ -150,7 +150,7 @@ impl HnswIndex {
         }
     }
 
-    /// lBuild from int8 quantized embeddings. Dequantizes once (lossy) and
+    /// Build from int8 quantized embeddings. Dequantizes once (lossy) and
     /// hands off to `build`. Recall ends up bounded by quantization
     /// noise; in practice still well above 0.95 @ k=10 for real corpora.
     pub fn build_from_int8(view: &Int8EmbeddingsView<'_>, m: usize, ef: usize, seed: u64) -> Self {
@@ -165,7 +165,7 @@ impl HnswIndex {
         Self::build(vectors, view.n, view.dim, m, ef, seed)
     }
 
-    /// lBuild from float16 LE bytes. Decodes once into f32 and builds.
+    /// Build from float16 LE bytes. Decodes once into f32 and builds.
     pub fn build_from_f16(
         bytes: &[u8],
         n: usize,
@@ -178,7 +178,7 @@ impl HnswIndex {
         Self::build(vectors, n, dim, m, ef, seed)
     }
 
-    /// lBuild from raw f32 LE bytes. Copies into an owned buffer.
+    /// Build from raw f32 LE bytes. Copies into an owned buffer.
     pub fn build_from_f32(
         bytes: &[u8],
         n: usize,
@@ -197,7 +197,7 @@ impl HnswIndex {
     }
 }
 
-/// lGeometric level distribution. Deterministic via the LCG state.
+/// Geometric level distribution. Deterministic via the LCG state.
 pub(super) fn sample_level(rng: &mut LcgRng, m: usize) -> u32 {
     let m_l = 1.0 / (m as f64).ln();
     let r = rng.next_f64();
@@ -208,7 +208,7 @@ pub(super) fn sample_level(rng: &mut LcgRng, m: usize) -> u32 {
     level.clamp(0, 31) as u32 // cap at 31 layers
 }
 
-/// lTiny LCG (deterministic, no rand dep). `pub(super)` so tests in
+/// Tiny LCG (deterministic, no rand dep). `pub(super)` so tests in
 /// `super::tests` can reuse it for synthetic vector generation.
 pub(super) struct LcgRng {
     state: u64,

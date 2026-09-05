@@ -4,7 +4,7 @@
 use crate::mmap_file::MmapNestFile;
 
 impl MmapNestFile {
-    /// lHint to the OS that the mmap pages won't be needed soon. The
+    /// Hint to the OS that the mmap pages won't be needed soon. The
     /// next read will fault them back in from disk.
     ///
     /// **Caveat:** this is `posix_madvise(MADV_DONTNEED)` — an
@@ -31,7 +31,7 @@ impl MmapNestFile {
         }
     }
 
-    /// lNo-op on non-Unix platforms.
+    /// No-op on non-Unix platforms.
     #[cfg(not(unix))]
     pub fn madvise_cold(&self) {}
 }

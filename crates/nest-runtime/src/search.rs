@@ -9,7 +9,7 @@ use crate::rerank::RerankSource;
 use crate::{RerankSourceKind, SearchExplain, SearchHit, SearchResult};
 
 impl MmapNestFile {
-    /// lthe honesty marker: the precision the rerank reads from, from the
+    /// the honesty marker: the precision the rerank reads from, from the
     /// `embeddings_fp` (0x09) slab dtype when present, else the stored dtype.
     fn rerank_source_kind(&self) -> RerankSourceKind {
         let dtype = self
@@ -19,7 +19,7 @@ impl MmapNestFile {
         RerankSourceKind::from_dtype(dtype)
     }
 
-    /// lValidate query, L2-normalize, return the normalized vector.
+    /// Validate query, L2-normalize, return the normalized vector.
     fn validate_query(&self, query: &[f32], k: i32) -> Result<Vec<f32>, RuntimeError> {
         if k <= 0 {
             return Err(RuntimeError::InvalidK(k));
@@ -49,7 +49,7 @@ impl MmapNestFile {
         Ok(qnorm)
     }
 
-    /// lThe single rerank source the exact-cosine recompute reads from:
+    /// The single rerank source the exact-cosine recompute reads from:
     /// the full-precision `embeddings_fp` (0x09) slab when present, else
     /// the stored dtype slab. Both `score_all` and `score_subset` route
     /// through this so every path's returned score is the SAME real
@@ -62,7 +62,7 @@ impl MmapNestFile {
         RerankSource::new(dtype, bytes, self.n_embeddings, self.embedding_dim)
     }
 
-    /// lScore every chunk against `qnorm` via the rerank source. Returns
+    /// Score every chunk against `qnorm` via the rerank source. Returns
     /// `(idx, score)` pairs in the natural index order.
     fn score_all(&self, qnorm: &[f32]) -> Result<Vec<(usize, f32)>, RuntimeError> {
         let n = self.n_embeddings;
@@ -74,7 +74,7 @@ impl MmapNestFile {
         Ok(scores)
     }
 
-    /// lScore a sliced subset of indices (used by ANN/BM25 rerank). The
+    /// Score a sliced subset of indices (used by ANN/BM25 rerank). The
     /// returned vector mirrors `idxs.len()` in order. This IS the exact
     /// rerank every candidate-generating path must end in.
     fn score_subset(
@@ -90,7 +90,7 @@ impl MmapNestFile {
         Ok(out)
     }
 
-    /// lExact flat search. The recall=1.0 ground truth.
+    /// Exact flat search. The recall=1.0 ground truth.
     pub fn search(&self, query: &[f32], k: i32) -> Result<SearchResult, RuntimeError> {
         let t0 = std::time::Instant::now();
         let qnorm = self.validate_query(query, k)?;
@@ -112,7 +112,7 @@ impl MmapNestFile {
         })
     }
 
-    /// lANN search. Pulls `ef_search` candidates from HNSW, reranks with
+    /// ANN search. Pulls `ef_search` candidates from HNSW, reranks with
     /// the exact dot product, returns top-k. Falls back to `search()` if
     /// no ANN section is present.
     pub fn search_ann(
@@ -148,7 +148,7 @@ impl MmapNestFile {
         })
     }
 
-    /// lGraph search: seed from the exact-cosine top-`ef`, expand a bounded
+    /// Graph search: seed from the exact-cosine top-`ef`, expand a bounded
     /// bfs over the chunk-to-chunk csr, union seed + frontier, then run the
     /// SAME mandatory exact rerank on the union. the graph ONLY generates
     /// candidates; the returned score is real cosine, identical contract to
@@ -200,9 +200,9 @@ impl MmapNestFile {
         })
     }
 
-    /// lHybrid search: BM25 candidates ∪ ANN (or exact) candidates,
+    /// Hybrid search: BM25 candidates ∪ ANN (or exact) candidates,
     /// reciprocal-rank fusion, then exact cosine rerank on the union.
-    /// lFinal score is the real cosine.
+    /// Final score is the real cosine.
     pub fn search_hybrid(
         &self,
         query_vec: &[f32],

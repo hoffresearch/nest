@@ -12,7 +12,7 @@ use crate::error::RuntimeError;
 use crate::mmap_file::MmapNestFile;
 
 impl MmapNestFile {
-    /// lDecode the stored canonical text for every chunk, in file order. this
+    /// Decode the stored canonical text for every chunk, in file order. this
     /// is the TIER-1 citation text, the same bytes `nest cite` returns, NOT
     /// the original source bytes. re-parses the mmap and decodes the
     /// chunks_canonical (0x02) section (handles zstd / txt_streams / dict /
@@ -25,14 +25,14 @@ impl MmapNestFile {
             .map_err(RuntimeError::Format)
     }
 
-    /// lThe per-chunk ids in file order, parallel to `canonical_texts()`.
+    /// The per-chunk ids in file order, parallel to `canonical_texts()`.
     /// lets a caller build a chunk_id -> canonical-text map without re-reading
     /// the file (the ids are already decoded and held at open time).
     pub fn chunk_ids(&self) -> &[String] {
         &self.chunk_ids
     }
 
-    /// lRe-parse the mmap and return a JSON document mirroring `nest
+    /// Re-parse the mmap and return a JSON document mirroring `nest
     /// inspect`: header fields, section table entries, manifest, hashes,
     /// and the runtime SIMD backend.
     pub fn inspect_json(&self) -> Result<String, RuntimeError> {
@@ -76,7 +76,7 @@ impl MmapNestFile {
         serde_json::to_string(&doc).map_err(|e| RuntimeError::Format(NestError::Json(e)))
     }
 
-    /// lThe space_table (0x15) as a JSON array (`null` when the file has no
+    /// The space_table (0x15) as a JSON array (`null` when the file has no
     /// multimodal capability): one object per named space with its band
     /// geometry, so `inspect --json` consumers (stats, the model bench)
     /// see every queryable space without opening the bands.
@@ -100,7 +100,7 @@ impl MmapNestFile {
         }
     }
 
-    /// lThe blob_refs (0x14) table as a JSON array (`null` when the file
+    /// The blob_refs (0x14) table as a JSON array (`null` when the file
     /// has no blob capability): one object per blob with its content hash
     /// as `sha256:<hex>`, the uri hint, original byte length, and whether
     /// the bytes are inlined in this .nest.

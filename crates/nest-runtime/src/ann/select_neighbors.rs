@@ -20,8 +20,8 @@
 use super::{Candidate, cosine_dist};
 use crate::materialize::PackedVectors;
 
-/// lAlgorithm 3: keep the `m` closest candidates by distance ascending.
-/// lStable: ties break by ascending id so the same candidate set + same
+/// Algorithm 3: keep the `m` closest candidates by distance ascending.
+/// Stable: ties break by ascending id so the same candidate set + same
 /// `m` always returns the same neighbor list (required for reproducible
 /// builds). Kept as a reference baseline and for unit tests; build calls
 /// the heuristic.
@@ -38,7 +38,7 @@ pub(super) fn select_neighbors_simple(candidates: &[Candidate], m: usize) -> Vec
     sorted.into_iter().map(|c| c.id).collect()
 }
 
-/// lAlgorithm 4 (Malkov & Yashunin 2018): heuristic neighbor selection
+/// Algorithm 4 (Malkov & Yashunin 2018): heuristic neighbor selection
 /// with diversity.
 ///
 /// `candidates` are pre-scored against the query (the node being inserted
@@ -48,7 +48,7 @@ pub(super) fn select_neighbors_simple(candidates: &[Candidate], m: usize) -> Vec
 /// default in build to guarantee neighbor lists actually reach `m` even
 /// when most candidates get shadowed.
 ///
-/// lDeterminism: ties in distance break by ascending id so the same
+/// Determinism: ties in distance break by ascending id so the same
 /// inputs always produce the same output ordering.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn select_neighbors_heuristic(

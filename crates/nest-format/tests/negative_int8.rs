@@ -97,7 +97,7 @@ fn embeddings_offset(bytes: &[u8]) -> usize {
     panic!("embeddings section not found");
 }
 
-/// lRecompute the embeddings section's checksum and the file_hash. See
+/// Recompute the embeddings section's checksum and the file_hash. See
 /// negative_fp16/zstd for the same pattern; centralized here too to
 /// keep the test self-contained.
 fn rewrite_emb_checksum_and_file_hash(bytes: &mut [u8]) {

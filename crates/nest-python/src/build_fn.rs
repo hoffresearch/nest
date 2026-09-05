@@ -12,7 +12,7 @@ use crate::build_inputs::{
     truncate_renormalize,
 };
 
-/// lBuild a .nest file from already-embedded chunks.
+/// Build a .nest file from already-embedded chunks.
 ///
 /// `chunks` is a list of dicts with keys:
 ///   - canonical_text: str
@@ -21,12 +21,12 @@ use crate::build_inputs::{
 ///   - byte_end: int
 ///   - embedding: list[float] (length == embedding_dim, L2-normalized)
 ///
-/// lOptional manifest fields (`title`, `version`, `created`, `description`,
+/// Optional manifest fields (`title`, `version`, `created`, `description`,
 /// `authors`, `license`) and a free-form `provenance` dict can be passed
 /// as kwargs. `reproducible=True` overrides `created` so two builds with
 /// identical inputs produce byte-identical output.
 ///
-/// lPreset / encoding kwargs:
+/// Preset / encoding kwargs:
 ///   - `preset`: one of "exact" (default), "compressed", "tiny", "hybrid",
 ///     "nano". "nano" is zstd text / int4 / hnsw (the first sub-int8 size
 ///     lever, ~2x smaller embeddings than tiny at stored precision; requires

@@ -63,7 +63,7 @@ fn random_l2(n: usize, dim: usize, seed: u64) -> Vec<f32> {
     v
 }
 
-/// lBuild a .nest carrying an HNSW (0x07) and a BM25 (0x08) section over a
+/// Build a .nest carrying an HNSW (0x07) and a BM25 (0x08) section over a
 /// synthetic f32 corpus, so `search_ann` and `search_hybrid` exercise the
 /// real candidate paths rather than falling back to exact.
 fn build_indexed_corpus(path: &PathBuf, n: usize, dim: usize) -> Vec<f32> {
@@ -139,7 +139,7 @@ fn tmp_path(name: &str) -> PathBuf {
     p
 }
 
-/// lA non-exact search path: its name and a thunk that runs it. The list
+/// A non-exact search path: its name and a thunk that runs it. The list
 /// of these is the honesty gate; new verbs must join it.
 type NonExactPath<'a> = (&'a str, Box<dyn Fn() -> SearchResult + 'a>);
 
@@ -243,7 +243,7 @@ fn non_exact_paths_return_real_cosine_byte_for_byte_and_recall_is_nan() {
     let _ = std::fs::remove_file(&path);
 }
 
-/// lThe additive `SearchExplain` is populated on all four paths with the
+/// The additive `SearchExplain` is populated on all four paths with the
 /// right route, candidate counts, and rerank-source honesty marker. the
 /// f32 synthetic corpus has no 0x09 fp slab and a float32 stored dtype, so
 /// the rerank source is `FullPrecision` (= "real cosine"). recall_estimate
@@ -297,7 +297,7 @@ fn search_explain_is_populated_on_all_four_paths_with_full_precision() {
     let _ = std::fs::remove_file(&path);
 }
 
-/// lWith no 0x09 fp slab and a lossy stored dtype the rerank source is
+/// With no 0x09 fp slab and a lossy stored dtype the rerank source is
 /// `StoredPrecision` (= "real cosine at stored precision"), AND the returned
 /// score still equals `score_subset` byte-for-byte (the gate the WO names).
 /// an int8 corpus exercises this: the marker discloses stored precision yet

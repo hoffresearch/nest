@@ -15,7 +15,7 @@ use crate::search::sort_scores_desc;
 use crate::{RerankSourceKind, SearchExplain, SearchResult};
 
 impl MmapNestFile {
-    /// lExact flat search over one named multimodal space (e.g. "vision").
+    /// Exact flat search over one named multimodal space (e.g. "vision").
     /// the query must be embedded with the model the space's
     /// `model_hash` fingerprints and have the space's dim; both are
     /// checked up front (the per-space honesty gate), so a text-tower

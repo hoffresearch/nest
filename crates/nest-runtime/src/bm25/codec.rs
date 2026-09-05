@@ -17,7 +17,7 @@ use super::index::{BM25_PAYLOAD_VERSION, Bm25Index, Posting, TermEntry};
 use crate::error::RuntimeError;
 
 impl Bm25Index {
-    /// lEncode for storage in section `0x08` (v2).
+    /// Encode for storage in section `0x08` (v2).
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut out = Vec::new();
         out.extend_from_slice(&BM25_PAYLOAD_VERSION.to_le_bytes());

@@ -23,7 +23,7 @@ fn valid_manifest() -> Manifest {
     }
 }
 
-/// lEvery additive-optional field is omitted from the canonical json when
+/// Every additive-optional field is omitted from the canonical json when
 /// unset, so adding the field never perturbs an existing file's bytes.
 #[test]
 fn unset_additive_fields_are_omitted() {
@@ -46,7 +46,7 @@ fn unset_additive_fields_are_omitted() {
     }
 }
 
-/// lThe manifest round-trips byte-identically through canonical json: an
+/// The manifest round-trips byte-identically through canonical json: an
 /// old manifest deserializes and re-serializes to the same bytes, so a
 /// reader that reads then rewrites it does not change its file_hash.
 #[test]
@@ -62,7 +62,7 @@ fn manifest_round_trips_byte_identical() {
     );
 }
 
-/// lA field a newer writer adds that this reader does not know must NOT
+/// A field a newer writer adds that this reader does not know must NOT
 /// fail deserialization; it lands in `extra` and is preserved on rewrite.
 /// This is what lets old readers open new files (additive within v1).
 #[test]
@@ -83,7 +83,7 @@ fn unknown_future_field_survives_via_extra() {
     );
 }
 
-/// lThe matryoshka disclosure fields (mrl_dim/full_dim) are additive: unset
+/// The matryoshka disclosure fields (mrl_dim/full_dim) are additive: unset
 /// they are omitted (a non-truncated file stays byte-identical to a v1
 /// manifest), and a manifest WITH them set round-trips byte-identically so a
 /// reader that reads then rewrites a truncated file does not move its
@@ -119,7 +119,7 @@ fn mrl_fields_are_additive_and_round_trip() {
     );
 }
 
-/// lCapabilities_ext is the additive home for future capability flags:
+/// Capabilities_ext is the additive home for future capability flags:
 /// `None` (default) is omitted (byte-identical to a v1 manifest), and a set
 /// flag appears, round-trips, and only ADDS bytes (file_hash moves, which is
 /// expected when the file genuinely declares a new capability).
