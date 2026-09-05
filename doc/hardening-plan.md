@@ -66,6 +66,20 @@ is what reaches the decoders in bulk.
 - mutation soak (release): 250,000 reader mutations + 40,000 runtime
   mutations, zero panics after the four fixes; before them the first 1,500
   found #1 and #2 within a second.
+- coverage-guided fuzz (cargo-fuzz, libfuzzer + asan, nightly, 10 minutes per
+  target, seeds from the harness fixtures), 2026-09-05 on this machine:
+
+  | target | executions | result |
+  |---|---|---|
+  | `nest_view` | 47,639,167 | clean (cov 1106, corpus 861) |
+  | `section_decoders` (before fix #5) | stopped early | oom: 31 GB `with_capacity` in the spans repack |
+  | `section_decoders` (after fix #5) | 18,983,714 | clean (cov 2368, corpus 2096) |
+  | `runtime_indexes` | 3,480,290 | clean (cov 948, corpus 413) |
+  | `mmap_open_search` | 3,123,031 | clean (cov 3612, corpus 1569) |
+
+  every run wrote its corpus under `fuzz/corpus/<target>/` (gitignored); the
+  two libfuzzer artifacts of finding #5 are tracked as `fuzz/seeds/regress-*`.
+
 - int4 rerank kernel, per-row allocation vs caller scratch: see the numbers
   appended at the end of this file (measured on this machine, 50k x 384).
 
@@ -98,9 +112,12 @@ budget is exhausted, and synthetic rows let anyone reproduce it without
 data), no multimodal column (no competitor exposes one), the citation claim
 is measured as raw-text vs zstd-text sharing one `content_hash` (index type
 is part of the canonical search contract, so exact vs hybrid legitimately
-differ). one finding the table makes visible: nest's HNSW build is roughly
-20x slower than hnswlib at the same m / ef_construction (single-threaded,
-no batching); item 4.11. original spec: nobody switches without a number. `python/tools/bench_competitors.py`, one
+differ). one finding the table makes visible: nest's HNSW build is 2.4x
+slower than hnswlib and 2.2x slower than usearch at the same m /
+ef_construction with every build single-threaded (224 s vs 92 s vs 103 s on
+100k x 384); the earlier "20x" came from letting the competitors use every
+core against nest's single thread. item 4.11. original spec: nobody
+switches without a number. `python/tools/bench_competitors.py`, one
 corpus, one machine, one table, checked in with the exact versions.
 
 - candidates: `usearch` (the closest single-file mmap peer), `sqlite-vec`
@@ -174,11 +191,12 @@ frozen, the rust API that reads it should say when it breaks.
 
 ### 4.11 HNSW build throughput
 
-measured in `doc/benchmarks.md`: at m=16 / ef_construction=200 nest builds
-its graph ~20x slower than hnswlib and usearch on the same rows (single
-thread, one insert at a time, `select_neighbors` re-sorting per candidate).
-recall at ef=100 is higher than both, so the graph is fine; the build loop
-is not. plan: profile `ann/build.rs` (`cargo flamegraph` on a 100k build),
+measured in `doc/benchmarks.md`: at m=16 / ef_construction=200, all builds
+single-threaded, nest builds its graph in 224 s against 92 s (hnswlib) and
+103 s (usearch) on the same 100k x 384 rows: 2.2-2.4x, one insert at a time,
+`select_neighbors` re-sorting per candidate, and no multi-threaded build at
+all while both competitors have one. recall@10 at ef=100 is 1.000 (hnswlib
+1.000, usearch 0.995), so the graph is fine; the build loop is not. plan: profile `ann/build.rs` (`cargo flamegraph` on a 100k build),
 batch the level-0 inserts, parallelize the independent upper-layer searches
 with rayon behind a deterministic merge (the seed contract must hold: same
 input, same graph bytes), then re-measure with the same table. a `criterion`
