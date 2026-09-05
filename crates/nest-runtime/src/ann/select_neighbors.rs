@@ -20,25 +20,20 @@
 use super::{Candidate, cosine_dist};
 use crate::materialize::PackedVectors;
 
-/// lAlgorithm 3: keep the `m` closest candidates by distance ascending.
-/// lStable: ties break by ascending id so the same candidate set + same
+/// Algorithm 3: keep the `m` closest candidates by distance ascending.
+/// Stable: ties break by ascending id so the same candidate set + same
 /// `m` always returns the same neighbor list (required for reproducible
 /// builds). Kept as a reference baseline and for unit tests; build calls
 /// the heuristic.
 #[allow(dead_code)]
 pub(super) fn select_neighbors_simple(candidates: &[Candidate], m: usize) -> Vec<u32> {
     let mut sorted: Vec<Candidate> = candidates.to_vec();
-    sorted.sort_by(|a, b| {
-        a.dist
-            .partial_cmp(&b.dist)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| a.id.cmp(&b.id))
-    });
+    sorted.sort_by(|a, b| crate::order::cmp_dist_asc(a.dist, b.dist).then_with(|| a.id.cmp(&b.id)));
     sorted.truncate(m);
     sorted.into_iter().map(|c| c.id).collect()
 }
 
-/// lAlgorithm 4 (Malkov & Yashunin 2018): heuristic neighbor selection
+/// Algorithm 4 (Malkov & Yashunin 2018): heuristic neighbor selection
 /// with diversity.
 ///
 /// `candidates` are pre-scored against the query (the node being inserted
@@ -48,7 +43,7 @@ pub(super) fn select_neighbors_simple(candidates: &[Candidate], m: usize) -> Vec
 /// default in build to guarantee neighbor lists actually reach `m` even
 /// when most candidates get shadowed.
 ///
-/// lDeterminism: ties in distance break by ascending id so the same
+/// Determinism: ties in distance break by ascending id so the same
 /// inputs always produce the same output ordering.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn select_neighbors_heuristic(
@@ -65,12 +60,8 @@ pub(super) fn select_neighbors_heuristic(
     }
 
     let mut working: Vec<Candidate> = candidates.to_vec();
-    working.sort_by(|a, b| {
-        a.dist
-            .partial_cmp(&b.dist)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| a.id.cmp(&b.id))
-    });
+    working
+        .sort_by(|a, b| crate::order::cmp_dist_asc(a.dist, b.dist).then_with(|| a.id.cmp(&b.id)));
 
     let mut chosen: Vec<Candidate> = Vec::with_capacity(m);
     let mut pruned: Vec<Candidate> = Vec::new();
@@ -83,7 +74,7 @@ pub(super) fn select_neighbors_heuristic(
         for chosen_one in &chosen {
             let chosen_row = store.row(chosen_one.id as usize, dim, sb);
             let d_cc = cosine_dist(cand_row, chosen_row);
-            // lCandidate is shadowed: an already-chosen neighbor is
+            // Candidate is shadowed: an already-chosen neighbor is
             // closer to it than the query is. Adding it gives no new
             // angular coverage.
             if d_cc < cand.dist {
@@ -99,7 +90,7 @@ pub(super) fn select_neighbors_heuristic(
     }
 
     if keep_pruned && chosen.len() < m {
-        // lPruned came in distance-ascending order via `working`; preserve
+        // Pruned came in distance-ascending order via `working`; preserve
         // that order so the closest-shadowed are picked first.
         for cand in pruned {
             if chosen.len() >= m {
@@ -156,7 +147,7 @@ mod tests {
     #[test]
     fn heuristic_drops_shadowed_candidate() {
         // 3 vectors: 0 and 1 are nearly identical, 2 is orthogonal.
-        // lQuery is closer to 0 than to 1 by a hair. With m=2, simple
+        // Query is closer to 0 than to 1 by a hair. With m=2, simple
         // would pick {0, 1} (the two closest). Heuristic picks {0, 2}
         // because 1 is shadowed by 0 (their mutual distance is tiny,
         // smaller than 1's distance to the query).
@@ -181,7 +172,7 @@ mod tests {
 
     #[test]
     fn heuristic_refills_when_under_m() {
-        // lAll 3 vectors collinear → 1 and 2 are shadowed by 0. With
+        // All 3 vectors collinear → 1 and 2 are shadowed by 0. With
         // keep_pruned=true and m=3, all three must come back (in
         // closest-first order).
         let vectors = vec![

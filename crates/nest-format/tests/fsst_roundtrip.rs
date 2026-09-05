@@ -3,6 +3,11 @@
 //! empty/single/many/multibyte-utf8 pt-br corpora and the escape path, two
 //! builds byte-identical.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::encoding::{decode_fsst_payload, encode_fsst};
 use nest_format::sections::encode_chunks_canonical;
 

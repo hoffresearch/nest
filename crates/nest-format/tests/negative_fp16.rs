@@ -9,6 +9,11 @@
 //!   confirms the public reader accepts dims 5, 7, and 11 without
 //!   error and produces values consistent with the scalar fallback.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::layout::{
     NEST_FOOTER_SIZE, NestFooter, SECTION_EMBEDDINGS, SECTION_ENCODING_FLOAT16,
 };
@@ -76,7 +81,7 @@ fn build_fp16(n: usize, dim: usize) -> Vec<u8> {
         .unwrap()
 }
 
-/// lRewrite the section's physical checksum (over the now-tampered
+/// Rewrite the section's physical checksum (over the now-tampered
 /// payload) and the footer's file_hash. Bypasses NestView::from_bytes
 /// because that would refuse to parse a file whose section checksum
 /// was just invalidated. Reads the section table directly from header
@@ -127,7 +132,7 @@ fn rejects_nan_in_fp16_embedding() {
         .unwrap();
     assert_eq!(entry.encoding, SECTION_ENCODING_FLOAT16);
     let payload_off = entry.offset as usize;
-    // lOverwrite first f16 lane with a NaN bit pattern.
+    // Overwrite first f16 lane with a NaN bit pattern.
     let nan_le = fp16_le(f32::NAN);
     bytes[payload_off..payload_off + 2].copy_from_slice(&nan_le);
     rewrite_section_checksum_and_file_hash(&mut bytes, SECTION_EMBEDDINGS);
@@ -210,7 +215,7 @@ fn fp16_section_size_matches_n_dim_2() {
 
 #[test]
 fn fp16_odd_dims_validate_cleanly() {
-    // lDims that don't align to 4/8/16 lane SIMD widths must still pass
+    // Dims that don't align to 4/8/16 lane SIMD widths must still pass
     // validation. The runtime's SIMD dot product has a tail loop for
     // these; if it ever regresses, the simd module's parity tests fail
     // first, but this end-to-end check is the contract guarantee.

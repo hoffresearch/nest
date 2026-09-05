@@ -10,6 +10,11 @@
 //! - content_hash equality: a fixed corpus WITH vs WITHOUT the multimodal
 //!   sections has IDENTICAL content_hash (citations stay stable).
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::manifest::Manifest;
 use nest_format::writer::NestFileBuilder;
 use nest_format::{

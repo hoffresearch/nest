@@ -19,6 +19,11 @@ pub enum RuntimeError {
     #[error("embedding space not found: {0}")]
     SpaceNotFound(String),
     #[error(
+        "blob {index} is not inlined in this file: open the media sidecar \
+         named by its blob_refs uri, or rebuild with [output] embed_media"
+    )]
+    BlobNotInlined { index: usize },
+    #[error(
         "model_hash mismatch in space {space}: the query was embedded with {expected}, \
          but the space vectors were embedded with {actual}"
     )]

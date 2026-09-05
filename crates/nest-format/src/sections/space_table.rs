@@ -12,6 +12,7 @@
 //! wire encoding: `raw` (self-describing payload, no compression).
 //! all integers le.
 
+use crate::bytes::{le_u32, le_u64};
 use crate::error::NestError;
 use crate::layout::{SECTION_SPACE_TABLE, SPACE_BAND_LEN};
 
@@ -43,7 +44,7 @@ pub struct SpaceEntry {
 }
 
 impl SpaceEntry {
-    /// lthe manifest-style dtype string for this space's band slab.
+    /// the manifest-style dtype string for this space's band slab.
     pub fn dtype_str(&self) -> &'static str {
         match self.dtype {
             SPACE_DTYPE_F32 => "float32",
@@ -191,10 +192,10 @@ impl<'a> Cursor<'a> {
         Ok(self.take(1)?[0])
     }
     fn u32(&mut self) -> Result<u32, NestError> {
-        Ok(u32::from_le_bytes(self.take(4)?.try_into().unwrap()))
+        le_u32(self.take(4)?)
     }
     fn u64(&mut self) -> Result<u64, NestError> {
-        Ok(u64::from_le_bytes(self.take(8)?.try_into().unwrap()))
+        le_u64(self.take(8)?)
     }
     fn utf8(&mut self) -> Result<String, NestError> {
         let len = self.u32()? as usize;

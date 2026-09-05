@@ -64,7 +64,9 @@ def save_frame(index_path: Path, manifest: dict, source_uri: str, out_dir: Path)
         with Image.open(media_path) as img:
             frame = np.asarray(img.convert("RGB"))
     else:
-        frame = image_decode.decode_frame(media_path, tuple(media["canvas"]), ordinal)
+        frame = image_decode.decode_frame(
+            media_path, tuple(media["canvas"]), ordinal, fps=int(media.get("fps", 1))
+        )
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{ordinal if ordinal is not None else media_path.stem}.png"
     Image.fromarray(frame).save(out_path)

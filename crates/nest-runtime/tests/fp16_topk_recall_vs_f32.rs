@@ -16,6 +16,11 @@
 //! Determinism: `Lcg` from `nest_runtime::ann` is reused so the
 //! corpus is identical to the one in `hnsw_recall.rs`.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -165,7 +170,7 @@ fn fp16_recall_at_10_geq_098_vs_f32() {
         let overlap = ids32.intersection(&ids16).count();
         total_recall += overlap as f64 / k as f64;
 
-        // lScore drift: same chunk_id should score within 1e-3 across dtypes.
+        // Score drift: same chunk_id should score within 1e-3 across dtypes.
         let by_id_32: std::collections::HashMap<&str, f32> = r32
             .hits
             .iter()
@@ -200,7 +205,7 @@ fn fp16_recall_at_10_geq_098_vs_f32() {
         max_drift
     );
 
-    // lCleanup.
+    // Cleanup.
     let _ = std::fs::remove_file(&f32_path);
     let _ = std::fs::remove_file(&f16_path);
 }

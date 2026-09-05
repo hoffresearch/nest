@@ -70,7 +70,7 @@ def decode_frames(
                 raise RuntimeError(f"ffmpeg decode failed: {stderr}")
 
 
-def _read_one_frame(video_path: Path, canvas: tuple[int, int], second: int) -> bytes:
+def _read_one_frame(video_path: Path, canvas: tuple[int, int], second: int | float) -> bytes:
     width, height = canvas
     # fmt: off
     cmd = [
@@ -87,28 +87,32 @@ def _read_one_frame(video_path: Path, canvas: tuple[int, int], second: int) -> b
     return proc.stdout[:expected]
 
 
-def decode_frame(video_path: Path, canvas: tuple[int, int], index: int) -> np.ndarray:
+def decode_frame(video_path: Path, canvas: tuple[int, int], index: int, fps: int = 1) -> np.ndarray:
     """Decode a single frame by ordinal, for read-side hit resolution.
 
-    Input seeking at 1 fps: the ordinal IS the timestamp. Seek lands on the
+    At the default 1 fps the ordinal IS the timestamp. Seek lands on the
     nearest preceding keyframe and decodes forward, which is provably the
     same frame the sequential path returns (asserted in the test suite on
-    both gop and all-intra media).
+    both gop and all-intra media). At fps > 1 the seek target is half a
+    frame period BEFORE the ordinal's pts, so the first frame at-or-after
+    the target is exactly the requested ordinal regardless of pts rounding.
     """
     width, height = canvas
-    raw = _read_one_frame(video_path, canvas, int(index))
+    ts = int(index) if fps <= 1 else (int(index) - 0.499) / fps
+    raw = _read_one_frame(video_path, canvas, ts)
     return np.frombuffer(raw, dtype=np.uint8).reshape(height, width, 3)
 
 
 def decode_frames_at(
-    video_path: Path, canvas: tuple[int, int], ordinals: Sequence[int]
+    video_path: Path, canvas: tuple[int, int], ordinals: Sequence[int], fps: int = 1
 ) -> list[np.ndarray]:
     """Resolve k hit ordinals in ONE ffmpeg invocation.
 
     Seeks to the smallest ordinal and walks forward, capturing the requested
     frames as they pass: worst case decodes `max - min + 1` frames instead of
     `max` (the select scan) or k full keyframe walks (k separate seeks).
-    Frames come back in the order the ordinals were given.
+    Frames come back in the order the ordinals were given. fps > 1 shifts
+    the seek target exactly like `decode_frame`.
     """
     if not ordinals:
         return []
@@ -116,9 +120,10 @@ def decode_frames_at(
     order = sorted(int(o) for o in ordinals)
     first, last = order[0], order[-1]
     wanted = set(order)
+    ts = first if fps <= 1 else (first - 0.499) / fps
     # fmt: off
     cmd = [
-        "ffmpeg", "-v", "error", "-ss", str(first), "-i", str(video_path),
+        "ffmpeg", "-v", "error", "-ss", str(ts), "-i", str(video_path),
         "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
     ]
     # fmt: on

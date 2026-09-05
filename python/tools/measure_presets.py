@@ -175,7 +175,7 @@ def _variant_row(
         "file_hash": db_v.file_hash,
         "content_hash": db_v.content_hash,
     }
-    # lhonest net-of-fp disclosure (machine-checkable). every sub-int8 row is
+    # honest net-of-fp disclosure (machine-checkable). every sub-int8 row is
     # STORED-PRECISION: the 0x09 embeddings_fp writer is not wired, so the
     # net-of-fp ratio equals the stored ratio and the recall is real cosine at
     # the stored precision. surface that explicitly plus the precision axis.
@@ -183,7 +183,7 @@ def _variant_row(
         measurement["stored_precision"] = True
         measurement["has_fp_source"] = False  # 0x09 embeddings_fp slab not emitted
         measurement["net_of_fp_ratio"] = round(size_ratio, 4)
-    # lmatryoshka disclosure: when the stored dim is shorter than the source
+    # matryoshka disclosure: when the stored dim is shorter than the source
     # dim, record both so the dimension lever is visible and a citation is
     # honestly tied to a given mrl_dim. derived from the built file's stride,
     # so it is machine-checkable straight off the published ladder JSON.
@@ -307,7 +307,7 @@ def main():
             f"search_mode={mode}  build={build_time:.1f}s  reused={reused}",
             file=log,
         )
-        # lmatryoshka: the stored vectors are truncated to mrl_dim, so the
+        # matryoshka: the stored vectors are truncated to mrl_dim, so the
         # query must be sliced to the same prefix and re-L2-normalized to
         # match the build-time truncate-then-renormalize. Recall is still
         # measured against the FULL-dim baseline top-k, so the curve is the

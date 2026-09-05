@@ -2,9 +2,21 @@
 //! the dispatcher only calls these after
 //! `is_aarch64_feature_detected!("neon")` returns true (which is
 //! basically always on Apple Silicon and modern ARM cores).
+//!
+//! Every kernel here is `unsafe fn` for two reasons the caller must
+//! discharge: the `target_feature` (neon), and the raw-pointer loads, which
+//! are bounded only by the slice lengths the safe dispatcher in `super`
+//! asserts. The `// SAFETY:` comment on each block names those invariants.
 
+/// # Safety
+///
+/// neon must be available, and `row_bytes.len() == q.len() * 4`.
 #[target_feature(enable = "neon")]
 pub(super) unsafe fn dot_f32_neon(q: &[f32], row_bytes: &[u8]) -> f32 {
+    // SAFETY: `chunks = dim / 4`, so every 4-lane `vld1q_f32` at `i * 4`
+    // ends at or before `dim` floats / `dim * 4` bytes, which the caller
+    // guarantees both slices hold; `vld1q` tolerates any alignment; the
+    // tail is indexed through the bounds-checked slice.
     unsafe {
         use std::arch::aarch64::*;
         let dim = q.len();
@@ -35,10 +47,18 @@ pub(super) unsafe fn dot_f32_neon(q: &[f32], row_bytes: &[u8]) -> f32 {
 // `float16x4_t` / `vcvt_f32_f16` need rustc >= 1.94; cfg(neon_f16) comes from
 // build.rs (see there for the full msrv story). the msrv attribute states the
 // bound the cfg guarantees, keeping `incompatible_msrv` live for newer APIs.
+/// # Safety
+///
+/// neon must be available, and `row_bytes.len() == q.len() * 2`.
 #[cfg(neon_f16)]
 #[clippy::msrv = "1.94"]
 #[target_feature(enable = "neon")]
 pub(super) unsafe fn dot_f32_f16_neon(q: &[f32], row_bytes: &[u8]) -> f32 {
+    // SAFETY: `chunks = dim / 4`, so every 4-lane u16 load at `i * 4` ends
+    // at or before `dim` halfs / `dim * 2` bytes and every f32 load inside
+    // `q`; the `transmute` reinterprets a `uint16x4_t` as `float16x4_t`,
+    // two 64-bit vector types of identical size and layout (IEEE binary16
+    // bit patterns, which is what `half::f16` writes).
     unsafe {
         // NEON has fcvtl to widen f16 -> f32 in groups of 4. Pack 4 lanes per
         // step. half::f16 layout matches IEEE binary16, same as ARM f16.
@@ -68,11 +88,17 @@ pub(super) unsafe fn dot_f32_f16_neon(q: &[f32], row_bytes: &[u8]) -> f32 {
 
 /// Fused dequant + dot for int4 block-`block` codes. NEON unpacks the
 /// nibbles 16-at-a-time (vqtbl-free: shift+mask+sign-extend on i8 lanes)
-/// into an f32 scratch row, then runs the IDENTICAL per-group scalar
-/// reduction `super::scalar::dot_f32_i4_blocked` over it. Decoding the
-/// nibbles is the win; the reduction stays scalar so the result is
-/// bit-for-bit equal to the scalar backend (float add is not associative,
-/// so a lane-parallel reduction would diverge in the last ulp).
+/// into the caller's f32 `scratch` row (no allocation per call), then runs
+/// the IDENTICAL per-group scalar reduction
+/// `super::scalar::dot_f32_i4_blocked` over it. Decoding the nibbles is
+/// the win; the reduction stays scalar so the result is bit-for-bit equal
+/// to the scalar backend (float add is not associative, so a lane-parallel
+/// reduction would diverge in the last ulp).
+///
+/// # Safety
+///
+/// neon must be available; `q.len() == scratch.len() == dim`,
+/// `codes.len() == dim / 2`, `group_scales.len() == dim / block`.
 #[target_feature(enable = "neon")]
 pub(super) unsafe fn dot_f32_i4_neon(
     q: &[f32],
@@ -80,12 +106,17 @@ pub(super) unsafe fn dot_f32_i4_neon(
     group_scales: &[f32],
     dim: usize,
     block: usize,
+    scratch: &mut [f32],
 ) -> f32 {
+    // SAFETY: `chunks = (dim/2) / 16`, so each 16-byte `vld1q_u8` at
+    // `c * 16` ends at or before `dim / 2 == codes.len()`, and the two
+    // 16-lane stores it feeds cover `scratch[c*32 .. c*32+32]`, which ends
+    // at or before `dim == scratch.len()` (the store helper is handed a
+    // sub-slice and asserts its length). The tail loop is bounds-checked.
     unsafe {
         use std::arch::aarch64::*;
         // Unpack `dim` nibbles into f32 lanes. Process 16 packed bytes (32
         // nibbles) per step. Low nibble of byte k -> lane 2k, high -> 2k+1.
-        let mut scratch = vec![0.0f32; dim];
         let nbytes = dim / 2;
         let chunks = nbytes / 16;
         let lo_mask = vdupq_n_s8(0x0F);
@@ -112,13 +143,20 @@ pub(super) unsafe fn dot_f32_i4_neon(
             };
             scratch[idx] = s as f32;
         }
-        dot_scratch_blocked(q, &scratch, group_scales, dim, block)
+        dot_scratch_blocked(q, scratch, group_scales, dim, block)
     }
 }
 
 /// Widen an i8x16 vector to four f32x4 and store into `out[..16]`.
+///
+/// # Safety
+///
+/// neon must be available and `out.len() >= 16`.
 #[target_feature(enable = "neon")]
 unsafe fn store_s8x16_as_f32(v: std::arch::aarch64::int8x16_t, out: &mut [f32]) {
+    assert!(out.len() >= 16, "store_s8x16_as_f32: need 16 lanes");
+    // SAFETY: the assert above guarantees the four 4-lane `vst1q_f32`
+    // writes (`out[0..16]`) stay inside `out`; unaligned stores.
     unsafe {
         use std::arch::aarch64::*;
         let lo16 = vmovl_s8(vget_low_s8(v));
@@ -157,8 +195,15 @@ fn dot_scratch_blocked(
     acc
 }
 
+/// # Safety
+///
+/// neon must be available, and `row.len() == q.len()`.
 #[target_feature(enable = "neon")]
 pub(super) unsafe fn dot_f32_i8_neon(q: &[f32], row: &[i8]) -> f32 {
+    // SAFETY: `chunks = dim / 8`, so every 8-byte `vld1_s8` of `row` and
+    // the two 4-lane loads of `q` at `i * 8` / `i * 8 + 4` end at or before
+    // `dim`, which both slices hold by the caller's contract; the tail is
+    // bounds-checked.
     unsafe {
         use std::arch::aarch64::*;
         let dim = q.len();

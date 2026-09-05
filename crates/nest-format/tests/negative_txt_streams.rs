@@ -11,6 +11,11 @@
 //!   [9+T..]    N zstd streams
 //! ```
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::layout::SECTION_ENCODING_TXT_STREAMS;
 use nest_format::{
     NestError, TXT_STREAMS_V1, decode_payload, decode_txt_streams, encode_txt_streams,

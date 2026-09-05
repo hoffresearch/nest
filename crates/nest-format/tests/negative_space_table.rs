@@ -3,6 +3,11 @@
 //! negative_blob_refs discipline). plus an exhaustive prefix-truncation
 //! fuzz.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::{NestError, SPACE_DTYPE_F32, SpaceEntry, decode_space_table, encode_space_table};
 
 fn good_entries() -> Vec<SpaceEntry> {

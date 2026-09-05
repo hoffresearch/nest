@@ -3,6 +3,7 @@
 use std::borrow::Cow;
 
 use super::NestView;
+use crate::bytes::le_u64;
 use crate::encoding::{decode_dedup_map, decode_payload, decode_payload_with_dict, expand_dedup};
 use crate::error::NestError;
 use crate::layout::{
@@ -14,11 +15,11 @@ use crate::sections::{
 };
 
 impl<'a> NestView<'a> {
-    /// lLogical (decoded) bytes of a section's payload. Borrows for raw
+    /// Logical (decoded) bytes of a section's payload. Borrows for raw
     /// encoding; copies for zstd. Float16/int8 embedding payloads are
     /// returned as-is — the runtime dispatches on `manifest.dtype`.
     ///
-    /// lThe chunks_canonical (0x02) section gets two extra, content_hash-
+    /// The chunks_canonical (0x02) section gets two extra, content_hash-
     /// invariant rewrites here so its decoded bytes are byte-identical to a
     /// plain build: a dict-framed (`zstd_dict`, id 5) payload is decoded
     /// against the shared dictionary in section 0x0A, and a deduped pool is
@@ -32,7 +33,7 @@ impl<'a> NestView<'a> {
         self.decoded_section_plain(section_id)
     }
 
-    /// lDecode a section that needs no dict/dedup context (everything but
+    /// Decode a section that needs no dict/dedup context (everything but
     /// chunks_canonical, which `decoded_section` special-cases).
     fn decoded_section_plain(&self, section_id: u32) -> crate::Result<Cow<'a, [u8]>> {
         let entry = self.entry(section_id)?;
@@ -40,7 +41,7 @@ impl<'a> NestView<'a> {
         decode_payload(entry.encoding, phys).map_err(|e| Self::tag_err(section_id, e))
     }
 
-    /// lDecode chunks_canonical with dict (0x0A) + dedup (0x0B) awareness,
+    /// Decode chunks_canonical with dict (0x0A) + dedup (0x0B) awareness,
     /// rebuilding the byte-identical canonical payload a plain build emits.
     fn decoded_chunks_canonical(&self) -> crate::Result<Cow<'a, [u8]>> {
         let entry = self.entry(SECTION_CHUNKS_CANONICAL)?;
@@ -82,7 +83,7 @@ impl<'a> NestView<'a> {
         }
     }
 
-    /// lDecode the `search_contract` section. Already validated to agree
+    /// Decode the `search_contract` section. Already validated to agree
     /// with the manifest at construction time.
     pub fn search_contract(&self) -> crate::Result<SearchContract> {
         let bytes = self.decoded_section(SECTION_SEARCH_CONTRACT)?;
@@ -100,9 +101,9 @@ impl<'a> NestView<'a> {
     /// (see `CANONICAL_SECTIONS`). Hashes the **decoded** bytes so two
     /// files that wire-compress the same logical content (zstd vs raw)
     /// produce the same content_hash and therefore stable citations.
-    /// lQuantized embeddings (float16 / int8) hash their on-disk bytes —
+    /// Quantized embeddings (float16 / int8) hash their on-disk bytes —
     /// they're already the canonical representation for that precision.
-    /// lOptional sections (HNSW, BM25, and every reserved 0x09+ section) are
+    /// Optional sections (HNSW, BM25, and every reserved 0x09+ section) are
     /// NOT included, and neither is the manifest: the manifest is covered by
     /// file_hash only. So additive manifest fields (a new Option field, a
     /// `capabilities_ext` flag) move file_hash but NEVER content_hash, which
@@ -112,7 +113,7 @@ impl<'a> NestView<'a> {
         let mut h = Sha256::new();
         for (id, name) in CANONICAL_SECTIONS {
             let bytes = self.decoded_section(*id)?;
-            // lDomain-separate by name length + name bytes so hashes for
+            // Domain-separate by name length + name bytes so hashes for
             // different sections cannot collide via concatenation.
             h.update((name.len() as u32).to_le_bytes());
             h.update(name.as_bytes());
@@ -133,5 +134,5 @@ fn count_prefix(payload: &[u8]) -> crate::Result<usize> {
             reason: "chunks_canonical: truncated count prefix".into(),
         });
     }
-    Ok(u64::from_le_bytes(payload[4..12].try_into().unwrap()) as usize)
+    Ok(le_u64(&payload[4..12])? as usize)
 }

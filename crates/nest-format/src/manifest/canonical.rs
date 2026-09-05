@@ -8,7 +8,7 @@ use crate::error::NestError;
 use serde::Serialize;
 
 impl Manifest {
-    /// lSerialize the manifest to canonical JSON: declaration order for the
+    /// Serialize the manifest to canonical JSON: declaration order for the
     /// known fields, BTreeMap order for `extra`, no whitespace.
     pub fn to_canonical_json(&self) -> crate::Result<Vec<u8>> {
         let mut buf = Vec::new();

@@ -18,21 +18,22 @@
 //! PRECISION (disclosed via the dtype). It never zstds/shuffles, so the
 //! runtime scores it off mmap with the fused dequant+dot kernel.
 
+use crate::bytes::le_u32;
 use crate::error::NestError;
 
 pub const INT4_PAYLOAD_VERSION: u32 = 1;
 pub const INT4_SCALE_KIND_PER_GROUP: u32 = 1;
 pub const INT4_PREFIX_SIZE: usize = 8;
-/// lBlock size for the per-group absmax scale. `dim` must be a multiple.
+/// Block size for the per-group absmax scale. `dim` must be a multiple.
 pub const INT4_BLOCK: usize = 64;
 
-/// lNumber of 64-dim blocks per row. `dim` must be divisible by `INT4_BLOCK`.
+/// Number of 64-dim blocks per row. `dim` must be divisible by `INT4_BLOCK`.
 #[inline]
 pub fn int4_blocks_per_row(dim: usize) -> usize {
     dim / INT4_BLOCK
 }
 
-/// lQuantize one L2-normalized f32 row to int4 with per-64-block absmax
+/// Quantize one L2-normalized f32 row to int4 with per-64-block absmax
 /// scales. Returns `(scales, codes)` where `scales[g]` is the f16 absmax
 /// scale of block `g` and `codes[j]` in `[-7, 7]` reconstructs as
 /// `codes[j] as f32 * scales[j / 64]`. Mirrors `quantize_f32_to_i8` but per
@@ -44,7 +45,7 @@ pub fn quantize_f32_to_i4(values: &[f32], dim: usize) -> (Vec<half::f16>, Vec<i8
     for g in 0..blocks {
         let blk = &values[g * INT4_BLOCK..(g + 1) * INT4_BLOCK];
         let max_abs = blk.iter().fold(0.0f32, |acc, &v| acc.max(v.abs()));
-        // lQuantize against the f16-rounded scale so the codes match the
+        // Quantize against the f16-rounded scale so the codes match the
         // stored (f16) scale the reader sees, keeping round-trip tight.
         let scale_f16 = half::f16::from_f32(if max_abs == 0.0 { 1.0 } else { max_abs / 7.0 });
         let scale = scale_f16.to_f32();
@@ -58,7 +59,7 @@ pub fn quantize_f32_to_i4(values: &[f32], dim: usize) -> (Vec<half::f16>, Vec<i8
     (scales, codes)
 }
 
-/// lPack signed 4-bit codes (`[-7, 7]`) into bytes, two nibbles per byte,
+/// Pack signed 4-bit codes (`[-7, 7]`) into bytes, two nibbles per byte,
 /// low nibble first. The nibble is the two's-complement low 4 bits, so
 /// `-7..=7` maps to `0x9..=0x7` and unpacks back exactly via sign extension.
 #[inline]
@@ -72,7 +73,7 @@ pub fn pack_nibbles(codes: &[i8]) -> Vec<u8> {
     out
 }
 
-/// lSign-extend a 4-bit nibble (low 4 bits of `b`) to an `i8` in `[-8, 7]`.
+/// Sign-extend a 4-bit nibble (low 4 bits of `b`) to an `i8` in `[-8, 7]`.
 #[inline]
 pub fn nibble_to_i4(b: u8) -> i8 {
     let n = b & 0x0F;
@@ -83,7 +84,7 @@ pub fn nibble_to_i4(b: u8) -> i8 {
     }
 }
 
-/// lEncode the int4 embeddings section payload. `embeddings` is `n * dim`
+/// Encode the int4 embeddings section payload. `embeddings` is `n * dim`
 /// row-major f32; `dim` must be divisible by `INT4_BLOCK`.
 pub fn encode_int4_embeddings(embeddings: &[f32], n: usize, dim: usize) -> crate::Result<Vec<u8>> {
     if dim == 0 || dim % INT4_BLOCK != 0 {
@@ -116,12 +117,12 @@ pub fn encode_int4_embeddings(embeddings: &[f32], n: usize, dim: usize) -> crate
     Ok(out)
 }
 
-/// lDecoded view over an int4 embeddings payload. Slices borrow the input
+/// Decoded view over an int4 embeddings payload. Slices borrow the input
 /// bytes (no copy); accessors decode scales/codes on demand.
 pub struct Int4EmbeddingsView<'a> {
-    /// lf16 LE group scales, `n * blocks` of them, row-major.
+    /// f16 LE group scales, `n * blocks` of them, row-major.
     pub scales: &'a [u8],
-    /// lpacked nibble codes, `n * dim/2` bytes.
+    /// packed nibble codes, `n * dim/2` bytes.
     pub codes: &'a [u8],
     pub n: usize,
     pub dim: usize,
@@ -137,21 +138,23 @@ impl<'a> Int4EmbeddingsView<'a> {
             });
         }
         let blocks = int4_blocks_per_row(dim);
-        let want = INT4_PREFIX_SIZE + n * blocks * 2 + n * dim / 2;
+        // checked: `n` / `dim` are header-controlled; an overflowed product
+        // must be a typed mismatch, never a wrapped "match".
+        let want = super::expected_embeddings_size("int4", n, dim).unwrap_or(usize::MAX);
         if bytes.len() != want {
             return Err(NestError::EmbeddingSizeMismatch {
                 expected: want,
                 got: bytes.len(),
             });
         }
-        let version = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
+        let version = le_u32(&bytes[0..4])?;
         if version != INT4_PAYLOAD_VERSION {
             return Err(NestError::UnsupportedSectionVersion {
                 section_id: crate::layout::SECTION_EMBEDDINGS,
                 version,
             });
         }
-        let kind = u32::from_le_bytes(bytes[4..8].try_into().unwrap());
+        let kind = le_u32(&bytes[4..8])?;
         if kind != INT4_SCALE_KIND_PER_GROUP {
             return Err(NestError::MalformedSectionPayload {
                 section_id: crate::layout::SECTION_EMBEDDINGS,
@@ -168,14 +171,14 @@ impl<'a> Int4EmbeddingsView<'a> {
         })
     }
 
-    /// lRead the f16 group scale `g` of row `i` as f32.
+    /// Read the f16 group scale `g` of row `i` as f32.
     #[inline]
     pub fn group_scale(&self, i: usize, g: usize) -> f32 {
         let off = (i * self.blocks + g) * 2;
         half::f16::from_le_bytes([self.scales[off], self.scales[off + 1]]).to_f32()
     }
 
-    /// lBorrow row `i`'s packed nibble bytes (`dim/2` of them).
+    /// Borrow row `i`'s packed nibble bytes (`dim/2` of them).
     #[inline]
     pub fn row_codes(&self, i: usize) -> &'a [u8] {
         let rs = self.dim / 2;
@@ -183,15 +186,31 @@ impl<'a> Int4EmbeddingsView<'a> {
         &self.codes[start..start + rs]
     }
 
-    /// lDecode row `i`'s f16 group scales into a fresh `Vec<f32>` (one per
-    /// 64-dim block). Used by the fused kernel and the packed ANN store.
+    /// Decode row `i`'s f16 group scales into a fresh `Vec<f32>` (one per
+    /// 64-dim block). One-shot use only (the packed ANN store materializes
+    /// every row once); the per-candidate rerank uses `row_scales_into`.
     #[inline]
     pub fn row_scales_f32(&self, i: usize) -> Vec<f32> {
         (0..self.blocks).map(|g| self.group_scale(i, g)).collect()
     }
+
+    /// Decode row `i`'s f16 group scales into a caller-owned buffer of
+    /// exactly `blocks` f32s, so a rerank over thousands of candidates
+    /// reuses one allocation instead of one `Vec` per row.
+    ///
+    /// # Panics
+    ///
+    /// When `out.len() != self.blocks`.
+    #[inline]
+    pub fn row_scales_into(&self, i: usize, out: &mut [f32]) {
+        assert_eq!(out.len(), self.blocks, "int4: one scale slot per block");
+        for (g, slot) in out.iter_mut().enumerate() {
+            *slot = self.group_scale(i, g);
+        }
+    }
 }
 
-// lUnit + round-trip coverage lives in `tests/int4_roundtrip.rs` (pack /
+// Unit + round-trip coverage lives in `tests/int4_roundtrip.rs` (pack /
 // unpack, quantize clamping, the section view, and the typed malformed-
 // payload rejections) so this codec source stays under the 300-line rust
 // src guard. Negative file-level paths live in `tests/negative_int4.rs`.

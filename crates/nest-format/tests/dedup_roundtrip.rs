@@ -4,6 +4,11 @@
 //! original ordered list (the content_hash invariant: re-expanded bytes equal
 //! the non-deduped bytes).
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::encoding::{decode_dedup_map, dedup, encode_dedup_map, expand_dedup};
 use nest_format::sections::encode_chunks_canonical;
 

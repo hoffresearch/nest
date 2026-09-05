@@ -31,20 +31,20 @@ pub const NEST_HEADER_SIZE: usize = 128;
 pub const NEST_SECTION_ENTRY_SIZE: usize = 32;
 pub const NEST_FOOTER_SIZE: usize = 40;
 
-/// lEvery section's `offset` is aligned to this many bytes. Padding
+/// Every section's `offset` is aligned to this many bytes. Padding
 /// before each section is zero and is NOT covered by the section's
 /// checksum. Chosen to match common SIMD widths so embeddings can be
 /// loaded directly from mmap.
 pub const SECTION_ALIGNMENT: u64 = 64;
 
-/// lRound `n` up to the next multiple of `a`. `a` must be a power of two.
+/// Round `n` up to the next multiple of `a`. `a` must be a power of two.
 #[inline]
 pub fn align_up(n: u64, a: u64) -> u64 {
     debug_assert!(a.is_power_of_two(), "alignment must be a power of two");
     (n + a - 1) & !(a - 1)
 }
 
-/// lSection payload encoding.
+/// Section payload encoding.
 ///
 /// - `0 = raw`: payload is the canonical bytes as the reader consumes them.
 ///   Used for embeddings (float32) and any non-compressed metadata section.
@@ -64,7 +64,7 @@ pub fn align_up(n: u64, a: u64) -> u64 {
 ///   by the fused dequant+dot kernel (never zstd/shuffle), the first real
 ///   sub-int8 size lever (~2x over int8).
 ///
-/// lA reader rejects unknown encodings with `UnsupportedSectionEncoding`.
+/// A reader rejects unknown encodings with `UnsupportedSectionEncoding`.
 pub const SECTION_ENCODING_RAW: u32 = 0;
 pub const SECTION_ENCODING_ZSTD: u32 = 1;
 pub const SECTION_ENCODING_FLOAT16: u32 = 2;
@@ -81,7 +81,7 @@ pub const SECTION_ENCODING_FRONTCODE: u32 = 6;
 pub const SECTION_ENCODING_INT4: u32 = 7;
 pub const SECTION_ENCODING_RABITQ: u32 = 8;
 pub const SECTION_ENCODING_FSST: u32 = 9;
-/// l`10 = txt_streams`: the chunks_canonical (0x02) section's COMPRESSED
+/// `10 = txt_streams`: the chunks_canonical (0x02) section's COMPRESSED
 /// form re-laid-out from one concatenated zstd-19 blob into N independently
 /// zstd-encoded streams (one per canonical string) behind an intpack offset
 /// table (O(1) single-chunk seek/reopen). decodes BYTE-IDENTICALLY to the
@@ -92,17 +92,17 @@ pub const SECTION_ENCODING_FSST: u32 = 9;
 /// a trained dict/fsst can beat one big zstd-19 blob.
 pub const SECTION_ENCODING_TXT_STREAMS: u32 = 10;
 
-/// lFormat version of the binary layout. Bumped when the on-disk
+/// Format version of the binary layout. Bumped when the on-disk
 /// container changes (header/footer/section table layout).
 pub const NEST_FORMAT_VERSION: u32 = 1;
 
-/// lSchema version of the manifest/contract. Bumped when manifest
+/// Schema version of the manifest/contract. Bumped when manifest
 /// fields or required section semantics change.
 pub const NEST_SCHEMA_VERSION: u32 = 1;
 
-// lLSection IDs. The first six are required (v1 contract); the rest are
-// lLoptional and only present when the manifest's `capabilities` declare
-// lLthem.
+// Section IDs. The first six are required (v1 contract); the rest are
+// optional and only present when the manifest's `capabilities` declare
+// them.
 pub const SECTION_CHUNK_IDS: u32 = 0x01;
 pub const SECTION_CHUNKS_CANONICAL: u32 = 0x02;
 pub const SECTION_CHUNKS_ORIGINAL_SPANS: u32 = 0x03;
@@ -112,12 +112,22 @@ pub const SECTION_SEARCH_CONTRACT: u32 = 0x06;
 pub const SECTION_HNSW_INDEX: u32 = 0x07;
 pub const SECTION_BM25_INDEX: u32 = 0x08;
 
-// reserved additive optional sections. ids 0x09+ are reserved within frozen
-// format v1 (see doc/arc/arc.yaml). all are EXCLUDED from
-// content_hash (which covers the canonical six only), so adding any of them
-// never invalidates a nest:// citation. claimed as named constants; NOT yet
-// emitted or read until each feature ships its section codec and a manifest
-// capability, at which point it joins OPTIONAL_SECTIONS.
+// additive optional sections 0x09-0x10, all EXCLUDED from content_hash
+// (which covers the canonical six only), so adding any of them never
+// invalidates a nest:// citation. status per id:
+//   0x09 embeddings_fp: READ by the runtime rerank (`rerank::FpSlab`) as the
+//        full-precision source for a sub-int8 candidate slab; the writer
+//        does not emit it yet (int4 today reranks at stored precision).
+//   0x0A dictionary:    WRITTEN + READ, the trained zstd dictionary the
+//        `zstd_dict` text codec decodes chunks_canonical against.
+//   0x0B dedup_map:     WRITTEN + READ, the ordinal -> unique-string map the
+//        `dedup` text codec expands to the byte-identical canonical payload.
+//   0x0C graph_adjacency: WRITTEN + READ, in OPTIONAL_SECTIONS below.
+//   0x0D-0x10:          claimed names only, no codec and no manifest
+//        capability yet; a reader rejects them via validate_encoding.
+// 0x0A / 0x0B resolve through the text codec (never by section_name) on
+// purpose: they are private companions of chunks_canonical, not user-facing
+// sections.
 pub const SECTION_EMBEDDINGS_FP: u32 = 0x09;
 pub const SECTION_DICTIONARY: u32 = 0x0A;
 pub const SECTION_DEDUP_MAP: u32 = 0x0B;
@@ -127,13 +137,12 @@ pub const SECTION_TOKENIZER_MODEL: u32 = 0x0E;
 pub const SECTION_EDIT_JOURNAL: u32 = 0x0F;
 pub const SECTION_REPRO_MANIFEST: u32 = 0x10;
 
-// reconciled additive optional sections past 0x10 (see doc/arc/arc.yaml).
-// the four redesign pillars each independently proposed
-// 0x11; this is the single disjoint map that resolves that collision in one
-// pass, BEFORE any feature edits this file. ALL are EXCLUDED from
+// additive optional sections past 0x10 (see doc/arc/arc.yaml), one disjoint
+// map so no two features claim the same id. ALL are EXCLUDED from
 // content_hash, so adding any of them never invalidates a nest:// citation.
-// claimed as named constants; NOT yet emitted or read until each feature
-// ships its section codec and a manifest capability.
+//   0x11-0x13 graph nodes / edge props / entity map: claimed names only.
+//   0x14 blob_refs, 0x15 space_table, 0x16 blob_span_overlay, 0x17
+//   blob_data: WRITTEN + READ, in OPTIONAL_SECTIONS below.
 pub const SECTION_GRAPH_NODES: u32 = 0x11;
 pub const SECTION_GRAPH_EDGE_PROPS: u32 = 0x12;
 pub const SECTION_GRAPH_ENTITY_MAP: u32 = 0x13;
@@ -144,6 +153,11 @@ pub const SECTION_SPACE_TABLE: u32 = 0x15;
 // optional section keyed by chunk ordinal, so self_contained and catalog
 // twins keep the SAME content_hash and old readers still open the file.
 pub const SECTION_BLOB_SPAN_OVERLAY: u32 = 0x16;
+// inlined blob bytes: the self-contained twin of the 0x14 catalog. a small
+// offset table parallel to blob_refs order, then the raw media bytes. RAW
+// (media is already codec-compressed), EXCLUDED from content_hash so the
+// embedded and sidecar twins keep the same citations.
+pub const SECTION_BLOB_DATA: u32 = 0x17;
 
 // per-space vector bands. each non-text embedding space gets one fixed-
 // stride 64-byte-aligned slab in 0x20-0x2F (NEVER zstd, scored by the
@@ -154,7 +168,7 @@ pub const SECTION_SPACE_EMBEDDINGS_BASE: u32 = 0x20;
 pub const SECTION_SPACE_EMBEDDINGS_FP_BASE: u32 = 0x30;
 pub const SPACE_BAND_LEN: u32 = 0x10;
 
-/// lCanonical order for content_hash. Sorted alphabetically by name; this
+/// Canonical order for content_hash. Sorted alphabetically by name; this
 /// order is fixed by spec so adding new section IDs cannot reshuffle the
 /// hash. Keep this list and section IDs in sync.
 pub const CANONICAL_SECTIONS: &[(u32, &str)] = &[
@@ -166,11 +180,11 @@ pub const CANONICAL_SECTIONS: &[(u32, &str)] = &[
     (SECTION_SEARCH_CONTRACT, "search_contract"),
 ];
 
-/// lRequired sections for a v1 .nest file. A reader rejects any file
+/// Required sections for a v1 .nest file. A reader rejects any file
 /// missing one of these with `MissingRequiredSection`.
 pub const REQUIRED_SECTIONS: &[(u32, &str)] = CANONICAL_SECTIONS;
 
-/// lOptional sections — present when their corresponding capability is
+/// Optional sections — present when their corresponding capability is
 /// advertised in the manifest. They do NOT participate in content_hash
 /// (which is over the canonical six only) so adding an optional section
 /// to a corpus does not invalidate citations.
@@ -186,6 +200,8 @@ pub const OPTIONAL_SECTIONS: &[(u32, &str)] = &[
     // self-contained media corpus keeps the content_hash of its text twin.
     (SECTION_BLOB_REFS, "blob_refs"),
     (SECTION_BLOB_SPAN_OVERLAY, "blob_span_overlay"),
+    // blob_data (0x17): inlined media bytes for the self-contained twin.
+    (SECTION_BLOB_DATA, "blob_data"),
     // space_table (0x15): the multimodal per-space directory. resolves via
     // section_name and stays OUT of CANONICAL_SECTIONS; the vector bands it
     // describes (0x20-0x2F / 0x30-0x3F) resolve through the range check in
@@ -210,7 +226,7 @@ pub fn section_name(id: u32) -> Option<&'static str> {
         .map(|(_, name)| *name)
 }
 
-/// lCommon prefix for all internal section payloads (12 bytes):
+/// Common prefix for all internal section payloads (12 bytes):
 ///   u32 version (LE)
 ///   u64 entry_count (LE)
 pub const SECTION_PAYLOAD_PREFIX_SIZE: usize = 12;

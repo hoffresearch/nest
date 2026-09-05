@@ -9,43 +9,10 @@ use anyhow::Result;
 use std::path::PathBuf;
 use std::process::Command as ProcCommand;
 
-/// lResolve python/tools/nest_forge.py: repo layout first, then the
-/// installed data-dir/share layouts (same ladder as the embedder scripts).
+/// Resolve python/tools/nest_forge.py through the one shared script
+/// ladder (repo layout, installed data dir, `<exe>/../share`).
 fn forge_tool_path() -> PathBuf {
-    let rel: PathBuf = ["python", "tools", "nest_forge.py"].iter().collect();
-    let mut bases: Vec<PathBuf> = Vec::new();
-    if let Ok(cwd) = std::env::current_dir() {
-        bases.push(cwd.clone());
-        bases.push(cwd.join(".."));
-    }
-    if let Some(repo) = super::embed_gate::exe_repo_root() {
-        bases.push(repo);
-    }
-    for base in bases {
-        let c = base.join(&rel);
-        if c.exists() {
-            return c;
-        }
-    }
-    let data_home = std::env::var("XDG_DATA_HOME")
-        .ok()
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var("HOME")
-                .ok()
-                .map(|h| PathBuf::from(h).join(".local").join("share"))
-        });
-    let exe_share = std::env::current_exe()
-        .ok()
-        .and_then(|e| e.parent().map(|p| p.to_path_buf()))
-        .map(|bin| bin.join("..").join("share"));
-    for base in [data_home, exe_share].into_iter().flatten() {
-        let c = base.join("nest").join("tools").join("nest_forge.py");
-        if c.exists() {
-            return c;
-        }
-    }
-    rel
+    super::super::embed_gate::installed_script_in("tools", "nest_forge.py")
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -66,7 +33,7 @@ pub fn run(
             tool.display()
         );
     }
-    let interpreter = super::pyenv::resolve_interpreter();
+    let interpreter = super::super::pyenv::resolve_interpreter();
     let mut cmd = ProcCommand::new(interpreter);
     cmd.arg(&tool).arg("--spec").arg(&spec);
     if let Some(n) = sample {

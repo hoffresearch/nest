@@ -32,9 +32,10 @@ pub const REPACK_KIND_CHUNK_IDS: u8 = 0;
 pub const REPACK_KIND_SPANS: u8 = 1;
 
 pub use blob::{
-    BLOB_REF_NONE, BLOB_REFS_PAYLOAD_VERSION, BLOB_SPAN_OVERLAY_PAYLOAD_VERSION, BlobRefRecord,
-    BlobSpanEntry, decode_blob_refs, decode_blob_span_overlay, encode_blob_refs,
-    encode_blob_span_overlay,
+    BLOB_DATA_PAYLOAD_VERSION, BLOB_REF_NONE, BLOB_REFS_PAYLOAD_VERSION,
+    BLOB_SPAN_OVERLAY_PAYLOAD_VERSION, BlobDataTable, BlobRefRecord, BlobSpanEntry,
+    decode_blob_data_table, decode_blob_refs, decode_blob_span_overlay, encode_blob_data,
+    encode_blob_refs, encode_blob_span_overlay,
 };
 pub use canonical::{decode_chunks_canonical, encode_chunks_canonical};
 pub use chunk_ids::{

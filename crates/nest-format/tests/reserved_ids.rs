@@ -33,7 +33,7 @@ fn implemented() -> Vec<u32> {
     ]
 }
 
-/// lReserved scalar ids (0x09..=0x16) that stay unresolved by section_name
+/// Reserved scalar ids (0x09..=0x16) that stay unresolved by section_name
 /// until their feature ships. SECTION_DICTIONARY (0x0A) and SECTION_DEDUP_MAP
 /// (0x0B) are now EMITTED by the dict/dedup text levers, but stay EXCLUDED
 /// from CANONICAL_SECTIONS / content_hash and unresolved by section_name
@@ -91,7 +91,7 @@ fn all_reserved_bands_are_disjoint() {
         "every section id (implemented + reserved + per-space bands) must be disjoint"
     );
 
-    // lThe two per-space bands stay inside their documented ranges.
+    // The two per-space bands stay inside their documented ranges.
     assert!(space_band().iter().all(|&x| (0x20..=0x2F).contains(&x)));
     assert!(space_fp_band().iter().all(|&x| (0x30..=0x3F).contains(&x)));
 }

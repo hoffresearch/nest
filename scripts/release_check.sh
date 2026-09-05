@@ -138,49 +138,11 @@ step "python tests/test_query_embedder_routing.py"
 ok "query embedder routing (4 cases)"
 
 # ---- ruff (best-effort) ----
+# the file list lives in scripts/ruff_check.sh so ci.yml and this gate stay
+# in lockstep; ruff missing from $PY is a skip here, a failure in ci.
 if "$PY" -c "import ruff" 2>/dev/null || "$PY" -m ruff --version 2>/dev/null | head -1 >/dev/null; then
-  step "ruff check / format on the files we own"
-  RUFF_TARGETS=(
-    python/embed_query.py
-    python/model_fingerprint.py
-    python/builder.py
-    python/tools/measure_presets.py
-    python/tools/compare_measure.py
-    python/forge/embed_image.py
-    python/forge/image_items.py
-    python/forge/image_media.py
-    python/forge/image_encode.py
-    python/forge/image_decode.py
-    python/forge/image_backends.py
-    python/forge/image_order.py
-    python/forge/image_corpus.py
-    python/tools/nest_build_image_corpus.py
-    python/tools/nest_search_image.py
-    python/tools/nest_image_eval.py
-    python/tools/_image_metrics.py
-    python/tools/nest_image_sweep.py
-    tests/test_search_text_model_hash.py
-    tests/test_image_corpus.py
-    tests/test_blob_bridge.py
-    tests/test_space_bridge.py
-    python/forge/model_registry.py
-    python/forge/embed_st.py
-    python/forge/build_spec.py
-    python/forge/corpus_sources.py
-    python/forge/forge_pipeline.py
-    python/forge/forge_cache.py
-    python/forge/forge_manifest.py
-    python/forge/quality_gate.py
-    python/forge/embed_query_model.py
-    python/tools/nest_forge.py
-    python/tools/nest_model_bench.py
-    tests/test_forge_spec.py
-    tests/test_quality_gate.py
-    tests/test_cli_space.py
-    tests/test_query_embedder_routing.py
-  )
-  "$PY" -m ruff check "${RUFF_TARGETS[@]}"
-  "$PY" -m ruff format --check "${RUFF_TARGETS[@]}"
+  step "ruff check / format on the files we own (scripts/ruff_check.sh)"
+  NEST_PYTHON="$PY" sh scripts/ruff_check.sh
   ok "ruff clean"
 else
   printf '  skip: ruff not importable in %s\n' "$PY" >&2

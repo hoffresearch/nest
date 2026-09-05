@@ -10,6 +10,11 @@
 //!    chunks_canonical payload, so the content_hash preimage is unchanged
 //!    regardless of which codec the chooser picks.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::encoding::{
     decode_dedup_map, decode_fsst_payload, decode_zstd_dict_payload, dedup, encode_dedup_map,
     encode_fsst, encode_zstd_dict, expand_dedup, train_dict,

@@ -1,9 +1,22 @@
 //! x86_64 AVX2+FMA implementations. Gated by `cfg(target_arch =
 //! "x86_64")`; the dispatcher only calls these after
 //! `is_x86_feature_detected!("avx2")` and `"fma"` both return true.
+//!
+//! Every kernel here is `unsafe fn` for two reasons the caller must
+//! discharge: the `target_feature` (the CPU must have avx2+fma, or the
+//! instructions fault), and the raw-pointer loads, which are bounded only
+//! by the slice lengths the safe dispatcher in `super` asserts. The
+//! `// SAFETY:` comment on each block names exactly those two invariants.
 
+/// # Safety
+///
+/// avx2+fma must be available, and `row_bytes.len() == q.len() * 4`.
 #[target_feature(enable = "avx2,fma")]
 pub(super) unsafe fn dot_f32_avx2(q: &[f32], row_bytes: &[u8]) -> f32 {
+    // SAFETY: `chunks = dim / 8`, so every `add(i * 8)` load reads 8 f32
+    // (32 bytes) that end at or before `dim` floats / `dim * 4` bytes, which
+    // the caller guarantees both slices hold; `loadu` tolerates any
+    // alignment; the tail is indexed through the bounds-checked slice.
     unsafe {
         use std::arch::x86_64::*;
         let dim = q.len();
@@ -32,11 +45,17 @@ pub(super) unsafe fn dot_f32_avx2(q: &[f32], row_bytes: &[u8]) -> f32 {
     }
 }
 
-/// lFused dequant + dot for int4 block-`block` codes. AVX2 unpacks the
-/// nibbles 16 packed bytes (32 nibbles) at a time into an f32 scratch row,
-/// then runs the IDENTICAL per-group scalar reduction over it (float add
-/// is not associative, so a lane-parallel reduction would diverge from the
-/// scalar backend in the last ulp; the win here is the vectorized unpack).
+/// Fused dequant + dot for int4 block-`block` codes. AVX2 unpacks the
+/// nibbles 16 packed bytes (32 nibbles) at a time into the caller's f32
+/// `scratch` row (no allocation per call), then runs the IDENTICAL
+/// per-group scalar reduction over it (float add is not associative, so a
+/// lane-parallel reduction would diverge from the scalar backend in the
+/// last ulp; the win here is the vectorized unpack).
+///
+/// # Safety
+///
+/// avx2+fma must be available; `q.len() == scratch.len() == dim`,
+/// `codes.len() == dim / 2`, `group_scales.len() == dim / block`.
 #[target_feature(enable = "avx2,fma")]
 pub(super) unsafe fn dot_f32_i4_avx2(
     q: &[f32],
@@ -44,21 +63,27 @@ pub(super) unsafe fn dot_f32_i4_avx2(
     group_scales: &[f32],
     dim: usize,
     block: usize,
+    scratch: &mut [f32],
 ) -> f32 {
+    // SAFETY: `chunks = (dim/2) / 16`, so each 16-byte `loadu_si128` at
+    // `c * 16` ends at or before `dim / 2 == codes.len()`, and the two
+    // 16-lane stores it feeds cover `scratch[c*32 .. c*32+32]`, which ends
+    // at or before `dim == scratch.len()` (the store helper is handed a
+    // sub-slice, so a wrong length would fail its own bounds check). The
+    // tail loop uses only bounds-checked slice indexing.
     unsafe {
         use std::arch::x86_64::*;
-        let mut scratch = vec![0.0f32; dim];
         let nbytes = dim / 2;
         let chunks = nbytes / 16;
         let lo_mask = _mm_set1_epi8(0x0F);
         for c in 0..chunks {
             let packed = _mm_loadu_si128(codes.as_ptr().add(c * 16) as *const __m128i);
-            // llow nibbles: mask -> shift left 4 -> arithmetic shift right 4.
+            // low nibbles: mask -> shift left 4 -> arithmetic shift right 4.
             let lo_masked = _mm_and_si128(packed, lo_mask);
             let lo = mm_srai_epi8_4(_mm_slli_epi16(lo_masked, 4));
-            // lhigh nibbles: arithmetic shift right by 4 (sign-extends bit 7).
+            // high nibbles: arithmetic shift right by 4 (sign-extends bit 7).
             let hi = mm_srai_epi8_4(packed);
-            // linterleave lo/hi so component order is lo0,hi0,lo1,hi1,...
+            // interleave lo/hi so component order is lo0,hi0,lo1,hi1,...
             let lo_part = _mm_unpacklo_epi8(lo, hi); // components 0..16
             let hi_part = _mm_unpackhi_epi8(lo, hi); // components 16..32
             store_i8x16_as_f32(lo_part, &mut scratch[c * 32..]);
@@ -75,12 +100,16 @@ pub(super) unsafe fn dot_f32_i4_avx2(
             };
             scratch[idx] = s as f32;
         }
-        dot_scratch_blocked(q, &scratch, group_scales, dim, block)
+        dot_scratch_blocked(q, scratch, group_scales, dim, block)
     }
 }
 
-/// lArithmetic shift right by 4 on packed i8 lanes (AVX2 has no epi8 SRA),
+/// Arithmetic shift right by 4 on packed i8 lanes (AVX2 has no epi8 SRA),
 /// emulated via the epi16 SRA plus a byte-wise blend of even/odd lanes.
+///
+/// # Safety
+///
+/// avx2 must be available. Pure register arithmetic, no memory access.
 #[target_feature(enable = "avx2,fma")]
 // This body is pure register-only intrinsics (no memory I/O). On our MSRV
 // (1.85) those are `unsafe` and the block is required under edition 2024's
@@ -89,16 +118,18 @@ pub(super) unsafe fn dot_f32_i4_avx2(
 // the lint so the same source compiles clean on both.
 #[allow(unused_unsafe)]
 unsafe fn mm_srai_epi8_4(v: std::arch::x86_64::__m128i) -> std::arch::x86_64::__m128i {
+    // SAFETY: register-only intrinsics; the only requirement is the target
+    // feature, which the caller's own `target_feature` guarantees.
     unsafe {
         use std::arch::x86_64::*;
-        // lshift each 16-bit lane right by 4 arithmetically: this is correct
+        // shift each 16-bit lane right by 4 arithmetically: this is correct
         // for the HIGH byte of each pair; the LOW byte gets the high byte's
         // low bits shifted in, so mask it out and recompute the low byte
         // from a separately-shifted copy.
         let sra16 = _mm_srai_epi16(v, 4);
-        // lhigh bytes (odd lanes) are now correct; keep them.
+        // high bytes (odd lanes) are now correct; keep them.
         let hi_bytes = _mm_and_si128(sra16, _mm_set1_epi16(0xFF00u16 as i16));
-        // lfor low bytes: shift the byte into the high half of its 16-bit
+        // for low bytes: shift the byte into the high half of its 16-bit
         // lane first (<<8), SRA by 4, then SRA the result back down 8, so the
         // low byte is arithmetically shifted in isolation.
         let lo16 = _mm_srai_epi16(_mm_srai_epi16(_mm_slli_epi16(v, 8), 4), 8);
@@ -107,9 +138,16 @@ unsafe fn mm_srai_epi8_4(v: std::arch::x86_64::__m128i) -> std::arch::x86_64::__
     }
 }
 
-/// lWiden an i8x16 vector to f32 and store into `out[..16]`.
+/// Widen an i8x16 vector to f32 and store into `out[..16]`.
+///
+/// # Safety
+///
+/// avx2 must be available and `out.len() >= 16`.
 #[target_feature(enable = "avx2,fma")]
 unsafe fn store_i8x16_as_f32(v: std::arch::x86_64::__m128i, out: &mut [f32]) {
+    assert!(out.len() >= 16, "store_i8x16_as_f32: need 16 lanes");
+    // SAFETY: the assert above guarantees the two 8-lane `storeu` writes
+    // (`out[0..8]` and `out[8..16]`) stay inside `out`; unaligned stores.
     unsafe {
         use std::arch::x86_64::*;
         let lo = _mm256_cvtepi8_epi32(v);
@@ -119,7 +157,7 @@ unsafe fn store_i8x16_as_f32(v: std::arch::x86_64::__m128i, out: &mut [f32]) {
     }
 }
 
-/// lPer-group reduction over an already-dequantized f32 scratch row,
+/// Per-group reduction over an already-dequantized f32 scratch row,
 /// matching `scalar::dot_f32_i4_blocked` operation-for-operation.
 #[inline]
 fn dot_scratch_blocked(
@@ -142,8 +180,14 @@ fn dot_scratch_blocked(
     acc
 }
 
+/// # Safety
+///
+/// avx2+fma must be available, and `row.len() == q.len()`.
 #[target_feature(enable = "avx2,fma")]
 pub(super) unsafe fn dot_f32_i8_avx2(q: &[f32], row: &[i8]) -> f32 {
+    // SAFETY: `chunks = dim / 8`, so every 8-byte `read_unaligned` of `row`
+    // and 8-lane `loadu` of `q` at `i * 8` ends at or before `dim`, which
+    // both slices hold by the caller's contract; the tail is bounds-checked.
     unsafe {
         use std::arch::x86_64::*;
         let dim = q.len();

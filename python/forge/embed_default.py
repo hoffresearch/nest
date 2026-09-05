@@ -29,8 +29,8 @@ from collections.abc import Sequence
 MODEL_ID = "nest-forge-static"
 STATIC_EMBEDDER_VERSION = "1"
 DEFAULT_DIM = 256
-# lthe seed is part of the fingerprint: changing it changes the model_hash, so
-# ltwo corpora built with different seeds are never silently confused.
+# the seed is part of the fingerprint: changing it changes the model_hash, so
+# two corpora built with different seeds are never silently confused.
 DEFAULT_SEED = "nest-forge-static/v1"
 
 
@@ -79,8 +79,8 @@ def embed_one(text: str, dim: int = DEFAULT_DIM, seed: str = DEFAULT_SEED) -> li
     """lEmbed one text: l2-normalized mean of its token vectors, f32-stable."""
     tokens = _tokenize(text)
     if not tokens:
-        # ldeterministic non-zero fallback for text with no alphanumerics, so
-        # lthe runtime's zero-norm guard never trips on a built chunk.
+        # deterministic non-zero fallback for text with no alphanumerics, so
+        # the runtime's zero-norm guard never trips on a built chunk.
         tokens = ["\x00empty"]
     acc = [0.0] * dim
     for tok in tokens:

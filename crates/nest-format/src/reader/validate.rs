@@ -29,7 +29,7 @@ impl NestView<'_> {
         let n = self.header.n_embeddings as usize;
         let dtype = self.manifest.dtype.as_str();
 
-        // lEncoding/dtype consistency: float16 dtype implies float16 encoding,
+        // Encoding/dtype consistency: float16 dtype implies float16 encoding,
         // int8 dtype implies int8 encoding, int4 dtype implies int4 encoding,
         // float32 dtype implies raw or zstd (zstd on embeddings is rejected
         // separately by validate_encoding_for_section).
@@ -48,7 +48,9 @@ impl NestView<'_> {
         }
 
         let want = expected_embeddings_size(dtype, n, dim).ok_or_else(|| {
-            NestError::UnsupportedDType(format!("unknown embeddings dtype: {}", dtype))
+            NestError::UnsupportedDType(format!(
+                "unknown embeddings dtype {dtype}, or n={n} x dim={dim} overflows"
+            ))
         })?;
         let got = entry.size as usize;
         if got != want {
@@ -60,7 +62,7 @@ impl NestView<'_> {
         Ok(())
     }
 
-    /// lWhen a space_table (0x15) is present, every listed space must have
+    /// When a space_table (0x15) is present, every listed space must have
     /// its band section (0x20 + space_index) present with exactly the size
     /// its (n_vectors, dim, dtype) imply, and n_vectors must match the
     /// corpus chunk count (the bands are parallel per-chunk embeddings).
@@ -142,75 +144,74 @@ impl NestView<'_> {
         Ok(())
     }
 
-    /// lWalk the embeddings section and reject any NaN/Inf value. Works
+    /// Walk the embeddings section and reject any NaN/Inf value. Works
     /// for all supported dtypes.
     pub fn validate_embeddings_values(&self) -> crate::Result<()> {
         self.validate_embeddings_layout()?;
         let entry = self.entry(SECTION_EMBEDDINGS)?;
         let data = self.get_section_data(SECTION_EMBEDDINGS)?;
-        match entry.encoding {
-            SECTION_ENCODING_RAW => {
-                for chunk in data.chunks_exact(4) {
-                    let v = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                    if v.is_nan() || v.is_infinite() {
-                        return Err(NestError::InvalidEmbeddingValue);
-                    }
-                }
-            }
-            SECTION_ENCODING_FLOAT16 => {
-                for chunk in data.chunks_exact(2) {
-                    let h = half::f16::from_le_bytes([chunk[0], chunk[1]]);
-                    let v = h.to_f32();
-                    if v.is_nan() || v.is_infinite() {
-                        return Err(NestError::InvalidEmbeddingValue);
-                    }
-                }
-            }
-            SECTION_ENCODING_INT8 => {
-                // i8 cannot encode NaN/Inf; only the per-vector scales
-                // could be NaN/Inf. Decode the int8 prefix and check.
-                let n = self.header.n_embeddings as usize;
-                let dim = self.header.embedding_dim as usize;
-                let view = Int8EmbeddingsView::parse(data, n, dim)?;
-                for i in 0..view.n {
-                    let s = view.scale(i);
-                    if s.is_nan() || s.is_infinite() {
-                        return Err(NestError::InvalidEmbeddingValue);
-                    }
-                }
-            }
-            SECTION_ENCODING_INT4 => {
-                // 4-bit codes cannot encode NaN/Inf; only the per-group f16
-                // absmax scales could. Decode the int4 prefix and check
-                // every group scale of every row.
-                let n = self.header.n_embeddings as usize;
-                let dim = self.header.embedding_dim as usize;
-                let view = Int4EmbeddingsView::parse(data, n, dim)?;
-                for i in 0..view.n {
-                    for g in 0..view.blocks {
-                        let s = view.group_scale(i, g);
-                        if s.is_nan() || s.is_infinite() {
-                            return Err(NestError::InvalidEmbeddingValue);
-                        }
-                    }
-                }
-            }
-            other => {
-                return Err(NestError::UnsupportedSectionEncoding {
-                    section_id: SECTION_EMBEDDINGS,
-                    encoding: other,
-                });
-            }
-        }
-        Ok(())
+        let n = self.header.n_embeddings as usize;
+        let dim = self.header.embedding_dim as usize;
+        validate_slab_values(entry.encoding, data, n, dim)
     }
 }
 
-/// lEncoding rules: the embeddings section gets dtype-specific encodings
+/// Reject any NaN/Inf in a fixed-stride vector slab of the given section
+/// encoding (raw f32, float16, int8, int4). The canonical embeddings, the
+/// `embeddings_fp` rerank slab and every multimodal band go through this
+/// before a kernel ever scores them: a NaN lane would turn a cosine into a
+/// NaN score, and a NaN score is what breaks a ranking (found by the
+/// mutation fuzz harness through the space bands).
+pub fn validate_slab_values(encoding: u32, data: &[u8], n: usize, dim: usize) -> crate::Result<()> {
+    match encoding {
+        SECTION_ENCODING_RAW => {
+            for chunk in data.chunks_exact(4) {
+                let v = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                if !v.is_finite() {
+                    return Err(NestError::InvalidEmbeddingValue);
+                }
+            }
+        }
+        SECTION_ENCODING_FLOAT16 => {
+            for chunk in data.chunks_exact(2) {
+                let v = half::f16::from_le_bytes([chunk[0], chunk[1]]).to_f32();
+                if !v.is_finite() {
+                    return Err(NestError::InvalidEmbeddingValue);
+                }
+            }
+        }
+        SECTION_ENCODING_INT8 => {
+            // i8 cannot encode NaN/Inf; only the per-vector scales could.
+            let view = Int8EmbeddingsView::parse(data, n, dim)?;
+            if (0..view.n).any(|i| !view.scale(i).is_finite()) {
+                return Err(NestError::InvalidEmbeddingValue);
+            }
+        }
+        SECTION_ENCODING_INT4 => {
+            // 4-bit codes cannot encode NaN/Inf; only the per-group f16
+            // absmax scales could.
+            let view = Int4EmbeddingsView::parse(data, n, dim)?;
+            for i in 0..view.n {
+                if (0..view.blocks).any(|g| !view.group_scale(i, g).is_finite()) {
+                    return Err(NestError::InvalidEmbeddingValue);
+                }
+            }
+        }
+        other => {
+            return Err(NestError::UnsupportedSectionEncoding {
+                section_id: SECTION_EMBEDDINGS,
+                encoding: other,
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Encoding rules: the embeddings section gets dtype-specific encodings
 /// (float16, int8, int4) and rejects zstd (we want SIMD-friendly mmap
 /// reads). the per-space vector bands (0x20-0x2F and the fp rerank band
 /// 0x30-0x3F) follow the SAME rule: fixed-stride slabs scored by the simd
-/// kernels, NEVER zstd. lAll other sections accept raw, zstd, intpack (the
+/// kernels, NEVER zstd. All other sections accept raw, zstd, intpack (the
 /// content_hash-preserving repack for chunk_ids / spans), txt_streams (the
 /// per-chunk-streams repack for chunks_canonical), zstd_dict (the
 /// trained-dictionary per-chunk-streams variant, decoded against section
