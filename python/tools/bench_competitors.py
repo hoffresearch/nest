@@ -204,22 +204,46 @@ def main() -> None:
         f"--queries {args.queries}`."
     )
     notes = [
-        "- `cold open + 1st query`: wall time of a fresh interpreter that opens the store and "
-        "answers one query, minus an interpreter doing nothing (3 runs, min). nest's number is "
-        "dominated by `open` verifying every section checksum and the footer hash over the whole "
-        "file before serving anything; the other stores trust their bytes.",
-        "- `build (s)`: single-threaded everywhere (hnswlib and usearch are told threads=1); "
-        "nest's hnsw build is the slow row, tracked as doc/hardening-plan.md item 4.11.",
-        "- `p50 / p99`: warm, single-threaded, one query at a time, from python. python call "
-        "overhead is inside every number.",
+        "".join(
+            [
+                "- `cold open + 1st query`: wall time of a fresh interpreter that opens the store and ",
+                "answers one query, minus an interpreter doing nothing (3 runs, min). nest's number is ",
+                "dominated by `open` verifying every section checksum and the footer hash over the whole ",
+                "file before serving anything; the other stores trust their bytes.",
+            ]
+        ),
+        "".join(
+            [
+                "- `build (s)`: single-threaded everywhere (hnswlib and usearch are told threads=1); ",
+                "nest's hnsw build is the slow row, tracked as doc/hardening-plan.md item 4.11.",
+            ]
+        ),
+        "".join(
+            [
+                "- `p50 / p99`: warm, single-threaded, one query at a time, from python. python call ",
+                "overhead is inside every number.",
+            ]
+        ),
         "- `recall@k` is against brute force over the same rows; exact paths are asserted at 1.0.",
-        "- `rebuild byte-identical`: two builds from the same rows compared by sha256 over the "
-        "artefact (a directory is hashed file by file).",
-        "- `integrity check`: whether the store can prove its own bytes. nest verifies sha256 per "
-        "section, per file and over the decoded content on `validate()`.",
-        f"- the same rows written with raw text and with zstd text share one `content_hash`: "
-        f"{same_citation}. re-encoding never moves a `nest://content_hash/chunk_id` citation; "
-        "the other stores have no equivalent notion.",
+        "".join(
+            [
+                "- `rebuild byte-identical`: two builds from the same rows compared by sha256 over the ",
+                "artefact (a directory is hashed file by file).",
+            ]
+        ),
+        "".join(
+            [
+                "- `integrity check`: whether the store can prove its own bytes. nest verifies sha256 per ",
+                "section, per file and over the decoded content on `validate()`.",
+            ]
+        ),
+        "".join(
+            [
+                "- the same rows written with raw text and with zstd text share one `content_hash`: ",
+                f"{same_citation}. re-encoding never moves a `nest://content_hash/chunk_id` citation; ",
+                "the other stores have no equivalent notion.",
+            ]
+        ),
     ]
     limits = (
         "what nest does NOT do that some of these do: in-place updates or deletes, metadata "
