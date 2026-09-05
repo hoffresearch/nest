@@ -26,7 +26,7 @@ from pathlib import Path
 
 import numpy as np
 
-# lfiles beyond the weights that change inference when they change: the
+# files beyond the weights that change inference when they change: the
 # remote code itself and the chat/processor configs it reads.
 REMOTE_CODE_GLOBS = ("modeling_*.py", "*chat_template*.jinja", "processor_config.json")
 

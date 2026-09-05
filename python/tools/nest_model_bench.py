@@ -13,7 +13,7 @@
       expected/negative ids (hit@k, MRR, negative leakage).
 
 Usage:
-  nest_model_bench.py --index out/spellbook/spellbook.nest -k 1 5 10
+  nest_model_bench.py --index out/mtgdataset/mtgdataset.nest -k 1 5 10
       [--queries 100] [--seed 42] [--text-query-template "artwork of {label}"]
       [--queries-file q.json] [--out bench.json]
 """
@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -55,9 +56,14 @@ def image_spaces(manifest: dict) -> dict[str, list[dict]]:
 def make_adapter(manifest: dict, preset: str):
     meta = manifest["models"][preset]
     recipe = meta.get("recipe", {})
+    # N11: a manifest is data, never an authorization. remote-code presets
+    # need the same explicit opt-in the query path uses.
+    allowed = frozenset(
+        p.strip() for p in os.environ.get("NEST_ALLOW_REMOTE_CODE", "").split(",") if p.strip()
+    )
     return model_registry.create_embedder(
         preset,
-        allow_remote_code=frozenset(manifest["models"].keys()),
+        allow_remote_code=allowed,
         allow_heavy=True,
         usage=recipe,
         batch_size=8,
@@ -71,8 +77,30 @@ def pick_items(manifest: dict, n: int, seed: int) -> list[dict]:
     return [items[i] for i in idx]
 
 
-def _expand(p: str) -> Path:
-    return Path(p.replace("~", str(Path.home()), 1)) if p.startswith("~") else Path(p)
+def _expand(p: str, roots: list[Path]) -> Path:
+    """Resolve a manifest image_path. Provenance redaction wrote these
+    relative to the SPEC dir, ~-prefixed, or as ${ENV_VAR}-prefixed
+    placeholders; expand those forms before trying each candidate root."""
+    if "$" in p:
+        expanded = os.path.expandvars(p)
+        if "$" in expanded:
+            raise SystemExit(
+                f"error: image_path '{p}' uses an env placeholder that is not "
+                "set; export it (e.g. SPELLBOOK_DATA=...) and rerun"
+            )
+        p = expanded
+    if p.startswith("~"):
+        return Path(p.replace("~", str(Path.home()), 1))
+    cand = Path(p)
+    if cand.is_absolute():
+        return cand
+    for root in roots:
+        if (root / cand).is_file():
+            return root / cand
+    raise SystemExit(
+        f"error: image_path '{p}' not found under {[str(r) for r in roots]}; "
+        "pass --images-root pointing at the spec dir the corpus was built from"
+    )
 
 
 def bench_model(
@@ -83,9 +111,10 @@ def bench_model(
     items: list[dict],
     ks: list[int],
     template: str,
+    roots: list[Path],
 ) -> dict:
     adapter = make_adapter(manifest, preset)
-    paths = [_expand(it["image_path"]) for it in items]
+    paths = [_expand(it["image_path"], roots) for it in items]
     t0 = time.time()
     src_vecs = adapter.embed_paths(paths)
     embed_s = time.time() - t0
@@ -95,6 +124,10 @@ def bench_model(
         "build_items_per_s": manifest["models"][preset].get("items_per_s"),
         "spaces": {},
     }
+    # match by chunk_id, not ordinal-vs-offset: offsets are frame positions
+    # inside a shard, which diverge from ordinals under cluster ordering and
+    # per-image backends. chunk order in the file IS ordinal order.
+    chunk_ids = db.chunk_ids()
     for space in spaces:
         name, dim = space["name"], space["dim"]
         q = model_registry.slice_renorm(src_vecs, dim) if dim else src_vecs
@@ -103,13 +136,14 @@ def bench_model(
         drifts = []
         lat = []
         for i, it in enumerate(items):
+            expected = chunk_ids[it["ordinal"]]
             t0 = time.time()
             hits = db.search_space(name, q[i].tolist(), max(ks))
             lat.append((time.time() - t0) * 1e3)
-            ranked = [h.offset_start for h in hits]
+            ranked = [h.chunk_id for h in hits]
             for k in ks:
-                identity[k] += int(it["ordinal"] in ranked[:k])
-            own = next((h.score for h in hits if h.offset_start == it["ordinal"]), None)
+                identity[k] += int(expected in ranked[:k])
+            own = next((h.score for h in hits if h.chunk_id == expected), None)
             if own is not None:
                 drifts.append(own)  # cosine(source-embed, stored decoded vector)
         n = len(items)
@@ -133,9 +167,9 @@ def bench_model(
             tq = model_registry.slice_renorm(tq, dim) if dim else tq
             t3 = {k: 0 for k in ks}
             for i, it in enumerate(items):
-                ranked = [h.offset_start for h in db.search_space(name, tq[i].tolist(), max(ks))]
+                ranked = [h.chunk_id for h in db.search_space(name, tq[i].tolist(), max(ks))]
                 for k in ks:
-                    t3[k] += int(it["ordinal"] in ranked[:k])
+                    t3[k] += int(chunk_ids[it["ordinal"]] in ranked[:k])
             space_rep["t3_text_to_image_hit"] = {f"@{k}": round(t3[k] / n, 4) for k in ks}
             space_rep["t3_ruler"] = "label-template (weak ground truth)"
         report["spaces"][name] = space_rep
@@ -145,7 +179,8 @@ def bench_model(
 def bench_queries_file(db, manifest: dict, qfile: Path, ks: list[int]) -> dict:
     """Real operator queries: [{query, expected_keys[], negative_keys[]?}]."""
     queries = json.loads(qfile.read_text())
-    by_key = {it["key"]: it["ordinal"] for it in manifest["items"]}
+    chunk_ids = db.chunk_ids()
+    by_key = {it["key"]: chunk_ids[it["ordinal"]] for it in manifest["items"]}
     out: dict[str, dict] = {}
     for s in manifest["spaces"]:
         if s["modality"] != "image":
@@ -163,7 +198,7 @@ def bench_queries_file(db, manifest: dict, qfile: Path, ks: list[int]) -> dict:
                 continue
             v = adapter.embed_texts([q["query"]], role="query")
             v = model_registry.slice_renorm(v, s["dim"])[0] if s["dim"] else v[0]
-            ranked = [h.offset_start for h in db.search_space(s["name"], v.tolist(), max(ks))]
+            ranked = [h.chunk_id for h in db.search_space(s["name"], v.tolist(), max(ks))]
             n += 1
             for k in ks:
                 hitk[k] += int(bool(expected & set(ranked[:k])))
@@ -230,10 +265,16 @@ def main() -> int:
     ap.add_argument("--text-query-template", default="")
     ap.add_argument("--queries-file", type=Path)
     ap.add_argument("--models", help="comma-separated preset subset")
+    ap.add_argument(
+        "--images-root",
+        type=Path,
+        help="base dir for relative manifest image paths (default: the index dir, then CWD)",
+    )
     ap.add_argument("--out", type=Path)
     args = ap.parse_args()
 
     manifest = load_sidecars(args.index)
+    roots = [args.images_root] if args.images_root else [args.index.parent, Path.cwd()]
     db = nest.open(str(args.index))
     # band geometry comes from the runtime's inspect (the manifest sidecar
     # does not duplicate it): fold band_bytes into the space records.
@@ -265,7 +306,7 @@ def main() -> int:
     for preset, sps in spaces.items():
         print(f"[bench] {preset} ({len(sps)} space(s))...", flush=True)
         report["models"][preset] = bench_model(
-            db, manifest, preset, sps, items, args.k, args.text_query_template
+            db, manifest, preset, sps, items, args.k, args.text_query_template, roots
         )
     if args.queries_file:
         report["operator_queries"] = bench_queries_file(db, manifest, args.queries_file, args.k)

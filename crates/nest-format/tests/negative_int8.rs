@@ -16,6 +16,11 @@
 //!   i8      * (n * dim)                             [8+4n..]
 //! ```
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::layout::{
     NEST_FOOTER_SIZE, NestFooter, SECTION_EMBEDDINGS, SECTION_ENCODING_INT8,
 };
@@ -97,7 +102,7 @@ fn embeddings_offset(bytes: &[u8]) -> usize {
     panic!("embeddings section not found");
 }
 
-/// lRecompute the embeddings section's checksum and the file_hash. See
+/// Recompute the embeddings section's checksum and the file_hash. See
 /// negative_fp16/zstd for the same pattern; centralized here too to
 /// keep the test self-contained.
 fn rewrite_emb_checksum_and_file_hash(bytes: &mut [u8]) {
@@ -127,11 +132,11 @@ fn rewrite_emb_checksum_and_file_hash(bytes: &mut [u8]) {
 fn rejects_unknown_payload_version() {
     let mut bytes = build_int8(2, 4);
     let off = embeddings_offset(&bytes);
-    // lSet payload_version = 99 (unknown).
+    // Set payload_version = 99 (unknown).
     bytes[off..off + 4].copy_from_slice(&99u32.to_le_bytes());
     rewrite_emb_checksum_and_file_hash(&mut bytes);
 
-    // lReader's validate_embeddings_layout / values is what surfaces this
+    // Reader's validate_embeddings_layout / values is what surfaces this
     // since the int8 prefix is parsed lazily.
     let view = NestView::from_bytes(&bytes).unwrap();
     let res = view.validate_embeddings_values();
@@ -152,7 +157,7 @@ fn rejects_unknown_payload_version() {
 fn rejects_unknown_scale_kind() {
     let mut bytes = build_int8(2, 4);
     let off = embeddings_offset(&bytes);
-    // lSet scale_kind = 99 (no quantizer defined).
+    // Set scale_kind = 99 (no quantizer defined).
     bytes[off + 4..off + 8].copy_from_slice(&99u32.to_le_bytes());
     rewrite_emb_checksum_and_file_hash(&mut bytes);
 
@@ -175,7 +180,7 @@ fn rejects_unknown_scale_kind() {
 fn rejects_nan_in_per_vector_scale() {
     let mut bytes = build_int8(3, 4);
     let off = embeddings_offset(&bytes);
-    // lScale[1] (second vector) = NaN. Scales start at offset 8 of the
+    // Scale[1] (second vector) = NaN. Scales start at offset 8 of the
     // payload; each is 4 bytes.
     bytes[off + 8 + 4..off + 8 + 8].copy_from_slice(&f32::NAN.to_le_bytes());
     rewrite_emb_checksum_and_file_hash(&mut bytes);

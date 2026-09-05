@@ -37,12 +37,30 @@ def provenance_sha256(payload: dict) -> str:
     return "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
 
 
+# bounded gop for inter coding: best size on the near-dup matrix (g=16 beat
+# g=8, g=32, and single-keyframe) while capping random-access decode cost at
+# 16 frames. one constant so the probe and the build always agree.
+INTER_KEYINT = 16
+
+# inter must not buy bytes with quality: at the SAME crf SVT quantizes
+# P-frames far coarser, and a bytes-only probe is blind to it (measured
+# 2026-08-31 on unique cards: -10.7% bytes for -15.9 ssimulacra2 p50).
+# inter wins only when its mean ssimulacra2 on the probe sample is within
+# this tolerance of the intra arm.
+PROBE_QUALITY_TOL = 2.0
+
+
 def probe_tune_still(cache: dict = {}) -> int | None:  # noqa: B006
     """Resolve the SVT-AV1 'Still Picture' tune number for the local encoder.
 
     The number varies by SVT-AV1 version, so it is probed (a 16x16
     one-frame encode) instead of assumed: an unsupported value must become
     a loud warning and a recorded fallback, never a silently ignored flag.
+    The probe carries keyint=1 because the IQ tune (3 on SVT 4.2) accepts
+    all-intra only — probing without it rejected tune=3 and silently fell
+    back to tune=4 (MS_SSIM); measured 2026-08-31 on the card corpus,
+    tune=3 is +1.26 ssim2 for +1.4% bytes. Still-tune encodes are always
+    all-intra (see encode_av1), so the probe matches what ships.
     Cached per process.
     """
     if "value" in cache:
@@ -56,7 +74,7 @@ def probe_tune_still(cache: dict = {}) -> int | None:  # noqa: B006
                 "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
                 "-f", "lavfi", "-i", "color=black:size=16x16:rate=1",
                 "-frames:v", "1", "-c:v", "libsvtav1",
-                "-svtav1-params", f"tune={candidate}", tmp.name,
+                "-svtav1-params", f"tune={candidate}:keyint=1", tmp.name,
             ]
             # fmt: on
             if subprocess.run(cmd, capture_output=True).returncode == 0:
@@ -105,8 +123,18 @@ def encode_av1(
     source_bytes = sum(p.stat().st_size for p in image_paths)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     svt_params = f"lp={lp}" + (f":keyint={keyint}" if keyint else "")
+    if keyint != 1:
+        # inter gop: cards/images are not scene cuts. SVT's scene-change
+        # detector re-inserts the keyframes inter exists to avoid; measured
+        # 2026-08-31 (near-dup reprints, crf35/s6): scd=0 + keyint=16 is
+        # -29% vs all-intra where default scd erased the inter gain.
+        svt_params += ":scd=0"
+    # still tune ships only with an all-intra gop: SVT's IQ tune supports
+    # all-intra (and low-delay, measured much worse) only — with keyint!=1
+    # the flag would hard-error the encode. tune_resolved=None in the record
+    # says the requested tune did not ship for this stream.
     tune_resolved: int | None = None
-    if tune == "still":
+    if tune == "still" and keyint == 1:
         tune_resolved = probe_tune_still()
         if tune_resolved is not None:
             svt_params += f":tune={tune_resolved}"
@@ -196,18 +224,29 @@ def probe_gop(
     preset: int = 8,
     pix_fmt: str = "yuv420p",
     n_samples: int = 32,
+    tune: str = "default",
+    contiguous: bool = False,
 ) -> dict:
-    """Encode a spaced sample both ways and let the bytes decide the gop.
+    """Encode a sample both ways and let the bytes decide the gop.
 
     Cosine similarity of the embeddings did NOT separate intra-favouring
     from inter-favouring corpora in fase 0 (CP-0.5), so the policy is
     decided by the only thing that actually pays: a probe encode at the
-    target crf. The sample is evenly spaced, so scan-ordered sources (wsi
-    tiles) cannot hide their redundancy in one neighbourhood. Ties go
-    intra: random access is O(1) there and costs nothing extra.
+    target crf. Ties go intra: random access is O(1) there and costs
+    nothing extra.
 
-    Both probe encodes go through `encode_av1`, so the frame-count and
-    pix_fmt guards apply to the probe exactly as they do to the build.
+    Sampling has two modes. Default is evenly spaced, so scan-ordered
+    sources (wsi tiles) cannot hide their redundancy in one neighbourhood.
+    `contiguous=True` is for ENGINEERED adjacency (order=cluster/
+    similarity): there the redundancy lives between neighbours, and evenly
+    spaced frames would erase the very signal the ordering created — so
+    the probe takes contiguous windows spread across the segment instead.
+
+    Each arm probes what would actually ship: the intra arm carries the
+    requested tune, the inter arm drops a still tune the same way the real
+    encode does (SVT's IQ tune is all-intra only). Both go through
+    `encode_av1`, so the frame-count and pix_fmt guards apply to the probe
+    exactly as they do to the build.
     """
     paths = list(image_paths)
     n = len(paths)
@@ -220,8 +259,14 @@ def probe_gop(
             "reason": "single frame",
         }
     take = min(n_samples, n)
-    idx = sorted(set(np.linspace(0, n - 1, take).round().astype(int).tolist()))
+    if contiguous:
+        win = min(8, take)
+        starts = sorted({int(s) for s in np.linspace(0, n - win, max(1, take // win))})
+        idx = sorted({i for s in starts for i in range(s, s + win)})
+    else:
+        idx = sorted(set(np.linspace(0, n - 1, take).round().astype(int).tolist()))
     sample = [paths[i] for i in idx]
+    quality: dict = {}
     with tempfile.TemporaryDirectory(prefix="nest-gop-probe-") as tmp:
         intra = encode_av1(
             sample,
@@ -231,19 +276,83 @@ def probe_gop(
             preset=preset,
             keyint=1,
             pix_fmt=pix_fmt,
+            tune=tune,
         )
         inter = encode_av1(
-            sample, Path(tmp) / "inter.mp4", canvas=canvas, crf=crf, preset=preset, pix_fmt=pix_fmt
+            sample,
+            Path(tmp) / "inter.mp4",
+            canvas=canvas,
+            crf=crf,
+            preset=preset,
+            keyint=INTER_KEYINT,  # probe what would actually ship
+            pix_fmt=pix_fmt,
+            tune=tune,  # dropped for inter inside encode_av1, like the build
         )
+        quality = _probe_arm_quality(sample, canvas, Path(tmp))
     decision = "intra" if intra["output_bytes"] <= inter["output_bytes"] else "inter"
+    # inter may not pay its byte savings with quality (a bytes-only decision
+    # at fixed crf is blind to SVT's coarser P-frame quantization).
+    if (
+        decision == "inter"
+        and quality.get("intra_ssim2") is not None
+        and quality["intra_ssim2"] - quality["inter_ssim2"] > PROBE_QUALITY_TOL
+    ):
+        decision = "intra"
+        quality["overridden"] = "inter-degrades-quality"
     return {
         "policy": "auto",
         "n_samples": len(sample),
+        "sampling": "contiguous-windows" if contiguous else "evenly-spaced",
         "crf": crf,
+        "tune": tune,
         "intra_bytes": intra["output_bytes"],
         "inter_bytes": inter["output_bytes"],
+        **quality,
         "decision": decision,
     }
+
+
+def _probe_arm_quality(sample: Sequence[Path], canvas, tmp: Path) -> dict:
+    """Mean ssimulacra2 of both probe arms against the letterboxed sources.
+
+    Soft dependency: without `ssimulacra2` on PATH the probe stays
+    bytes-only and says so in the record (and once on stderr) instead of
+    failing builds that never asked for a quality gate.
+    """
+    import shutil as _shutil
+    import sys
+
+    if _shutil.which("ssimulacra2") is None:
+        print(
+            "[forge] warning: ssimulacra2 not on PATH; gop probe is bytes-only "
+            "(brew install jpeg-xl)",
+            file=sys.stderr,
+        )
+        return {"quality": "unmeasured (ssimulacra2 not on PATH)"}
+    from PIL import Image
+
+    from .image_decode import decode_frames
+    from .quality_gate import _ssimulacra2
+
+    src_pngs = []
+    for i, p in enumerate(sample):
+        out = tmp / f"src{i:04d}.png"
+        with Image.open(p) as img:
+            image_media.letterbox(img, canvas).save(out)
+        src_pngs.append(out)
+    scores = {}
+    for arm in ("intra", "inter"):
+        vals = []
+        i = 0
+        for batch in decode_frames(tmp / f"{arm}.mp4", canvas, batch_size=16):
+            for frame in batch:
+                dist = tmp / f"{arm}{i:04d}.png"
+                Image.fromarray(frame).save(dist)
+                vals.append(_ssimulacra2(src_pngs[i], dist))
+                i += 1
+        scores[f"{arm}_ssim2"] = round(float(np.mean(vals)), 2)
+    scores["quality_tolerance"] = PROBE_QUALITY_TOL
+    return scores
 
 
 def encode_avif(
@@ -337,17 +446,13 @@ def encode_jxl_dir(
         if shutil.which(tool) is None:
             raise RuntimeError(f"jxl backend needs '{tool}' on PATH: brew install jpeg-xl")
     out_dir.mkdir(parents=True, exist_ok=True)
-    files: list[str] = []
-    decisions: list[dict] = []
-    source_bytes = 0
 
     def run_cjxl(src: Path, dst: Path, args: list[str]) -> bool:
         return (
             subprocess.run(["cjxl", str(src), str(dst), *args], capture_output=True).returncode == 0
         )
 
-    for i, path in enumerate(image_paths):
-        source_bytes += path.stat().st_size
+    def one(i: int, path: Path) -> tuple[str, dict]:
         name = f"{i:06d}.jxl"
         action, verified = "lossless", None
         if transcode:
@@ -377,8 +482,18 @@ def encode_jxl_dir(
         else:
             if not run_cjxl(path, out_dir / name, ["-d", "0"]):
                 raise RuntimeError(f"cjxl -d 0 failed for {path}")
-        files.append(name)
-        decisions.append({"file": name, "action": action, "verified": verified})
+        return name, {"file": name, "action": action, "verified": verified}
+
+    # cjxl is one process per image and each file's outcome depends only on
+    # its own source, so the fan-out changes wall time, never bytes.
+    import os
+    from concurrent.futures import ThreadPoolExecutor
+
+    source_bytes = sum(p.stat().st_size for p in image_paths)
+    with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as pool:
+        results = list(pool.map(one, range(len(image_paths)), image_paths))
+    files = [name for name, _ in results]
+    decisions = [d for _, d in results]
 
     output_bytes = sum((out_dir / f).stat().st_size for f in files)
     toolchain = {"cjxl": _tool_version(["cjxl", "--version"]), "transcode": transcode}

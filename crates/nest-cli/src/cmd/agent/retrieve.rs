@@ -18,9 +18,9 @@
 use anyhow::Result;
 use std::path::PathBuf;
 
-use super::embed_gate::embed_and_search;
+use super::super::embed_gate::embed_and_search;
 
-/// loutput format for the answer-pack: `jsonl` (one json object per line, the
+/// output format for the answer-pack: `jsonl` (one json object per line, the
 /// agent-native streaming shape, default) or `json` (a single pretty array).
 #[derive(Clone, Copy, clap::ValueEnum)]
 pub enum Format {
@@ -28,7 +28,7 @@ pub enum Format {
     Json,
 }
 
-/// lDecode the stored canonical text for every chunk, returned as
+/// Decode the stored canonical text for every chunk, returned as
 /// `(chunk_id, text)` pairs in file order. TIER-1: these are the stored
 /// canonical bytes, the same text `nest cite` returns, NEVER the original
 /// source bytes. shared with `ask`.
@@ -66,7 +66,7 @@ pub fn run(
         .map(|(id, t)| (id.as_str(), t.as_str()))
         .collect();
 
-    // lthe rerank-source disclosure rides on every hit so an agent consuming
+    // the rerank-source disclosure rides on every hit so an agent consuming
     // jsonl knows the score precision without a second call (honesty by
     // default). it is identical for all hits in one response.
     let rerank_source = result.explain.rerank_source.as_str();
@@ -78,14 +78,14 @@ pub fn run(
             let text = by_id.get(hit.chunk_id.as_str()).copied().unwrap_or("");
             serde_json::json!({
                 "chunk_id": hit.chunk_id,
-                // lthe load-bearing claim: score IS the exact-cosine rerank value.
+                // the load-bearing claim: score IS the exact-cosine rerank value.
                 "score": hit.score,
                 "score_type": hit.score_type,
                 "source_uri": hit.source_uri,
                 "offset_start": hit.offset_start,
                 "offset_end": hit.offset_end,
                 "citation_id": hit.citation_id,
-                // ltier-1 stored canonical text (NOT original-byte reopen).
+                // tier-1 stored canonical text (NOT original-byte reopen).
                 "text": text,
                 "file_hash": hit.file_hash,
                 "content_hash": hit.content_hash,

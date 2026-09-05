@@ -3,6 +3,11 @@
 //! `NestError`, NEVER panic (mirrors negative_graph_adjacency discipline).
 //! plus an exhaustive prefix-truncation fuzz on both.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::{
     BLOB_REF_NONE, BlobRefRecord, BlobSpanEntry, NestError, decode_blob_refs,
     decode_blob_span_overlay, encode_blob_refs, encode_blob_span_overlay,

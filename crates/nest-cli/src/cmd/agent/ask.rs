@@ -18,15 +18,15 @@
 use anyhow::Result;
 use std::path::PathBuf;
 
-use super::embed_gate::embed_and_search;
+use super::super::embed_gate::embed_and_search;
 
-/// ldisclosure level for `ask`. mirrors the lens design's progressive
+/// disclosure level for `ask`. mirrors the lens design's progressive
 /// disclosure dial, scoped to what `ask` needs pre-gate (answer | explain).
 #[derive(Clone, Copy, clap::ValueEnum)]
 pub enum Disclose {
-    /// lcited text + nest:// citation only (default).
+    /// cited text + nest:// citation only (default).
     Answer,
-    /// lanswer plus the rerank-source honesty line, route, and candidate counts.
+    /// answer plus the rerank-source honesty line, route, and candidate counts.
     Explain,
 }
 
@@ -43,7 +43,7 @@ pub fn run(
     let runtime = nest_runtime::MmapNestFile::open(&file)?;
     let result = embed_and_search(&runtime, &query, k, candidates, embedder, model_path)?;
 
-    // ltier-1 canonical text for the returned chunk_ids, the same bytes cite
+    // tier-1 canonical text for the returned chunk_ids, the same bytes cite
     // returns. resolved once from the file; never the original source bytes.
     let texts = super::retrieve::canonical_texts(&file)?;
     let by_id: std::collections::HashMap<&str, &str> = texts
@@ -62,7 +62,7 @@ pub fn run(
             e.graph_candidates,
             e.fusion_mode
         );
-        // lthe honesty backbone: state whether the score is full-precision.
+        // the honesty backbone: state whether the score is full-precision.
         println!("rerank_source: {}", e.rerank_source.disclosure());
         if e.recall_estimate.is_nan() {
             println!("recall:        (not computed; rerank guarantees real cosine)");
@@ -72,7 +72,7 @@ pub fn run(
         println!();
     }
 
-    // lthe answer: one low-cognitive-load block per hit, sources beneath, no
+    // the answer: one low-cognitive-load block per hit, sources beneath, no
     // field-wall. the citation is the stable nest://content_hash/chunk_id.
     if result.hits.is_empty() {
         println!("no hits.");

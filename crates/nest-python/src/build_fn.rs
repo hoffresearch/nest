@@ -8,11 +8,10 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
 use crate::build_inputs::{
-    build_graph_payload, parse_blob_refs, parse_blob_spans, parse_chunks, resolve_preset,
-    truncate_renormalize,
+    build_graph_payload, parse_chunks, resolve_preset, truncate_renormalize,
 };
 
-/// lBuild a .nest file from already-embedded chunks.
+/// Build a .nest file from already-embedded chunks.
 ///
 /// `chunks` is a list of dicts with keys:
 ///   - canonical_text: str
@@ -21,12 +20,12 @@ use crate::build_inputs::{
 ///   - byte_end: int
 ///   - embedding: list[float] (length == embedding_dim, L2-normalized)
 ///
-/// lOptional manifest fields (`title`, `version`, `created`, `description`,
+/// Optional manifest fields (`title`, `version`, `created`, `description`,
 /// `authors`, `license`) and a free-form `provenance` dict can be passed
 /// as kwargs. `reproducible=True` overrides `created` so two builds with
 /// identical inputs produce byte-identical output.
 ///
-/// lPreset / encoding kwargs:
+/// Preset / encoding kwargs:
 ///   - `preset`: one of "exact" (default), "compressed", "tiny", "hybrid",
 ///     "nano". "nano" is zstd text / int4 / hnsw (the first sub-int8 size
 ///     lever, ~2x smaller embeddings than tiny at stored precision; requires
@@ -56,6 +55,10 @@ use crate::build_inputs::{
 ///     `original_uri`, `byte_len`, `inlined`. entry order is the table
 ///     order the span overlay addresses. excluded from content_hash, so a
 ///     self-contained media corpus keeps the citations of its text twin.
+///   - `blob_data_paths`: optional list parallel to `blob_refs` (str path
+///     or None per record) inlining those files' bytes as blob_data (0x17)
+///     for a self-contained corpus. requires `blob_refs`; excluded from
+///     content_hash like the rest of the blob trio.
 ///   - `chunk_blob_spans`: optional list of dicts (one per chunk) for the
 ///     blob_span_overlay (0x16): keys `blob_ref_index` (int or None),
 ///     `byte_start`, `byte_end`. the runtime prefers these over 0x03 spans
@@ -91,6 +94,7 @@ use crate::build_inputs::{
     with_graph=false,
     graph_top_m=8,
     blob_refs=None,
+    blob_data_paths=None,
     chunk_blob_spans=None,
     spaces=None,
     hnsw_m=16,
@@ -123,6 +127,7 @@ pub fn build(
     with_graph: bool,
     graph_top_m: usize,
     blob_refs: Option<&Bound<PyList>>,
+    blob_data_paths: Option<&Bound<PyList>>,
     chunk_blob_spans: Option<&Bound<PyList>>,
     spaces: Option<&Bound<PyList>>,
     hnsw_m: usize,
@@ -135,7 +140,7 @@ pub fn build(
     let full_dim = embedding_dim;
     let mut chunk_inputs = parse_chunks(chunks)?;
 
-    // lMatryoshka prefix truncation (Qwen3/ST/BGE truncate-then-renormalize).
+    // Matryoshka prefix truncation (Qwen3/ST/BGE truncate-then-renormalize).
     // Slice each row to the first mrl_dim components and re-L2-normalize on
     // the prefix BEFORE quantization/HNSW so int8/int4 calibrate and the
     // graph builds on the shorter renormalized row. Pure deterministic op.
@@ -167,10 +172,10 @@ pub fn build(
         None => serde_json::json!({}),
     };
 
-    // lResolve preset defaults; explicit kwargs win (helper lives in
+    // Resolve preset defaults; explicit kwargs win (helper lives in
     // build_inputs so this entry point stays under the 300-line guard).
     let (text_enc, dt, default_hnsw, default_bm25) = resolve_preset(preset, text_encoding, dtype)?;
-    // lint4 requires the EFFECTIVE (post-truncation) embedding_dim to be a
+    // int4 requires the EFFECTIVE (post-truncation) embedding_dim to be a
     // multiple of the block size so every 64-dim group has its own absmax
     // scale. With matryoshka this means mrl_dim%64==0 (e.g. 256/192/128 are
     // valid, 96 is not). Fail fast with a clear message.
@@ -183,7 +188,7 @@ pub fn build(
     let want_hnsw = with_hnsw.unwrap_or(default_hnsw);
     let want_bm25 = with_bm25.unwrap_or(default_bm25);
 
-    // lDisclosure metadata + manifest assembly live in build_manifest so
+    // Disclosure metadata + manifest assembly live in build_manifest so
     // this entry point stays under the 300-line guard.
     let manifest = crate::build_manifest::build_manifest(
         embedding_model,
@@ -207,7 +212,7 @@ pub fn build(
         .text_encoding(text_enc)
         .embedding_dtype(dt);
 
-    // lHNSW: build the index from f32 vectors (we have them in chunk_inputs
+    // HNSW: build the index from f32 vectors (we have them in chunk_inputs
     // already). The runtime materializes f32 vectors at open time too —
     // here we use the originals so build is independent of dtype loss. The
     // index is also the source of top-m SEMANTIC edges for the optional graph,
@@ -232,7 +237,7 @@ pub fn build(
         }
     }
 
-    // lOptional chunk-to-chunk graph (G1). NEXT_CHUNK edges (sequential
+    // Optional chunk-to-chunk graph (G1). NEXT_CHUNK edges (sequential
     // ordinals) + top-m SEMANTIC edges from the hnsw level-0 graph,
     // canonically sorted (byte-identical builds). additive, excluded from
     // content_hash; sets capabilities_ext.graph_present. default off.
@@ -242,31 +247,19 @@ pub fn build(
         }
     }
 
-    // lOptional blob pair (0x14/0x16) for media corpora. both additive and
+    // Optional blob pair (0x14/0x16) for media corpora. both additive and
     // excluded from content_hash; the builder setters declare the additive
     // `blobs_present` capability. the overlay must have one entry per chunk
     // (chunk order), or the runtime's span rewrite would misalign.
-    if let Some(refs) = blob_refs {
-        let records = parse_blob_refs(refs)?;
-        let payload = nest_format::encode_blob_refs(&records)
-            .map_err(|e| PyValueError::new_err(format!("blob_refs encode: {}", e)))?;
-        builder = builder.blob_refs(payload);
-    }
-    if let Some(spans) = chunk_blob_spans {
-        let entries = parse_blob_spans(spans)?;
-        if entries.len() != n {
-            return Err(PyValueError::new_err(format!(
-                "chunk_blob_spans must have one entry per chunk ({}), got {}",
-                n,
-                entries.len()
-            )));
-        }
-        let payload = nest_format::encode_blob_span_overlay(&entries)
-            .map_err(|e| PyValueError::new_err(format!("blob_span_overlay encode: {}", e)))?;
-        builder = builder.blob_span_overlay(payload);
-    }
+    builder = crate::blob_data::attach_blob_sections(
+        builder,
+        blob_refs,
+        blob_data_paths,
+        chunk_blob_spans,
+        n,
+    )?;
 
-    // lOptional multimodal spaces (0x15 + one band per space). additive,
+    // Optional multimodal spaces (0x15 + one band per space). additive,
     // excluded from content_hash; sets supports_multimodal. the per-space
     // model_hash rides the table, so the runtime's per-space honesty gate
     // works exactly like the corpus-level one.

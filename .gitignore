@@ -89,5 +89,17 @@ dat/demo/
 
 # wheel staging (scripts/stage_wheel.py output)
 packaging/staging/
-dat/copusMTG/*
-!dat/copusMTG/spellbook.toml
+# mtg corpus artifacts (specs/scripts/results stay tracked)
+dat/mtg/release/
+dat/mtg/benchmark/sample-2048/runs/
+dat/mtg/benchmark/sample-2048/iframe/samples/
+dat/mtg/
+
+# cargo-fuzz working state (seeds/ stays tracked)
+fuzz/target/
+fuzz/corpus/
+fuzz/artifacts/
+fuzz/coverage/
+
+# competitor benchmark scratch stores (python/tools/bench_competitors.py --work)
+.bench-competitors/

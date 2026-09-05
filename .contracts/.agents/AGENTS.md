@@ -67,9 +67,10 @@ crates/nest-runtime   depends on nest-format: mmap open, SIMD dispatcher, MmapNe
                        bm25::Bm25Index, graph::CsrIndex, exact/ann/graph/hybrid search with mandatory
                        exact rerank
 crates/nest-cli        depends on nest-format + nest-runtime: clap binary `nest`, twelve engine
-                       subcommands (incl search-space, the declarative build launcher) + the
-                       ask/retrieve flagship verbs + doctor; the clap surface lives in cli.rs,
-                       the one three-layer model gate in cmd/embed_gate.rs
+                       subcommands in cmd/*.rs (incl media, search-space, doctor) + the three
+                       agent verbs ask/retrieve/build in cmd/agent/*.rs; `--help` tags and orders
+                       the two groups; the clap surface lives in cli.rs, the one three-layer
+                       model gate in cmd/embed_gate.rs
 crates/nest-python     depends on nest-format + nest-runtime: cdylib _nest, PyO3 abi3-py312
 
 forge-core/            SEPARATE cargo workspace at the repo root, OUTSIDE crates/ (ingestion layer,
@@ -94,13 +95,13 @@ examples/              fastapi, flask, jupyter integration examples
 
 key rust deps: memmap2 (mmap), rayon (parallel build), zstd / half / bytemuck (encodings), sha2 (hashing), thiserror (typed errors), clap (cli), serde / serde_json (manifest).
 
-CLI binary: `nest`. twelve engine subcommands: `inspect`, `validate`, `search`, `search-ann`, `search-graph`, `search-space` (exact search over one named multimodal band), `search-text`, `benchmark` (incl `--space`), `stats`, `cite`, `build` (declarative corpus build, a launcher over `python/tools/nest_forge.py`), `doctor`. plus two agent-native flagship verbs layered over the same engine: `ask` (text query in, cited answer out, `--disclose answer|explain`) and `retrieve` (json/jsonl answer-pack of cited spans where score IS the exact rerank value). the flagship embeds offline and routes the query embedder BY THE MANIFEST MODEL: potion corpora keep the potion script, any registry model goes through `python/forge/embed_query_model.py` (with `--mrl-dim` for truncated default spaces). one or several embedding models per build come from the preset registry (`python/forge/model_registry.py`); the build contract with every user-selectable knob is `doc/usage.md` sections 12-14 and the working example `dat/copusMTG/spellbook.toml`. verb-collapse, the `nest dev` namespace, and the nest-profile crate stay deferred.
+CLI binary: `nest`. twelve engine subcommands (file + vector in, never run python): `inspect`, `validate`, `stats`, `media` (list / export the inlined 0x17 blobs, sha256-verified), `search`, `search-ann`, `search-graph`, `search-space` (exact search over one named multimodal band), `search-text`, `benchmark` (incl `--space`), `cite`, `doctor`. plus three agent verbs layered over the same engine, under `cmd/agent/`: `build` (declarative corpus build, a launcher over `python/tools/nest_forge.py`), `ask` (text query in, cited answer out, `--disclose answer|explain`) and `retrieve` (json/jsonl answer-pack of cited spans where score IS the exact rerank value). the flagship embeds offline and routes the query embedder BY THE MANIFEST MODEL: potion corpora keep the potion script, any registry model goes through `python/forge/embed_query_model.py` (with `--mrl-dim` for truncated default spaces). one or several embedding models per build come from the preset registry (`python/forge/model_registry.py`); the build contract with every user-selectable knob is `doc/usage.md` sections 12-14 (section 13 carries a complete working spec). verb-collapse, the `nest dev` namespace, and the nest-profile crate stay deferred.
 
 python entry: `sys.path.insert(0, "python"); import nest`. dynamic loader finds `_nest.so` or `lib_nest.dylib`.
 
 # format and runtime contract
 
-- rust edition 2024, resolver 3, `thiserror` for errors (never panic in library code). `repr(C)` structs for binary layout; all integers LE unsigned. every `unsafe` block needs a `// SAFETY:` comment naming the invariant it relies on.
+- rust edition 2024, resolver 3, `thiserror` for errors (never panic in library code). `repr(C)` + `bytemuck::Pod` structs for binary layout; all integers LE unsigned. every `unsafe` block needs a `// SAFETY:` comment naming the invariant it relies on, and clippy denies undocumented ones (`[workspace.lints]`: `undocumented_unsafe_blocks`, `unwrap_used`; tests exempt). read fixed-width fields through `nest_format::bytes::{le_u32, le_u64, le_f32, array32}` (typed `UnexpectedEof`, no `try_into().unwrap()`); compute header-derived sizes with checked arithmetic (`expected_embeddings_size`); write cursor bounds checks as `need > remaining`, never `pos + need > len`; sort f32 scores through `nest_runtime::order` (NaN-last total order), never `partial_cmp(..).unwrap_or(Equal)`.
 - binary format v1 is frozen. v0.2 added encodings 1/2/3 (zstd, float16, int8) and optional sections 0x07 (HNSW) and 0x08 (BM25). v0.3 added encoding 7 (int4) and the graph pillar (section 0x0C). since then the media blob pillar (0x14 blob_refs, 0x16 blob_span_overlay) and the multimodal space pillar (0x15 space_table + the 0x20-0x2F embedding band) shipped, all additive and content_hash-excluded; see `doc/arc/arc.yaml`'s `contract` array for the full section-id map.
 - hash format: always `sha256:<64 lowercase hex>`. four hashes: `header_checksum`, per-section `checksum` (physical bytes), `file_hash` (whole file), `content_hash` (decoded canonical sections, stable across encodings). same chunks + same model fingerprint + `reproducible=True` produce byte-identical files, so the `nest://content_hash/chunk_id` citation URI points at content, not at a copy.
 - `NestFileBuilder` is a consuming builder (`add_chunk(self) -> Self`). presets via `.text_encoding()` + `.embedding_dtype()`, or the bundled levers: `exact`, `compressed` (zstd + f16), `tiny` (int8 + hnsw), `micro` (mrl256-int8), `nano` (int4 block-64), `hybrid` (f32 + hnsw + bm25).
@@ -119,6 +120,7 @@ python entry: `sys.path.insert(0, "python"); import nest`. dynamic loader finds 
 - branches: `main` is release; `dev` is integration. work happens in `dev` (or feature branches off `dev`).
 - PRs target `dev` from feature branches. release PRs target `main` from `dev`. squash merge into `main` to keep history linear.
 - tags on `main` only (`v0.2.0` is current). `Cargo.toml` workspace version tracks the latest released tag.
+- every push and pull request runs `.github/workflows/ci.yml`: fmt, clippy with the workspace deny lints, build + test on ubuntu (avx2) and macos (neon), the mutation-fuzz harnesses at a higher iteration count, the 300-line guard, forge-core's own gate, ruff via `scripts/ruff_check.sh` (the ONE python file list, shared with release_check.sh), and a bounded cargo-fuzz smoke on nightly. it is release_check.sh minus the lfs corpus measurement.
 - pushing a `v*` tag on `main` runs the full release: `.github/workflows/release.yml` (cargo-dist: cli tarballs for 5 targets, checksums, sigstore attestations, homebrew formula, the embedder payload artifact) and `.github/workflows/pypi.yml` (maturin abi3 wheels for 4 platforms, OIDC trusted publishing). `.github/workflows/install-test.yml` then tests the INSTALLED product per platform. maintainer one-time setup for these channels is in `doc/install.md` > maintainer checklist.
 - git lfs tracks `*.nest`, `*.safetensors`, datasets, and the vendored potion table (including `dat/corpus_next.v1.nest`); golden fixtures under `crates/nest-format/tests/fixtures/` stay in regular git. run `git lfs pull` if a binary is a pointer.
 - demo datasets under `dat/demo/` are intentionally gitignored and downloaded locally from upstream sources listed in `dat/demo/Instructions.md`.
@@ -204,7 +206,8 @@ these are documented honest limitations of the current code, not bugs to silentl
 - **avoid force-push `main` ever**. force-push `dev` only after explicit user confirmation. squash-merge from PR is fine because that goes through GitHub.
 - **avoid run `git add -A`** in repos that may carry untracked secrets or LFS payloads. stage explicit paths.
 - **avoid bypass `release_check.sh`**. if it fails, fix the underlying issue. suppressing a clippy lint is fine when justified inline (`#[allow(clippy::name)]` + comment); suppressing the whole gate is not.
-- **avoid introduce `unsafe` without a `// SAFETY:` comment** that names the invariant the caller is relying on.
+- **avoid introduce `unsafe` without a `// SAFETY:` comment** that names the invariant the caller is relying on (clippy denies it anyway). prefer `bytemuck` casts over raw-parts casts; keep raw-pointer kernels behind a safe dispatcher that `assert!`s every length in release.
+- **avoid a decoder change without running the mutation harness**: `cargo test -p nest-format --test mutation_fuzz -p nest-runtime --test mutation_fuzz` (default counts run in seconds; `NEST_MUTATION_ITERS=25000` for a soak). a new section codec gets an arm in `fuzz/fuzz_targets/section_decoders.rs` and a fixture in the harness. a finding becomes a `tests/negative_*.rs` before the fix.
 - **avoid add em-dashes or emoji** to project files. consistency check in CI is informal but the maintainer reads diffs.
 
 # documentation
@@ -213,10 +216,11 @@ these are documented honest limitations of the current code, not bugs to silentl
 - `doc/install.md`: every install channel (one-liner, pypi `nestdb`, brew, binstall, docker), verification (sha256 + attestations), offline notes, and the maintainer one-time checklist.
 - `doc/arc/arc.yaml`: the single architecture reference, machine-readable for agents and tooling and the human-readable inventory plus runtime contract summary.
 - `doc/arc/arc.mmd`: mermaid sequence diagram of the build and query flows.
-- `doc/usage.md`: how-to for the twelve engine subcommands plus the ask/retrieve flagship verbs, presets, offline mode, citations, the model registry and multi-model spaces (section 12), declarative builds (section 13), and the compression levers with the dual quality gate (section 14).
+- `doc/usage.md`: how-to for the twelve engine subcommands (incl `media`, section 15) plus the ask/retrieve/build agent verbs, presets, offline mode, citations, the model registry and multi-model spaces (section 12), declarative builds (section 13), and the compression levers with the dual quality gate (section 14).
 - `doc/changelog.md`: v0.1.0, v0.2.0, and unreleased deltas.
+- `doc/benchmarks.md`: nest vs usearch / hnswlib / sqlite-vec / lancedb, one table, regenerated by `python/tools/bench_competitors.py`.
+- `doc/hardening-plan.md`: the review-driven hardening list, status per item with the proving command, open items specified.
 - `dat/demo/Instructions.md`: what each upstream PT-BR dataset is and how to rebuild the unified corpus.
-- `dat/copusMTG/spellbook.toml`: the working declarative build spec (the corpus artifacts beside it are gitignored; only the spec is tracked).
 - `doc/data-governance.md`: provenance, licensing, and personal-data posture for distributed `.nest` files.
 - `doc/CONTRIBUTING.md`: external contributor flow.
 - `doc/CODE_OF_CONDUCT.md`: contributor covenant 2.1, lowercase plain-style.

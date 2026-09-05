@@ -1,7 +1,7 @@
 fn main() {
-    // lUse pyo3-build-config to emit Python linker flags automatically.
+    // Use pyo3-build-config to emit Python linker flags automatically.
     pyo3_build_config::use_pyo3_cfgs();
-    // lOn macOS, allow undefined Python symbols for extension modules.
+    // On macOS, allow undefined Python symbols for extension modules.
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     if target_os == "macos" {
         println!("cargo:rustc-link-arg=-undefined");

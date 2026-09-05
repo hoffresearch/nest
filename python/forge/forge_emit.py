@@ -17,11 +17,13 @@ from forge.forge_cache import atomic_write_json
 from forge.forge_manifest import build_lock, check_lock, redact_path, write_manifest
 
 
-def _blob_tables(ctx) -> tuple[list[dict] | None, list[dict] | None]:
+def _blob_tables(ctx) -> tuple[list[dict] | None, list[dict] | None, list[str] | None]:
     if ctx.media is None:
-        return None, None
+        return None, None, None
     media_dir = image_media.media_dir_for(ctx.out_dir / f"{ctx.spec.name}.nest")
+    embed = ctx.spec.output.embed_media
     refs: list[dict] = []
+    paths: list[str] = []
     index_of: dict[str, int] = {}
 
     def add_ref(rel: str, sha: str | None) -> int:
@@ -33,9 +35,10 @@ def _blob_tables(ctx) -> tuple[list[dict] | None, list[dict] | None]:
                     "content_hash": (sha or image_media.sha256_file(p)).removeprefix("sha256:"),
                     "original_uri": f"media://{rel}",
                     "byte_len": p.stat().st_size,
-                    "inlined": False,
+                    "inlined": embed,
                 }
             )
+            paths.append(str(p))
         return index_of[rel]
 
     spans = []
@@ -56,7 +59,7 @@ def _blob_tables(ctx) -> tuple[list[dict] | None, list[dict] | None]:
             rel = ctx.frame_uris[frame_idx].removeprefix("media://")
             i = add_ref(rel, None)
             spans.append({"blob_ref_index": i, "byte_start": 0, "byte_end": refs[i]["byte_len"]})
-    return refs, spans
+    return refs, spans, (paths if embed else None)
 
 
 def _spaces_payload(ctx, only_preset: str | None = None) -> list[dict]:
@@ -89,7 +92,7 @@ def _emit(ctx) -> dict:
     dm = default_model(spec)
     d_preset = model_registry.get_preset(dm.preset)
     text_vecs = ctx.vectors[dm.preset]["text"]
-    blob_refs, chunk_spans = _blob_tables(ctx)
+    blob_refs, chunk_spans, blob_paths = _blob_tables(ctx)
     chunks = [
         {
             "canonical_text": r.canonical_text,
@@ -121,6 +124,7 @@ def _emit(ctx) -> dict:
             with_graph=spec.build.with_graph,
             graph_top_m=spec.build.graph_top_m,
             blob_refs=blob_refs,
+            blob_data_paths=blob_paths,
             chunk_blob_spans=chunk_spans,
             spaces=spaces or None,
             provenance={"dataset": spec.name, "corpus_input_hash": ctx.input_hash},
@@ -170,7 +174,15 @@ def _finalize(ctx, result: dict, *, strict_env: bool, rebuild_only: bool) -> Non
 
                 raise ForgeError(msg)
             print(f"[forge] warning: {msg}")
-    atomic_write_json(lock_path, lock)
+    if ctx.models_filtered and lock_path.is_file():
+        # a --models subset run must not poison the full build's lock: a
+        # later full --rebuild-only would diff its models against the
+        # subset and fail even though every cached vector is identical.
+        print("[forge] --models subset: keeping the existing build.lock untouched")
+    else:
+        if ctx.models_filtered:
+            lock["models_subset"] = sorted(m.preset for m in spec.models)
+        atomic_write_json(lock_path, lock)
 
     manifest = {
         "name": spec.name,
@@ -189,7 +201,7 @@ def _finalize(ctx, result: dict, *, strict_env: bool, rebuild_only: bool) -> Non
             }
             for ms, modality, dim, name in emitted_spaces(spec)
         ],
-        "media": ctx.media,
+        "media": ({**ctx.media, "embedded": spec.output.embed_media} if ctx.media else None),
         "outputs": {
             k: {**v, "file": redact_path(v["file"], mode, spec_dir)}
             for k, v in result["outputs"].items()

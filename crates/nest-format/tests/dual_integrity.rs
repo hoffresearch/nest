@@ -20,6 +20,11 @@
 //!
 //! Together: physical and semantic guarantees are independent.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::layout::{
     SECTION_CHUNK_IDS, SECTION_CHUNKS_CANONICAL, SECTION_CHUNKS_ORIGINAL_SPANS,
     SECTION_ENCODING_INTPACK, SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD, SECTION_PROVENANCE,
@@ -118,7 +123,7 @@ fn raw_and_zstd_share_content_hash_but_not_file_hash() {
 
 #[test]
 fn section_checksums_track_physical_bytes_not_decoded() {
-    // lSame logical content, two encodings. Physical checksums for the
+    // Same logical content, two encodings. Physical checksums for the
     // text-heavy sections must differ (different bytes on disk =
     // different SHA-256 over those bytes). This is what catches a
     // bit-flip even when the logical content is unchanged.
@@ -213,7 +218,7 @@ fn content_hash_diverges_when_canonical_text_changes() {
     let va = NestView::from_bytes(&a).unwrap();
     let vb = NestView::from_bytes(&b).unwrap();
 
-    // lBoth pass physical validation: section checksums are over each
+    // Both pass physical validation: section checksums are over each
     // file's own bytes, both internally consistent.
     va.validate_embeddings_values().unwrap();
     vb.validate_embeddings_values().unwrap();
@@ -229,7 +234,7 @@ fn content_hash_diverges_when_canonical_text_changes() {
 
 #[test]
 fn three_files_three_distinct_classifications() {
-    // lA complete proof: file A (raw, X), file B (zstd, X), file C (raw, Y).
+    // A complete proof: file A (raw, X), file B (zstd, X), file C (raw, Y).
     //   A.content_hash == B.content_hash (semantic equivalence)
     //   A.content_hash != C.content_hash (semantic divergence)
     //   A.file_hash != B.file_hash != C.file_hash (all three differ physically)

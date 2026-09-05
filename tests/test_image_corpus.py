@@ -696,6 +696,8 @@ class ImageCorpusTest(unittest.TestCase):
         """
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
+        from forge import image_encode
+
         result = self._build("gopauto", compress=True)
         media = result["media"]
         gop = media["gop"]
@@ -704,7 +706,7 @@ class ImageCorpusTest(unittest.TestCase):
         self.assertGreater(gop["intra_bytes"], 0)
         self.assertGreater(gop["inter_bytes"], 0)
         self.assertGreater(gop["n_samples"], 1)
-        expected_keyint = 1 if gop["decision"] == "intra" else None
+        expected_keyint = 1 if gop["decision"] == "intra" else image_encode.INTER_KEYINT
         self.assertEqual(media["keyint"], expected_keyint)
 
     def test_auto_gop_policy_finds_redundancy(self):
@@ -721,18 +723,24 @@ class ImageCorpusTest(unittest.TestCase):
             draw.rectangle([40 + i, 60, 100 + i, 120], fill=(0, 0, 0))
             img.save(src / f"frame{i:03d}.png")
 
+        from forge import image_encode
+
         result = self._build("gopred", compress=True, src=src)
         gop = result["media"]["gop"]
         self.assertEqual(gop["decision"], "inter")
         self.assertLess(gop["inter_bytes"], gop["intra_bytes"])
-        self.assertIsNone(result["media"]["keyint"])
+        # inter ships with the bounded gop (INTER_KEYINT), never the encoder
+        # default: measured 2026-08-31, and it caps random-access decode cost.
+        self.assertEqual(result["media"]["keyint"], image_encode.INTER_KEYINT)
 
     def test_gop_policy_inter_forces_the_default_gop(self):
         """`inter` is the lever for material the probe has not seen."""
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
+        from forge import image_encode
+
         result = self._build("gopinter", compress=True, gop_policy="inter")
-        self.assertIsNone(result["media"]["keyint"])
+        self.assertEqual(result["media"]["keyint"], image_encode.INTER_KEYINT)
         self.assertEqual(result["media"]["gop"]["decision"], "inter")
         self.assertEqual(result["media"]["frame_count"], result["n_items"])
 
@@ -823,6 +831,102 @@ class ImageCorpusTest(unittest.TestCase):
                 manifest["frame_sha256"][item["ordinal"]],
             )
         self.assertEqual(len(set(seen)), result["n_items"])
+
+    def test_auto_gop_is_probed_per_segment_when_sharded(self):
+        """gop=auto + sharding: one probe per shard, recorded per segment.
+
+        A single global probe averages regimes away: with cluster ordering
+        the near-duplicate runs concentrate in a few segments, and those
+        are exactly where inter pays while unique segments keep O(1)
+        all-intra access (RFC-2). The decision direction is not asserted on
+        this synthetic set; the wiring is: every shard gets its own probe
+        and its encoded keyint obeys it.
+        """
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        from forge import image_encode
+
+        result = self._build("gopseg", compress=True, shard_size=5)
+        media = result["media"]
+        gop = media["gop"]
+        self.assertEqual(gop["policy"], "auto")
+        self.assertTrue(gop["per_segment"])
+        self.assertIn(gop["decision"], ("intra", "inter", "mixed"))
+        self.assertEqual(len(gop["segments"]), len(media["segments"]))
+        for seg, probe in zip(media["segments"], gop["segments"], strict=True):
+            expected = 1 if probe["decision"] == "intra" else image_encode.INTER_KEYINT
+            self.assertEqual(seg["keyint"], expected)
+            self.assertGreater(probe["intra_bytes"], 0)
+            self.assertGreater(probe["inter_bytes"], 0)
+            # source order is not engineered: the probe samples spaced frames
+            self.assertEqual(probe["sampling"], "evenly-spaced")
+            # the probe is quality-aware (or says out loud that it is not)
+            self.assertTrue("intra_ssim2" in probe or "quality" in probe)
+
+    def test_still_tune_is_dropped_for_inter_gop(self):
+        """SVT's IQ tune is all-intra only: an inter segment must drop it
+        (recorded as tune_resolved=None), never hard-error the encode."""
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        from forge import image_encode
+
+        paths = sorted(self.src.glob("*.png"))[:4]
+        info = image_encode.encode_av1(
+            paths,
+            self.tmp / "interstill.mp4",
+            canvas=(256, 256),
+            preset=12,
+            keyint=image_encode.INTER_KEYINT,
+            tune="still",
+        )
+        self.assertIsNone(info["toolchain"]["params"]["tune_resolved"])
+        self.assertEqual(info["keyint"], image_encode.INTER_KEYINT)
+        intra = image_encode.encode_av1(
+            paths,
+            self.tmp / "intrastill.mp4",
+            canvas=(256, 256),
+            preset=12,
+            keyint=1,
+            tune="still",
+        )
+        self.assertIsNotNone(intra["toolchain"]["params"]["tune_resolved"])
+
+    def test_probe_samples_contiguous_windows_for_engineered_order(self):
+        """order=cluster/similarity puts the redundancy between neighbours;
+        an evenly-spaced probe would erase the signal the ordering created,
+        so the probe must record contiguous-window sampling there."""
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        result = self._build("contigprobe", compress=True, shard_size=5, order_similarity=True)
+        gop = result["media"]["gop"]
+        self.assertTrue(gop["per_segment"])
+        for probe in gop["segments"]:
+            self.assertEqual(probe["sampling"], "contiguous-windows")
+
+    def test_per_segment_probe_finds_redundancy_in_every_shard(self):
+        """Near-identical frames in every shard: each probe must say inter."""
+        if not have_ffmpeg():
+            self.skipTest("ffmpeg with libsvtav1 not available")
+        from PIL import Image, ImageDraw
+
+        src = self.tmp / "redundantsharded"
+        src.mkdir()
+        for i in range(10):
+            img = Image.new("RGB", (320, 240), (200, 100, 50))
+            draw = ImageDraw.Draw(img)
+            draw.rectangle([40 + i, 60, 100 + i, 120], fill=(0, 0, 0))
+            img.save(src / f"frame{i:03d}.png")
+
+        from forge import image_encode
+
+        result = self._build("gopredshard", compress=True, src=src, shard_size=5)
+        media = result["media"]
+        self.assertEqual(len(media["segments"]), 2)
+        for seg in media["segments"]:
+            self.assertEqual(seg["keyint"], image_encode.INTER_KEYINT)
+        self.assertEqual(media["keyint"], image_encode.INTER_KEYINT)
+        self.assertEqual(media["gop"]["decision"], "inter")
+        self.assertTrue(media["gop"]["per_segment"])
 
     def test_dtype_override_reaches_the_built_corpus(self):
         """The dtype lever (F5.3) is a build kwarg, not a preset swap."""

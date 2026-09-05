@@ -1,0 +1,113 @@
+# continuous integration for the rust workspace and the python surface.
+#
+# the release / install-test / pypi workflows only run on tags and
+# releases, so until this file existed nothing ran `cargo test` on a pull
+# request. this is the gate `scripts/release_check.sh` runs locally, minus
+# the LFS corpus measurement (no LFS budget in CI): fmt, clippy with the
+# workspace deny lints (`unwrap_used`, `undocumented_unsafe_blocks`), the
+# whole test suite on linux + macos (the aarch64 macos runner exercises the
+# NEON kernels, the x86_64 linux runner the AVX2 ones), the 300-line guard,
+# the deterministic mutation-fuzz harnesses at a higher iteration count,
+# and a bounded coverage-guided fuzz smoke on nightly.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  rust:
+    name: rust ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: toolchain
+        run: rustup toolchain install stable --profile minimal --component clippy,rustfmt && rustup default stable
+      - uses: Swatinem/rust-cache@v2
+      - name: fmt
+        run: cargo fmt --all --check
+      - name: clippy (workspace deny lints)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: build
+        run: cargo build --workspace --all-targets
+      - name: test
+        run: cargo test --workspace
+      - name: mutation fuzz (deterministic, higher count)
+        env:
+          NEST_MUTATION_ITERS: "6000"
+        run: |
+          cargo test --release -p nest-format --test mutation_fuzz
+          NEST_MUTATION_ITERS=800 cargo test --release -p nest-runtime --test mutation_fuzz
+      - name: 300-line guard (crates/**/src)
+        run: |
+          overlong="$(find crates -name '*.rs' -path '*/src/*' -not -path '*/tests/*' \
+            | xargs wc -l | awk '$1 > 300 {print}' | grep -v 'total$' || true)"
+          if [ -n "$overlong" ]; then echo "$overlong"; exit 1; fi
+      - name: forge-core (separate workspace)
+        run: |
+          cargo fmt --manifest-path forge-core/Cargo.toml --all --check
+          cargo clippy --manifest-path forge-core/Cargo.toml --all-targets -- -D warnings
+          cargo test --manifest-path forge-core/Cargo.toml
+
+  fuzz:
+    name: cargo-fuzz smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: nightly toolchain
+        run: rustup toolchain install nightly --profile minimal && rustup default nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - name: cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: seed corpora
+        run: |
+          cd fuzz
+          for t in nest_view section_decoders runtime_indexes mmap_open_search; do
+            mkdir -p corpus/$t
+            cp seeds/*.bin ../crates/nest-format/tests/fixtures/golden_v1_minimal.nest corpus/$t/
+          done
+      - name: run every target (bounded)
+        run: |
+          cd fuzz
+          for t in nest_view section_decoders runtime_indexes; do
+            cargo fuzz run $t -- -max_total_time=90 -max_len=65536
+          done
+          cargo fuzz run mmap_open_search -- -max_total_time=90 -max_len=65536 -rss_limit_mb=4096
+      - name: keep any crash artifact
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts
+          if-no-files-found: ignore
+
+  python:
+    name: python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: ruff (same file list as release_check.sh)
+        run: |
+          python -m pip install ruff
+          NEST_PYTHON=python sh scripts/ruff_check.sh

@@ -54,7 +54,7 @@ fn run_capture(cmd: &mut ProcCommand) -> Option<std::process::Output> {
     cmd.output().ok().filter(|o| o.status.success())
 }
 
-/// lthe potion table dir lives next to the embedder script
+/// the potion table dir lives next to the embedder script
 /// (`<root>/forge/embed_query_potion.py` -> `<root>/forge/models/...`).
 /// rejects a git-lfs pointer so a fresh clone without `git lfs pull` fails
 /// loudly instead of embedding garbage later.
@@ -93,7 +93,7 @@ fn check_potion_table(rep: &mut Report, embedder: &Path) {
     }
 }
 
-/// lone real offline embed: the fixed probe exercises numpy + tokenizers +
+/// one real offline embed: the fixed probe exercises numpy + tokenizers +
 /// the table load exactly the way `ask`/`retrieve` do.
 fn check_embedder_run(rep: &mut Report, interpreter: &str, embedder: &Path) {
     let out = ProcCommand::new(interpreter)

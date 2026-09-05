@@ -14,6 +14,7 @@
 //! two builds of the same edge set produce byte-identical bytes. typed
 //! errors on truncation/hostile claims, never panics.
 
+use crate::bytes::{le_u32, le_u64};
 use crate::encoding::pack_u64s;
 use crate::error::NestError;
 use crate::layout::SECTION_GRAPH_ADJACENCY;
@@ -189,9 +190,8 @@ impl<'a> Cursor<'a> {
     fn new(buf: &'a [u8]) -> Self {
         Self { buf, pos: 0 }
     }
-    /// take the next `n` bytes, bounds-checked (the building block for u8/u32/u64).
     fn take(&mut self, n: usize) -> Result<&'a [u8], NestError> {
-        if self.pos + n > self.buf.len() {
+        if n > self.buf.len() - self.pos {
             return Err(malformed("graph_adjacency: unexpected EOF"));
         }
         let s = &self.buf[self.pos..self.pos + n];
@@ -202,10 +202,10 @@ impl<'a> Cursor<'a> {
         Ok(self.take(1)?[0])
     }
     fn u32(&mut self) -> Result<u32, NestError> {
-        Ok(u32::from_le_bytes(self.take(4)?.try_into().unwrap()))
+        le_u32(self.take(4)?)
     }
     fn u64(&mut self) -> Result<u64, NestError> {
-        Ok(u64::from_le_bytes(self.take(8)?.try_into().unwrap()))
+        le_u64(self.take(8)?)
     }
     /// read a length-prefixed intpack blob, decode it to u64s.
     fn intpack_column(&mut self) -> Result<Vec<u64>, NestError> {
@@ -257,7 +257,7 @@ pub fn parse_csr_parts(bytes: &[u8]) -> Result<CsrParts, NestError> {
         }
         total = total.saturating_add(deg);
     }
-    if *offsets.last().unwrap() != total {
+    if offsets.last().copied() != Some(total) {
         return Err(malformed("graph_adjacency: final offset != edge count"));
     }
     let dst_gaps = cur.intpack_column()?;

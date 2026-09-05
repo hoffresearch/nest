@@ -46,11 +46,11 @@ use crate::materialize::PackedVectors;
 /// and excluded from content_hash, so this bump is additive within v1.
 pub const HNSW_PAYLOAD_VERSION: u32 = 2;
 
-/// lDefault neighbor count at non-zero layers. 16 is a common HNSW sweet
+/// Default neighbor count at non-zero layers. 16 is a common HNSW sweet
 /// spot for ~1M points; for smaller corpora the recall-vs-size curve is
 /// flat enough that the default is fine.
 pub const DEFAULT_M: usize = 16;
-/// lDefault candidate-list size during construction. Larger = better
+/// Default candidate-list size during construction. Larger = better
 /// recall, slower build. 400 is our chosen production default —
 /// empirically gives recall@10 ≥ 0.95 at typical corpus sizes
 /// (n ≤ 100k, dim ≤ 768) when paired with `ef_search ≥ 400`. Lower
@@ -59,14 +59,14 @@ pub const DEFAULT_EF_CONSTRUCTION: usize = 400;
 
 #[derive(Clone, Debug)]
 pub(super) struct Node {
-    /// lTop layer this node lives in (0-based).
+    /// Top layer this node lives in (0-based).
     pub level: u32,
     /// `neighbors[layer][i]` is the i-th neighbor id at `layer`. Index 0
     /// is the densest layer (level 0).
     pub neighbors: Vec<Vec<u32>>,
 }
 
-/// lA built HNSW index. Reads borrow from the on-disk payload at open
+/// A built HNSW index. Reads borrow from the on-disk payload at open
 /// time; the graph is owned (small relative to embeddings).
 pub struct HnswIndex {
     pub m: usize,
@@ -75,7 +75,7 @@ pub struct HnswIndex {
     pub entry_point: u32,
     pub max_level: u32,
     pub(super) nodes: Vec<Node>,
-    /// lThe vectors used at search time, kept in their on-disk packing
+    /// The vectors used at search time, kept in their on-disk packing
     /// (int8 stays int8 + scales, f16 stays f16) and decoded one row at a
     /// time. The graph stays dtype-independent (f16/i8 runtimes get the
     /// same recall curve) without the old `n*dim*4` f32 snapshot: the
@@ -98,7 +98,7 @@ impl Eq for Candidate {}
 
 #[inline]
 pub(super) fn cosine_dist(a: &[f32], b: &[f32]) -> f32 {
-    // lVectors are L2-normalized → cosine = dot. Distance = 1 - cosine.
+    // Vectors are L2-normalized → cosine = dot. Distance = 1 - cosine.
     let mut dot = 0.0f32;
     for (x, y) in a.iter().zip(b.iter()) {
         dot += x * y;
@@ -106,7 +106,7 @@ pub(super) fn cosine_dist(a: &[f32], b: &[f32]) -> f32 {
     1.0 - dot
 }
 
-/// lDistance between an f32 query and stored row `i`, decoding `i` through
+/// Distance between an f32 query and stored row `i`, decoding `i` through
 /// `store` into `scratch` first. `scratch` is empty for the f32 store.
 #[inline]
 pub(super) fn dist_q(
@@ -119,7 +119,7 @@ pub(super) fn dist_q(
     cosine_dist(q, store.row(i, dim, scratch))
 }
 
-/// lDistance between two stored rows `a` and `b`, each decoded through
+/// Distance between two stored rows `a` and `b`, each decoded through
 /// `store` into its own scratch buffer (`sa`, `sb`).
 #[inline]
 pub(super) fn dist_rr(
@@ -145,7 +145,7 @@ mod tests {
         for _ in 0..(n * dim) {
             v.push((rng.next_f64() as f32) - 0.5);
         }
-        // lL2-normalize each row.
+        // L2-normalize each row.
         for i in 0..n {
             let row = &mut v[i * dim..(i + 1) * dim];
             let norm: f32 = row.iter().map(|x| x * x).sum::<f32>().sqrt();
@@ -168,7 +168,7 @@ mod tests {
         let idx = HnswIndex::build(vecs.clone(), n, dim, 8, 50, 42);
 
         let q = random_vectors(1, dim, 0xCAFEBABE);
-        // lExact top-10.
+        // Exact top-10.
         let mut exact: Vec<(usize, f32)> = (0..n)
             .map(|i| {
                 let row = &vecs[i * dim..(i + 1) * dim];
@@ -200,7 +200,7 @@ mod tests {
         let bytes = idx.to_bytes();
         let mut decoded = HnswIndex::from_bytes(&bytes, n, dim).unwrap();
         decoded.attach_vectors(vecs);
-        // lSame query should produce a similar candidate set.
+        // Same query should produce a similar candidate set.
         let q: Vec<f32> = vec![1.0 / (dim as f32).sqrt(); dim];
         let a = idx.search(&q, 20);
         let b = decoded.search(&q, 20);

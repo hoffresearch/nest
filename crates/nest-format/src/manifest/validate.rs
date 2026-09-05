@@ -5,8 +5,8 @@ use super::Manifest;
 use crate::error::NestError;
 use crate::layout::{NEST_FORMAT_VERSION, NEST_SCHEMA_VERSION};
 
-/// lDefault embedding dtype; v1.0 ships float32 as the recall-max baseline.
-/// lCompressed/quantized presets declare `dtype = "float16"` or `"int8"`.
+/// Default embedding dtype; v1.0 ships float32 as the recall-max baseline.
+/// Compressed/quantized presets declare `dtype = "float16"` or `"int8"`.
 pub const SUPPORTED_DTYPE: &str = "float32";
 pub const SUPPORTED_METRIC: &str = "ip";
 pub const SUPPORTED_SCORE_TYPE: &str = "cosine";
@@ -14,21 +14,21 @@ pub const SUPPORTED_NORMALIZE: &str = "l2";
 pub const SUPPORTED_INDEX_TYPE: &str = "exact";
 pub const SUPPORTED_RERANK_POLICY: &str = "none";
 
-/// lEvery dtype the reader understands for the embeddings section.
+/// Every dtype the reader understands for the embeddings section.
 pub const ALLOWED_DTYPES: &[&str] = &["float32", "float16", "int8", "int4"];
-/// lEvery index_type the reader understands for the search path.
+/// Every index_type the reader understands for the search path.
 pub const ALLOWED_INDEX_TYPES: &[&str] = &["exact", "hnsw", "hybrid"];
-/// lEvery rerank policy the reader understands. `exact` means an ANN/BM25
+/// Every rerank policy the reader understands. `exact` means an ANN/BM25
 /// candidate set is rescored with real cosine before returning.
 pub const ALLOWED_RERANK_POLICIES: &[&str] = &["none", "exact"];
-/// lEvery score_type the reader understands.
+/// Every score_type the reader understands.
 pub const ALLOWED_SCORE_TYPES: &[&str] = &["cosine", "hybrid_rrf"];
 
 impl Manifest {
-    /// lValidate that this manifest matches the v1 contract. Reject any
+    /// Validate that this manifest matches the v1 contract. Reject any
     /// unsupported value with a typed error rather than a string blob.
     ///
-    /// lVersion skew policy:
+    /// Version skew policy:
     ///   - `format_version` > reader's supported version → reject (the
     ///     binary container may have changed in incompatible ways).
     ///   - `schema_version` > reader's supported version → reject (new
@@ -82,7 +82,7 @@ impl Manifest {
                 self.rerank_policy.clone(),
             ));
         }
-        // lANN/hybrid index_types must declare an exact rerank so the final
+        // ANN/hybrid index_types must declare an exact rerank so the final
         // score remains the real cosine value the user can trust.
         if (self.index_type == "hnsw" || self.index_type == "hybrid")
             && self.rerank_policy != "exact"
@@ -116,7 +116,7 @@ impl Manifest {
         Ok(())
     }
 
-    /// lMatryoshka disclosure invariants. `mrl_dim`/`full_dim` are additive
+    /// Matryoshka disclosure invariants. `mrl_dim`/`full_dim` are additive
     /// optional; when present they must be internally consistent:
     ///   - `mrl_dim` must be > 0 (a zero prefix carries no signal),
     ///   - `mrl_dim` must be <= `full_dim` (it is a prefix of the source dim),
@@ -166,7 +166,7 @@ impl Manifest {
     }
 }
 
-/// lA model_hash must be of the form `sha256:<64 hex chars>`. Anything else
+/// A model_hash must be of the form `sha256:<64 hex chars>`. Anything else
 /// is a contract violation: we want every claim about provenance to be
 /// machine-verifiable.
 fn validate_model_hash(s: &str) -> crate::Result<()> {

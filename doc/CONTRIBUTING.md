@@ -9,7 +9,7 @@
 3. keep each pr focused on one concern. small is better.
 4. add or update tests for the change. new behavior needs a new test. write real tests against real artifacts (built .nest files, golden fixtures, real corpora), no mocks; cover the happy path, the error path, and one edge case.
 5. if the change alters architecture, module boundaries, data flow, or doc locations, update the arc pair (`doc/arc/arc.yaml`, `doc/arc/arc.mmd`) in the same pr. keep both concise and pragmatic. do not add a separate human architecture doc; `arc.yaml` is both the machine map and the human reference.
-6. run `./scripts/release_check.sh` locally before pushing. that script is the same gate ci runs on the pr.
+6. run `./scripts/release_check.sh` locally before pushing. `.github/workflows/ci.yml` runs the same gate on the pr (minus the lfs corpus measurement), plus the mutation-fuzz harnesses and a cargo-fuzz smoke.
 7. commit with a clear message in plain english. no conventional commits prefix.
 8. open a pr against `dev`. the maintainer squashes or rebases into `main` at release time.
 
@@ -95,6 +95,14 @@ python tests/test_search_text_model_hash.py
 ```
 
 `release_check.sh` is the source of truth. if it passes locally, ci passes.
+
+two lints are denied workspace-wide and will fail the build: `clippy::unwrap_used` (tests are exempt; parse paths read fields through `nest_format::bytes`) and `clippy::undocumented_unsafe_blocks` (every `unsafe` block states its invariant in a `// SAFETY:` comment). a change to any section decoder or search path should also run the mutation harness, and a new codec gets an arm in `fuzz/fuzz_targets/section_decoders.rs`:
+
+```
+cargo test -p nest-format --test mutation_fuzz -p nest-runtime --test mutation_fuzz
+NEST_MUTATION_ITERS=25000 cargo test --release -p nest-format --test mutation_fuzz
+cargo +nightly fuzz run nest_view -- -max_total_time=600      # needs cargo-fuzz, see fuzz/README.md
+```
 
 ## reporting issues
 

@@ -15,6 +15,11 @@
 //!   u8      * (n * dim/2)   packed nibbles            [...]
 //! ```
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::layout::{
     NEST_FOOTER_SIZE, NestFooter, SECTION_EMBEDDINGS, SECTION_ENCODING_INT4,
 };
@@ -170,7 +175,7 @@ fn rejects_unknown_scale_kind() {
 fn rejects_nan_in_group_scale() {
     let mut bytes = build_int4(3, DIM);
     let off = embeddings_offset(&bytes);
-    // lFirst f16 group scale of row 0 sits right after the 8-byte prefix.
+    // First f16 group scale of row 0 sits right after the 8-byte prefix.
     // Set it to f16 NaN (0x7E00).
     bytes[off + 8..off + 10].copy_from_slice(&half::f16::NAN.to_le_bytes());
     rewrite_emb_checksum_and_file_hash(&mut bytes);
@@ -202,7 +207,7 @@ fn rejects_inf_in_group_scale() {
 
 #[test]
 fn rejects_truncated_prefix() {
-    // lTruncate the embeddings section size in the table by one byte so the
+    // Truncate the embeddings section size in the table by one byte so the
     // payload no longer matches the int4 expected size. The reader's
     // validate_embeddings_layout surfaces EmbeddingSizeMismatch.
     let mut bytes = build_int4(2, DIM);
@@ -239,7 +244,7 @@ fn rejects_truncated_prefix() {
 
 #[test]
 fn rejects_dim_not_multiple_of_block_at_section_level() {
-    // lSection-level (writer) rejection: an int4 build whose embedding_dim is
+    // Section-level (writer) rejection: an int4 build whose embedding_dim is
     // not a multiple of 64 fails to encode the embeddings payload, so no
     // file is produced (the view-level rejection is covered separately in
     // tests/int4_roundtrip.rs). dim = 63 -> not a multiple of INT4_BLOCK.

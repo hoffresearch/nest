@@ -20,7 +20,7 @@ use pyo3::prelude::*;
 
 use nest_runtime::{MmapNestFile, SearchResult};
 
-/// lone cited span from `retrieve()`. mirrors `SearchHitPy` and adds the
+/// one cited span from `retrieve()`. mirrors `SearchHitPy` and adds the
 /// tier-1 `text` plus the `rerank_source` precision disclosure, so an agent
 /// has the citeable answer and the honesty marker without a second call.
 #[pyclass(skip_from_py_object)]
@@ -28,7 +28,7 @@ use nest_runtime::{MmapNestFile, SearchResult};
 pub struct RetrieveHitPy {
     #[pyo3(get)]
     pub chunk_id: String,
-    /// lthe exact-cosine rerank value (NOT a candidate-generator proxy).
+    /// the exact-cosine rerank value (NOT a candidate-generator proxy).
     #[pyo3(get)]
     pub score: f32,
     #[pyo3(get)]
@@ -41,19 +41,19 @@ pub struct RetrieveHitPy {
     pub offset_end: u64,
     #[pyo3(get)]
     pub citation_id: String,
-    /// ltier-1 stored canonical text (the same bytes `cite` returns).
+    /// tier-1 stored canonical text (the same bytes `cite` returns).
     #[pyo3(get)]
     pub text: String,
     #[pyo3(get)]
     pub file_hash: String,
     #[pyo3(get)]
     pub content_hash: String,
-    /// l"full_precision" | "stored_precision": the precision the rerank read.
+    /// "full_precision" | "stored_precision": the precision the rerank read.
     #[pyo3(get)]
     pub rerank_source: String,
 }
 
-/// lRoute by manifest capability, run search, then attach tier-1 canonical
+/// Route by manifest capability, run search, then attach tier-1 canonical
 /// text to each hit. the score on every returned hit IS the exact rerank
 /// value `search_*` produced. shared by the `NestFile.retrieve` method.
 pub fn retrieve(
@@ -65,7 +65,7 @@ pub fn retrieve(
     ef: usize,
     expected_model_hash: Option<String>,
 ) -> PyResult<Vec<RetrieveHitPy>> {
-    // lhonesty gate: when the caller passes the model_hash of the embedder it
+    // honesty gate: when the caller passes the model_hash of the embedder it
     // used for `query`, reject a corpus built with a different model. A bare
     // query vector carries no model identity, so the runtime cannot gate
     // unconditionally the way the CLI does — the caller opts in by passing the
@@ -95,7 +95,7 @@ pub fn retrieve(
     }
     .map_err(|e| PyValueError::new_err(format!("{e}")))?;
 
-    // ltier-1 canonical text, decoded once, mapped by chunk_id (file order).
+    // tier-1 canonical text, decoded once, mapped by chunk_id (file order).
     let texts = rt
         .canonical_texts()
         .map_err(|e| PyValueError::new_err(format!("{e}")))?;

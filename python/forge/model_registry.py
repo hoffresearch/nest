@@ -85,7 +85,7 @@ _OPEN_CLIP_REQUIRES = (
 )
 
 
-# lpinned sha256 of the wemm-2b remote-code files as reviewed 2026-08-31
+# pinned sha256 of the wemm-2b remote-code files as reviewed 2026-08-31
 # (N11): a changed file is REFUSED, not warned about. 4b/9b have no local
 # snapshot yet, so their pin list stays empty until one is reviewed.
 _WEMM_2B_CODE_PINS = (
@@ -187,7 +187,7 @@ PRESETS: dict[str, ModelPreset] = {
             "2B",
             2048,
             executable=True,
-            local_dir="/Users/nn/models/modelsdownload/WeMM-Embedding-2B",
+            local_dir="~/models/modelsdownload/WeMM-Embedding-2B",
         ),
         _wemm("wemm-4b", "4B", 2560, executable=False, local_dir=None),
         _wemm("wemm-9b", "9B", 4096, executable=False, local_dir=None),
@@ -239,8 +239,10 @@ def resolve_model_dir(preset: ModelPreset, model_path: str | os.PathLike | None 
     env_key = "NEST_MODEL_DIR_" + preset.name.upper().replace("-", "_")
     if os.environ.get(env_key):
         return Path(os.environ[env_key])
-    if preset.local_dir and Path(preset.local_dir).is_dir():
-        return Path(preset.local_dir)
+    if preset.local_dir:
+        local = Path(preset.local_dir).expanduser()
+        if local.is_dir():
+            return local
     if preset.kind == "st_multimodal":
         from model_fingerprint import hf_cache_snapshot
 

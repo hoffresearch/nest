@@ -10,6 +10,11 @@
 //!   rejects a zstd-encoded band (bands are fixed-stride slabs, never
 //!   zstd) — both through real .nest files.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::manifest::Manifest;
 use nest_format::writer::NestFileBuilder;
 use nest_format::{

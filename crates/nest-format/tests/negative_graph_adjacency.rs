@@ -3,6 +3,11 @@
 //! NEVER panic (mirrors negative_txt_streams discipline). plus an
 //! exhaustive prefix-truncation fuzz.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::{
     EDGE_TYPE_NEXT_CHUNK, EDGE_TYPE_SEMANTIC, Edge, NestError, decode_graph_adjacency,
     encode_graph_adjacency, parse_csr_parts,

@@ -3,7 +3,7 @@
 
 use nest_format::manifest::Manifest;
 
-/// lAssemble the build manifest. the matryoshka disclosure fields
+/// Assemble the build manifest. the matryoshka disclosure fields
 /// (`mrl_dim`/`full_dim`) are set only when truncation is active, so a
 /// non-truncated file stays byte-identical with a v1 manifest.
 #[allow(clippy::too_many_arguments)]

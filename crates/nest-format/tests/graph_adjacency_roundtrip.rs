@@ -9,6 +9,11 @@
 //!   section has IDENTICAL content_hash (citations stay stable), because the
 //!   section is excluded from CANONICAL_SECTIONS.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failing unwrap is a failing test"
+)]
 use nest_format::manifest::Manifest;
 use nest_format::writer::NestFileBuilder;
 use nest_format::{
