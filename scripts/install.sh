@@ -1,7 +1,7 @@
 #!/bin/sh
 # nest installer (issue #75). one-liner:
 #
-#   curl -sSf https://get.hoffresearch.com/nest | sh
+#   curl -sSf https://raw.githubusercontent.com/hoffresearch/nest/main/scripts/install.sh | sh
 #
 # downloads the release tarball for this platform, verifies its sha256
 # against the release's checksum file, installs the binary to

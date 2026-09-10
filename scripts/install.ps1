@@ -1,6 +1,6 @@
 # nest installer for windows (issue #75). one-liner:
 #
-#   irm https://get.hoffresearch.com/nest.ps1 | iex
+#   irm https://raw.githubusercontent.com/hoffresearch/nest/main/scripts/install.ps1 | iex
 #
 # mirrors scripts/install.sh: downloads the windows release zip, verifies
 # its sha256 against the release checksum file, installs the binary to
