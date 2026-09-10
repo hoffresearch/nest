@@ -185,3 +185,56 @@ fn hnsw_recall_realistic_size() {
         recall
     );
 }
+
+/// sha256 of the serialized graph, hex.
+fn graph_digest(idx: &HnswIndex) -> String {
+    use sha2::{Digest, Sha256};
+    hex::encode(Sha256::digest(idx.to_bytes()))
+}
+
+/// the build is deterministic for a seed AND its bytes are pinned: any
+/// change to the insertion order, the distance arithmetic, the neighbor
+/// heuristic or the tie-breaking shows up here as a different digest.
+/// the build-throughput work (hardening-plan §4.11) must either keep these
+/// digests or change them on purpose, in the same commit, with the reason.
+/// `PIN_HNSW_DIGESTS=1 cargo test --release -p nest-runtime --test
+/// hnsw_recall graph_bytes_are_pinned -- --nocapture` prints the current
+/// values to paste below.
+#[test]
+fn graph_bytes_are_pinned() {
+    const CASES: [(usize, usize, u64, u64, usize, usize, &str); 2] = [
+        // (n, dim, corpus seed, build seed, m, ef_construction, digest)
+        (
+            2_000,
+            128,
+            0x5EED_0001,
+            0xBEEF,
+            DEFAULT_M,
+            DEFAULT_EF_CONSTRUCTION,
+            "0210ecf212b48524fea016a3033064259ce23075666cbae43f0bdb02d0b77f9b",
+        ),
+        (
+            10_000,
+            384,
+            0xCAFE_BABE,
+            0xDEAD_BEEF,
+            DEFAULT_M,
+            DEFAULT_EF_CONSTRUCTION,
+            "7b0cbd99fd12d272f6925d5dc82f691e3f411eea65400dea968c38f44248c1e8",
+        ),
+    ];
+    let print = std::env::var("PIN_HNSW_DIGESTS").is_ok();
+    for (n, dim, corpus_seed, build_seed, m, ef, want) in CASES {
+        let corpus = random_l2(n, dim, corpus_seed);
+        let idx = HnswIndex::build(corpus, n, dim, m, ef, build_seed);
+        let got = graph_digest(&idx);
+        if print {
+            println!("pin n={n} dim={dim} -> {got}");
+            continue;
+        }
+        assert_eq!(
+            got, want,
+            "hnsw graph bytes changed for n={n} dim={dim}: update the pin on purpose, in the same commit, with the reason"
+        );
+    }
+}
