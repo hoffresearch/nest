@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// A reference to an original source artifact addressed by content-hash.
 ///
-/// lin the default self-contained mode `inlined=true` and the original
+/// in the default self-contained mode `inlined=true` and the original
 /// bytes live inside the .nest; in catalog mode `inlined=false` and the
 /// heavy bytes stay out-of-line while this record keeps the digest,
 /// uri-hint, and length so a citation can reopen and verify them later.
