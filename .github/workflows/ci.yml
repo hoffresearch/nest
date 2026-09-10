@@ -10,8 +10,9 @@
 # the deterministic mutation-fuzz harnesses at a higher iteration count,
 # a bounded coverage-guided fuzz smoke on nightly, cargo-deny (advisories,
 # licenses, bans, sources; policy in deny.toml) on the three cargo
-# workspaces, and cargo-semver-checks on nest-format's public api against
-# the pull request's base commit.
+# workspaces, cargo-semver-checks on nest-format's public api against the
+# pull request's base commit, and (on the schedule or on demand) a
+# 30-minute-per-target fuzz soak whose corpus carries over between nights.
 
 name: ci
 
@@ -19,6 +20,16 @@ on:
   push:
     branches: [main]
   pull_request:
+  # nightly soak: every cargo-fuzz target for 30 minutes with the corpus
+  # carried over between nights (hardening-plan §4.3). also on demand.
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: seconds per fuzz target for the soak job
+        required: false
+        default: "1800"
 
 permissions:
   contents: read
@@ -30,6 +41,7 @@ env:
 jobs:
   rust:
     name: rust ${{ matrix.os }}
+    if: github.event_name != 'schedule'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -70,6 +82,7 @@ jobs:
 
   fuzz:
     name: cargo-fuzz smoke
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -140,9 +153,59 @@ jobs:
         with:
           package: nest-format
           baseline-rev: ${{ github.event.pull_request.base.sha }}
+  fuzz-soak:
+    name: cargo-fuzz soak ${{ matrix.target }}
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [nest_view, section_decoders, runtime_indexes, mmap_open_search]
+    steps:
+      - uses: actions/checkout@v6
+      - name: nightly toolchain
+        run: rustup toolchain install nightly --profile minimal && rustup default nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - name: cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      # the corpus accumulates across nights: restore the newest one, seed
+      # only when nothing was restored, minimize before saving.
+      - name: restore corpus
+        uses: actions/cache@v4
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+      - name: seed corpus if empty
+        run: |
+          cd fuzz
+          mkdir -p corpus/${{ matrix.target }}
+          if [ -z "$(ls -A corpus/${{ matrix.target }})" ]; then
+            cp seeds/*.bin ../crates/nest-format/tests/fixtures/golden_v1_minimal.nest corpus/${{ matrix.target }}/
+          fi
+      - name: soak
+        run: |
+          cd fuzz
+          cargo fuzz run ${{ matrix.target }} -- \
+            -max_total_time=${{ inputs.seconds || 1800 }} -max_len=65536 -rss_limit_mb=4096
+      - name: minimize corpus
+        if: always()
+        run: cd fuzz && cargo fuzz cmin ${{ matrix.target }} || true
+      - name: keep any crash artifact
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-soak-artifacts-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}
+          if-no-files-found: ignore
+          retention-days: 30
 
   python:
     name: python
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

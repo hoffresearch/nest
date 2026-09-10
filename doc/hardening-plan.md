@@ -140,12 +140,17 @@ corpus, one machine, one table, checked in with the exact versions.
   lockfile; README links the table and quotes two numbers (cold open, bytes
   on disk), nothing else.
 
-### 4.3 coverage-guided fuzz soak (first run done, see §3; keep going)
+### 4.3 coverage-guided fuzz soak (done: nightly job + local script)
 
 first soak ran 2026-09-05, 10 minutes per target, and paid for itself with
-finding #5. next: a nightly `schedule:` job in `ci.yml` (30 min per target,
-artifacts uploaded on crash) and a one-hour local soak per target after any
-decoder change. every finding becomes a `tests/negative_*.rs` before the fix.
+finding #5. now: `ci.yml` job `fuzz-soak` runs every target (the four libfuzzer
+binaries; `reseal.rs` is their shared helper) for 30 minutes on the nightly `schedule:` (03:17 utc) or
+on demand (`gh workflow run ci.yml -f seconds=600`), with the corpus
+carried over between nights through the actions cache (`cargo fuzz cmin`
+before saving) and crash artifacts uploaded for 30 days. locally,
+`sh scripts/fuzz_soak.sh [seconds]` runs the same loop, one hour per target
+by default, after any decoder change. every finding becomes a
+`tests/negative_*.rs` before the fix, its artifact a `fuzz/seeds/regress-*`.
 
 ### 4.4 miri on nest-format
 
