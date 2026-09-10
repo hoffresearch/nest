@@ -172,14 +172,33 @@ packing is exact; and every encoder is byte-stable across two calls. these
 are the byte-identity claims the citation URI depends on; before this they
 were tested on fixed inputs only.
 
-### 4.6 write the 0x09 fp slab
+### 4.6 write the 0x09 fp slab (decision 2026-09-10: not as a preset; reader stays)
 
-the runtime reranks from `embeddings_fp` when present, but no writer emits
-it, so an int4 corpus reranks at stored precision and every hit discloses
-that. `NestFileBuilder::embeddings_fp(EmbeddingDType::Float16)` writes the
-64-byte-aligned raw slab next to the int4 section; `nano` preset gains it;
-measure_presets gets the recall delta. this closes the honesty-disclosure
-gap instead of documenting it.
+the item assumed the slab would sit next to the int4 section as a rerank
+source while int4 kept generating candidates. reading the runtime says
+otherwise: `rerank_source()` in `search.rs` routes BOTH `score_all` (the
+exact path) and `score_subset` (ann / graph / hybrid rerank) through the
+fp slab whenever it is present, and `RerankSourceKind::from_dtype` calls
+only float32 "full precision" (float16 is stored precision). so a file
+with int4 + fp slab reads the int4 rows for one thing only, the graph's
+materialized distances, and pays for both slabs:
+
+| stored + slab | bytes / dim | rerank disclosure | ladder point it competes with |
+|---|---|---|---|
+| int4 + f16 slab | 2.5 | still "stored precision" (f16) | `compressed` (f16 stored, 2.0, recall 1.000) |
+| int4 + f32 slab | 4.5 | "real cosine" | `exact` (f32 stored, 4.0, recall 1.000) |
+| int8 (`tiny`) | 1.0 | "stored precision" | recall 0.992 at ratio 0.256 |
+
+neither combination is a pareto point: `tiny` already gives 0.992 at
+1 byte/dim, and the only way the slab earns its bytes is a two-stage exact
+path (coarse scan over the stored rows, fp rerank of the top candidates),
+which turns "exact" into approximate-with-exact-scores and is a contract
+change, not a hardening item. decision: no writer, no `nano-fp` preset.
+the reader path stays as is (a file produced elsewhere with a 0x09 slab
+is honored and validated), the disclosure stays honest, and `nano` keeps
+saying "real cosine at stored precision". reopen only with a corpus where
+the int4 scan + fp rerank shape is measured to beat `tiny` on the same
+recall.
 
 ### 4.7 kernel benchmarks in-repo (done)
 
@@ -202,9 +221,18 @@ throwaway example; the next kernel change is measured by `cargo bench`.
 
 ### 4.8 supply chain items already promised in SECURITY.md
 
-- signed release tags (`git tag -s`, verify step in `release.yml`).
-- SBOM per release (`cargo cyclonedx` -> attach to the release, attest it
-  like the binaries).
+- signed release tags: done. `tag.gpgsign = true` locally (ssh key),
+  `.github/allowed_signers` lists the release keys, and the reusable
+  `.github/workflows/tag-verify.yml` runs in cargo-dist's plan phase
+  (`plan-jobs` in `Cargo.toml`) and before the pypi wheels: a lightweight
+  tag, an unsigned tag, or an unknown key stops the release before any
+  build. pull-request plan runs pass through (branch ref, nothing to
+  verify).
+- SBOM per release: done. `cargo-cyclonedx = true` in the dist config
+  uploads one `.cdx.xml` per package next to the binaries, covered by the
+  same attestations; `cargo-auditable = true` embeds the dependency tree in
+  the executables (`cargo audit bin nest`). `release.yml` regenerated with
+  `dist generate` (0.32.0), not hand-edited.
 - `cargo deny` (advisories + licenses + bans + sources): done. policy in
   `deny.toml` (the allowlist is exactly the license set of the three
   lockfiles; a copyleft-only crate fails on purpose), `ci.yml` job `deny`
