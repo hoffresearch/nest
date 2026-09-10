@@ -181,12 +181,24 @@ that. `NestFileBuilder::embeddings_fp(EmbeddingDType::Float16)` writes the
 measure_presets gets the recall delta. this closes the honesty-disclosure
 gap instead of documenting it.
 
-### 4.7 kernel benchmarks in-repo
+### 4.7 kernel benchmarks in-repo (done)
 
-`crates/nest-runtime/benches/simd.rs` (criterion): f32/f16/i8/i4 dot per
-backend at dim 256/384/768, and the rerank loop over 50k rows. the
-allocation fix in §1 was measured with a throwaway example; the next kernel
-change should be measured by `cargo bench`, not asserted.
+`cargo bench -p nest-runtime` (criterion, default features off), three
+benches under `crates/nest-runtime/benches/`:
+
+- `simd.rs`: f32/f16/i8/i4 dot at dim 256/384/768 on the detected backend
+  (the group name says neon / avx2 / scalar; `NEST_FORCE_SCALAR=1` for the
+  scalar path), plus the full int8 section scan over 50k rows.
+- `rerank.rs`: the public path end to end: one `.nest` per stored dtype
+  (20k x 384, the same hnsw graph in every file), `search` (exact scan)
+  and `search_ann` at ef=100 (hnsw candidates + the mandatory exact rerank,
+  where the allocation-free int4 path shows).
+- `hnsw_build.rs`: `HnswIndex::build` over 20k x 384 at m=16 /
+  ef_construction=200, the guard for §4.11.
+
+ci compiles them (`cargo bench --no-run`); numbers come from a quiet
+machine and live in §6. the allocation fix in §1 was measured with a
+throwaway example; the next kernel change is measured by `cargo bench`.
 
 ### 4.8 supply chain items already promised in SECURITY.md
 
