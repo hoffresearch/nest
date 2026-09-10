@@ -128,6 +128,7 @@ fn rewrite_emb_checksum_and_file_hash(bytes: &mut [u8]) {
 }
 
 #[test]
+#[cfg_attr(all(miri, target_arch = "aarch64"), ignore)] // half converts f16 with inline asm on aarch64, which miri cannot run
 fn rejects_unknown_payload_version() {
     let mut bytes = build_int4(2, DIM);
     let off = embeddings_offset(&bytes);
@@ -150,6 +151,7 @@ fn rejects_unknown_payload_version() {
 }
 
 #[test]
+#[cfg_attr(all(miri, target_arch = "aarch64"), ignore)] // half converts f16 with inline asm on aarch64, which miri cannot run
 fn rejects_unknown_scale_kind() {
     let mut bytes = build_int4(2, DIM);
     let off = embeddings_offset(&bytes);
@@ -172,6 +174,7 @@ fn rejects_unknown_scale_kind() {
 }
 
 #[test]
+#[cfg_attr(all(miri, target_arch = "aarch64"), ignore)] // half converts f16 with inline asm on aarch64, which miri cannot run
 fn rejects_nan_in_group_scale() {
     let mut bytes = build_int4(3, DIM);
     let off = embeddings_offset(&bytes);
@@ -190,6 +193,7 @@ fn rejects_nan_in_group_scale() {
 }
 
 #[test]
+#[cfg_attr(all(miri, target_arch = "aarch64"), ignore)] // half converts f16 with inline asm on aarch64, which miri cannot run
 fn rejects_inf_in_group_scale() {
     let mut bytes = build_int4(3, DIM);
     let off = embeddings_offset(&bytes);
@@ -206,6 +210,7 @@ fn rejects_inf_in_group_scale() {
 }
 
 #[test]
+#[cfg_attr(all(miri, target_arch = "aarch64"), ignore)] // half converts f16 with inline asm on aarch64, which miri cannot run
 fn rejects_truncated_prefix() {
     // Truncate the embeddings section size in the table by one byte so the
     // payload no longer matches the int4 expected size. The reader's
@@ -262,6 +267,7 @@ fn rejects_dim_not_multiple_of_block_at_section_level() {
 }
 
 #[test]
+#[cfg_attr(all(miri, target_arch = "aarch64"), ignore)] // half converts f16 with inline asm on aarch64, which miri cannot run
 fn int4_baseline_validates_and_has_correct_size() {
     let n = 4;
     let dim = 128; // 2 blocks per row.

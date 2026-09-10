@@ -35,6 +35,7 @@ fn spread_repeats() -> Vec<String> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn dedup_before_zstd_beats_zstd_alone_on_repeats() {
     let corpus = spread_repeats();
 
