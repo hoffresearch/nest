@@ -189,8 +189,13 @@ change should be measured by `cargo bench`, not asserted.
 
 ### 4.9 public API discipline for nest-format
 
-`cargo semver-checks` in CI on the format crate: the on-disk format is
-frozen, the rust API that reads it should say when it breaks.
+done: `ci.yml` job `semver` runs `cargo semver-checks` on `nest-format` for
+every pull request, baseline = the pr's base commit (the crate is not on
+crates.io, so there is no published version to compare against). a pr that
+removes or changes a `pub` item without a version bump goes red. the
+runtime crate is not covered yet: its api still moves with every rfc.
+original note: the on-disk format is frozen, the rust API that reads it
+should say when it breaks.
 
 ### 4.11 HNSW build throughput
 
