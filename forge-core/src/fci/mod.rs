@@ -31,7 +31,7 @@ pub const FCI_SCHEMA_VERSION: u32 = 1;
 /// canonical input yields byte-identical .fci, the upstream half of nest's
 /// reproducible build.
 ///
-/// lfield order is fixed by declaration and the serializer is compact, so
+/// field order is fixed by declaration and the serializer is compact, so
 /// `to_canonical_bytes` is stable across machines for the same content.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FciBundle {
