@@ -117,9 +117,9 @@ python entry: `sys.path.insert(0, "python"); import nest`. dynamic loader finds 
 # repo workflow
 
 - remote: `git@github.com:hoffresearch/nest.git`. owner: hoff research. maintainer: brenner cruvinel (`brenner@hoffresearch.com`).
-- branches: `main` is release; `dev` is integration. work happens in `dev` (or feature branches off `dev`).
-- PRs target `dev` from feature branches. release PRs target `main` from `dev`. squash merge into `main` to keep history linear.
-- tags on `main` only (`v0.2.0` is current). `Cargo.toml` workspace version tracks the latest released tag.
+- branches: `main` is the only long-lived branch. work happens on short-lived branches off `main`; every change reaches `main` through a pull request.
+- PRs target `main` and are squash merged (the ruleset requires pull requests, verified ssh-signed commits, and linear history). delete the branch after merge and start the next one from `origin/main`.
+- tags on `main` only (`v0.3.0` is current). `Cargo.toml` workspace version tracks the latest released tag.
 - every push and pull request runs `.github/workflows/ci.yml`: fmt, clippy with the workspace deny lints, build + test on ubuntu (avx2) and macos (neon), the mutation-fuzz harnesses at a higher iteration count, the 300-line guard, forge-core's own gate, ruff via `scripts/ruff_check.sh` (the ONE python file list, shared with release_check.sh), and a bounded cargo-fuzz smoke on nightly. it is release_check.sh minus the lfs corpus measurement.
 - pushing a `v*` tag on `main` runs the full release: `.github/workflows/release.yml` (cargo-dist: cli tarballs for 5 targets, checksums, sigstore attestations, homebrew formula, the embedder payload artifact) and `.github/workflows/pypi.yml` (maturin abi3 wheels for 4 platforms, OIDC trusted publishing). `.github/workflows/install-test.yml` then tests the INSTALLED product per platform. maintainer one-time setup for these channels is in `doc/install.md` > maintainer checklist.
 - git lfs tracks `*.nest`, `*.safetensors`, datasets, and the vendored potion table (including `dat/corpus_next.v1.nest`); golden fixtures under `crates/nest-format/tests/fixtures/` stay in regular git. run `git lfs pull` if a binary is a pointer.
@@ -183,7 +183,7 @@ documentation, comments, and commit messages follow the README's tone.
 - **NEON f16 MSRV**: `float16x4_t` and `vcvt_f32_f16` are stable since rustc 1.94, but the workspace MSRV is 1.85 (`rust-version` in the workspace `Cargo.toml` — the single msrv source; clippy reads it too). `crates/nest-runtime/build.rs` probes the compiling rustc and emits `cfg(neon_f16)` at >= 1.94; that cfg gates `simd/neon.rs::dot_f32_f16_neon` and its dispatch arm, and older toolchains fall back to the scalar f16 kernel. the kernel carries `#[clippy::msrv = "1.94"]` to match the cfg guarantee. avoid remove build.rs or the cfg gate without bumping the workspace `rust-version` to >= 1.94.
 - **HNSW recall test needs release mode**: debug is 30x slower and hits the 60s default cargo test timeout. always run with `--release`.
 - **PT-BR fingerprint corpus**: the model fingerprint is computed against the local sentence-transformers cache. first-time builders must `python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')"` to populate the cache, otherwise `nest_build_corpus.py` and the fingerprint test fail.
-- **squash merge breaks `dev` history**: when a PR squash-merges into `main`, the squashed commit hash differs from the originals on `dev`. subsequent merges of `main` into `dev` will conflict on any files the squash touched. resolve by `git checkout --ours` from `dev` (dev is always the source of truth post-squash; main is just a flat snapshot).
+- **squash merge replaces the branch history**: the PR lands on `main` as one commit with a new hash, so a branch that keeps living after its merge conflicts on every file the squash touched. delete merged branches and start each new one from `origin/main`; never rebase old work onto a merged branch.
 - **avoid run `cargo clean` casually**: rebuild times are 30-60s for the full workspace. incremental compilation handles most edits.
 - **`ask`/`retrieve` embed OFFLINE, routed by the manifest model**: a potion corpus uses `python/forge/embed_query_potion.py` (static table, numpy + tokenizers, no torch, no socket); a corpus whose default text space is a registry model (wemm, clip, jina) routes through `python/forge/embed_query_model.py`, which loads that model locally (network only with `NEST_ALLOW_DOWNLOAD=1`). only `search-text` uses `python/embed_query.py` (sentence-transformers, network on first use). the embedder runs under `python3` unless `NEST_PYTHON` is set; point `NEST_PYTHON` at a venv that carries the forge deps (numpy + tokenizers + the git-lfs potion table) or the embed step fails with `ModuleNotFoundError`. the two flagship e2e tests in `cli_e2e.rs` and `python/forge/test_retrieve.py` need those deps and skip cleanly when absent; they are not run by `release_check.sh`.
 - **`cite` is tier-1 only**: it returns the stored canonical text + verifying hashes, NEVER an original-byte reopen. `ask`/`retrieve` print the same tier-1 text. do not let help text or docs claim original-byte reopen (that is net-new tier-2 catalog work, post-gate).
@@ -203,7 +203,7 @@ these are documented honest limitations of the current code, not bugs to silentl
 - **avoid write markdown that wasn't requested**.
 - **avoid bump `NEST_FORMAT_VERSION` for additive changes**. encodings 4-255 and section IDs 0x09+ are reserved within v1. v2 only when an existing field changes meaning.
 - **avoid `--no-verify` git hooks** unless explicitly asked.
-- **avoid force-push `main` ever**. force-push `dev` only after explicit user confirmation. squash-merge from PR is fine because that goes through GitHub.
+- **avoid force-push `main` ever** (the ruleset blocks it). force-push a feature branch only after explicit user confirmation, and only with `--force-with-lease`. squash-merge from PR is fine because that goes through GitHub.
 - **avoid run `git add -A`** in repos that may carry untracked secrets or LFS payloads. stage explicit paths.
 - **avoid bypass `release_check.sh`**. if it fails, fix the underlying issue. suppressing a clippy lint is fine when justified inline (`#[allow(clippy::name)]` + comment); suppressing the whole gate is not.
 - **avoid introduce `unsafe` without a `// SAFETY:` comment** that names the invariant the caller is relying on (clippy denies it anyway). prefer `bytemuck` casts over raw-parts casts; keep raw-pointer kernels behind a safe dispatcher that `assert!`s every length in release.
@@ -212,12 +212,12 @@ these are documented honest limitations of the current code, not bugs to silentl
 
 # documentation
 
-- `README.md`: project overview, install, CLI summary, presets, v0.2 highlights, embedded mermaid system view.
+- `README.md`: project overview, install, CLI summary, python surface, benchmarks, hardening, presets, reference index.
 - `doc/install.md`: every install channel (one-liner, pypi `nestdb`, brew, binstall, docker), verification (sha256 + attestations), offline notes, and the maintainer one-time checklist.
 - `doc/arc/arc.yaml`: the single architecture reference, machine-readable for agents and tooling and the human-readable inventory plus runtime contract summary.
 - `doc/arc/arc.mmd`: mermaid sequence diagram of the build and query flows.
 - `doc/usage.md`: how-to for the twelve engine subcommands (incl `media`, section 15) plus the ask/retrieve/build agent verbs, presets, offline mode, citations, the model registry and multi-model spaces (section 12), declarative builds (section 13), and the compression levers with the dual quality gate (section 14).
-- `doc/changelog.md`: v0.1.0, v0.2.0, and unreleased deltas.
+- `doc/changelog.md`: 0.1.0 through 0.3.0 and the unreleased deltas, with measured numbers.
 - `doc/benchmarks.md`: nest vs usearch / hnswlib / sqlite-vec / lancedb, one table, regenerated by `python/tools/bench_competitors.py`.
 - `doc/hardening-plan.md`: the review-driven hardening list, status per item with the proving command, open items specified.
 - `dat/demo/Instructions.md`: what each upstream PT-BR dataset is and how to rebuild the unified corpus.
