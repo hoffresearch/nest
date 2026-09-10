@@ -158,13 +158,19 @@ the format crate now has zero `unsafe`, so `cargo +nightly miri test -p
 nest-format` is cheap and turns "no UB" from a claim into a run. one CI job,
 nightly schedule.
 
-### 4.5 property tests for the codecs
+### 4.5 property tests for the codecs (done)
 
-`proptest` roundtrips for `intpack`, `txt_streams`, `fsst`, `zstd_dict`,
-`dedup`, int8/int4 quantize+pack: `decode(encode(x)) == x` and
-`encode(x)` byte-stable across two calls. these are the byte-identity
-claims the citation URI depends on; today they are tested on fixed inputs
-only.
+`crates/nest-format/tests/codec_roundtrip_prop.rs` (proptest, 256 cases per
+property, `PROPTEST_CASES=5000` for a soak, regressions persisted under
+`proptest-regressions/`): `intpack` (mixed frame widths, `get` past the end
+is a typed error), `txt_streams`, `fsst`, `zstd_dict` (dictionary training
+included) each decode to the raw canonical payload byte for byte; `dedup`
+map + expand reproduce the input exactly; float16 within one f16 ulp; int8
+and int4 payloads are sized by `expected_embeddings_size`, parse, and
+reconstruct every component within half a quantization step; nibble
+packing is exact; and every encoder is byte-stable across two calls. these
+are the byte-identity claims the citation URI depends on; before this they
+were tested on fixed inputs only.
 
 ### 4.6 write the 0x09 fp slab
 
