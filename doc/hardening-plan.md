@@ -182,7 +182,10 @@ change should be measured by `cargo bench`, not asserted.
 - signed release tags (`git tag -s`, verify step in `release.yml`).
 - SBOM per release (`cargo cyclonedx` -> attach to the release, attest it
   like the binaries).
-- `cargo deny` (advisories + licenses) as a CI job.
+- `cargo deny` (advisories + licenses + bans + sources): done. policy in
+  `deny.toml` (the allowlist is exactly the license set of the three
+  lockfiles; a copyleft-only crate fails on purpose), `ci.yml` job `deny`
+  over the workspace, forge-core and fuzz on every push / pull request.
 
 ### 4.9 public API discipline for nest-format
 

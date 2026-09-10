@@ -8,7 +8,9 @@
 # whole test suite on linux + macos (the aarch64 macos runner exercises the
 # NEON kernels, the x86_64 linux runner the AVX2 ones), the 300-line guard,
 # the deterministic mutation-fuzz harnesses at a higher iteration count,
-# and a bounded coverage-guided fuzz smoke on nightly.
+# a bounded coverage-guided fuzz smoke on nightly, and cargo-deny
+# (advisories, licenses, bans, sources; policy in deny.toml) on the three
+# cargo workspaces.
 
 name: ci
 
@@ -98,6 +100,26 @@ jobs:
           name: fuzz-artifacts
           path: fuzz/artifacts
           if-no-files-found: ignore
+
+  deny:
+    name: cargo deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: workspace (advisories, licenses, bans, sources)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories licenses bans sources
+      - name: forge-core (separate workspace)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories licenses bans sources
+          manifest-path: forge-core/Cargo.toml
+      - name: fuzz (separate workspace)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories licenses bans sources
+          manifest-path: fuzz/Cargo.toml
 
   python:
     name: python
