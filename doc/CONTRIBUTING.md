@@ -5,13 +5,13 @@
 ## how to contribute
 
 1. fork the repo at https://github.com/hoffresearch/nest.
-2. branch from `dev`: `git checkout -b feature/short-description`.
+2. branch from `main`: `git checkout -b feature/short-description origin/main`.
 3. keep each pr focused on one concern. small is better.
 4. add or update tests for the change. new behavior needs a new test. write real tests against real artifacts (built .nest files, golden fixtures, real corpora), no mocks; cover the happy path, the error path, and one edge case.
 5. if the change alters architecture, module boundaries, data flow, or doc locations, update the arc pair (`doc/arc/arc.yaml`, `doc/arc/arc.mmd`) in the same pr. keep both concise and pragmatic. do not add a separate human architecture doc; `arc.yaml` is both the machine map and the human reference.
 6. run `./scripts/release_check.sh` locally before pushing. `.github/workflows/ci.yml` runs the same gate on the pr (minus the lfs corpus measurement), plus the mutation-fuzz harnesses and a cargo-fuzz smoke.
 7. commit with a clear message in plain english. no conventional commits prefix.
-8. open a pr against `dev`. the maintainer squashes or rebases into `main` at release time.
+8. open a pr against `main`. the maintainer squash merges it; `main` requires verified (ssh-signed) commits and linear history, so sign your commits (`git config commit.gpgsign true` with an ssh or gpg key registered on github).
 
 ## setup
 
