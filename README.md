@@ -35,7 +35,7 @@ nest doctor
 pip install "nestdb[embed]"     # python; offline embedding via the bundled potion table
 ```
 
-also windows (`install.ps1`), homebrew tap, `cargo binstall nest-cli`, docker. artifacts carry sha256 + sigstore attestations. channels, verification, and offline notes: [doc/install.md](doc/install.md).
+also windows (`install.ps1`), homebrew tap, `cargo binstall nest-cli`, docker. artifacts carry sha256 + sigstore attestations. channels, verification, offline notes, and the maintainer checklist: [doc/install.md](doc/install.md). the release channels serve from the first `v*` tag cut after the pipeline landed; `v0.3.0` predates it and carries no artifacts, so the dev build below is the working path until then.
 
 dev build (rust edition 2024, python 3.12+):
 
