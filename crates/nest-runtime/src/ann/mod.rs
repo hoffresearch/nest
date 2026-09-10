@@ -36,6 +36,7 @@ mod build;
 mod codec;
 mod search;
 pub mod select_neighbors;
+mod visited;
 
 use crate::materialize::PackedVectors;
 
@@ -96,13 +97,31 @@ pub(super) struct Candidate {
 
 impl Eq for Candidate {}
 
+/// `1 - dot` over two l2-normalized rows, with eight independent
+/// accumulators combined in a fixed tree. plain rust on purpose: the
+/// compiler vectorizes the eight lanes on every target (sse2 on x86_64,
+/// neon on aarch64) and, without fma contraction, the arithmetic is the
+/// same on all of them, so a graph built on one machine is byte-identical
+/// to the same build on another. the simd kernels in `crate::simd` are
+/// NOT used here: their reduction trees differ per backend, which would
+/// make the graph bytes depend on the cpu that built them.
 #[inline]
 pub(super) fn cosine_dist(a: &[f32], b: &[f32]) -> f32 {
-    // Vectors are L2-normalized → cosine = dot. Distance = 1 - cosine.
-    let mut dot = 0.0f32;
-    for (x, y) in a.iter().zip(b.iter()) {
-        dot += x * y;
+    let mut acc = [0.0f32; 8];
+    let ca = a.chunks_exact(8);
+    let cb = b.chunks_exact(8);
+    let (ra, rb) = (ca.remainder(), cb.remainder());
+    for (x, y) in ca.zip(cb) {
+        for j in 0..8 {
+            acc[j] += x[j] * y[j];
+        }
     }
+    let mut tail = 0.0f32;
+    for (x, y) in ra.iter().zip(rb.iter()) {
+        tail += x * y;
+    }
+    let dot =
+        ((acc[0] + acc[1]) + (acc[2] + acc[3])) + ((acc[4] + acc[5]) + (acc[6] + acc[7])) + tail;
     1.0 - dot
 }
 
