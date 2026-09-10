@@ -8,6 +8,7 @@ format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). version
 
 ### added
 
+- signed release tags and sboms (hardening-plan §4.8): `.github/workflows/tag-verify.yml` verifies the release tag against `.github/allowed_signers` in cargo-dist's plan phase and before the pypi wheels build, so an unsigned or lightweight tag stops the release; the dist config now emits a cyclonedx sbom per package (attested like the binaries) and builds the binaries with cargo-auditable.
 - `cargo deny` in ci (hardening-plan §4.8): `deny.toml` checks advisories (yanked = deny), licenses (allowlist = exactly the set in the three lockfiles: MIT, Apache-2.0 incl. the LLVM exception, BSD-2/3, NCSA, Unicode-3.0, Unlicense, Zlib), bans (duplicate versions warn) and sources (crates.io only); the `deny` job runs it on the workspace, forge-core and fuzz on every push and pull request.
 - `cargo semver-checks` in ci (hardening-plan §4.9): the `semver` job checks `nest-format`'s public api on every pull request against the pr's base commit, so a breaking change to the reader api without a version bump fails the pr.
 - nightly fuzz soak (hardening-plan §4.3): `ci.yml` runs every cargo-fuzz target for 30 minutes on a nightly schedule (or on demand with a chosen duration), carrying the corpus over between nights and uploading crash artifacts; `scripts/fuzz_soak.sh` is the same loop for a local hour-per-target soak after a decoder change.

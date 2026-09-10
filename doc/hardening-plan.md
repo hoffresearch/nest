@@ -202,9 +202,18 @@ throwaway example; the next kernel change is measured by `cargo bench`.
 
 ### 4.8 supply chain items already promised in SECURITY.md
 
-- signed release tags (`git tag -s`, verify step in `release.yml`).
-- SBOM per release (`cargo cyclonedx` -> attach to the release, attest it
-  like the binaries).
+- signed release tags: done. `tag.gpgsign = true` locally (ssh key),
+  `.github/allowed_signers` lists the release keys, and the reusable
+  `.github/workflows/tag-verify.yml` runs in cargo-dist's plan phase
+  (`plan-jobs` in `Cargo.toml`) and before the pypi wheels: a lightweight
+  tag, an unsigned tag, or an unknown key stops the release before any
+  build. pull-request plan runs pass through (branch ref, nothing to
+  verify).
+- SBOM per release: done. `cargo-cyclonedx = true` in the dist config
+  uploads one `.cdx.xml` per package next to the binaries, covered by the
+  same attestations; `cargo-auditable = true` embeds the dependency tree in
+  the executables (`cargo audit bin nest`). `release.yml` regenerated with
+  `dist generate` (0.32.0), not hand-edited.
 - `cargo deny` (advisories + licenses + bans + sources): done. policy in
   `deny.toml` (the allowlist is exactly the license set of the three
   lockfiles; a copyleft-only crate fails on purpose), `ci.yml` job `deny`
