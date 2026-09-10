@@ -5,6 +5,7 @@
 
 use std::collections::{BinaryHeap, HashSet};
 
+use super::visited::VisitSet;
 use super::{Candidate, HnswIndex, Node, dist_q};
 use crate::materialize::PackedVectors;
 
@@ -53,6 +54,7 @@ impl HnswIndex {
         for layer in (1..=self.max_level).rev() {
             curr = greedy_search(curr, q, layer, &self.nodes, &self.store, self.dim);
         }
+        let mut visited: HashSet<u32> = HashSet::new();
         let candidates = layer_search(
             &[curr],
             q,
@@ -62,6 +64,7 @@ impl HnswIndex {
             &self.store,
             self.dim,
             u32::MAX,
+            &mut visited,
         );
         candidates.into_iter().map(|c| c.id as usize).collect()
     }
@@ -114,9 +117,9 @@ pub(super) fn layer_search(
     store: &PackedVectors,
     dim: usize,
     skip_id: u32,
+    visited: &mut impl VisitSet,
 ) -> Vec<Candidate> {
     let mut scratch = store.scratch(dim);
-    let mut visited: HashSet<u32> = HashSet::new();
     // BinaryHeap orderings:
     //   `frontier` — min-heap by distance (closest first to expand).
     //   `result`   — max-heap by distance (so we can prune the farthest).

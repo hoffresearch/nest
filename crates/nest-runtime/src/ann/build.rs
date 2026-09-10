@@ -8,6 +8,7 @@ use nest_format::Int8EmbeddingsView;
 
 use super::search::{greedy_search, layer_search};
 use super::select_neighbors::select_neighbors_heuristic;
+use super::visited::VisitedList;
 use super::{Candidate, HnswIndex, Node, dist_rr};
 use crate::materialize::PackedVectors;
 
@@ -31,6 +32,9 @@ impl HnswIndex {
         let m_max0 = m * 2;
         let mut rng = LcgRng::new(seed);
 
+        // one visited list for the whole build, cleared per layer search
+        // (an epoch bump), instead of a fresh hash set per call.
+        let mut visited = VisitedList::new(n);
         let mut nodes: Vec<Node> = Vec::with_capacity(n);
         for _ in 0..n {
             let level = sample_level(&mut rng, m);
@@ -72,6 +76,7 @@ impl HnswIndex {
             let mut entry = curr;
             let start_layer = level.min(max_level);
             for layer in (0..=start_layer).rev() {
+                visited.clear();
                 let candidates = layer_search(
                     &[entry],
                     q,
@@ -81,6 +86,7 @@ impl HnswIndex {
                     &store,
                     dim,
                     i as u32,
+                    &mut visited,
                 );
                 // The new node always picks `m` neighbors (Algorithm 4 with
                 // M=m). The asymmetry — layer 0 allowing up to `m_max0`
