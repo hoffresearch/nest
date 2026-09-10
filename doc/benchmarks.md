@@ -1,15 +1,15 @@
 # benchmarks
 
-measured 2026-09-05 on arm64 Darwin 25.6.0, python 3.12.14, single thread, n=100,000 synthetic clustered l2-normalized rows x 384 dims (2000 centers), 200 queries, k=10, seed 7. reproduce: `.venv/bin/python python/tools/bench_competitors.py --n 100000 --dim 384 --queries 200`.
+measured 2026-09-10 on arm64 Darwin 25.6.0, python 3.12.14, single thread, n=100,000 synthetic clustered l2-normalized rows x 384 dims (2000 centers), 200 queries, k=10, seed 7. reproduce: `.venv/bin/python python/tools/bench_competitors.py --n 100000 --dim 384 --queries 200`.
 
 | system | path | build (s) | bytes on disk | cold open + 1st query (ms) | p50 (ms) | p99 (ms) | recall@10 | rebuild byte-identical | integrity check |
 |---|---|---|---|---|---|---|---|---|---|
-| nest (exact) | exact | 2.21 | 165,290,134 | 308.5 | 8.574 | 9.908 | 1.0 | yes | yes (sha256 per section + file + content) |
-| nest (hybrid) | ann (hnsw) | 224.49 | 163,221,498 | 359.7 | 0.942 | 1.402 | 1.0 | yes | yes (sha256 per section + file + content) |
-| usearch | ann (hnsw) | 103.32 | 168,453,808 | 60.9 | 0.569 | 35.623 | 0.995 | yes | no |
-| hnswlib | ann (hnsw) | 91.89 | 168,449,236 | 192.9 | 0.386 | 0.645 | 1.0 | yes | no |
-| sqlite-vec | exact | 0.82 | 156,606,464 | 55.1 | 21.526 | 25.194 | 1.0 | yes | structural only (pragma integrity_check) |
-| lancedb | exact | 0.28 | 153,799,983 | 609.7 | 16.605 | 21.237 | 1.0 | no | no |
+| nest (exact) | exact | 2.14 | 165,290,134 | 292.3 | 7.803 | 8.315 | 1.0 | yes | yes (sha256 per section + file + content) |
+| nest (hybrid) | ann (hnsw) | 172.82 | 163,221,498 | 356.1 | 0.721 | 1.021 | 1.0 | yes | yes (sha256 per section + file + content) |
+| usearch | ann (hnsw) | 109.26 | 168,453,808 | 58.1 | 0.672 | 61.422 | 0.995 | yes | no |
+| hnswlib | ann (hnsw) | 83.07 | 168,449,236 | 181.5 | 0.324 | 0.525 | 1.0 | yes | no |
+| sqlite-vec | exact | 0.81 | 156,606,464 | 50.0 | 19.762 | 24.836 | 1.0 | yes | structural only (pragma integrity_check) |
+| lancedb | exact | 0.25 | 153,799,983 | 612.4 | 16.728 | 19.401 | 1.0 | no | no |
 
 how to read it:
 
