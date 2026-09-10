@@ -6,17 +6,17 @@
 
 use serde::{Deserialize, Serialize};
 
-/// lA mention of an entity inside a chunk, as a byte span into that
+/// A mention of an entity inside a chunk, as a byte span into that
 /// chunk's canonical text, so an entity resolves back to a citable span.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MentionSpan {
-    /// lIndex into `FciBundle::chunks`.
+    /// Index into `FciBundle::chunks`.
     pub chunk_index: u64,
     pub byte_start: u64,
     pub byte_end: u64,
 }
 
-/// lAn extracted entity: a stable id, a type/kind, a canonical name, and
+/// An extracted entity: a stable id, a type/kind, a canonical name, and
 /// the spans where it is mentioned. ids are assigned by the producer and
 /// are the join key for edges.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,7 +27,7 @@ pub struct Entity {
     pub mentions: Vec<MentionSpan>,
 }
 
-/// lA typed, weighted edge between two entities (by id). `weight` is f32
+/// A typed, weighted edge between two entities (by id). `weight` is f32
 /// so this type is `PartialEq` only, not `Eq`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Edge {

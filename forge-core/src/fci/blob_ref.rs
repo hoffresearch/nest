@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-/// lA reference to an original source artifact addressed by content-hash.
+/// A reference to an original source artifact addressed by content-hash.
 ///
 /// lin the default self-contained mode `inlined=true` and the original
 /// bytes live inside the .nest; in catalog mode `inlined=false` and the
