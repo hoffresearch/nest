@@ -12,7 +12,7 @@ use crate::error::ForgeError;
 use serde::Serialize;
 
 impl FciBundle {
-    /// lSerialize to canonical, deterministic bytes (compact json,
+    /// Serialize to canonical, deterministic bytes (compact json,
     /// declaration-order fields). same bundle -> same bytes everywhere.
     pub fn to_canonical_bytes(&self) -> Result<Vec<u8>, ForgeError> {
         let mut buf = Vec::new();
@@ -23,7 +23,7 @@ impl FciBundle {
         Ok(buf)
     }
 
-    /// lParse a bundle from canonical bytes and validate it. fail closed on
+    /// Parse a bundle from canonical bytes and validate it. fail closed on
     /// malformed bytes, an unknown schema version, or a dangling reference.
     pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, ForgeError> {
         let bundle: FciBundle =
