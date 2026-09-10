@@ -88,7 +88,7 @@ or `Pipeline` in `python/builder.py` (chunker, sqlite cache, auto-validate). off
 
 ## benchmarks
 
-[doc/benchmarks.md](doc/benchmarks.md): nest against usearch, hnswlib, sqlite-vec and lancedb on the same 100,000 x 384 rows, same machine, same ruler. nest hybrid answers at recall@10 = 1.000 with p50 0.94 ms (hnsw candidates, exact-cosine rerank), rebuilds byte-identically, and is the only store in the table that proves its own bytes; the price is a cold open of ~310 ms (every checksum is verified before the first query) and an hnsw build 2.4x slower than hnswlib single-threaded. the table also lists what nest does not do (updates, filters, concurrent writers). reproduce with `python/tools/bench_competitors.py`.
+[doc/benchmarks.md](doc/benchmarks.md): nest against usearch, hnswlib, sqlite-vec and lancedb on the same 100,000 x 384 rows, same machine, same ruler. nest hybrid answers at recall@10 = 1.000 with p50 0.72 ms (hnsw candidates, exact-cosine rerank), rebuilds byte-identically, and is the only store in the table that proves its own bytes; the price is a cold open of ~290 ms (every checksum is verified before the first query) and an hnsw build 2.1x slower than hnswlib single-threaded (was 2.4x before the build loop was tuned). the table also lists what nest does not do (updates, filters, concurrent writers). reproduce with `python/tools/bench_competitors.py`.
 
 ## hardening
 
