@@ -227,11 +227,51 @@ single-threaded, nest builds its graph in 224 s against 92 s (hnswlib) and
 103 s (usearch) on the same 100k x 384 rows: 2.2-2.4x, one insert at a time,
 `select_neighbors` re-sorting per candidate, and no multi-threaded build at
 all while both competitors have one. recall@10 at ef=100 is 1.000 (hnswlib
-1.000, usearch 0.995), so the graph is fine; the build loop is not. plan: profile `ann/build.rs` (`cargo flamegraph` on a 100k build),
-batch the level-0 inserts, parallelize the independent upper-layer searches
-with rayon behind a deterministic merge (the seed contract must hold: same
-input, same graph bytes), then re-measure with the same table. a `criterion`
-bench (4.7) guards the number afterwards.
+1.000, usearch 0.995), so the graph is fine; the build loop is not.
+
+first round (2026-09-10), single-threaded, byte-deterministic across
+machines by construction:
+
+- `cosine_dist` (`ann/mod.rs`) was a sequential f32 loop the compiler could
+  not vectorize (float reassociation is not allowed). it is now eight
+  independent accumulators combined in a fixed tree, plain rust: sse2 on
+  x86_64, neon on aarch64, no fma, so the arithmetic is identical on every
+  target and a graph built on one machine matches the same build on
+  another. the simd kernels in `crate::simd` are deliberately not used
+  here: their reduction trees differ per backend, which would tie the
+  graph bytes to the cpu that built them.
+- `layer_search` allocated a `HashSet<u32>` per call (hundreds of
+  thousands of calls per build). the build now carries one epoch-stamped
+  `VisitedList` (`ann/visited.rs`) cleared by bumping the epoch; the query
+  path keeps its `HashSet` (a per-query `vec![0; n]` would cost o(n) for an
+  o(ef) walk).
+- the graph bytes are pinned (`hnsw_recall.rs::graph_bytes_are_pinned`,
+  two seeded builds). the 2k x 128 digest did not move; the 10k x 384
+  digest did, because a few near-ties resolve the other way under the new
+  rounding; recall@10 is unchanged and the previous digest is recorded next
+  to the new one.
+
+measured with `cargo bench -p nest-runtime --bench hnsw_build` (20k x 384,
+m=16, ef_construction=200, criterion, 10 samples, same machine and the
+same background load for both runs):
+
+| build loop | mean | median |
+|---|---|---|
+| before (72dc0b1c) | 33.9 s | 34.2 s |
+| after | 19.6 s | 19.7 s |
+
+1.73x. what is left is the distance count itself, which is algorithmic
+(hnswlib evaluates the same candidates) plus fma, which the build gives up
+on purpose for cross-machine byte identity. the competitor table in
+`doc/benchmarks.md` is re-run with this loop; a parallel build is a
+separate decision (it cannot be byte-identical to the sequential one,
+hnswlib's and usearch's are not either), recorded below.
+
+open: opt-in `hnsw_threads = N` that searches candidates for a batch of
+inserts against the graph snapshot in parallel and links in id order.
+changes the bytes, not the expected recall; `reproducible = true` would
+force one thread. not started; needs the maintainer's call on the
+contract.
 
 ### 4.10 README positioning
 
