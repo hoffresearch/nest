@@ -1,5 +1,5 @@
 //! layout tests, carved out of `layout/mod.rs` so the module stays under
-//! the 300-line crate guard (same precedent as `ann/codec.rs`).
+//! the 300-line crate guard (same precedent as `ann/codec/mod.rs`).
 
 use super::*;
 

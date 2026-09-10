@@ -60,14 +60,14 @@ prefer release_check.sh before merge, it is the project gate; .github/workflows/
 
 - dat/corpus_next.v1.nest is tracked with git lfs.
 - dat/demo datasets are local-only and gitignored.
-- dataset fetch commands and provenance are documented in dat/demo/README.md.
+- dataset fetch commands and provenance are documented in dat/demo/Instructions.md.
 - the offline one-gif demo needs no datasets: python python/forge/retrieve.py.
 
 ## branch and release flow
 
-- feature work targets dev (or feature branches based on dev).
-- release flow is dev to main.
-- main may enforce pr-only updates and required checks.
+- feature work happens on short-lived branches off main; every change reaches main through a pull request, squash-merged.
+- main requires pull requests, verified (ssh-signed) commits, and linear history; delete the branch after merge and start the next one from origin/main.
+- releases are tags on main (v*); the tag drives the release, pypi and install-test workflows (doc/install.md).
 
 ## do not
 
