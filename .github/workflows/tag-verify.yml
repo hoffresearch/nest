@@ -1,0 +1,46 @@
+# verify the release tag's signature (hardening-plan §4.8). a reusable
+# workflow: cargo-dist calls it in the plan phase (`plan-jobs` in
+# Cargo.toml), pypi.yml calls it before building wheels. an unsigned tag,
+# or one signed by a key not listed in .github/allowed_signers, fails the
+# release before anything is built or uploaded.
+#
+# to sign a tag locally: `git config tag.gpgsign true` (ssh signing key
+# already configured for commits), then `git tag vX.Y.Z -m "vX.Y.Z"`.
+
+name: tag-verify
+
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: tag to verify (defaults to the ref that triggered the run)
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify tag signature
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: verify
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -eu
+          if [ -z "${{ inputs.tag }}" ] && [ "${{ github.ref_type }}" != "tag" ]; then
+            echo "::notice::$TAG is a branch ref (pull request plan run), nothing to verify"
+            exit 0
+          fi
+          if ! git rev-parse -q --verify "refs/tags/$TAG^{tag}" >/dev/null; then
+            echo "::error::$TAG is not an annotated tag (lightweight tags carry no signature)"
+            exit 1
+          fi
+          git -c gpg.ssh.allowedSignersFile=.github/allowed_signers verify-tag "$TAG"
+          echo "tag $TAG: signature verified against .github/allowed_signers"

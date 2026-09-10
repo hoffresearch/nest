@@ -1,0 +1,5 @@
+# ssh allowed signers for release tags (hardening-plan §4.8).
+# one principal per line: <email> namespaces="git" <key type> <key>.
+# verified by .github/workflows/tag-verify.yml:
+#   git -c gpg.ssh.allowedSignersFile=.github/allowed_signers verify-tag <tag>
+brenner@hoffresearch.com namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOE4DFy24mFzC/7/whMEc6SNR68KkXRk8eX9YC1hcQzI
