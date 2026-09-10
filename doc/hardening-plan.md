@@ -112,11 +112,12 @@ budget is exhausted, and synthetic rows let anyone reproduce it without
 data), no multimodal column (no competitor exposes one), the citation claim
 is measured as raw-text vs zstd-text sharing one `content_hash` (index type
 is part of the canonical search contract, so exact vs hybrid legitimately
-differ). one finding the table makes visible: nest's HNSW build is 2.4x
+differ). one finding the table made visible: nest's HNSW build was 2.4x
 slower than hnswlib and 2.2x slower than usearch at the same m /
 ef_construction with every build single-threaded (224 s vs 92 s vs 103 s on
 100k x 384); the earlier "20x" came from letting the competitors use every
-core against nest's single thread. item 4.11. original spec: nobody
+core against nest's single thread. item 4.11 brought it to 173 s vs 83 s
+vs 109 s (2026-09-10 re-run, same table). original spec: nobody
 switches without a number. `python/tools/bench_competitors.py`, one
 corpus, one machine, one table, checked in with the exact versions.
 
@@ -276,11 +277,14 @@ should say when it breaks.
 
 ### 4.11 HNSW build throughput
 
-measured in `doc/benchmarks.md`: at m=16 / ef_construction=200, all builds
-single-threaded, nest builds its graph in 224 s against 92 s (hnswlib) and
-103 s (usearch) on the same 100k x 384 rows: 2.2-2.4x, one insert at a time,
-`select_neighbors` re-sorting per candidate, and no multi-threaded build at
-all while both competitors have one. recall@10 at ef=100 is 1.000 (hnswlib
+measured in `doc/benchmarks.md` (2026-09-05): at m=16 / ef_construction=200,
+all builds single-threaded, nest built its graph in 224 s against 92 s
+(hnswlib) and 103 s (usearch) on the same 100k x 384 rows: 2.2-2.4x, one
+insert at a time, `select_neighbors` re-sorting per candidate, and no
+multi-threaded build at all while both competitors have one. re-run
+2026-09-10 after the first round below: nest hybrid 172.8 s (the whole
+build: graph + bm25 + zstd text + write) against hnswlib 83.1 s and usearch
+109.3 s, 2.1x / 1.6x; nest p50 0.72 ms, cold open 292 ms, bytes unchanged. recall@10 at ef=100 is 1.000 (hnswlib
 1.000, usearch 0.995), so the graph is fine; the build loop is not.
 
 first round (2026-09-10), single-threaded, byte-deterministic across
