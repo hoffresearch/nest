@@ -357,7 +357,38 @@ find crates -name '*.rs' -path '*/src/*' -not -path '*/tests/*' | xargs wc -l | 
 NEST_PYTHON=.venv/bin/python sh scripts/ruff_check.sh
 ```
 
-## 6. int4 rerank kernel, measured 2026-09-05
+## 6. measured, `cargo bench -p nest-runtime` (2026-09-10, quiet machine)
+
+apple silicon (neon backend), release, criterion means. reproduce with
+`cargo bench -p nest-runtime`; the three benches are described in §4.7.
+
+kernel: one f32 query against one stored row (`benches/simd.rs`).
+
+| dtype | dim 256 | dim 384 | dim 768 |
+|---|---|---|---|
+| f32 | 27.5 ns | 47.8 ns | 104.7 ns |
+| f16 | 27.2 ns | 50.1 ns | 107.3 ns |
+| i8 | 25.7 ns | 41.9 ns | 96.4 ns |
+| i4 (block 64, scratch reuse) | 68.6 ns | 99.8 ns | 204.1 ns |
+
+int8 section scan, 50k rows x 384: 1.99 ms (25.1 M rows/s).
+
+public path (`benches/rerank.rs`), 20k x 384 rows, one `.nest` per stored
+dtype, same hnsw graph in every file:
+
+| stored dtype | `search` exact scan, k=10 | `search_ann` ef=100 + exact rerank |
+|---|---|---|
+| f32 | 1.51 ms | 0.999 ms |
+| f16 | 1.55 ms | 1.64 ms |
+| i8 | 1.45 ms | 0.651 ms |
+| i4 | 2.72 ms | 1.49 ms |
+
+hnsw build (`benches/hnsw_build.rs`), 20k x 384, m=16, ef_construction=200:
+12.39 s (the 19.6 s in §4.11 was the same build under a running miri; the
+33.9 s "before" was measured under the same load, so the 1.73x ratio
+stands, and this is the number to beat next).
+
+## 6a. int4 rerank kernel, measured 2026-09-05
 
 throwaway example (deleted after the run), release build, 50,000 rows x
 384 dims, 5 passes, scores asserted bit-identical between the two shapes:
