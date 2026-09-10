@@ -1,0 +1,1 @@
+.contracts/.agents/AGENTS.md
