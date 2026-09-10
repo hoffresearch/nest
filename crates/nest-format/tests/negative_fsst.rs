@@ -22,6 +22,7 @@ fn empty_payload_errors() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // too slow under miri
 fn bad_kind_byte_errors() {
     let mut f = framed();
     f[0] = 0x00; // TXT_STREAMS_V1, not V3
@@ -29,6 +30,7 @@ fn bad_kind_byte_errors() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // too slow under miri
 fn truncated_count_errors() {
     let f = framed();
     // keep the kind byte but truncate the u64 count.
@@ -36,6 +38,7 @@ fn truncated_count_errors() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // too slow under miri
 fn prefix_truncation_fuzz_never_panics() {
     let f = framed();
     for cut in 0..f.len() {
@@ -45,6 +48,7 @@ fn prefix_truncation_fuzz_never_panics() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // too slow under miri
 fn corrupted_table_region_errors_no_panic() {
     let mut f = framed();
     // flip bytes deep in the region (past the container header + offset

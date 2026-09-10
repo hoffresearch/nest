@@ -248,6 +248,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
     fn byte_identical_across_corpora() {
         assert_byte_identical(&[]);
         assert_byte_identical(&["only one"]);
@@ -257,6 +258,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
     fn o1_seek_returns_the_right_stream() {
         let t = texts(&["alpha", "beta", "gama", "delta"]);
         let packed = encode_txt_streams(&t).unwrap();
@@ -269,6 +271,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
     fn determinism_two_encodes_byte_identical() {
         let t = texts(&["a", "bb", "ccc", "coração"]);
         assert_eq!(

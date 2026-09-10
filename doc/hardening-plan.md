@@ -152,11 +152,37 @@ before saving) and crash artifacts uploaded for 30 days. locally,
 by default, after any decoder change. every finding becomes a
 `tests/negative_*.rs` before the fix, its artifact a `fuzz/seeds/regress-*`.
 
-### 4.4 miri on nest-format
+### 4.4 miri on nest-format (done: nightly job; first run found three things, none in this crate)
 
-the format crate now has zero `unsafe`, so `cargo +nightly miri test -p
-nest-format` is cheap and turns "no UB" from a claim into a run. one CI job,
-nightly schedule.
+`ci.yml` job `miri` runs `cargo miri test -p nest-format` on the nightly
+schedule and on demand (`MIRIFLAGS=-Zmiri-disable-isolation
+-Zmiri-tree-borrows`). the format crate has zero `unsafe`, so this is the
+run that backs the "no undefined behaviour" claim for the parsers, the
+`bytemuck` views and the pure-rust codecs. what the first local run
+(aarch64, 2026-09-10) found:
+
+- `sha2` 0.11.0's neon backend (`vld1q_u32` in `aarch64_sha2::compress`)
+  is reported as undefined behaviour under stacked borrows: a 16-byte load
+  through a pointer retagged for 4 bytes. tree borrows accepts it, and the
+  code is the dependency's, not this crate's; the job uses tree borrows and
+  this line is the record. worth an upstream report.
+- `half` converts f16 with inline assembly on aarch64, which miri cannot
+  execute: every test that touches an f16 value is
+  `#[cfg_attr(all(miri, target_arch = "aarch64"), ignore)]`, so the x86_64
+  runner still covers them.
+- `zstd` is c code miri cannot call: the tests that build or decode a zstd
+  payload are `#[cfg_attr(miri, ignore)]` with that reason on the line,
+  and five binaries whose every case goes through zstd or the fsst table
+  build (`fsst_roundtrip`, `roundtrip`, `zstd_dict_roundtrip`,
+  `negative_zstd`, `negative_zstd_dict`, `content_hash_dict_fsst_dedup`) plus
+  the mutation harness and the property tests are `#![cfg(not(miri))]`
+  with the reason at the top; they run natively in the `rust` job.
+- one real finding in a test: `space_table_roundtrip.rs` leaked its file
+  bytes into `'static` on purpose to hand out a `NestView<'static>`; miri's
+  leak checker flagged it and the helper now returns only the verdict.
+
+everything else (unit tests, the negative suites, the section and index
+roundtrips, golden, the v0.1 compat path) runs clean under the interpreter.
 
 ### 4.5 property tests for the codecs (done)
 

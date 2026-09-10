@@ -37,6 +37,7 @@ fn assert_typed_err(res: nest_format::Result<Vec<u8>>) {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn baseline_decodes_cleanly() {
     // guards against false-positive negatives: a real payload must decode.
     let packed = good_packed();
@@ -52,6 +53,7 @@ fn empty_payload_errors() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn bad_kind_byte_errors() {
     let mut packed = good_packed();
     packed[0] = TXT_STREAMS_V1.wrapping_add(7); // unknown kind/version
@@ -59,6 +61,7 @@ fn bad_kind_byte_errors() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn truncated_count_errors() {
     // only the kind byte and a partial count: cannot read the u64 count.
     for len in 1..9 {
@@ -69,6 +72,7 @@ fn truncated_count_errors() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn truncated_offset_table_errors() {
     // chop into the intpack offset table region (right after the 9-byte
     // header). the IntpackReader directory / block bounds checks must fire.
@@ -81,6 +85,7 @@ fn truncated_offset_table_errors() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn truncated_stream_body_errors() {
     // drop the last byte of the final zstd stream: the final-offset ==
     // streams-length check or the zstd decode must reject it.
@@ -90,6 +95,7 @@ fn truncated_stream_body_errors() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn oversized_claimed_count_errors() {
     // tamper the u64 chunk count to a huge value while the offset table is
     // unchanged: parse must reject (offsets != count + 1) without trying to
@@ -105,6 +111,7 @@ fn oversized_claimed_count_errors() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn corrupted_zstd_stream_errors() {
     // flip bytes inside the streams region (a zstd frame): decode of that
     // stream must fail as a typed error, not a panic.
@@ -119,6 +126,7 @@ fn corrupted_zstd_stream_errors() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn fuzz_every_truncation_never_panics() {
     // exhaustive prefix truncation: every cut returns a typed error or Ok,
     // never a panic. this is the core no-panic-on-hostile-mmap guarantee.

@@ -4,6 +4,7 @@
 use super::*;
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn zstd_roundtrip_preserves_bytes() {
     let original = b"hello hello hello world world world".repeat(64);
     let compressed = zstd_encode(&original).unwrap();
@@ -76,6 +77,7 @@ fn wire_codec_registry_maps_only_implemented_ids() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn encode_smallest_picks_the_winner_and_records_its_id() {
     use crate::layout::{SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD};
     let candidates = [SECTION_ENCODING_RAW, SECTION_ENCODING_ZSTD];

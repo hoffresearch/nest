@@ -32,6 +32,7 @@ const ARTIFACTS: [&[u8]; 2] = [
 ];
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn hostile_pool_counts_are_typed_errors_not_allocation_aborts() {
     for (i, payload) in ARTIFACTS.iter().enumerate() {
         for enc in 0..=10u32 {

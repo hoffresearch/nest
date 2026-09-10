@@ -110,10 +110,12 @@ fn base_builder(n: usize) -> NestFileBuilder {
     b
 }
 
-fn open(builder: NestFileBuilder) -> Result<NestView<'static>, NestError> {
+/// build and parse; only the verdict leaves the function (the view borrows
+/// the bytes, so it is dropped here rather than leaked into 'static, which
+/// miri's leak checker would flag).
+fn open(builder: NestFileBuilder) -> Result<(), NestError> {
     let bytes = builder.build_bytes().unwrap();
-    let leaked: &'static [u8] = Box::leak(bytes.into_boxed_slice());
-    NestView::from_bytes(leaked)
+    NestView::from_bytes(&bytes).map(|_| ())
 }
 
 fn open_err(builder: NestFileBuilder) -> NestError {
@@ -140,6 +142,7 @@ fn band_size_mismatch_rejected() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn zstd_band_rejected() {
     // bands are fixed-stride slabs scored by the simd kernels: the zstd
     // encoding is illegal for band ids and the reader rejects it at parse.

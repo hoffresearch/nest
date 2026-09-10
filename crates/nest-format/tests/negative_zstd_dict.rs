@@ -3,6 +3,8 @@
 //! return a typed NestError, never a panic. exhaustive prefix-truncation
 //! fuzz over a real framed payload.
 
+// not under miri: every case builds a dict-framed zstd payload first (c code miri cannot call).
+#![cfg(not(miri))]
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,
