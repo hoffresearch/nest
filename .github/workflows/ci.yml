@@ -63,6 +63,8 @@ jobs:
         run: cargo build --workspace --all-targets
       - name: test
         run: cargo test --workspace
+      - name: benches compile (numbers are not a gate on shared runners)
+        run: cargo bench -p nest-runtime --no-run
       - name: mutation fuzz (deterministic, higher count)
         env:
           NEST_MUTATION_ITERS: "6000"
