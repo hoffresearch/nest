@@ -97,6 +97,7 @@ fn build(text_encoding: SectionEncoding, texts: &[&str]) -> Vec<u8> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn raw_and_zstd_share_content_hash_but_not_file_hash() {
     let texts = &[
         "primeiro paragrafo",
@@ -122,6 +123,7 @@ fn raw_and_zstd_share_content_hash_but_not_file_hash() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn section_checksums_track_physical_bytes_not_decoded() {
     // Same logical content, two encodings. Physical checksums for the
     // text-heavy sections must differ (different bytes on disk =
@@ -177,6 +179,7 @@ fn section_checksums_track_physical_bytes_not_decoded() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn compressed_preset_repacks_chunk_ids_with_intpack() {
     // chunk_ids are high-entropy sha-256, so the 32-raw intpack repack
     // always beats the ascii form. it must be chosen under the compressed
@@ -233,6 +236,7 @@ fn content_hash_diverges_when_canonical_text_changes() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn three_files_three_distinct_classifications() {
     // A complete proof: file A (raw, X), file B (zstd, X), file C (raw, Y).
     //   A.content_hash == B.content_hash (semantic equivalence)

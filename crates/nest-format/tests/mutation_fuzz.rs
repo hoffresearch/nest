@@ -21,6 +21,8 @@
 //! `NEST_FUZZ_SEED_DIR` to have this test dump its base fixtures there as
 //! seeds.
 
+// not under miri: thousands of mutated decodes, most through zstd (c code miri cannot call); the deterministic harness runs natively in ci.
+#![cfg(not(miri))]
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,

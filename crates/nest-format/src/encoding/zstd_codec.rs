@@ -61,6 +61,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
     fn roundtrip_within_cap() {
         let original = b"the file is the database ".repeat(256);
         let compressed = zstd_encode(&original).unwrap();
@@ -69,6 +70,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
     fn decompression_bomb_is_rejected_not_ooming() {
         // a tiny compressed frame declaring more than the cap must error,
         // never inflate. zeros compress to a few bytes but declare their full
