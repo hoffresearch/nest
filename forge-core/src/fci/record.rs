@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-/// lA canonical-text record mirroring `builder.ChunkSpec` EXACTLY
+/// A canonical-text record mirroring `builder.ChunkSpec` EXACTLY
 /// (canonical_text, source_uri, byte_start, byte_end), so the python
 /// adapter maps it 1:1 to a `ChunkSpec` and the byte spans round-trip
 /// through `nest cite`.

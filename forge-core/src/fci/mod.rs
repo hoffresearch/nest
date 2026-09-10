@@ -20,12 +20,12 @@ pub use record::ChunkRecord;
 use crate::error::ForgeError;
 use serde::{Deserialize, Serialize};
 
-/// lFrozen .fci schema version, independent of NEST_FORMAT_VERSION. bumped
+/// Frozen .fci schema version, independent of NEST_FORMAT_VERSION. bumped
 /// only when the .fci layout changes meaning; readers fail closed on an
 /// unknown version.
 pub const FCI_SCHEMA_VERSION: u32 = 1;
 
-/// lA forge canonical intermediate bundle: canonical-text shards, the
+/// A forge canonical intermediate bundle: canonical-text shards, the
 /// per-modality embedding requests over them, extracted entities + typed
 /// edges, and the blob manifest. serialized deterministically so the same
 /// canonical input yields byte-identical .fci, the upstream half of nest's
@@ -57,12 +57,12 @@ impl Default for FciBundle {
 }
 
 impl FciBundle {
-    /// lAn empty bundle stamped with the current schema version.
+    /// An empty bundle stamped with the current schema version.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// lCheck the bundle is internally consistent and at a supported schema
+    /// Check the bundle is internally consistent and at a supported schema
     /// version. every cross-reference (request -> chunk, mention -> chunk,
     /// edge -> entity) must point at an existing target; otherwise the
     /// downstream adapter would silently mis-map a span. fail closed with a
