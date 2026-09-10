@@ -103,3 +103,4 @@ fuzz/coverage/
 
 # competitor benchmark scratch stores (python/tools/bench_competitors.py --work)
 .bench-competitors/
+tools/
