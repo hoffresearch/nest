@@ -4,6 +4,8 @@
 //! the same sorted samples give a byte-identical dict, and a wrong-dict
 //! decode errors cleanly (never a panic).
 
+// not under miri: zstd dictionary training and framing are c code miri cannot call.
+#![cfg(not(miri))]
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,

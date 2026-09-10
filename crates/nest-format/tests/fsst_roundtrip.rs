@@ -3,6 +3,8 @@
 //! empty/single/many/multibyte-utf8 pt-br corpora and the escape path, two
 //! builds byte-identical.
 
+// not under miri: the fsst symbol-table build over whole corpora takes minutes and gigabytes under miri; the fsst decoder is covered natively and by negative_fsst under miri.
+#![cfg(not(miri))]
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,

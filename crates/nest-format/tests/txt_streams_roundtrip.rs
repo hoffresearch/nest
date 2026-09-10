@@ -47,11 +47,13 @@ fn empty_corpus_decodes_byte_identical() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn single_chunk_decodes_byte_identical() {
     assert_decodes_byte_identical(&["only one chunk of canonical text"]);
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn many_chunks_decode_byte_identical() {
     let owned: Vec<String> = (0..200)
         .map(|i| format!("chunk number {i} with some body"))
@@ -61,6 +63,7 @@ fn many_chunks_decode_byte_identical() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn multibyte_utf8_ptbr_accents_decode_byte_identical() {
     // pt-br accents + empty string in the middle must round-trip byte-exact.
     assert_decodes_byte_identical(&[
@@ -73,6 +76,7 @@ fn multibyte_utf8_ptbr_accents_decode_byte_identical() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn offset_table_o1_seek_returns_the_right_stream() {
     let t = texts(&["alpha", "beta", "coração", "delta", "épsilon"]);
     let packed = encode_txt_streams(&t).unwrap();
@@ -88,6 +92,7 @@ fn offset_table_o1_seek_returns_the_right_stream() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn two_encodes_are_byte_identical_deterministic() {
     let t = texts(&["a", "bb", "ccc", "coração", "dddd"]);
     assert_eq!(
@@ -114,6 +119,7 @@ fn similar_corpus() -> Vec<String> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn dict_variant_v2_decodes_byte_identical() {
     let t = similar_corpus();
     let mut su = t.clone();
@@ -127,6 +133,7 @@ fn dict_variant_v2_decodes_byte_identical() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // too slow under miri
 fn fsst_variant_v3_decodes_byte_identical() {
     let t = similar_corpus();
     let framed = encode_fsst(&t).unwrap();
@@ -136,6 +143,7 @@ fn fsst_variant_v3_decodes_byte_identical() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn all_three_variants_share_the_offset_table_layout() {
     // V1 / V2 / V3 all start with their kind byte then the same u64 count,
     // so a reader dispatches on the section-entry encoding id and the kind

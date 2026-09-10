@@ -10,6 +10,8 @@
 //!    chunks_canonical payload, so the content_hash preimage is unchanged
 //!    regardless of which codec the chooser picks.
 
+// not under miri: the twins are built through the zstd dictionary codec (c code miri cannot call) and the fsst table build is too heavy under miri.
+#![cfg(not(miri))]
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,

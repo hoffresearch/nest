@@ -12,6 +12,9 @@
 //! failing inputs are persisted under `proptest-regressions/` and replayed
 //! first on the next run.
 
+// not under miri: proptest volume is not what miri is for: hundreds of cases per property, each a full encode + decode; the fixed-input codec tests cover the same paths under miri.
+#![cfg(not(miri))]
+
 use nest_format::encoding::{IntpackReader, pack_u64s, unpack_u64s};
 use nest_format::encoding::{
     decode_dedup_map, decode_fsst_payload, decode_txt_streams_payload, decode_zstd_dict_payload,

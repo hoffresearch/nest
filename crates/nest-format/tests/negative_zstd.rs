@@ -15,6 +15,8 @@
 //!   a fresh checksum + file_hash so the test isolates the
 //!   decompression failure from a checksum failure.
 
+// not under miri: every case builds a zstd payload first (c code miri cannot call).
+#![cfg(not(miri))]
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,

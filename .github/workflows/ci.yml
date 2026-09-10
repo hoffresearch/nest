@@ -12,7 +12,8 @@
 # licenses, bans, sources; policy in deny.toml) on the three cargo
 # workspaces, cargo-semver-checks on nest-format's public api against the
 # pull request's base commit, and (on the schedule or on demand) a
-# 30-minute-per-target fuzz soak whose corpus carries over between nights.
+# 30-minute-per-target fuzz soak whose corpus carries over between nights
+# plus nest-format's test suite under miri.
 
 name: ci
 
@@ -204,6 +205,31 @@ jobs:
           path: fuzz/artifacts/${{ matrix.target }}
           if-no-files-found: ignore
           retention-days: 30
+
+  miri:
+    name: miri (nest-format)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - name: nightly toolchain with miri
+        run: rustup toolchain install nightly --profile minimal --component miri && rustup default nightly
+      - uses: Swatinem/rust-cache@v2
+      - name: miri setup
+        run: cargo miri setup
+      # nest-format has zero `unsafe`; this turns "no undefined behaviour"
+      # from a claim into a run over its parsers and codecs. tree borrows:
+      # sha2 0.11's neon loader trips stacked borrows on aarch64 hosts (a
+      # dependency, not this crate). tests that call zstd (c code miri cannot
+      # run), the f16 conversions of `half` (inline asm on aarch64) and the
+      # fsst table build (too slow under an interpreter) are marked in the
+      # source with the reason; the mutation and property harnesses run
+      # natively in the rust job instead.
+      - name: nest-format under miri
+        env:
+          MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows
+        run: cargo miri test -p nest-format
 
   python:
     name: python

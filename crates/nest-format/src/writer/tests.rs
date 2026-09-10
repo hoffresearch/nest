@@ -102,6 +102,7 @@ fn rejects_bad_dim() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn zstd_encoding_preserves_content_hash() {
     let mut m = good_manifest();
     m.n_chunks = 3;
@@ -144,6 +145,7 @@ fn zstd_encoding_preserves_content_hash() {
 }
 
 #[test]
+#[cfg_attr(all(miri, target_arch = "aarch64"), ignore)] // half converts f16 with inline asm on aarch64, which miri cannot run
 fn float16_embeddings_roundtrip() {
     let mut m = good_manifest();
     m.n_chunks = 2;
@@ -203,6 +205,7 @@ fn int8_embeddings_roundtrip() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn two_compressed_builds_byte_identical_with_text_levers() {
     // a heavily-repeated corpus engages the dict/dedup text levers under the
     // compressed preset. two reproducible builds must still be byte-identical
@@ -257,6 +260,7 @@ fn two_compressed_builds_byte_identical_with_text_levers() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
 fn rejects_zstd_embeddings() {
     // Embeddings can never be zstd-compressed (we want SIMD-friendly
     // mmap reads). text_encoding does not apply to embeddings.
