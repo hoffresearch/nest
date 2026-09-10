@@ -213,6 +213,12 @@ fn graph_bytes_are_pinned() {
             DEFAULT_EF_CONSTRUCTION,
             "0210ecf212b48524fea016a3033064259ce23075666cbae43f0bdb02d0b77f9b",
         ),
+        // 2026-09-10: `cosine_dist` moved from a sequential f32 loop to eight
+        // fixed-order accumulators (identical on every target, no fma). the
+        // last bits of a few distances differ, so a handful of near-ties on
+        // the 10k build resolve the other way; the 2k build is unchanged and
+        // recall@10 is the same (hnsw_recall_realistic_size). previous digest:
+        // 7b0cbd99fd12d272f6925d5dc82f691e3f411eea65400dea968c38f44248c1e8
         (
             10_000,
             384,
@@ -220,7 +226,7 @@ fn graph_bytes_are_pinned() {
             0xDEAD_BEEF,
             DEFAULT_M,
             DEFAULT_EF_CONSTRUCTION,
-            "7b0cbd99fd12d272f6925d5dc82f691e3f411eea65400dea968c38f44248c1e8",
+            "bf93c2fecdb6bba867787f23b0b541e1e9534bdeec625007162eb0d152254139",
         ),
     ];
     let print = std::env::var("PIN_HNSW_DIGESTS").is_ok();
