@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-/// The named embedding space a request targets. `text` is space[0] and is
+/// The named embedding space a request targets. `text` is `space[0]` and is
 /// always the canonical text space; `image`/`glyph`/`symbol` are the
 /// multimodal carriers a later phase routes per modality.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
