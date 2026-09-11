@@ -14,7 +14,7 @@ measured 2026-09-10 on arm64 Darwin 25.6.0, python 3.12.14, single thread, n=100
 how to read it:
 
 - `cold open + 1st query`: wall time of a fresh interpreter that opens the store and answers one query, minus an interpreter doing nothing (3 runs, min). nest's number is dominated by `open` verifying every section checksum and the footer hash over the whole file before serving anything; the other stores trust their bytes.
-- `build (s)`: single-threaded everywhere (hnswlib and usearch are told threads=1); nest's hnsw build is the slow row, tracked as doc/hardening-plan.md item 4.11.
+- `build (s)`: single-threaded everywhere (hnswlib and usearch are told threads=1); nest's hnsw build is the slow row.
 - `p50 / p99`: warm, single-threaded, one query at a time, from python. python call overhead is inside every number.
 - `recall@k` is against brute force over the same rows; exact paths are asserted at 1.0.
 - `rebuild byte-identical`: two builds from the same rows compared by sha256 over the artefact (a directory is hashed file by file).

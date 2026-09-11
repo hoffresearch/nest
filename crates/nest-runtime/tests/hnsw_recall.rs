@@ -195,7 +195,7 @@ fn graph_digest(idx: &HnswIndex) -> String {
 /// the build is deterministic for a seed AND its bytes are pinned: any
 /// change to the insertion order, the distance arithmetic, the neighbor
 /// heuristic or the tie-breaking shows up here as a different digest.
-/// the build-throughput work (hardening-plan §4.11) must either keep these
+/// any build-throughput work must either keep these
 /// digests or change them on purpose, in the same commit, with the reason.
 /// `PIN_HNSW_DIGESTS=1 cargo test --release -p nest-runtime --test
 /// hnsw_recall graph_bytes_are_pinned -- --nocapture` prints the current

@@ -1,4 +1,4 @@
-//! hnsw build throughput (hardening-plan §4.11): `HnswIndex::build` over
+//! hnsw build throughput: `HnswIndex::build` over
 //! 20k x 384 synthetic l2-normalized rows at m=16 / ef_construction=200,
 //! the same knobs `doc/benchmarks.md` uses against hnswlib and usearch
 //! (there at 100k). one sample is one full build, so the run is minutes,

@@ -22,7 +22,7 @@ on:
     branches: [main]
   pull_request:
   # nightly soak: every cargo-fuzz target for 30 minutes with the corpus
-  # carried over between nights (hardening-plan §4.3). also on demand.
+  # carried over between nights. also on demand.
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
