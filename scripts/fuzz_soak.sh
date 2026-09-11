@@ -1,5 +1,5 @@
 #!/bin/sh
-# local coverage-guided fuzz soak (hardening-plan §4.3): every cargo-fuzz
+# local coverage-guided fuzz soak: every cargo-fuzz
 # target for SECONDS each (default 3600), corpus under fuzz/corpus/<target>
 # (gitignored, accumulates across runs). run it after any decoder change,
 # before the pr. a crash lands in fuzz/artifacts/<target>/; turn it into a

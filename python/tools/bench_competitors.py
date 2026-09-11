@@ -42,7 +42,7 @@ NOTES = (
             " is dominated by `open` verifying every section checksum and the footer hash over"
             " the whole file before serving anything; the other stores trust their bytes.",
             "- `build (s)`: single-threaded everywhere (hnswlib and usearch are told threads=1);"
-            " nest's hnsw build is the slow row, tracked as doc/hardening-plan.md item 4.11.",
+            " nest's hnsw build is the slow row.",
             "- `p50 / p99`: warm, single-threaded, one query at a time, from python. python call"
             " overhead is inside every number.",
             "- `recall@k` is against brute force over the same rows; exact paths are asserted"

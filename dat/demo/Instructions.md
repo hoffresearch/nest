@@ -63,7 +63,7 @@ rebuild the benchmark (the control index is not optional: the compressed numbers
     --index tmp/ph2/ph2.nest --baseline tmp/ph2-control/ph2-control.nest -k 1 5 10
 ```
 
-the full variant matrix (av1 crf ladder, avif444, control, dtype rungs, ordering) is one command per dataset with `python/tools/nest_image_sweep.py`; see `doc/usage.md` for the flags and `doc/changelog.md` for the measured matrix with confidence intervals.
+the full variant matrix (av1 crf ladder, avif444, control, dtype rungs, ordering) is one command per dataset with `python/tools/nest_image_sweep.py`; see `doc/usage.md` for the flags and `doc/CHANGELOG` for the measured matrix with confidence intervals.
 
 ## offline demo (no downloads)
 

@@ -85,8 +85,7 @@ prefer release_check.sh before merge, it is the project gate; .github/workflows/
 - doc/arc/arc.mmd
 - doc/usage.md
 - doc/benchmarks.md
-- doc/hardening-plan.md
-- doc/changelog.md
+- doc/CHANGELOG
 
 made it simple, but signifcant.
 Hoff Research - hoffresearch.com

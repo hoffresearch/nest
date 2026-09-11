@@ -57,7 +57,7 @@ publish-jobs = ["homebrew"]
 # sigstore keyless provenance for every release artifact, verifiable with
 # `gh attestation verify` (issue #75).
 github-attestations = true
-# supply chain (hardening-plan §4.8): a cyclonedx sbom per release artifact,
+# supply chain: a cyclonedx sbom per release artifact,
 # uploaded next to it and covered by the same attestations; binaries built
 # with cargo-auditable so `cargo audit bin nest` can read the dependency
 # tree out of the executable. the tag-verify job runs in the plan phase and
