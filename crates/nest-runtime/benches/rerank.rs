@@ -1,5 +1,5 @@
-//! end-to-end search benchmarks through the public api (hardening-plan
-//! §4.7, the reproducible version of §6): one `.nest` per stored dtype,
+//! end-to-end search benchmarks through the public api (the
+//! reproducible version of the doc/benchmarks.md numbers): one `.nest` per stored dtype,
 //! 20k x 384 synthetic l2-normalized rows, the same hnsw graph in every
 //! file (the graph is dtype-independent; the runtime materializes f32
 //! vectors from the stored section), then per query:

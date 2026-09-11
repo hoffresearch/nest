@@ -83,7 +83,7 @@ python/                writer pipeline (builder.py), model fingerprint, query em
                        the model registry (model_registry + model_adapters + embed_st +
                        embed_st_worker) and the dual quality gate (quality_gate)
 tests/                 python test scripts (plain scripts, not pytest)
-doc/                   arc/ architecture pair, usage.md, changelog.md, data-governance.md
+doc/                   arc/ architecture pair, usage.md (with the install reference), CHANGELOG, SECURITY.md (with the data-governance posture)
 dat/                   corpus_next.v1.nest (LFS demo corpus), measure/ regression baselines, demo/ sources
 scripts/               release_check.sh (the merge gate), pre-commit (PHI/data backstop hook),
                        install.sh / install.ps1, stage_wheel.py, stage_embedder_payload.py
@@ -121,7 +121,7 @@ python entry: `sys.path.insert(0, "python"); import nest`. dynamic loader finds 
 - PRs target `main` and are squash merged (the ruleset requires pull requests, verified ssh-signed commits, and linear history). delete the branch after merge and start the next one from `origin/main`.
 - tags on `main` only (`v0.3.0` is current). `Cargo.toml` workspace version tracks the latest released tag.
 - every push and pull request runs `.github/workflows/ci.yml`: fmt, clippy with the workspace deny lints, build + test on ubuntu (avx2) and macos (neon), the mutation-fuzz harnesses at a higher iteration count, the 300-line guard, forge-core's own gate, ruff via `scripts/ruff_check.sh` (the ONE python file list, shared with release_check.sh), and a bounded cargo-fuzz smoke on nightly. it is release_check.sh minus the lfs corpus measurement.
-- pushing a `v*` tag on `main` runs the full release: `.github/workflows/release.yml` (cargo-dist: cli tarballs for 5 targets, checksums, sigstore attestations, homebrew formula, the embedder payload artifact) and `.github/workflows/pypi.yml` (maturin abi3 wheels for 4 platforms, OIDC trusted publishing). `.github/workflows/install-test.yml` then tests the INSTALLED product per platform. maintainer one-time setup for these channels is in `doc/install.md` > maintainer checklist.
+- pushing a `v*` tag on `main` runs the full release: `.github/workflows/release.yml` (cargo-dist: cli tarballs for 5 targets, checksums, sigstore attestations, homebrew formula, the embedder payload artifact) and `.github/workflows/pypi.yml` (maturin abi3 wheels for 4 platforms, OIDC trusted publishing). `.github/workflows/install-test.yml` then tests the INSTALLED product per platform. maintainer one-time setup for these channels is the maintainer checklist in the reference section of `doc/usage.md`.
 - git lfs tracks `*.nest`, `*.safetensors`, datasets, and the vendored potion table (including `dat/corpus_next.v1.nest`); golden fixtures under `crates/nest-format/tests/fixtures/` stay in regular git. run `git lfs pull` if a binary is a pointer.
 - demo datasets under `dat/demo/` are intentionally gitignored and downloaded locally from upstream sources listed in `dat/demo/Instructions.md`.
 - tests run without the demo datasets (the unit and golden-fixture tests avoid depend on them); only `measure_presets.py` and `release_check.sh` need the baseline corpus.
@@ -133,7 +133,7 @@ python entry: `sys.path.insert(0, "python"); import nest`. dynamic loader finds 
 - every change ships with real tests, no mocks: happy path, error path, one edge case minimum.
 - test against real artifacts (built .nest files, golden fixtures, real corpora), never mocked interfaces.
 - applies to every contributor, human or agent; nothing merges without executable proof.
-- keep the doc/changelog.md test-surface count in sync when adding suites.
+- keep the doc/CHANGELOG test-surface count in sync when adding suites.
 - base formatting via `.editorconfig`: utf-8, lf, 4-space indent (2 for toml/yaml/json), final newline.
 
 # naming
@@ -163,7 +163,7 @@ every file created or modified in a session that exceeds 333 lines must be read 
 
 run a full audit over every change made in the session, no summarizing, from devops, code quality, and secops angles. write a temporary manifest in markdown under your tmp folder to track tasks executed.
 
-identify every trace of dead code, generated scripts and files no longer useful, items needing update, and items to be moved to the correct location per architecture and design pattern. if the project lacks documented conventions, create them: design notes in `doc/changelog.md` for architectural decisions, `.editorconfig` for stack-agnostic base formatting, and an idiomatic linter config per language used.
+identify every trace of dead code, generated scripts and files no longer useful, items needing update, and items to be moved to the correct location per architecture and design pattern. if the project lacks documented conventions, create them: design notes in `doc/CHANGELOG` for architectural decisions, `.editorconfig` for stack-agnostic base formatting, and an idiomatic linter config per language used.
 
 identify temporary scripts and possible dead-code files in incorrect folders. understand how each works, preserve application integrity, test and validate that no imports or responsibilities are left orphan. run tests after execution.
 
@@ -213,18 +213,15 @@ these are documented honest limitations of the current code, not bugs to silentl
 # documentation
 
 - `README.md`: project overview, install, CLI summary, python surface, benchmarks, hardening, presets, reference index.
-- `doc/install.md`: every install channel (one-liner, pypi `nestdb`, brew, binstall, docker), verification (sha256 + attestations), offline notes, and the maintainer one-time checklist.
 - `doc/arc/arc.yaml`: the single architecture reference, machine-readable for agents and tooling and the human-readable inventory plus runtime contract summary.
 - `doc/arc/arc.mmd`: mermaid sequence diagram of the build and query flows.
-- `doc/usage.md`: how-to for the twelve engine subcommands (incl `media`, section 15) plus the ask/retrieve/build agent verbs, presets, offline mode, citations, the model registry and multi-model spaces (section 12), declarative builds (section 13), and the compression levers with the dual quality gate (section 14).
-- `doc/changelog.md`: 0.1.0 through 0.3.0 and the unreleased deltas, with measured numbers.
+- `doc/usage.md`: how-to for the twelve engine subcommands (incl `media`, section 15) plus the ask/retrieve/build agent verbs, presets, offline mode, citations, the model registry and multi-model spaces (section 12), declarative builds (section 13), and the compression levers with the dual quality gate (section 14), and the collapsed reference section: every install channel (one-liner, pypi `nestdb`, brew, binstall, docker, dev build), verification (sha256 + attestations + sbom), offline notes, and the maintainer one-time checklist.
+- `doc/CHANGELOG`: 0.1.0 through 0.3.0 and the unreleased deltas, with measured numbers.
 - `doc/benchmarks.md`: nest vs usearch / hnswlib / sqlite-vec / lancedb, one table, regenerated by `python/tools/bench_competitors.py`.
-- `doc/hardening-plan.md`: the review-driven hardening list, status per item with the proving command, open items specified.
 - `dat/demo/Instructions.md`: what each upstream PT-BR dataset is and how to rebuild the unified corpus.
-- `doc/data-governance.md`: provenance, licensing, and personal-data posture for distributed `.nest` files.
 - `doc/CONTRIBUTING.md`: external contributor flow.
 - `doc/CODE_OF_CONDUCT.md`: contributor covenant 2.1, lowercase plain-style.
-- `doc/SECURITY.md`: reporting channel, supported versions, security scope.
+- `doc/SECURITY.md`: reporting channel, supported versions, security scope, hardening notes, and the data-governance posture (cleartext datastore, erasure and rectification, provenance as a compliance asset, corpus licensing).
 - `doc/LICENSE`: mit license text.
 - `scripts/release_check.sh`: read it. it documents the gate by being the gate.
 

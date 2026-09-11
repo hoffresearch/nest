@@ -26,7 +26,7 @@ workspace = true
 name = "nest_runtime"
 path = "src/lib.rs"
 
-# criterion benches (hardening-plan §4.7): `cargo bench -p nest-runtime`.
+# criterion benches: `cargo bench -p nest-runtime`.
 # default features off: no rayon, no plotters html report, just the
 # statistics and the cli.
 [dev-dependencies]

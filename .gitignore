@@ -104,3 +104,6 @@ fuzz/coverage/
 # competitor benchmark scratch stores (python/tools/bench_competitors.py --work)
 .bench-competitors/
 tools/
+
+# local-only planning notes, never published
+doc/hardening-plan.md
