@@ -22,28 +22,28 @@ nest-runtime = { path = "../crates/nest-runtime" }
 sha2 = "0.11"
 
 [[bin]]
-name = "nest_view"
+name = "nest-view"
 path = "fuzz_targets/nest_view.rs"
 test = false
 doc = false
 bench = false
 
 [[bin]]
-name = "section_decoders"
+name = "section-decoders"
 path = "fuzz_targets/section_decoders.rs"
 test = false
 doc = false
 bench = false
 
 [[bin]]
-name = "runtime_indexes"
+name = "runtime-indexes"
 path = "fuzz_targets/runtime_indexes.rs"
 test = false
 doc = false
 bench = false
 
 [[bin]]
-name = "mmap_open_search"
+name = "mmap-open-search"
 path = "fuzz_targets/mmap_open_search.rs"
 test = false
 doc = false
