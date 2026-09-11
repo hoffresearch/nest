@@ -7,7 +7,7 @@
 #
 # The PUBLISHED package is the `nestdb` wheel, a maturin project owned by
 # `packaging/pyproject.toml` and staged by `scripts/stage_wheel.py` (see
-# doc/install.md). This root file stays the dev-tooling config: it exists
+# the reference section of doc/usage.md). This root file stays the dev-tooling config: it exists
 # so `ruff` (and any other PEP 518 tool) finds a canonical config at the
 # workspace root.
 #

@@ -67,7 +67,7 @@ prefer release_check.sh before merge, it is the project gate; .github/workflows/
 
 - feature work happens on short-lived branches off main; every change reaches main through a pull request, squash-merged.
 - main requires pull requests, verified (ssh-signed) commits, and linear history; delete the branch after merge and start the next one from origin/main.
-- releases are tags on main (v*); the tag drives the release, pypi and install-test workflows (doc/install.md).
+- releases are tags on main (v*); the tag drives the release, pypi and install-test workflows (doc/usage.md, reference section).
 
 ## do not
 
