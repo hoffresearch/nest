@@ -603,10 +603,8 @@ the full map (flows, contracts, inventory) lives in [doc/arc/arc.yaml](doc/arc/a
 
 ## license
 
-MIT, see [doc/LICENSE](doc/LICENSE).
+MIT, see [doc/LICENSE](doc/LICENSE). [Hoff Research](https://hoffresearch.com)
 
-made it simple, but significant
+made it simple, but significant (∂μfμν = jν)
 
-[hoff research](https://hoffresearch.com), author: brenner cruvinel
-
-(∂μfμν = jν)
+author: brenner cruvinel 
