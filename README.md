@@ -2,13 +2,15 @@
 
 # nest
 
-single-file, memory-mapped, hash-verified vector database with stable citations. one `.nest` file carries chunks, embeddings, source spans, media, indices, and a search contract; a rust runtime mmaps it and answers with exact-cosine scores and `nest://content_hash/chunk_id` references that survive re-encoding. reproducible byte for byte, offline by construction. sovereign in the plain sense: the file is the whole database and nothing phones home.
+single-file, memory-mapped, hash-verified vector database with stable citations.
+
+one `.nest` file carries chunks, embeddings, source spans, media, indices, and a search contract. a rust runtime mmaps it and answers with exact-cosine scores and `nest://content_hash/chunk_id` citations that survive re-encoding. reproducible byte for byte, offline by construction: the file is the whole database and nothing phones home.
 
 python builds. rust serves. nest ships.
 
-no server, no api call, no central index. ship a curated knowledge base with the application. the file is the database.
+no server to run, no api call, no central index to audit. ship a curated knowledge base inside the application; every answer points at a chunk you can verify.
 
-warm p50 vs p99 query latency per store, 100,000 x 384 rows, log scale, bottom-left is fastest and flattest
+warm p50 vs p99 per store, 100k x 384 rows, log scale, bottom-left is fastest and flattest
 
 ```mermaid
 ---
@@ -50,16 +52,18 @@ quadrantChart
     "sqlite-vec": [0.92, 0.76] radius: 5, color: #8E44AD
 ```
 
-nest hybrid and nest exact are the only two points that verify every byte before answering and return recall@10 = 1.000; the numbers behind every point are in [doc/benchmarks.md](doc/benchmarks.md).
+the two nest points verify every byte before the first answer and return recall@10 = 1.000. numbers per point: [doc/benchmarks.md](doc/benchmarks.md).
 
 ## sovereign, enforced by the format
 
-four properties, all enforced by the format itself, not by policy.
+four properties, held by the bytes, not by policy.
 
-- **self-contained**: the file is the entire knowledge base; copy it like a sqlite db.
-- **verifiable**: sha-256 per section, per file, and over the decoded content; every hit returns a `nest://content_hash/chunk_id` citation that `nest cite` resolves to the stored canonical text.
-- **reproducible**: same chunks + same model fingerprint + `reproducible=True` = byte-identical `file_hash` on any machine.
-- **offline-first**: the runtime never opens a socket; model mismatches fail loudly via the `model_hash` gate, never silently.
+| property       | what the format enforces |
+|----------------|--------------------------|
+| self-contained | the file is the entire knowledge base; copy it like a sqlite db |
+| verifiable     | sha-256 per section, per file, and over the decoded content; every hit cites `nest://content_hash/chunk_id` and `nest cite` resolves it to the stored text |
+| reproducible   | same chunks + same model fingerprint + `reproducible=True` = byte-identical `file_hash` on any machine |
+| offline-first  | the runtime never opens a socket; a model mismatch fails loudly at the `model_hash` gate |
 
 ## install
 
@@ -543,6 +547,9 @@ int8 at 384 is the `tiny` preset, int4 at 384 is `nano`. int4 packs blocks of 64
 
 ## presets
 
+<details>
+<summary>six levers, one corpus, measured</summary>
+
 | preset       | text | embeddings  | ann | bm25 | size ratio | recall@10 |
 |--------------|------|-------------|-----|------|-----------:|----------:|
 | `exact`      | raw  | float32     | no  | no   |     1.000  |   1.0000  |
@@ -553,6 +560,8 @@ int8 at 384 is the `tiny` preset, int4 at 384 is `nano`. int4 packs blocks of 64
 | `hybrid`     | zstd | float32     | yes | yes  |     0.609  |   1.0000  |
 
 measured on a 30,725-chunk pt-br corpus (`dat/measure/ladder.json`, gated in ci). the recall ruler is self-perturbation, so it reports rank stability under quantization, not real-query quality; sub-int8 scores are real cosine at the stored precision, disclosed on every result. full honesty notes, the mrl curve, and the lever guide: [doc/usage.md](doc/usage.md) section 6.
+
+</details>
 
 ## reference
 
