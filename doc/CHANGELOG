@@ -6,6 +6,10 @@ format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). version
 
 ## [Unreleased]
 
+### changed
+
+- docs consolidated (2026-09-11): `doc/install.md` is folded into `doc/usage.md` as a collapsed reference section at the end (every install channel, verification, offline notes, the maintainer checklist; sections 1 to 15 keep their numbers so existing cross-references resolve), `doc/data-governance.md` is condensed into a data governance section of `doc/SECURITY.md`, `doc/changelog.md` is `doc/CHANGELOG`, and the readme's reference list is collapsed. the hardening plan is maintainer working notes and leaves the tree (gitignored, kept locally); every pointer at it in docs, workflow headers and source comments is reworded.
+
 ### added
 
 - hnsw build 1.73x faster on 20k x 384, still single-threaded and byte-deterministic across machines: the build distance is an eight-accumulator fixed-tree dot the compiler vectorizes without fma on every target, and the build reuses one epoch-stamped visited list instead of allocating a hash set per layer search. the graph bytes are pinned by a test for two seeded builds; the 10k digest moved once, on purpose, with the reason recorded in the test.
