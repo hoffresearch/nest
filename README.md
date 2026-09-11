@@ -114,7 +114,8 @@ measured on a 30,725-chunk pt-br corpus (`dat/measure/ladder.json`, gated in ci)
 <details>
 <summary>docs, maps, contracts</summary>
 
-- [doc/usage.md](doc/usage.md): every verb, presets, offline mode, model registry, declarative builds, compression levers
+- [doc/usage.md](doc/usage.md): every verb, presets, offline mode, model registry, declarative builds, compression levers, and the install reference (channels, verification, maintainer checklist)
+- [doc/SECURITY.md](doc/SECURITY.md): reporting, scope, hardening notes, and the data-governance posture for distributed `.nest` files
 - [doc/arc/arc.yaml](doc/arc/arc.yaml) + [doc/arc/arc.mmd](doc/arc/arc.mmd): the architecture pair
 - [doc/benchmarks.md](doc/benchmarks.md): the competitor table and how it was measured
 - [doc/CHANGELOG](doc/CHANGELOG): releases and unreleased deltas, with measured numbers

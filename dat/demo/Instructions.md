@@ -195,6 +195,6 @@ least one is share-alike (CC-BY-SA), which is viral over the derived corpus.
   license/attribution field — carry the attribution alongside the artifact until
   it does.
 - The corpus embeds **personal data about named public figures** (political and
-  health claims). See [`doc/data-governance.md`](../../doc/data-governance.md)
+  health claims). See the data governance section of [`doc/SECURITY.md`](../../doc/SECURITY.md#data-governance)
   for the erasure/lawful-basis posture. For anything you ship broadly, prefer the
   CC0 `python/forge/demo_corpus` corpus instead of this mixed-license union.
