@@ -35,7 +35,7 @@ nest doctor
 pip install "nestdb[embed]"     # python; offline embedding via the bundled potion table
 ```
 
-also windows (`install.ps1`), homebrew tap, `cargo binstall nest-cli`, docker. artifacts carry sha256 + sigstore attestations. channels, verification, offline notes, and the maintainer checklist: [doc/install.md](doc/install.md). the release channels serve from the first `v*` tag cut after the pipeline landed; `v0.3.0` predates it and carries no artifacts, so the dev build below is the working path until then.
+also windows (`install.ps1`), homebrew tap, `cargo binstall nest-cli`, docker. artifacts carry sha256 + sigstore attestations. channels, verification, offline notes, and the maintainer checklist: the reference section of [doc/usage.md](doc/usage.md#reference). the release channels serve from the first `v*` tag cut after the pipeline landed; `v0.3.0` predates it and carries no artifacts, so the dev build below is the working path until then.
 
 dev build (rust edition 2024, python 3.12+):
 
@@ -111,14 +111,18 @@ measured on a 30,725-chunk pt-br corpus (`dat/measure/ladder.json`, gated in ci)
 
 ## reference
 
+<details>
+<summary>docs, maps, contracts</summary>
+
 - [doc/usage.md](doc/usage.md): every verb, presets, offline mode, model registry, declarative builds, compression levers
 - [doc/arc/arc.yaml](doc/arc/arc.yaml) + [doc/arc/arc.mmd](doc/arc/arc.mmd): the architecture pair
 - [doc/benchmarks.md](doc/benchmarks.md): the competitor table and how it was measured
 - [doc/CHANGELOG](doc/CHANGELOG): releases and unreleased deltas, with measured numbers
-- [doc/install.md](doc/install.md): every install channel and its verification
 - [dat/demo/Instructions.md](dat/demo/Instructions.md): the pt-br demo corpus sources and rebuild
 - [.contracts/.agents/AGENTS.md](.contracts/.agents/AGENTS.md): the single instruction source for agents and contributors
 - `./scripts/release_check.sh`: the merge gate; it documents itself by being the gate
+
+</details>
 
 ## license
 
