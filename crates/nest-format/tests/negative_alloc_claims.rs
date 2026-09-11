@@ -1,5 +1,5 @@
 //! Regression for the first coverage-guided fuzz finding (cargo-fuzz,
-//! `section_decoders`, 2026-09-05): a 90-byte intpack-repacked spans payload
+//! `section-decoders`, 2026-09-05): a 90-byte intpack-repacked spans payload
 //! claimed a uri pool of 1.3 billion entries and `Vec::with_capacity` asked
 //! the allocator for 31 GB. every count-driven allocation on a decode path
 //! is bounded by what the bytes can hold before it happens; these are the

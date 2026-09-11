@@ -37,7 +37,8 @@ from pathlib import Path
 # Force HuggingFace/sentence-transformers OFFLINE by default, BEFORE the
 # (lazy) sentence_transformers import ever runs. A hostile or misconfigured
 # corpus model name must never trigger a hub download mid-run — especially
-# while the box is handling PHI (see doc/phi-safety.md). Opt into the
+# while the box is handling PHI (see the data governance section of
+# doc/SECURITY.md). Opt into the
 # first-time model fetch explicitly with NEST_ALLOW_DOWNLOAD=1.
 if os.environ.get("NEST_ALLOW_DOWNLOAD") != "1":
     for _k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):

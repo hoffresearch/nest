@@ -40,6 +40,15 @@ unused-allowed-license = "allow"
 # lock update that fixes them is a visible follow-up, not a blocked pr.
 multiple-versions = "warn"
 wildcards = "allow"
+# syn 2 and syn 3 coexist by upstream choice, not by a stale lock: pyo3-macros
+# 0.29 (workspace) and zerocopy-derive 0.8 (through half; workspace and fuzz)
+# are still on syn 2 while serde_derive, clap_derive, bytemuck_derive and
+# thiserror-impl moved to syn 3. build-time proc-macro input only, nothing of
+# it reaches a binary. drop the entry when pyo3 and zerocopy-derive move.
+# forge-core has no syn 2, so its ci step runs with `-A unmatched-skip`.
+skip = [
+    { crate = "syn@2", reason = "pyo3-macros 0.29 and zerocopy-derive 0.8 have not moved to syn 3 yet" },
+]
 
 [sources]
 unknown-registry = "deny"

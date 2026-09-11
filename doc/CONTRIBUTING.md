@@ -101,7 +101,7 @@ two lints are denied workspace-wide and will fail the build: `clippy::unwrap_use
 ```
 cargo test -p nest-format --test mutation_fuzz -p nest-runtime --test mutation_fuzz
 NEST_MUTATION_ITERS=25000 cargo test --release -p nest-format --test mutation_fuzz
-cargo +nightly fuzz run nest_view -- -max_total_time=600      # needs cargo-fuzz, see fuzz/README.md
+cargo +nightly fuzz run nest-view -- -max_total_time=600      # needs cargo-fuzz, see fuzz/README.md
 ```
 
 ## reporting issues
