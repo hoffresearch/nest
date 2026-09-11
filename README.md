@@ -605,8 +605,8 @@ the full map (flows, contracts, inventory) lives in [doc/arc/arc.yaml](doc/arc/a
 
 MIT, see [doc/LICENSE](doc/LICENSE).
 
-<p>
-<sub>made it simple, but significant</sub><br>
-<b>hoff research</b> &middot; <a href="https://hoffresearch.com">hoffresearch.com</a> &middot; brenner cruvinel<br>
-<sub>(∂μfμν = jν)</sub>
-</p>
+made it simple, but significant
+
+[hoff research](https://hoffresearch.com), author: brenner cruvinel
+
+(∂μfμν = jν)
