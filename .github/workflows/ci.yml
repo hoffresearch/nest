@@ -99,17 +99,17 @@ jobs:
       - name: seed corpora
         run: |
           cd fuzz
-          for t in nest_view section_decoders runtime_indexes mmap_open_search; do
+          for t in nest-view section-decoders runtime-indexes mmap-open-search; do
             mkdir -p corpus/$t
             cp seeds/*.bin ../crates/nest-format/tests/fixtures/golden_v1_minimal.nest corpus/$t/
           done
       - name: run every target (bounded)
         run: |
           cd fuzz
-          for t in nest_view section_decoders runtime_indexes; do
+          for t in nest-view section-decoders runtime-indexes; do
             cargo fuzz run $t -- -max_total_time=90 -max_len=65536
           done
-          cargo fuzz run mmap_open_search -- -max_total_time=90 -max_len=65536 -rss_limit_mb=4096
+          cargo fuzz run mmap-open-search -- -max_total_time=90 -max_len=65536 -rss_limit_mb=4096
       - name: keep any crash artifact
         if: failure()
         uses: actions/upload-artifact@v7
@@ -132,6 +132,9 @@ jobs:
         with:
           command: check advisories licenses bans sources
           manifest-path: forge-core/Cargo.toml
+          # forge-core carries no syn 2, so the workspace-wide skip in
+          # deny.toml goes unmatched there (one policy file, three workspaces).
+          command-arguments: -A unmatched-skip
       - name: fuzz (separate workspace)
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
@@ -164,7 +167,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [nest_view, section_decoders, runtime_indexes, mmap_open_search]
+        target: [nest-view, section-decoders, runtime-indexes, mmap-open-search]
     steps:
       - uses: actions/checkout@v6
       - name: nightly toolchain
