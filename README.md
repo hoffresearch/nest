@@ -4,7 +4,7 @@
 
 single-file, memory-mapped, hash-verified vector database with stable citations. one `.nest` file carries chunks, embeddings, source spans, media, indices, and a search contract; a rust runtime mmaps it and answers with exact-cosine scores and `nest://content_hash/chunk_id` references that survive re-encoding. reproducible byte for byte, offline by construction. sovereign in the plain sense: the file is the whole database and nothing phones home.
 
-python builds. rust serves. nest ships. agents/llms read, that's it.
+python builds. rust serves. nest ships.
 
 no server, no api call, no central index. ship a curated knowledge base with the application. the file is the database.
 
@@ -61,23 +61,6 @@ four properties, all enforced by the format itself, not by policy.
 - **reproducible**: same chunks + same model fingerprint + `reproducible=True` = byte-identical `file_hash` on any machine.
 - **offline-first**: the runtime never opens a socket; model mismatches fail loudly via the `model_hash` gate, never silently.
 
-## architecture
-
-<details>
-<summary>crates, python, and the map</summary>
-
-python builds a deterministic container; a rust runtime mmaps it and answers exact, hnsw, bm25, graph, and per-space searches, always finishing with an exact-cosine rerank. the cli and the python api are thin surfaces over the same runtime.
-
-- `nest-format`: frozen v1 container (layout, manifest, sections, encodings, hashes)
-- `nest-runtime`: mmap, simd dispatch, indices, search with mandatory exact rerank
-- `nest-cli`: the `nest` binary (engine verbs + `ask`/`retrieve` + declarative `build`)
-- `nest-python`: pyo3 bridge (`nest.open`, `nest.build`, `NestFile.retrieve`)
-- `python/`: writer pipeline, model registry, offline embedders, forge tooling
-
-the full map (flows, contracts, inventory) lives in [doc/arc/arc.yaml](doc/arc/arc.yaml) and the visual sequence in [doc/arc/arc.mmd](doc/arc/arc.mmd).
-
-</details>
-
 ## install
 
 ```sh
@@ -117,7 +100,12 @@ cp target/release/lib_nest.so python/_nest.so      # linux
 
 ## cli
 
+<details>
+<summary>one binary, two groups of verbs</summary>
+
 one binary, two groups of verbs. the engine takes a file and a vector and never runs python; the agent verbs take text or a build spec, shell out to the offline python embedder or the forge, and speak in cited answers. every printed score is the exact-cosine rerank value.
+
+</details>
 
 <details>
 <summary>agent verbs: ask, retrieve, build</summary>
@@ -572,6 +560,7 @@ measured on a 30,725-chunk pt-br corpus (`dat/measure/ladder.json`, gated in ci)
 <summary>docs</summary>
 
 - [doc/usage.md](doc/usage.md): every verb, presets, offline mode, model registry, declarative builds, compression levers, and the install reference (channels, verification, maintainer checklist)
+- [doc/benchmarks.md](doc/benchmarks.md): the competitor table, the charts, and how it was measured
 - [doc/SECURITY.md](doc/SECURITY.md): reporting, scope, hardening notes (denied lints, the mutation-fuzz harness, the nightly soak), and the data-governance posture for distributed `.nest` files
 - [doc/CHANGELOG](doc/CHANGELOG): releases and unreleased deltas, with measured numbers
 - [dat/demo/Instructions.md](dat/demo/Instructions.md): the pt-br demo corpus sources and rebuild
@@ -579,10 +568,17 @@ measured on a 30,725-chunk pt-br corpus (`dat/measure/ladder.json`, gated in ci)
 </details>
 
 <details>
-<summary>maps</summary>
+<summary>architecture</summary>
 
-- [doc/arc/arc.yaml](doc/arc/arc.yaml) + [doc/arc/arc.mmd](doc/arc/arc.mmd): the architecture pair, machine-readable inventory and the visual sequence
-- [doc/benchmarks.md](doc/benchmarks.md): the competitor table, the charts, and how it was measured
+python builds a deterministic container; a rust runtime mmaps it and answers exact, hnsw, bm25, graph, and per-space searches, always finishing with an exact-cosine rerank. the cli and the python api are thin surfaces over the same runtime.
+
+- `nest-format`: frozen v1 container (layout, manifest, sections, encodings, hashes)
+- `nest-runtime`: mmap, simd dispatch, indices, search with mandatory exact rerank
+- `nest-cli`: the `nest` binary (engine verbs + `ask`/`retrieve` + declarative `build`)
+- `nest-python`: pyo3 bridge (`nest.open`, `nest.build`, `NestFile.retrieve`)
+- `python/`: writer pipeline, model registry, offline embedders, forge tooling
+
+the full map (flows, contracts, inventory) lives in [doc/arc/arc.yaml](doc/arc/arc.yaml) and the visual sequence in [doc/arc/arc.mmd](doc/arc/arc.mmd).
 
 </details>
 
@@ -600,7 +596,7 @@ measured on a 30,725-chunk pt-br corpus (`dat/measure/ladder.json`, gated in ci)
 
 MIT, see [doc/LICENSE](doc/LICENSE).
 
-<p align="center">
+<p>
 <sub>made it simple, but significant</sub><br>
 <b>hoff research</b> &middot; <a href="https://hoffresearch.com">hoffresearch.com</a> &middot; brenner cruvinel<br>
 <sub>(∂μfμν = jν)</sub>
