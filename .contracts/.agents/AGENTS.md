@@ -213,7 +213,7 @@ these are documented honest limitations of the current code, not bugs to silentl
 # documentation
 
 - `README.md`: project overview, install, CLI summary, python surface, benchmarks, hardening, presets, reference index.
-- `doc/arc/arc.yaml`: the single architecture reference, machine-readable for agents and tooling and the human-readable inventory plus runtime contract summary.
+- `doc/arc/arc.yaml`: the single architecture reference, machine-readable for agents and tooling and the human-readable inventory plus runtime contract summary. `doc/arc/arc.schema.json` is its json schema; the modeline on line 1 binds them in editors (and keeps the schemastore from applying the architect framework schema to a file named arc.yaml).
 - `doc/arc/arc.mmd`: mermaid sequence diagram of the build and query flows.
 - `doc/usage.md`: how-to for the twelve engine subcommands (incl `media`, section 15) plus the ask/retrieve/build agent verbs, presets, offline mode, citations, the model registry and multi-model spaces (section 12), declarative builds (section 13), and the compression levers with the dual quality gate (section 14), and the collapsed reference section: every install channel (one-liner, pypi `nestdb`, brew, binstall, docker, dev build), verification (sha256 + attestations + sbom), offline notes, and the maintainer one-time checklist.
 - `doc/CHANGELOG`: 0.1.0 through 0.3.0 and the unreleased deltas, with measured numbers.

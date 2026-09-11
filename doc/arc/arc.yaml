@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=arc.schema.json
 project: nest
 last-updated: "2026-08-31"
 domain: architecture
@@ -303,6 +304,7 @@ inventory:
     - {path: "tests/test_query_embedder_routing.py", kind: python-test, purpose: "routing by manifest model observable via the fake preset; --mrl-dim passed for truncated default spaces; slice_renorm equals the engine truncation", links: ["crates/nest-cli/src/cmd/embed_gate.rs"]}
     - {path: "doc/arc/arc.yaml", kind: yaml-doc, purpose: "the single architecture reference: machine-readable for agents and tooling, and the human-readable inventory plus format/runtime contract (see system_view, contract, quality, risks, inventory above)", links: ["doc/arc/arc.mmd"]}
     - {path: "doc/arc/arc.mmd", kind: mermaid-doc, purpose: "sequence diagram of the build and query flows", links: ["doc/arc/arc.yaml"]}
+    - {path: "doc/arc/arc.schema.json", kind: "config", purpose: "json schema (draft-07) for arc.yaml: header keys, layers, flows, the four narrative lists, the inventory item shape. the modeline on line 1 of arc.yaml points editors here, which also overrides the schemastore association of any file named arc.yaml with the architect framework schema", links: ["doc/arc/arc.yaml"]}
     - {path: "doc/CODE_OF_CONDUCT.md", kind: governance-doc, purpose: "project conduct policy", links: []}
     - {path: "doc/CONTRIBUTING.md", kind: contributor-doc, purpose: "setup, branching, testing, and style guidance", links: ["scripts/release_check.sh"]}
     - {path: "doc/usage.md", kind: usage-doc, purpose: "the operator guide: every verb with examples, presets and the recall ladder, model_hash and offline operation, benchmark, citations, release verification, nest doctor, the model registry, declarative builds, compression levers, media blobs, and the collapsed reference section: every install channel (one-liner, windows, nestdb wheel, homebrew tap, cargo binstall, docker, dev build), verification (sha256, sigstore attestations, sbom, install-test), offline and air-gapped notes, and the maintainer one-time checklist", links: ["README.md", "crates/nest-cli/src/main.rs"]}
