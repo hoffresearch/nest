@@ -63,6 +63,9 @@ four properties, all enforced by the format itself, not by policy.
 
 ## architecture
 
+<details>
+<summary>crates, python, and the map</summary>
+
 python builds a deterministic container; a rust runtime mmaps it and answers exact, hnsw, bm25, graph, and per-space searches, always finishing with an exact-cosine rerank. the cli and the python api are thin surfaces over the same runtime.
 
 - `nest-format`: frozen v1 container (layout, manifest, sections, encodings, hashes)
@@ -72,6 +75,8 @@ python builds a deterministic container; a rust runtime mmaps it and answers exa
 - `python/`: writer pipeline, model registry, offline embedders, forge tooling
 
 the full map (flows, contracts, inventory) lives in [doc/arc/arc.yaml](doc/arc/arc.yaml) and the visual sequence in [doc/arc/arc.mmd](doc/arc/arc.mmd).
+
+</details>
 
 ## install
 
@@ -348,10 +353,10 @@ python python/forge/retrieve.py
 
 ## benchmarks
 
-[doc/benchmarks.md](doc/benchmarks.md): nest against usearch, hnswlib, sqlite-vec and lancedb on the same 100,000 x 384 rows, same machine, same ruler. nest hybrid answers at recall@10 = 1.000 with p50 0.72 ms (hnsw candidates, exact-cosine rerank), rebuilds byte-identically, and is the only store in the table that proves its own bytes; the price is a cold open of ~290 ms (every checksum is verified before the first query) and an hnsw build 2.1x slower than hnswlib single-threaded (was 2.4x before the build loop was tuned). the table also lists what nest does not do (updates, filters, concurrent writers).
+<details>
+<summary>nest vs usearch, hnswlib, sqlite-vec, lancedb, and the preset ladder</summary>
 
-> [!TIP]
-> verify these results on your own hardware with your own parameters: `python/tools/bench_competitors.py` regenerates the competitor table and `python/tools/measure_presets.py` the preset ladder. `release_check.sh` gates the ladder against `dat/measure/baseline.json`.
+[doc/benchmarks.md](doc/benchmarks.md): nest against usearch, hnswlib, sqlite-vec and lancedb on the same 100,000 x 384 rows, same machine, same ruler. nest hybrid answers at recall@10 = 1.000 with p50 0.72 ms (hnsw candidates, exact-cosine rerank), rebuilds byte-identically, and is the only store in the table that proves its own bytes; the price is a cold open of ~290 ms (every checksum is verified before the first query) and an hnsw build 2.1x slower than hnswlib single-threaded (was 2.4x before the build loop was tuned). the table also lists what nest does not do (updates, filters, concurrent writers).
 
 <details>
 <summary>preset ladder: size vs recall</summary>
@@ -546,11 +551,7 @@ int8 at 384 is the `tiny` preset, int4 at 384 is `nano`. int4 packs blocks of 64
 ---
 </details>
 
-## hardening
-
-- `clippy::unwrap_used` and `clippy::undocumented_unsafe_blocks` are denied workspace-wide; `nest-format` has zero `unsafe`, the runtime's `unsafe` is the SIMD kernels and two `mmap` calls, each with its invariant written down.
-- every push runs [ci.yml](.github/workflows/ci.yml): fmt, clippy, tests on linux (avx2) and macos (neon), a deterministic mutation-fuzz harness over every section decoder and search verb, and a coverage-guided `cargo fuzz` smoke; `fuzz/` holds the targets and seeds.
-- a malformed `.nest` that panics the runtime is a security bug: [doc/SECURITY.md](doc/SECURITY.md).
+</details>
 
 ## presets
 
@@ -568,25 +569,30 @@ measured on a 30,725-chunk pt-br corpus (`dat/measure/ladder.json`, gated in ci)
 ## reference
 
 <details>
-<summary>docs, maps, contracts</summary>
+<summary>docs</summary>
 
-> [!TIP]
-> docs
-> - [doc/usage.md](doc/usage.md): every verb, presets, offline mode, model registry, declarative builds, compression levers, and the install reference (channels, verification, maintainer checklist)
-> - [doc/SECURITY.md](doc/SECURITY.md): reporting, scope, hardening notes, and the data-governance posture for distributed `.nest` files
-> - [doc/CHANGELOG](doc/CHANGELOG): releases and unreleased deltas, with measured numbers
-> - [dat/demo/Instructions.md](dat/demo/Instructions.md): the pt-br demo corpus sources and rebuild
+- [doc/usage.md](doc/usage.md): every verb, presets, offline mode, model registry, declarative builds, compression levers, and the install reference (channels, verification, maintainer checklist)
+- [doc/SECURITY.md](doc/SECURITY.md): reporting, scope, hardening notes (denied lints, the mutation-fuzz harness, the nightly soak), and the data-governance posture for distributed `.nest` files
+- [doc/CHANGELOG](doc/CHANGELOG): releases and unreleased deltas, with measured numbers
+- [dat/demo/Instructions.md](dat/demo/Instructions.md): the pt-br demo corpus sources and rebuild
 
-> [!NOTE]
-> maps
-> - [doc/arc/arc.yaml](doc/arc/arc.yaml) + [doc/arc/arc.mmd](doc/arc/arc.mmd): the architecture pair, machine-readable inventory and the visual sequence
-> - [doc/benchmarks.md](doc/benchmarks.md): the competitor table, the charts above, and how it was measured
+</details>
 
-> [!IMPORTANT]
-> contracts
-> - [.contracts/.agents/AGENTS.md](.contracts/.agents/AGENTS.md): the single instruction source for agents and contributors
-> - `./scripts/release_check.sh`: the merge gate; it documents itself by being the gate
-> - binary format v1 is frozen; encodings 4-255 and section ids 0x09+ are reserved inside v1, and `content_hash` is excluded from every additive section
+<details>
+<summary>maps</summary>
+
+- [doc/arc/arc.yaml](doc/arc/arc.yaml) + [doc/arc/arc.mmd](doc/arc/arc.mmd): the architecture pair, machine-readable inventory and the visual sequence
+- [doc/benchmarks.md](doc/benchmarks.md): the competitor table, the charts, and how it was measured
+
+</details>
+
+<details>
+<summary>contracts</summary>
+
+- [.contracts/.agents/AGENTS.md](.contracts/.agents/AGENTS.md): the single instruction source for agents and contributors
+- `./scripts/release_check.sh`: the merge gate; it documents itself by being the gate
+- binary format v1 is frozen; encodings 4-255 and section ids 0x09+ are reserved inside v1, and `content_hash` is excluded from every additive section
+- a malformed `.nest` that panics the runtime is a security bug: [doc/SECURITY.md](doc/SECURITY.md)
 
 </details>
 
