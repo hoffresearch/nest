@@ -1,4 +1,4 @@
-# verify the release tag's signature (hardening-plan §4.8). a reusable
+# verify the release tag's signature. a reusable
 # workflow: cargo-dist calls it in the plan phase (`plan-jobs` in
 # Cargo.toml), pypi.yml calls it before building wheels. an unsigned tag,
 # or one signed by a key not listed in .github/allowed_signers, fails the

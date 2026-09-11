@@ -2,7 +2,7 @@
 
 `nest` is a single-file binary container for distributing semantic knowledge bases. one file: chunks, canonical text, byte-spans, embeddings, search contract, hashes. copy it, share it, search it.
 
-this guide covers the commands you'll actually use: the agent verbs `ask`, `retrieve` and `build` (the front door; they shell out to the offline python embedder or the forge), and the engine subcommands beneath them (validate, stats, inspect, media, search/search-ann/search-graph/search-space/search-text, benchmark, cite, doctor), which take a file and a vector and never run python. `nest --help` lists them in the same two groups.
+this guide covers the commands you'll actually use: the agent verbs `ask`, `retrieve` and `build` (the front door; they shell out to the offline python embedder or the forge), and the engine subcommands beneath them (validate, stats, inspect, media, search/search-ann/search-graph/search-space/search-text, benchmark, cite, doctor), which take a file and a vector and never run python. `nest --help` lists them in the same two groups. getting the binary onto a machine (every install channel, verification, offline notes, the maintainer checklist) is the reference section at the end of this document; the short form is `curl -sSf https://raw.githubusercontent.com/hoffresearch/nest/main/scripts/install.sh | sh` followed by `nest doctor`.
 
 ## 1. build a `.nest` from chunks
 
@@ -93,7 +93,7 @@ neither means much alone. pass `--baseline` with the uncompressed control index 
     -k 1 5 10 --out eval.json
 ```
 
-measured in phase 6 (full matrix and intervals in `doc/changelog.md`): on ph2 (n=200) av1-intra crf35 compresses the media 86x for a mean label `precision@10` delta of -3.4 to -4.7 points whose interval crosses zero, but the melanoma class alone drops 16.9 points with a significant interval ([-25, -10]); on ham10000 (2000-sample) the media shrinks 151x for a mean delta of -1.5 [-3.5, +0.6], again with a significant melanoma cost (-10.7). the text-to-image ruler is harsher and honest: 44/60 correct top-10 clinical queries on the control falls to 22/60 at crf35, and the loss does not recover with rate. per-class floors matter more than the mean: report the interval and the worst class, not just the point.
+measured in phase 6 (full matrix and intervals in `doc/CHANGELOG`): on ph2 (n=200) av1-intra crf35 compresses the media 86x for a mean label `precision@10` delta of -3.4 to -4.7 points whose interval crosses zero, but the melanoma class alone drops 16.9 points with a significant interval ([-25, -10]); on ham10000 (2000-sample) the media shrinks 151x for a mean delta of -1.5 [-3.5, +0.6], again with a significant melanoma cost (-10.7). the text-to-image ruler is harsher and honest: 44/60 correct top-10 clinical queries on the control falls to 22/60 at crf35, and the loss does not recover with rate. per-class floors matter more than the mean: report the interval and the worst class, not just the point.
 
 `python/tools/nest_image_sweep.py` runs the variant matrix for you (av1-intra crf ladder, avif444, control, `dtype:` rungs, `av1-order`), records `nest_bytes` and the control's `media_bytes` per variant, and writes one consolidated comparison json:
 
@@ -324,7 +324,7 @@ runs the full pipeline: cargo test, clippy, fmt, all 3 python test suites, ruff,
 
 ## 11. install health check (`nest doctor`)
 
-`doctor` takes no file. it validates the install surface after a one-liner / tarball install (see `doc/install.md`): nest and format versions, the detected simd backend, the python interpreter the embedder will run under, the numpy + tokenizers deps, the potion embedder script, the potion table (a git-lfs pointer is rejected), and one real offline embed of a fixed probe string.
+`doctor` takes no file. it validates the install surface after a one-liner / tarball install (the channels are in the reference section below): nest and format versions, the detected simd backend, the python interpreter the embedder will run under, the numpy + tokenizers deps, the potion embedder script, the potion table (a git-lfs pointer is rejected), and one real offline embed of a fixed probe string.
 
 ```sh
 nest doctor
@@ -441,3 +441,165 @@ nest media corpus.nest --export DIR    # write every inlined blob to DIR, verify
 ```
 
 `--export` fails on the first blob whose bytes do not hash to the recorded `content_hash`; `nest validate` performs the same proof over every inlined blob without writing anything. the python side reads one blob without exporting the store: `NestFile.blob_bytes(i)`. the section is content_hash-excluded, so an embedded corpus and its sidecar twin carry the same citations.
+
+## reference
+
+every way to get `nest` onto a machine, what each channel lays down, how to verify what you got, and what a maintainer has to set up once before a release can feed these channels. each item is collapsed; open the one you need.
+
+status: the release pipeline (`.github/workflows/release.yml` via cargo-dist, `.github/workflows/pypi.yml`, `.github/workflows/install-test.yml`) landed after `v0.3.0`, and that tag carries no artifacts. the channels below serve from the first `v*` tag cut on `main` from here on; until then the dev build is the working path. the maintainer checklist is the list of what must exist before that tag is pushed.
+
+the product is offline by construction: the installers are the only thing that ever opens a socket. after install, `nest doctor` validates the surface without network.
+
+<details>
+<summary>one-liner (linux, macos)</summary>
+
+```sh
+curl -sSf https://raw.githubusercontent.com/hoffresearch/nest/main/scripts/install.sh | sh
+nest doctor
+```
+
+`scripts/install.sh` (posix sh; needs `curl`, `tar`, and `sha256sum` or `shasum`):
+
+1. detects the platform and maps it to a release target: `x86_64` / `aarch64` times `unknown-linux-musl` / `apple-darwin`.
+2. downloads four files from the github release: `nest-cli-<target>.tar.xz`, its `.sha256`, `nest-embedder-payload.tar.gz`, its `.sha256`.
+3. verifies both sha256 sums before anything touches the install dirs. a mismatch aborts with the two hashes printed.
+4. installs the binary to `~/.local/bin/nest` and extracts the payload to `${XDG_DATA_HOME:-~/.local/share}/nest/forge/` (the potion embedder script plus its vendored table).
+5. warns if `~/.local/bin` is not on `PATH`.
+
+| flag / env | effect |
+|---|---|
+| `--version vX.Y.Z` | pin a release (default: latest). a bare `X.Y.Z` gets the `v` prepended |
+| `--uninstall` | remove the binary and the payload dir |
+| `NEST_RELEASE_BASE` | url prefix that serves the four files (any url `curl` accepts, `file://` included) |
+| `NEST_BIN_DIR` | binary dir, default `~/.local/bin` |
+| `NEST_DATA_DIR` | payload parent, default `${XDG_DATA_HOME:-~/.local/share}` |
+
+the linux binaries are static musl, so they run on any distro and inside `scratch` containers. `nest doctor` needs a python 3.12+ interpreter with `numpy` and `tokenizers` for the offline embed probe (`NEST_PYTHON` selects the interpreter); everything else in the cli runs without python.
+
+</details>
+
+<details>
+<summary>windows</summary>
+
+```powershell
+irm https://raw.githubusercontent.com/hoffresearch/nest/main/scripts/install.ps1 | iex
+nest doctor
+```
+
+`scripts/install.ps1` mirrors the shell installer: `-Version vX.Y.Z`, `-Uninstall`, the same `NEST_RELEASE_BASE` / `NEST_BIN_DIR` / `NEST_DATA_DIR` overrides. the binary goes to `~\.local\bin\nest.exe`, the payload to `%LOCALAPPDATA%\nest\forge\`. the payload is a `.tar.gz`; `tar` ships with windows 10 1803+. the windows archive is a `.zip`.
+
+</details>
+
+<details>
+<summary>python package `nestdb`</summary>
+
+```sh
+pip install "nestdb[embed]"            # library + offline potion embedding
+uvx --from nestdb nest validate file.nest
+```
+
+one `cp312-abi3` wheel per platform: linux x86_64, linux aarch64, macos universal2, windows amd64. python 3.12+. the wheel carries `nest._nest` (the pyo3 extension), the `nest` package, and the bundled potion table (~30 mb) under `nest/models/potion-base-8M/`. the table is bundled on purpose: the installed package embeds offline by construction, so there is no lazy-fetch path to fail in an air-gapped environment. the `embed` extra adds `numpy` and `tokenizers`; the core surface (`nest.open`, `search`, `retrieve`, `validate`, `inspect`) needs nothing beyond the wheel.
+
+the console entry point `nest` installed by the wheel is the read-only subset (`validate`, `inspect`, `stats`, `search`) over the library api, which is what makes `uvx --from nestdb nest ...` work. the full cli (`ask`, `retrieve`, `build`, `doctor`, `media`, the ann/graph/space searches) is the rust binary from the one-liner, windows, homebrew and binstall items.
+
+the wheel is staged by `scripts/stage_wheel.py` into `packaging/staging/` (gitignored) from `packaging/pyproject.toml`, and built by maturin in `pypi.yml`. the dev flow (`cargo build` + copy the `.so`) is unchanged and does not install a package.
+
+</details>
+
+<details>
+<summary>homebrew</summary>
+
+```sh
+brew install hoffresearch/nest/nest
+```
+
+the formula lives in the `hoffresearch/homebrew-nest` tap and is generated by cargo-dist on every release (`installers = ["homebrew"]` in `Cargo.toml`). known gap, tracked in `.contracts/.agents/AGENTS.md`: the generated formula installs the binary only. a brew-installed `nest` reports exit `4` from `nest doctor` until the payload is laid down, either by running the one-liner (it overwrites nothing brew owns) or by copying `python/forge/` from a checkout into `${XDG_DATA_HOME:-~/.local/share}/nest/forge/`. a custom formula that ships the payload is deferred until the tap sees real use.
+
+</details>
+
+<details>
+<summary>cargo binstall</summary>
+
+```sh
+cargo binstall nest-cli
+```
+
+`[package.metadata.binstall]` in `crates/nest-cli/Cargo.toml` maps the crate to the cargo-dist archive names (`.tar.xz`, `.zip` on windows), so binstall downloads the released binary instead of compiling. same payload gap as homebrew. to build from source instead: `cargo install --git https://github.com/hoffresearch/nest nest-cli`.
+
+</details>
+
+<details>
+<summary>docker</summary>
+
+```sh
+docker build --platform=linux/amd64 -f docker/Dockerfile -t nest .
+docker run --rm -v "$PWD/dat:/dat:ro" nest validate /dat/corpus_next.v1.nest
+```
+
+`docker/Dockerfile` builds the static musl binary in a throwaway toolchain stage and copies it into `scratch`: no shell, no package manager, no network at runtime. the corpus arrives as a mounted volume, so the same image serves air-gapped hosts. on apple silicon build the aarch64 variant natively (`--build-arg TARGET=aarch64-unknown-linux-musl`); qemu user emulation crashes rustc mid-build. the image has no python, so `ask` / `retrieve` are not available inside it; the engine verbs (file + vector in) are.
+
+</details>
+
+<details>
+<summary>dev build</summary>
+
+```sh
+cargo build --release --workspace
+cargo build --release -p nest-python --features pyo3/extension-module
+cp target/release/lib_nest.dylib python/_nest.so   # macos (.so on linux)
+```
+
+rust edition 2024 (`rustc >= 1.85`), python 3.12+. the potion table is git-lfs: `git lfs pull` before `nest doctor` or any `ask` / `retrieve`, a pointer file is rejected with exit `5`. setup details, hooks and the merge gate are in `doc/CONTRIBUTING.md`.
+
+</details>
+
+<details>
+<summary>verification</summary>
+
+every release artifact ships with a per-file `<name>.sha256` and the release carries a combined `sha256.sum`. the installers verify before writing; by hand:
+
+```sh
+sha256sum -c nest-cli-x86_64-unknown-linux-musl.tar.xz.sha256
+gh attestation verify nest-cli-x86_64-unknown-linux-musl.tar.xz --repo hoffresearch/nest
+```
+
+the attestation is sigstore keyless provenance produced in the release job (`attestations: write`, `actions/attest`), binding the artifact digest to the workflow, the commit, and the tag. the pypi wheels carry pep 740 attestations produced by trusted publishing (no stored token), visible on the file's pypi page.
+
+every release also carries a cyclonedx sbom per built package (`nest-cli.cdx.xml`, generated by `cargo cyclonedx` in the build job and attested like the binaries), and the binaries are built with `cargo auditable`, so the dependency tree can be read back out of the executable:
+
+```sh
+gh attestation verify nest-cli.cdx.xml --repo hoffresearch/nest
+cargo audit bin ~/.local/bin/nest
+```
+
+commits on `main` are ssh-signed and the branch ruleset requires verified signatures. release tags are annotated and ssh-signed too: `.github/workflows/tag-verify.yml` checks the tag against `.github/allowed_signers` in the plan phase of the release and before the wheels build, so an unsigned tag, a lightweight tag, or a signature from a key not on that list stops the release before anything is built.
+
+`.github/workflows/install-test.yml` runs after every published release and installs the product the way a user does: the one-liner against the release url on linux x86_64 / aarch64, macos arm64 / x86_64, windows, then `nest validate` on the golden fixture and `nest doctor`; a second job pip-installs the published wheel and runs the `uvx` entry point. a failure there means the release is broken for users: yank and re-cut.
+
+</details>
+
+<details>
+<summary>offline and air-gapped notes</summary>
+
+- after install nothing opens a socket: `ask`, `retrieve`, `doctor`, and the python `nest.embed_potion` all resolve the vendored potion table locally. sentence-transformers presets from the model registry are the exception and download only with `NEST_ALLOW_DOWNLOAD=1` (section 12).
+- the cli finds the embedder in this order: the repo layout (`python/forge/embed_query_potion.py`), then `${XDG_DATA_HOME:-~/.local/share}/nest/forge/`, then `<exe>/../share/nest/forge/`. `nest doctor` prints which one it picked and validates the table is real bytes, not an lfs pointer.
+- air-gapped install: fetch the four files the one-liner downloads on a connected machine, copy them over, and run the installer with `NEST_RELEASE_BASE=file:///path/to/dir`. for the wheel, `pip download nestdb[embed]` on the connected side and `pip install --no-index --find-links` on the other.
+- `nest doctor` exit codes are typed so provisioning scripts branch on them: `0` ok, `2` python missing, `3` numpy/tokenizers missing, `4` embedder script missing, `5` table missing or lfs pointer, `6` embed run failed. a scalar simd fallback warns but exits `0`.
+
+</details>
+
+<details>
+<summary>maintainer checklist (one-time, before the first tagged release)</summary>
+
+the release workflows assume external state that a fresh org does not have. as of 2026-09-10:
+
+1. **homebrew tap**: create the public repo `hoffresearch/homebrew-nest` with an empty `Formula/` directory. it does not exist yet, and the `publish-homebrew-formula` job in `release.yml` checks it out and pushes to it, so the job fails without it. add a fine-grained token with contents write on that repo as the `HOMEBREW_TAP_TOKEN` secret of `hoffresearch/nest`.
+2. **pypi**: on pypi.org, add a pending trusted publisher for the project name `nestdb` (owner `hoffresearch`, repository `nest`, workflow `pypi.yml`, environment `pypi`), and create the `pypi` environment in the github repo settings. `nestdb` is not published yet; the first successful `pypi.yml` run claims the name. no api token is stored anywhere.
+3. **git-lfs**: release and wheel builds pull the potion table (`.github/dist-build-setup.yml`, `lfs: true` in `pypi.yml`). check the lfs bandwidth quota before a release; five targets plus four wheels each fetch the ~30 mb table.
+4. **attestations**: nothing to configure. `release.yml` already requests `attestations: write`, `pypi.yml` requests `id-token: write`.
+5. **short url**: `get.hoffresearch.com` is not registered (nxdomain). the scripts and the README use the raw github url. if the short form is wanted, point the dns at a 302 to the raw script and update the README plus both script headers in the same change.
+6. **cutting a release**: bump `version` in `Cargo.toml` (the workspace version tracks the latest tag), move the `[Unreleased]` block in `doc/CHANGELOG` under the new version, merge to `main`, then `git tag -s vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z` (annotated and signed; `git config tag.gpgsign true` makes `-s` the default with the ssh key already used for commits). the tag drives `release.yml` and `pypi.yml`, both of which verify the signature first; the published release triggers `install-test.yml`. if that trigger does not fire, run it by hand with `workflow_dispatch` and the tag.
+7. **release signers**: `.github/allowed_signers` lists the keys allowed to sign release tags (one line per principal). a new maintainer key is a pull request that appends a line there; the verify step reads the file from the tagged commit.
+8. **changing the dist config**: after editing `[workspace.metadata.dist]` run `dist generate` and commit the regenerated `release.yml`; never hand-edit it. `pr-run-mode = "plan"` keeps pull requests on the plan step only.
+
+</details>

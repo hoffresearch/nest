@@ -1,4 +1,4 @@
-//! property tests for the section codecs (hardening-plan §4.5).
+//! property tests for the section codecs.
 //!
 //! two claims per codec, the ones the citation uri and the reproducible
 //! build depend on and that the fixed-input tests only sample:

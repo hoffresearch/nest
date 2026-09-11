@@ -24,7 +24,7 @@ WEAK RULER: queries are corpus vectors plus tiny noise (self-perturbation),
 so recall@10 here measures rank-stability under quantization, NOT real-query
 retrieval. the JSON dump carries a `ruler` provenance block saying so. the
 real-query (mteb-style) ruler is gate-zero; see the ruler note in
-doc/changelog.md.
+doc/CHANGELOG.
 
 Helpers live in private siblings:
   `_baseline_decoder.py`  — section-table parser
@@ -53,7 +53,7 @@ from _bench_runner import build_variant, percentile, run_bench  # noqa: E402
 # query is a corpus vector plus tiny deterministic noise, so the figure measures
 # rank-stability under quantization, NOT real-query retrieval. the real-query
 # (mteb-style) ruler is gate-zero; until it exists these numbers are likely
-# inflated. see the ruler note in doc/changelog.md.
+# inflated. see the ruler note in doc/CHANGELOG.
 _RULER_PROVENANCE = {
     "kind": "self-perturbation",
     "query": (
@@ -68,7 +68,7 @@ _RULER_PROVENANCE = {
         "recall@10 here is easier than real retrieval and is likely inflated"
     ),
     "real_ruler": (
-        "pending gate-zero (real-query labeled harness); see the ruler note in doc/changelog.md"
+        "pending gate-zero (real-query labeled harness); see the ruler note in doc/CHANGELOG"
     ),
 }
 

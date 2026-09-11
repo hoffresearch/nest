@@ -35,7 +35,7 @@ nest doctor
 pip install "nestdb[embed]"     # python; offline embedding via the bundled potion table
 ```
 
-also windows (`install.ps1`), homebrew tap, `cargo binstall nest-cli`, docker. artifacts carry sha256 + sigstore attestations. channels, verification, offline notes, and the maintainer checklist: [doc/install.md](doc/install.md). the release channels serve from the first `v*` tag cut after the pipeline landed; `v0.3.0` predates it and carries no artifacts, so the dev build below is the working path until then.
+also windows (`install.ps1`), homebrew tap, `cargo binstall nest-cli`, docker. artifacts carry sha256 + sigstore attestations. channels, verification, offline notes, and the maintainer checklist: the reference section of [doc/usage.md](doc/usage.md#reference). the release channels serve from the first `v*` tag cut after the pipeline landed; `v0.3.0` predates it and carries no artifacts, so the dev build below is the working path until then.
 
 dev build (rust edition 2024, python 3.12+):
 
@@ -94,7 +94,7 @@ or `Pipeline` in `python/builder.py` (chunker, sqlite cache, auto-validate). off
 
 - `clippy::unwrap_used` and `clippy::undocumented_unsafe_blocks` are denied workspace-wide; `nest-format` has zero `unsafe`, the runtime's `unsafe` is the SIMD kernels and two `mmap` calls, each with its invariant written down.
 - every push runs [ci.yml](.github/workflows/ci.yml): fmt, clippy, tests on linux (avx2) and macos (neon), a deterministic mutation-fuzz harness over every section decoder and search verb, and a coverage-guided `cargo fuzz` smoke; `fuzz/` holds the targets and seeds.
-- a malformed `.nest` that panics the runtime is a security bug: [doc/SECURITY.md](doc/SECURITY.md). what is still open, with a spec per item: [doc/hardening-plan.md](doc/hardening-plan.md).
+- a malformed `.nest` that panics the runtime is a security bug: [doc/SECURITY.md](doc/SECURITY.md).
 
 ## presets
 
@@ -111,15 +111,19 @@ measured on a 30,725-chunk pt-br corpus (`dat/measure/ladder.json`, gated in ci)
 
 ## reference
 
-- [doc/usage.md](doc/usage.md): every verb, presets, offline mode, model registry, declarative builds, compression levers
+<details>
+<summary>docs, maps, contracts</summary>
+
+- [doc/usage.md](doc/usage.md): every verb, presets, offline mode, model registry, declarative builds, compression levers, and the install reference (channels, verification, maintainer checklist)
+- [doc/SECURITY.md](doc/SECURITY.md): reporting, scope, hardening notes, and the data-governance posture for distributed `.nest` files
 - [doc/arc/arc.yaml](doc/arc/arc.yaml) + [doc/arc/arc.mmd](doc/arc/arc.mmd): the architecture pair
 - [doc/benchmarks.md](doc/benchmarks.md): the competitor table and how it was measured
-- [doc/hardening-plan.md](doc/hardening-plan.md): what a reviewer found, what was fixed, what is open
-- [doc/changelog.md](doc/changelog.md): releases and unreleased deltas, with measured numbers
-- [doc/install.md](doc/install.md): every install channel and its verification
+- [doc/CHANGELOG](doc/CHANGELOG): releases and unreleased deltas, with measured numbers
 - [dat/demo/Instructions.md](dat/demo/Instructions.md): the pt-br demo corpus sources and rebuild
 - [.contracts/.agents/AGENTS.md](.contracts/.agents/AGENTS.md): the single instruction source for agents and contributors
 - `./scripts/release_check.sh`: the merge gate; it documents itself by being the gate
+
+</details>
 
 ## license
 
