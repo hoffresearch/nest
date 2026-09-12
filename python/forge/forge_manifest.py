@@ -118,6 +118,10 @@ def build_lock(spec, model_hashes: dict[str, str], device: str) -> dict:
 def _spec_dict(spec) -> dict:
     raw = asdict(spec)
     raw["media"] = asdict(spec.media) if spec.media is not None else None
+    # where the embed cache lives is not identity: the same entries are read
+    # whether the root came from the spec, --cache-dir or NEST_CACHE_DIR, and
+    # a machine path does not belong in the L3 record.
+    raw["output"].pop("cache_dir", None)
     return raw
 
 
@@ -140,7 +144,7 @@ def check_lock(previous: dict, current: dict) -> list[str]:
 
 
 _LOCATION_KEYS = re.compile(
-    r"resolved_spec\.(spec_path|output\.dir|source\.(path|db|image\.path_template))\b"
+    r"resolved_spec\.(spec_path|output\.(dir|cache_dir)|source\.(path|db|image\.path_template))\b"
 )
 
 

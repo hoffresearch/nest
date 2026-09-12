@@ -153,6 +153,10 @@ pub enum Commands {
         /// Override the spec's [output].dir.
         #[arg(long)]
         out_dir: Option<PathBuf>,
+        /// Override the spec's [output].cache_dir (the shared embed cache
+        /// root; else NEST_CACHE_DIR, else ${XDG_CACHE_HOME:-~/.cache}/nest).
+        #[arg(long)]
+        cache_dir: Option<PathBuf>,
         /// Resume from per-stage state after an interrupted build.
         #[arg(long)]
         resume: bool,
