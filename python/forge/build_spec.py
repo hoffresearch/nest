@@ -2,7 +2,7 @@
 
 Every user-facing choice lives here as a typed field with its default; every
 violation raises SpecError naming the offending key. Unknown keys are errors,
-not silence — a typo'd knob that silently does nothing is a lie in a config.
+not silence: a typo'd knob that silently does nothing is a lie in a config.
 """
 
 from __future__ import annotations
@@ -220,7 +220,7 @@ def _parse(data: dict, spec_path: str) -> CorpusSpec:
         )
     raw_models = data.get("models", [])
     if not isinstance(raw_models, list) or not all(isinstance(m, dict) for m in raw_models):
-        raise SpecError("models must be an array of tables — write [[models]], not [models]")
+        raise SpecError("models must be an array of tables; write [[models]], not [models]")
     corpus = dict(data.get("corpus", {}))
     src = dict(data.get("source", {}))
     joins = [_section(SourceJoin, dict(j), "source.joins") for j in src.pop("joins", [])]

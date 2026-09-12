@@ -136,7 +136,7 @@ def validate(spec: CorpusSpec, *, allow_heavy: bool = False) -> None:
         )
         # validate each knob against ITS OWN pipeline resolution: crf=auto
         # gates on quality.gate_model, ordering clusters on cluster.space,
-        # both falling back to the first image model — never on each other.
+        # both falling back to the first image model, never on each other.
         if m.crf == "auto":
             gate = m.quality.gate_model or (image_presets[0] if image_presets else "")
             need(bool(gate), "media.quality.gate_model: crf=auto needs an image model")
