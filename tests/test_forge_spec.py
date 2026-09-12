@@ -445,19 +445,26 @@ def test_cache_shared_across_specs(base: Path) -> None:
         d.mkdir()
         return _fixture(d, with_media=True, mode="single", salt=" shared")
 
+    # timings alone cannot tell a hit from a sub-millisecond compute on 12
+    # rows (both round to 0.0), so a hit is proven by the entry's mtime: a
+    # recompute rewrites the content-addressed file, a hit never touches it.
     d1, d2 = base / "shared-a", base / "shared-b"
     r1 = build(load_spec(fixture_rows(d1)))
-    assert r1["timings"]["embed.potion"] > 0.0, "first build must compute potion"
     new_potion = {p.name for p in potion.glob("*.npz")} - before_potion
     new_fake = {p.name for p in fake.glob("*.npz")} - before_fake
     assert len(new_potion) == 1, f"one potion entry for one triad, got {new_potion}"
     assert len(new_fake) == 1, f"one image-space entry for one triad, got {new_fake}"
     assert r1["corpus_input_hash"], "the manifest must carry the shared key"
+    potion_entry = potion / next(iter(new_potion))
+    fake_entry = fake / next(iter(new_fake))
+    potion_mtime, fake_mtime = potion_entry.stat().st_mtime_ns, fake_entry.stat().st_mtime_ns
 
     r2 = build(load_spec(fixture_rows(d2)))
     assert r2["corpus_input_hash"] == r1["corpus_input_hash"], "same rows, same triad key"
     assert r2["timings"]["embed.potion"] == 0.0, "second output dir must hit the shared entry"
     assert r2["timings"]["embed.fake-test"] == 0.0, "same media knobs must hit the image entry"
+    assert potion_entry.stat().st_mtime_ns == potion_mtime, "a hit must not rewrite the entry"
+    assert fake_entry.stat().st_mtime_ns == fake_mtime, "a hit must not rewrite the entry"
     assert {p.name for p in potion.glob("*.npz")} - before_potion == new_potion, (
         "a second spec with the same rows must not add a second potion table"
     )
@@ -472,7 +479,8 @@ def test_cache_shared_across_specs(base: Path) -> None:
     spec_p.write_text(spec_p.read_text().replace("crf = 40", "crf = 45"))
     r3 = build(load_spec(spec_p))
     assert r3["timings"]["embed.potion"] == 0.0, "text-only recipe must not change with crf"
-    assert r3["timings"]["embed.fake-test"] > 0.0, "image-space recipe must change with crf"
+    assert potion_entry.stat().st_mtime_ns == potion_mtime, "potion entry must be untouched"
+    assert fake_entry.stat().st_mtime_ns == fake_mtime, "the old image entry must be untouched"
     after_fake = {p.name for p in fake.glob("*.npz")} - before_fake
     assert new_fake < after_fake and len(after_fake) == 2, (
         f"crf change must add an image entry, not overwrite: {after_fake}"
@@ -483,9 +491,10 @@ def test_cache_shared_across_specs(base: Path) -> None:
     # [output] cache_dir in the spec wins over NEST_CACHE_DIR
     local = base / "local-cache"
     spec_p.write_text(spec_p.read_text().replace("[output]", f'[output]\ncache_dir = "{local}"'))
-    r4 = build(load_spec(spec_p))
-    assert r4["timings"]["embed.potion"] > 0.0, "a fresh root has no entry to hit"
-    assert list((local / "embed" / "potion").glob("*.npz")), "entries must land in cache_dir"
+    build(load_spec(spec_p))
+    assert len(list((local / "embed" / "potion").glob("*.npz"))) == 1, (
+        "a fresh root has no entry to hit: the potion table must be written under cache_dir"
+    )
     assert (local / "models" / "model_hash.potion.json").is_file(), "probe joins the root"
     assert {p.name for p in potion.glob("*.npz")} - before_potion == new_potion, (
         "the env root must be untouched when the spec overrides it"
