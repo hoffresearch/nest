@@ -64,7 +64,7 @@ def _av1_sharded(
     frame-count and pix_fmt guards hold per segment.
 
     `keyint=None` means gop=auto resolved PER SEGMENT: one probe per shard.
-    A single global probe averages regimes away — with order=cluster the
+    A single global probe averages regimes away - with order=cluster the
     near-duplicate runs concentrate in a few segments, and those are exactly
     where inter pays (measured 2026-08-31: -29% on same-artwork reprints)
     while unique-image segments keep O(1) all-intra access.

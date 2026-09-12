@@ -47,7 +47,7 @@ def probe_gop(
     sources (wsi tiles) cannot hide their redundancy in one neighbourhood.
     `contiguous=True` is for ENGINEERED adjacency (order=cluster/
     similarity): there the redundancy lives between neighbours, and evenly
-    spaced frames would erase the very signal the ordering created — so
+    spaced frames would erase the very signal the ordering created - so
     the probe takes contiguous windows spread across the segment instead.
 
     Each arm probes what would actually ship: the intra arm carries the

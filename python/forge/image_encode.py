@@ -52,7 +52,7 @@ def probe_tune_still(cache: dict = {}) -> int | None:  # noqa: B006
     one-frame encode) instead of assumed: an unsupported value must become
     a loud warning and a recorded fallback, never a silently ignored flag.
     The probe carries keyint=1 because the IQ tune (3 on SVT 4.2) accepts
-    all-intra only — probing without it rejected tune=3 and silently fell
+    all-intra only - probing without it rejected tune=3 and silently fell
     back to tune=4 (MS_SSIM); measured 2026-08-31 on the card corpus,
     tune=3 is +1.26 ssim2 for +1.4% bytes. Still-tune encodes are always
     all-intra (see encode_av1), so the probe matches what ships.
@@ -125,7 +125,7 @@ def encode_av1(
         # -29% vs all-intra where default scd erased the inter gain.
         svt_params += ":scd=0"
     # still tune ships only with an all-intra gop: SVT's IQ tune supports
-    # all-intra (and low-delay, measured much worse) only — with keyint!=1
+    # all-intra (and low-delay, measured much worse) only - with keyint!=1
     # the flag would hard-error the encode. tune_resolved=None in the record
     # says the requested tune did not ship for this stream.
     tune_resolved: int | None = None

@@ -110,7 +110,7 @@ def encode_jxl_dir(
     `verify_roundtrip`); lossless preserves decoded pixels. Timestamps and
     filenames live in the manifest only. A JPEG the encoder refuses follows
     `on_unsupported_jpeg` (error | copy-source | lossless-jxl) and the
-    per-file decision is recorded — a silent fallback would claim a
+    per-file decision is recorded - a silent fallback would claim a
     reversibility the corpus does not have.
     """
     import shutil
