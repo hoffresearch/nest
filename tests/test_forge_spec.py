@@ -4,7 +4,11 @@ fake e2e build emits valid multi-space files in all three output modes
 with dedup'd media, shared blob spans and citation-consistent chunk_ids;
 the N2 triad invalidates caches on any content change; --rebuild-only is
 byte-identical (L3); a corrupted cache is recomputed, never reused;
-${VAR} in spec paths expands strictly (unset names the key).
+${VAR} in spec paths expands strictly (unset names the key); the
+embed cache is content-addressed under one shared root (NEST_CACHE_DIR or
+xdg), so two specs with the same rows share one potion table, a media
+knob change adds an entry instead of overwriting, `[output] cache_dir`
+wins over the env var, and `<out>/.cache` is never created.
 
 Run: .venv/bin/python tests/test_forge_spec.py
 """
@@ -27,10 +31,19 @@ from forge.build_spec import SpecError, load_spec, validate
 from forge.forge_pipeline import build
 
 HAVE_FFMPEG = shutil.which("ffmpeg") is not None
+CACHE_ROOT = Path()  # set by main(): the suite's own NEST_CACHE_DIR, inside its tmp dir
+
+
+def _listing(root: Path) -> set[str]:
+    return {str(p.relative_to(root)) for p in root.rglob("*")} if root.is_dir() else set()
 
 
 def _fixture(
-    base: Path, with_media: bool = True, mode: str = "both", embed_media: bool = False
+    base: Path,
+    with_media: bool = True,
+    mode: str = "both",
+    embed_media: bool = False,
+    salt: str = "",
 ) -> Path:
     from PIL import Image
 
@@ -46,7 +59,7 @@ def _fixture(
             {
                 "id": f"k{i:02d}",
                 "title": f"Item {i}",
-                "body": f"body text {i}" if i % 3 else "",
+                "body": f"body text {i}{salt}" if i % 3 else "",
                 "img": str(img.resolve()),
             }
         )
@@ -404,16 +417,91 @@ def test_corrupt_cache_recomputed(base: Path) -> None:
     d.mkdir()
     spec_p = _fixture(d, with_media=False, mode="single")
     build(load_spec(spec_p))
-    cache = next((d / "out" / ".cache").glob("faketest.potion.npz"))
+    assert not (d / "out" / ".cache").exists(), "the embed cache must not live in the output dir"
+    cache = next((CACHE_ROOT / "embed" / "potion").glob("*.npz"))
     cache.write_bytes(cache.read_bytes()[:-7])  # torn write
     result = build(load_spec(spec_p))  # must recompute, not crash or reuse
     nest.open(result["outputs"]["faketest.nest"]["file"]).validate()
     print("test_corrupt_cache_recomputed: OK")
 
 
+def test_cache_shared_across_specs(base: Path) -> None:
+    """content-addressed entries under one root: same rows in two output
+    dirs read one potion table; a media knob change adds a clip-side entry
+    instead of overwriting; the spec's cache_dir beats NEST_CACHE_DIR."""
+    if not HAVE_FFMPEG:
+        print("test_cache_shared_across_specs: SKIP (no ffmpeg)")
+        return
+    potion = CACHE_ROOT / "embed" / "potion"
+    fake = CACHE_ROOT / "embed" / "fake-test"
+    before_potion = {p.name for p in potion.glob("*.npz")} if potion.is_dir() else set()
+    before_fake = {p.name for p in fake.glob("*.npz")} if fake.is_dir() else set()
+
+    def fixture_rows(d: Path) -> Path:
+        # byte-identical rows + images across dirs: only the paths differ, and
+        # paths never enter the triad (corpus_input_hash is over content). the
+        # salt keeps this test's triad apart from the earlier fixtures, which
+        # already share their own entries in the same root.
+        d.mkdir()
+        return _fixture(d, with_media=True, mode="single", salt=" shared")
+
+    d1, d2 = base / "shared-a", base / "shared-b"
+    r1 = build(load_spec(fixture_rows(d1)))
+    assert r1["timings"]["embed.potion"] > 0.0, "first build must compute potion"
+    new_potion = {p.name for p in potion.glob("*.npz")} - before_potion
+    new_fake = {p.name for p in fake.glob("*.npz")} - before_fake
+    assert len(new_potion) == 1, f"one potion entry for one triad, got {new_potion}"
+    assert len(new_fake) == 1, f"one image-space entry for one triad, got {new_fake}"
+    assert r1["corpus_input_hash"], "the manifest must carry the shared key"
+
+    r2 = build(load_spec(fixture_rows(d2)))
+    assert r2["corpus_input_hash"] == r1["corpus_input_hash"], "same rows, same triad key"
+    assert r2["timings"]["embed.potion"] == 0.0, "second output dir must hit the shared entry"
+    assert r2["timings"]["embed.fake-test"] == 0.0, "same media knobs must hit the image entry"
+    assert {p.name for p in potion.glob("*.npz")} - before_potion == new_potion, (
+        "a second spec with the same rows must not add a second potion table"
+    )
+    for d in (d1, d2):
+        assert not (d / "out" / ".cache").exists(), "no per-output .cache dir"
+        assert (d / "out" / ".forge-state").is_dir(), ".forge-state stays transactional in out"
+
+    # same corpus name, changed [media] crf: the text-only potion recipe is
+    # unchanged (no decoder fingerprint), the image-space recipe is not, so a
+    # SECOND fake-test entry appears beside the first, nothing is overwritten.
+    spec_p = d2 / "spec.toml"
+    spec_p.write_text(spec_p.read_text().replace("crf = 40", "crf = 45"))
+    r3 = build(load_spec(spec_p))
+    assert r3["timings"]["embed.potion"] == 0.0, "text-only recipe must not change with crf"
+    assert r3["timings"]["embed.fake-test"] > 0.0, "image-space recipe must change with crf"
+    after_fake = {p.name for p in fake.glob("*.npz")} - before_fake
+    assert new_fake < after_fake and len(after_fake) == 2, (
+        f"crf change must add an image entry, not overwrite: {after_fake}"
+    )
+    for npz in after_fake:
+        assert (fake / (npz + ".sha256")).is_file(), "every entry keeps its checksum sidecar"
+
+    # [output] cache_dir in the spec wins over NEST_CACHE_DIR
+    local = base / "local-cache"
+    spec_p.write_text(spec_p.read_text().replace("[output]", f'[output]\ncache_dir = "{local}"'))
+    r4 = build(load_spec(spec_p))
+    assert r4["timings"]["embed.potion"] > 0.0, "a fresh root has no entry to hit"
+    assert list((local / "embed" / "potion").glob("*.npz")), "entries must land in cache_dir"
+    assert (local / "models" / "model_hash.potion.json").is_file(), "probe joins the root"
+    assert {p.name for p in potion.glob("*.npz")} - before_potion == new_potion, (
+        "the env root must be untouched when the spec overrides it"
+    )
+    print("test_cache_shared_across_specs: OK")
+
+
 def main() -> None:
+    global CACHE_ROOT
+    user_cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "nest"
+    user_before = _listing(user_cache)
     with tempfile.TemporaryDirectory(prefix="nest-forge-spec-") as tmp:
         base = Path(tmp)
+        # every build in this suite writes its embed cache here, never ~/.cache
+        CACHE_ROOT = base / "xdg-cache"
+        os.environ["NEST_CACHE_DIR"] = str(CACHE_ROOT)
         test_validation_errors(base)
         test_media_profiles(base)
         test_env_expansion(base)
@@ -422,6 +510,9 @@ def main() -> None:
         test_embed_media(base)
         test_triad_invalidation(base)
         test_corrupt_cache_recomputed(base)
+        test_cache_shared_across_specs(base)
+        assert (CACHE_ROOT / "embed" / "potion").is_dir(), "builds must have used the env root"
+    assert _listing(user_cache) == user_before, "the suite must never touch the user's cache"
     print("all forge spec tests passed")
 
 
