@@ -5,7 +5,12 @@ Two floors, never traded against each other:
   >= visual_floor_min. A global average would let one whole stratum degrade.
 - vector: cosine(embed(source), embed(decoded)) p10 >= drift_floor_p10 with
   the gate model. An image can look fine to humans and still move in
-  embedding space, which is what retrieval actually serves.
+  embedding space, which is what retrieval actually serves. A negative
+  floor disables the leg (recorded as drift_pass = true).
+- optional third leg (quality_utility): text-to-image hit@1 of the sample
+  must stay within utility_tol of the lossless source and above
+  utility_floor_hit1. Enabled by a non-negative floor; it is what a
+  retrieval-only profile gates on once drift is disabled.
 
 Strata come from cheap deterministic heuristics; they are themselves policy,
 so BUCKET_HEURISTICS_VERSION is recorded in the report and participates in
@@ -25,6 +30,7 @@ import numpy as np
 from forge import image_media
 from forge.image_decode import decode_frames
 from forge.image_encode import encode_av1
+from forge.quality_utility import UtilityGate
 
 BUCKET_HEURISTICS_VERSION = 1
 
@@ -88,13 +94,26 @@ def _ssimulacra2(orig_png: Path, dist_png: Path) -> float:
     return float(out.stdout.strip().split()[-1])
 
 
-def choose_crf(paths: list[Path], canvas: tuple[int, int], media_spec, gate_adapter):
-    """Return (chosen_crf, report). See module docstring for the gate."""
+def choose_crf(
+    paths: list[Path],
+    canvas: tuple[int, int],
+    media_spec,
+    gate_adapter,
+    labels: list[str] | None = None,
+):
+    """Return (chosen_crf, report). See module docstring for the gate.
+    `labels` (one per path) render the utility queries; required only when
+    utility_floor_hit1 >= 0."""
     from PIL import Image
 
     if shutil.which("ssimulacra2") is None:
         raise RuntimeError('media.crf="auto" needs ssimulacra2 on PATH: brew install jpeg-xl')
     q = media_spec.quality
+    use_utility = q.utility_floor_hit1 >= 0
+    if use_utility and (labels is None or len(labels) != len(paths)):
+        from forge.build_spec import SpecError
+
+        raise SpecError("media.quality.utility_floor_hit1: needs one label per item")
     idx = stratified_sample(paths, q.buckets, q.sample_per_bucket)
     sample = [paths[i] for i in idx]
     keys = [bucket_of(p, q.buckets) for p in sample]
@@ -111,6 +130,9 @@ def choose_crf(paths: list[Path], canvas: tuple[int, int], media_spec, gate_adap
             Image.fromarray(arr).save(png)
             src_pngs.append(png)
         src_emb = gate_adapter.embed_arrays(src_arrays)
+        utility = None
+        if use_utility:
+            utility = UtilityGate(q, gate_adapter, [labels[i] for i in idx], src_emb)
 
         ladder_report: dict[str, dict] = {}
         passing: list[int] = []
@@ -145,13 +167,23 @@ def choose_crf(paths: list[Path], canvas: tuple[int, int], media_spec, gate_adap
                 ok_buckets &= p10 >= q.visual_floor_p10
             ssim_min = float(np.min(scores))
             drift_p10 = float(np.percentile(drift, 10))
-            ok = ok_buckets and ssim_min >= q.visual_floor_min and drift_p10 >= q.drift_floor_p10
-            ladder_report[str(crf)] = {
+            visual_ok = ok_buckets and ssim_min >= q.visual_floor_min
+            drift_ok = q.drift_floor_p10 < 0 or drift_p10 >= q.drift_floor_p10
+            rung = {
                 "ssim_p10_by_bucket": by_bucket,
                 "ssim_min": round(ssim_min, 2),
                 "drift_p10": round(drift_p10, 5),
-                "pass": ok,
+                "visual_pass": visual_ok,
+                "drift_pass": drift_ok,
             }
+            ok = visual_ok and drift_ok
+            if utility is not None:
+                hit1, utility_ok = utility.check(dec_emb)
+                rung["hit1"] = round(hit1, 4)
+                rung["utility_pass"] = utility_ok
+                ok = ok and utility_ok
+            rung["pass"] = ok
+            ladder_report[str(crf)] = rung
             if ok:
                 passing.append(crf)
             for png in dist_pngs:
@@ -162,11 +194,13 @@ def choose_crf(paths: list[Path], canvas: tuple[int, int], media_spec, gate_adap
         chosen = max(passing)
     else:
         chosen = min(q.crf_ladder)
-        warning = (
-            f"no ladder crf met the floors (visual p10>={q.visual_floor_p10}, "
-            f"min>={q.visual_floor_min}, drift p10>={q.drift_floor_p10}); "
-            f"using smallest crf {chosen}"
+        floors = (
+            f"visual p10>={q.visual_floor_p10}, min>={q.visual_floor_min}, "
+            f"drift p10>={q.drift_floor_p10}"
         )
+        if utility is not None:
+            floors += f", utility hit@1>={utility.threshold:.4f}"
+        warning = f"no ladder crf met the floors ({floors}); using smallest crf {chosen}"
         print(f"[forge] warning: {warning}")
     report = {
         "bucket_heuristics_version": BUCKET_HEURISTICS_VERSION,
@@ -178,4 +212,6 @@ def choose_crf(paths: list[Path], canvas: tuple[int, int], media_spec, gate_adap
         "warning": warning,
         "gate_model_hash": gate_adapter.model_hash,
     }
+    if utility is not None:
+        report["utility"] = utility.report()
     return chosen, report

@@ -195,9 +195,35 @@ def test_media_profiles(base: Path) -> None:
     assert m.backend == "av1" and m.quality.drift_floor_p10 == 0.98, "gate defaults untouched"
     m = parse('[media]\nprofile = "retrieval"\ncrf = 45').media
     assert m.crf == 45 and m.speed == 6, "explicit crf wins, the rest of the profile stays"
+    m = parse('[media]\nprofile = "retrieval-auto"').media
+    assert (m.gop, m.tune, m.speed, m.crf) == ("intra", "still", 6, "auto")
+    q = m.quality
+    assert (q.drift_floor_p10, q.utility_floor_hit1, q.utility_tol) == (-1.0, 0.0, 0.02)
+    assert q.visual_floor_p10 == -1e9 and q.crf_ladder == [40, 45, 50, 55, 60]
+    assert q.sample_per_bucket == 12 and q.utility_query_template == "{label}", "schema defaults"
+    m = parse('[media]\nprofile = "retrieval-auto"\n[media.quality]\nutility_tol = 0.05').media
+    assert m.quality.utility_tol == 0.05, "explicit quality key wins"
+    assert m.quality.drift_floor_p10 == -1.0 and m.crf == "auto", "profile quality keys stay"
     m = parse("[media]").media
     assert m.profile == "" and m.gop == "auto", "no profile keeps the schema defaults"
-    assert set(MEDIA_PROFILES) == {"near-dup", "stills", "archive", "retrieval"}
+    assert m.quality.utility_floor_hit1 == -1.0, "utility leg is off by default"
+    assert set(MEDIA_PROFILES) == {"near-dup", "stills", "archive", "retrieval", "retrieval-auto"}
+    gated = (
+        '[[models]]\npreset="potion"\ntext="default"\n[[models]]\npreset="fake-test"\nimage="space"\n'
+        '[source.image]\npath_template = "{id}.png"\n'
+    )
+    auto = '[media]\nprofile = "retrieval-auto"\n[media.quality]\n'
+    for line, key in (
+        ("utility_floor_hit1 = 1.5", "utility_floor_hit1"),
+        ("utility_queries = -1", "utility_queries"),
+        ('utility_query_template = "x"', "utility_query_template"),
+        ("utility_tol = 2", "utility_tol"),
+    ):
+        _expect_spec_error(MINIMAL.format(models=gated, extra=auto + line), key, base)
+    p = base / "prof-ok.toml"
+    p.write_text(MINIMAL.format(models=gated, extra='[media]\nprofile = "retrieval-auto"'))
+    validate(load_spec(p))
+    assert load_spec(p).media.quality.utility_floor_hit1 == 0.0
     _expect_spec_error(
         MINIMAL.format(models=models, extra='[media]\nprofile = "cards"'),
         "media.profile",

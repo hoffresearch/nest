@@ -136,7 +136,7 @@ def validate(spec: CorpusSpec, *, allow_heavy: bool = False) -> None:
         )
         # validate each knob against ITS OWN pipeline resolution: crf=auto
         # gates on quality.gate_model, ordering clusters on cluster.space,
-        # both falling back to the first image model — never on each other.
+        # both falling back to the first image model, never on each other.
         if m.crf == "auto":
             gate = m.quality.gate_model or (image_presets[0] if image_presets else "")
             need(bool(gate), "media.quality.gate_model: crf=auto needs an image model")
@@ -144,6 +144,7 @@ def validate(spec: CorpusSpec, *, allow_heavy: bool = False) -> None:
                 gate in image_presets,
                 f"media.quality.gate_model '{gate}' must be a spec model with image=space",
             )
+            _validate_utility(m.quality, gate, need)
         if m.order in ("similarity", "cluster"):
             cspace = m.cluster.space or (image_presets[0] if image_presets else "")
             need(bool(cspace), f"media.cluster.space: order={m.order} needs an image model")
@@ -161,4 +162,26 @@ def validate(spec: CorpusSpec, *, allow_heavy: bool = False) -> None:
     need(
         not (spec.output.embed_media and spec.media is None),
         "output.embed_media requires a [media] section (there is nothing to inline)",
+    )
+
+
+def _validate_utility(q, gate: str, need) -> None:
+    """The task-utility floor: ranges, the query template, and a gate model
+    that can embed text (hit@1 is text-to-image)."""
+    if q.utility_floor_hit1 < 0:
+        return  # disabled; the other utility keys are inert
+    need(
+        0.0 <= q.utility_floor_hit1 <= 1.0,
+        "media.quality.utility_floor_hit1: hit@1 floor must be within 0..1 (negative = off)",
+    )
+    need(q.utility_queries >= 0, "media.quality.utility_queries: must be >= 0 (0 = every sampled item)")
+    need(
+        "{label}" in q.utility_query_template,
+        'media.quality.utility_query_template: must contain "{label}"',
+    )
+    need(0.0 <= q.utility_tol <= 1.0, "media.quality.utility_tol: must be within 0..1")
+    preset = model_registry.get_preset(gate)
+    need(
+        "text" in preset.modalities,
+        f"media.quality.utility_floor_hit1: gate model '{gate}' has no text tower",
     )

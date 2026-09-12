@@ -105,7 +105,8 @@ def _encode_media(ctx: _Ctx, media_dir: Path) -> tuple[dict, list[str]]:
         from forge import quality_gate
 
         gate = _gate_adapter(ctx, m.quality.gate_model or first_image_preset(ctx.spec))
-        crf, quality_report = quality_gate.choose_crf(paths, canvas, m, gate)
+        labels = [r.label or r.text for r in ctx.unique]  # utility queries, one per frame
+        crf, quality_report = quality_gate.choose_crf(paths, canvas, m, gate, labels=labels)
 
     order = None
     if m.order in ("similarity", "cluster"):
