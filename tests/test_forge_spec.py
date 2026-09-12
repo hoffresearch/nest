@@ -3,7 +3,8 @@ spec validation errors name their key; total ordering is enforced; the
 fake e2e build emits valid multi-space files in all three output modes
 with dedup'd media, shared blob spans and citation-consistent chunk_ids;
 the N2 triad invalidates caches on any content change; --rebuild-only is
-byte-identical (L3); a corrupted cache is recomputed, never reused.
+byte-identical (L3); a corrupted cache is recomputed, never reused;
+${VAR} in spec paths expands strictly (unset names the key).
 
 Run: .venv/bin/python tests/test_forge_spec.py
 """
@@ -172,15 +173,84 @@ def test_media_profiles(base: Path) -> None:
     assert m.backend == "jxl-transcode"
     m = parse('[media]\nprofile = "stills"').media
     assert (m.gop, m.tune) == ("intra", "still")
+    m = parse('[media]\nprofile = "retrieval"').media
+    assert (m.gop, m.tune, m.speed, m.crf) == ("intra", "still", 6, 50)
+    assert m.backend == "av1" and m.quality.drift_floor_p10 == 0.98, "gate defaults untouched"
+    m = parse('[media]\nprofile = "retrieval"\ncrf = 45').media
+    assert m.crf == 45 and m.speed == 6, "explicit crf wins, the rest of the profile stays"
     m = parse("[media]").media
     assert m.profile == "" and m.gop == "auto", "no profile keeps the schema defaults"
-    assert set(MEDIA_PROFILES) == {"near-dup", "stills", "archive"}
+    assert set(MEDIA_PROFILES) == {"near-dup", "stills", "archive", "retrieval"}
     _expect_spec_error(
         MINIMAL.format(models=models, extra='[media]\nprofile = "cards"'),
         "media.profile",
         base,
     )
     print("test_media_profiles: OK")
+
+
+def test_env_expansion(base: Path) -> None:
+    """${VAR} in spec strings expands strictly: set -> build runs; unset ->
+    SpecError naming the key; bare $ and ~ mid-string survive; ~/ still expands."""
+    d = base / "env"
+    (d / "data").mkdir(parents=True)
+    rows = [{"id": f"r{i}", "title": f"Row {i}"} for i in range(3)]
+    (d / "data" / "rows.jsonl").write_text("\n".join(json.dumps(r) for r in rows))
+    spec_p = d / "env.toml"
+    spec_p.write_text("""
+[corpus]
+name = "envtest"
+chunker_version = "v"
+[source]
+kind = "jsonl"
+path = "${NEST_FORGE_TEST_DATA}/rows.jsonl"
+order_by = ["id"]
+[source.text]
+template = "{title} costs $5 ${NEST_FORGE_TEST_DATA}"
+[[models]]
+preset = "potion"
+text = "default"
+[output]
+dir = "${NEST_FORGE_TEST_DATA}/out"
+""")
+    os.environ["NEST_FORGE_TEST_DATA"] = str(d / "data")
+    spec = load_spec(spec_p)
+    validate(spec)
+    assert spec.source.path == str(d / "data" / "rows.jsonl"), "braced var must expand"
+    assert spec.output.dir == str(d / "data" / "out")
+    assert spec.source.text.template == f"{{title}} costs $5 {d / 'data'}", (
+        "bare $5 and {col} placeholders must survive; the braced var expands"
+    )
+    result = build(spec)
+    assert result["n_items"] == 3
+    nest.open(result["outputs"]["envtest.nest"]["file"]).validate()
+    os.environ.pop("NEST_FORGE_TEST_DATA")
+    try:
+        load_spec(spec_p)
+    except SpecError as e:
+        msg = str(e)
+        assert "source.path" in msg and "NEST_FORGE_TEST_DATA" in msg and "export" in msg, msg
+    else:
+        raise AssertionError("an unset ${VAR} must be a SpecError, never a silent '$'")
+    # no expanduser mid-string, bare $ untouched, and ~/ still expands
+    from forge.spec_paths import expand_paths
+
+    os.environ["NEST_FORGE_TEST_DATA"] = "/x"
+    out = expand_paths({"source": {"db": "${NEST_FORGE_TEST_DATA}/~x", "query": "cost > $5"}})
+    assert out == {"source": {"db": "/x/~x", "query": "cost > $5"}}, out
+    assert expand_paths(["~/x"]) == [os.path.expanduser("~/x")]
+    os.environ["NEST_FORGE_TEST_DATA"] = "~/via-var"
+    assert expand_paths("${NEST_FORGE_TEST_DATA}/y") == os.path.expanduser("~/via-var/y"), (
+        "a variable holding ~/ expands too"
+    )
+    try:
+        expand_paths({"models": [{"preset": "p"}, {"model_path": "${NEST_FORGE_UNSET_X}"}]})
+    except SpecError as e:
+        assert str(e).startswith("models[1].model_path:"), str(e)
+    else:
+        raise AssertionError("dotted key path must reach into lists")
+    os.environ.pop("NEST_FORGE_TEST_DATA")
+    print("test_env_expansion: OK")
 
 
 def test_total_ordering(base: Path) -> None:
@@ -310,6 +380,7 @@ def main() -> None:
         base = Path(tmp)
         test_validation_errors(base)
         test_media_profiles(base)
+        test_env_expansion(base)
         test_total_ordering(base)
         test_e2e_fake(base)
         test_embed_media(base)
