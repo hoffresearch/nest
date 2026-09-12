@@ -21,6 +21,7 @@ pub fn run(
     sample: Option<usize>,
     models: Option<String>,
     out_dir: Option<PathBuf>,
+    cache_dir: Option<PathBuf>,
     resume: bool,
     rebuild_only: bool,
     dry_run: bool,
@@ -44,6 +45,9 @@ pub fn run(
     }
     if let Some(d) = &out_dir {
         cmd.arg("--out-dir").arg(d);
+    }
+    if let Some(d) = &cache_dir {
+        cmd.arg("--cache-dir").arg(d);
     }
     for (flag, on) in [
         ("--resume", resume),

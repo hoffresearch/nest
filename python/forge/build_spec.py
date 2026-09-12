@@ -172,6 +172,10 @@ class OutputSpec:
     # inline the media bytes into the .nest (0x17): one self-contained file,
     # no sidecar needed at read time. the media dir remains as build cache.
     embed_media: bool = False
+    # root of the shared, content-addressed embed cache (embed/<preset>/<triad>.npz
+    # and models/ probes). "" = NEST_CACHE_DIR, else ${XDG_CACHE_HOME:-~/.cache}/nest.
+    # `.forge-state/` and `.tmp/` stay in `dir` (transactional, same filesystem).
+    cache_dir: str = ""
 
 
 @dataclass

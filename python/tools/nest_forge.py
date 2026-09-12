@@ -1,8 +1,8 @@
 """nest_forge.py — declarative corpus builds from a TOML/JSON spec (RFC-1).
 
   python python/tools/nest_forge.py --spec corpus.toml [--sample N] [--models a,b]
-      [--out-dir D] [--resume] [--rebuild-only] [--strict-env] [--allow-heavy]
-      [--dry-run [--json]]
+      [--out-dir D] [--cache-dir C] [--resume] [--rebuild-only] [--strict-env]
+      [--allow-heavy] [--dry-run [--json]]
 
 --dry-run resolves the plan (models, dep status, spaces, outputs) without
 loading any model. The rust `nest build` verb is a launcher over this tool.
@@ -26,6 +26,7 @@ from forge.build_spec import (  # noqa: E402
     load_spec,
     validate,
 )
+from forge.forge_cache import cache_root  # noqa: E402
 
 
 def dry_run_report(spec, allow_heavy: bool) -> dict:
@@ -80,6 +81,8 @@ def dry_run_report(spec, allow_heavy: bool) -> dict:
         "spaces": [name for _, _, _, name in emitted_spaces(spec)],
         "output_mode": spec.output.mode,
         "outputs": outputs,
+        "out_dir": str(Path(spec.output.dir).resolve()),
+        "cache_dir": str(cache_root(spec.output.cache_dir).resolve()),
         "provenance": spec.output.provenance,
     }
 
@@ -98,6 +101,11 @@ def main() -> int:
     )
     ap.add_argument("--models", help="comma-separated preset subset")
     ap.add_argument("--out-dir", help="override [output].dir")
+    ap.add_argument(
+        "--cache-dir",
+        help="override [output].cache_dir (else NEST_CACHE_DIR, else "
+        "${XDG_CACHE_HOME:-~/.cache}/nest): the shared embed cache root",
+    )
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--rebuild-only", action="store_true")
     ap.add_argument("--strict-env", action="store_true")
@@ -110,6 +118,8 @@ def main() -> int:
         spec = load_spec(args.spec)
         if args.out_dir:
             spec.output.dir = args.out_dir
+        if args.cache_dir:
+            spec.output.cache_dir = args.cache_dir
         validate(spec, allow_heavy=args.allow_heavy)
         if args.dry_run:
             report = dry_run_report(spec, args.allow_heavy)
@@ -164,6 +174,8 @@ def _pretty(report: dict) -> str:
             lines.append(f"        -> {deps}")
     lines.append("spaces: " + (", ".join(report["spaces"]) or "(none)"))
     lines.append("files:  " + ", ".join(report["outputs"]))
+    lines.append(f"out:    {report['out_dir']}")
+    lines.append(f"cache:  {report['cache_dir']}  (embed/<preset>/<triad>.npz, shared)")
     return "\n".join(lines)
 
 
