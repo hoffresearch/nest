@@ -375,7 +375,7 @@ chunker_version = "cards/1"     # changes ⇒ every chunk_id (citation) changes
 
 [source]
 kind = "sqlite"
-db = "~/data/cards.sqlite"
+db = "${MTG_DATA}/mtg.sqlite"   # ${VAR} is strict: unset => SpecError naming the key
 query = "SELECT id, name, body, image_uri FROM cards WHERE image_uri IS NOT NULL"
 order_by = ["id"]               # must be a TOTAL order (verified)
 
@@ -386,7 +386,7 @@ template = """
 """
 
 [source.image]
-path_template = "~/data/images/{id}.jpg"
+path_template = "${MTG_DATA}/images/{id}.jpg"
 label_template = "{name}"
 
 [media]
@@ -409,7 +409,7 @@ embed_media = true              # media inlined via 0x17: ONE file serves it all
 
 the contract highlights:
 
-- **source**: `sqlite` (query, `[[source.joins]]`, `[source.derive]` helpers, text template whose lines drop when ALL their placeholders are empty, `path_template`/`label_template` for images) | `csv` | `jsonl` | `image_dir`. `order_by` must be a TOTAL order; the composite key's uniqueness is verified against the loaded rows, because `ORDER BY x` with duplicate x is not deterministic.
+- **source**: `sqlite` (query, `[[source.joins]]`, `[source.derive]` helpers, text template whose lines drop when ALL their placeholders are empty, `path_template`/`label_template` for images) | `csv` | `jsonl` | `image_dir`. `order_by` must be a TOTAL order; the composite key's uniqueness is verified against the loaded rows, because `ORDER BY x` with duplicate x is not deterministic. path rule, applied to every string in the spec: `${VAR}` expands from the environment (only the braced form, so a bare `$` in `query` or `template` and the `{col}` placeholders survive), an unset `${VAR}` is a SpecError naming the key (`source.db: ${MTG_DATA} is not set; export MTG_DATA=/path`, never a silent `$`), then a leading `~/` expands to home (also when the variable itself holds `~/...`); anything else stays relative to the CWD.
 - **models**: each `[[models]]` names a preset and its role; `text = "default" | "space" | "none"` (exactly ONE default; it is space 0 of every emitted file, never injected implicitly), `image = "space" | "none"`, `dims = [256, 512]` (one named space per dim: `wemm-2b@256`), `space_dtype`, plus the recipe fields (`image_prompt`, `text_query_mode`, `image_max_side`, `encode_kwargs`).
 - **media** (§14 for the levers): `profile` (a measured recipe resolved into knob defaults; explicit keys always win), `backend`, `crf` (int or `"auto"`), `tune`, `speed`, `fps`, `gop`, `order`, `shard_size`, `dedup` (identical source images stored once; duplicate rows share the frame through the 0x16 overlay).
 - **embedding.image_input**: `mode = "decoded_media"` (default with media: the index describes what the file serves) | `"source"` (measures the model, not the codec). the decoder fingerprint joins the recipe hash in decoded mode; the two modes answer different questions and are never mixed.
@@ -426,7 +426,7 @@ the media section is where the compression research became knobs. all decisions 
 - `dedup = true`: content-hash dedup of source images; n rows → one frame via the span overlay, zero format change. on the full scryfall printings set the potential is ~48% of the media (100,452 printings, 51,870 unique arts).
 - `order = "cluster"`: greedy cosine clustering (deterministic tie-breaks) makes near-duplicates adjacent so per-segment inter coding has something to predict; measured before recommended; on a 1-per-card corpus the honest expectation is ~0, and on the same-artwork reprint corpus it is -29% (2026-08-31, g=16 + scd=0 vs all-intra).
 - `gop = "auto"` with sharding probes PER SEGMENT: each `shard_size` chunk runs its own intra-vs-inter probe encode and ships its own keyint (recorded per segment in the manifest, `gop.per_segment = true`). a single global probe averages regimes away — with `order = "cluster"` the near-duplicate runs concentrate in a few segments, which decide inter (bounded gop, keyint=16, scene-change detection off), while unique segments keep O(1) all-intra access. forced `gop = "intra" | "inter"` still applies to every segment alike.
-- `profile`: dataset-type presets resolved BEFORE explicit keys (an explicit key always wins, so no other use case is closed off). `"near-dup"` = cluster ordering + per-segment gop + still tune (visually similar corpora: card reprints, video frames, scans); `"stills"` = all-intra + still tune (unique images, O(1) access); `"archive"` = jxl-transcode (byte-reversible, for corpora where loss is not acceptable). the resolved knobs and the profile name both land in the manifest.
+- `profile`: dataset-type presets resolved BEFORE explicit keys (an explicit key always wins, so no other use case is closed off). `"near-dup"` = cluster ordering + per-segment gop + still tune (visually similar corpora: card reprints, video frames, scans); `"stills"` = all-intra + still tune (unique images, O(1) access); `"archive"` = jxl-transcode (byte-reversible, for corpora where loss is not acceptable); `"retrieval"` = all-intra + still tune + `speed = 6` + fixed `crf = 50`, for a corpus that only serves search and never shows its pixels (measured 2026-09-03 on 38627 cards: 532671548 B self-contained, 7.46x vs the jpeg source, no measurable txt@1 loss on 100 queries; the default drift floor at p10 0.942 would have vetoed it, which is why the profile pins crf instead of running the gate). the resolved knobs and the profile name both land in the manifest.
 - `backend = "jxl"` / `"jxl-transcode"`: the ONLY truly lossless modes. `jxl` is lossless of the source pixels; `jxl-transcode` repacks jpegs reversibly (~20% smaller, round-trip verified by reconstructing the jpeg and comparing sha256). non-transcodable inputs follow `on_unsupported_jpeg = error | copy-source | lossless-jxl`, per-file decisions recorded. preservation contract: decoded pixels (jxl) / original jpeg bytes (verified transcode); exif/icc/xmp only with `keep_metadata`; timestamps and filenames live in the manifest. needs `cjxl`/`djxl` (`brew install jpeg-xl`, which also ships `ssimulacra2` for the gate).
 
 measure everything with `python/tools/nest_image_sweep.py` (variants now include `av1-tune`, `jxl`, `jxl-transcode`) and compare models with the three-tier `python/tools/nest_model_bench.py`: T1 pipeline stability (identity self-retrieval, inflated by construction and labeled as such), T2 codec cost (embedding drift), T3 task utility (label-template text→image as declared weak ground truth, plus `--queries-file` with real operator queries: hit@k, mrr, negative leakage). the tiers answer different questions and are never aggregated into one number.
