@@ -217,6 +217,13 @@ def test_utility_needs_text_tower(base: Path) -> None:
             assert "utility_floor_hit1" in str(e), e
         else:
             raise AssertionError("an image-only gate model must be a SpecError")
+    m = _media(visual_floor_p10=-1e9, utility_floor_hit1=0.0, utility_query_template="{label} {x}")
+    try:
+        choose_crf(paths, (96, 96), m, TextImageAdapter(_refs(paths, labels)), labels=labels)
+    except SpecError as e:
+        assert "utility_query_template" in str(e), e
+    else:
+        raise AssertionError("a template with a stray placeholder must be a SpecError")
     print("test_utility_needs_text_tower: OK")
 
 

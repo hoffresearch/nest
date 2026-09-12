@@ -53,7 +53,12 @@ class UtilityGate:
         self.tol = float(q.utility_tol)
         self.template = q.utility_query_template
         self.targets = query_subset(len(labels), q.utility_queries)
-        texts = [self.template.format(label=labels[i]) for i in self.targets]
+        try:
+            texts = [self.template.format(label=labels[i]) for i in self.targets]
+        except (KeyError, IndexError, ValueError) as e:
+            raise SpecError(
+                f"media.quality.utility_query_template: only {{label}} is a placeholder ({e!r})"
+            ) from e
         try:
             emb = adapter.embed_texts(texts, role="query")
         except Exception as e:  # CapabilityError and friends: name the key
