@@ -50,7 +50,7 @@ sequenceDiagram
     D->>D: load spec (typed SpecError; order_by must be a total order)
     D->>D: load rows + per-item input_hash; dedup identical images
     D->>I: media via backends (crf=auto dual gate: ssimulacra2 strata + embedding drift; tune/jxl levers)
-    D->>D: embed each registry model once (triad-keyed cache; st models in isolated workers)
+    D->>D: embed each registry model once (triad-addressed cache under xdg, shared across specs; st models in isolated workers)
     D->>F: nest.build per output (single / per-model / both; space 0 = the ONE default text model)
     F->>N: deterministic emit + manifest v1 + build.lock.json
 

@@ -1,9 +1,13 @@
 """Embedding cache with the RFC-0 N2 key triad and N8 concurrency rules.
 
 A cache entry is valid only when (model_hash, embedding_recipe_hash,
-corpus_input_hash) all match — row keys alone are never a key. Writes go to a
-temp file + atomic rename under an flock'd lockfile; a sha256 sidecar guards
-against torn writes: any mismatch means recompute, never reuse.
+corpus_input_hash) all match; row keys alone are never a key. Entries are
+content-addressed: the file name is a hash of the triad plus the arrays
+flags, under a shared root (`cache_root`), so two specs that need the same
+vectors read one file and a changed knob adds a sibling instead of
+overwriting. Writes go to a temp file + atomic rename under an flock'd
+lockfile; a sha256 sidecar guards against torn writes: any mismatch means
+recompute, never reuse.
 """
 
 from __future__ import annotations
@@ -19,6 +23,20 @@ from pathlib import Path
 import numpy as np
 
 TRIAD_KEYS = ("model_hash", "embedding_recipe_hash", "corpus_input_hash")
+
+
+def cache_root(override: str = "") -> Path:
+    """Where embed caches and model probes live, shared across specs and
+    output dirs: explicit override (spec `[output] cache_dir`) > env
+    `NEST_CACHE_DIR` > `${XDG_CACHE_HOME:-~/.cache}/nest`."""
+    if override:
+        return Path(os.path.expanduser(override))
+    env = os.environ.get("NEST_CACHE_DIR", "")
+    if env:
+        return Path(os.path.expanduser(env))
+    xdg = os.environ.get("XDG_CACHE_HOME", "")
+    base = Path(xdg) if xdg else Path.home() / ".cache"
+    return base / "nest"
 
 
 @contextmanager
@@ -55,13 +73,22 @@ def _sidecar(path: Path) -> Path:
     return path.with_suffix(path.suffix + ".sha256")
 
 
+def triad_hash(triad: dict) -> str:
+    """16 hex chars of the canonical hash over the WHOLE triad dict (the
+    three RFC-0 keys plus the arrays flags), the entry's file stem."""
+    return canonical_hash(triad).removeprefix("sha256:")[:16]
+
+
 class EmbedCache:
-    """One .npz per (corpus, model preset), guarded by the triad."""
+    """One content-addressed .npz per (preset, triad) under `<root>/embed/`,
+    with its .sha256 sidecar and .lock beside it. The stored meta repeats
+    the three triad keys and load() re-checks them as a second guard."""
 
-    def __init__(self, cache_dir: Path, corpus_name: str, preset: str):
-        self.path = Path(cache_dir) / f"{corpus_name}.{preset}.npz"
+    def __init__(self, root: Path, preset: str, triad: dict):
+        self.triad = triad
+        self.path = Path(root) / "embed" / preset / f"{triad_hash(triad)}.npz"
 
-    def load(self, triad: dict) -> dict[str, np.ndarray] | None:
+    def load(self) -> dict[str, np.ndarray] | None:
         """Return cached arrays iff the triad and the checksum both match."""
         with locked(self.path):
             if not (self.path.is_file() and _sidecar(self.path).is_file()):
@@ -71,13 +98,14 @@ class EmbedCache:
                 return None  # torn write: recompute
             with np.load(self.path, allow_pickle=False) as z:
                 meta = json.loads(bytes(z["meta"]).decode())
-                if any(meta.get(k) != triad[k] for k in TRIAD_KEYS):
+                if any(meta.get(k) != self.triad[k] for k in TRIAD_KEYS):
                     return None
                 return {k: z[k] for k in z.files if k != "meta"}
 
-    def store(self, triad: dict, arrays: dict[str, np.ndarray]) -> None:
+    def store(self, arrays: dict[str, np.ndarray]) -> None:
         meta = np.frombuffer(
-            json.dumps({k: triad[k] for k in TRIAD_KEYS}, sort_keys=True).encode(), dtype=np.uint8
+            json.dumps({k: self.triad[k] for k in TRIAD_KEYS}, sort_keys=True).encode(),
+            dtype=np.uint8,
         )
         with locked(self.path):
             fd, tmp = tempfile.mkstemp(dir=self.path.parent, suffix=".npz")
@@ -93,6 +121,6 @@ class EmbedCache:
 
 
 def canonical_hash(payload: dict) -> str:
-    """sha256 over canonical JSON — the same convention as model fingerprints."""
+    """sha256 over canonical JSON, the same convention as model fingerprints."""
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return "sha256:" + hashlib.sha256(blob.encode()).hexdigest()
