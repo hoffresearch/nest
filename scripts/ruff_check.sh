@@ -47,6 +47,8 @@ python/forge/forge_recipe.py
 python/forge/forge_media_stage.py
 python/forge/forge_manifest.py
 python/forge/quality_gate.py
+python/forge/quality_utility.py
+python/forge/media_profiles.py
 python/forge/embed_query_model.py
 python/tools/nest_forge.py
 python/tools/nest_model_bench.py

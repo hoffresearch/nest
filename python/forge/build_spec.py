@@ -11,6 +11,8 @@ import json
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 
+from forge.media_profiles import MEDIA_PROFILES, merge_profile
+
 
 class SpecError(ValueError):
     """Spec violation; message names the offending key."""
@@ -71,9 +73,17 @@ class QualitySpec:
     sample_per_bucket: int = 12
     visual_floor_p10: float = 85.0
     visual_floor_min: float = 72.0
-    drift_floor_p10: float = 0.98
+    drift_floor_p10: float = 0.98  # negative = the drift leg is disabled
     gate_model: str = ""
     crf_ladder: list[int] = field(default_factory=lambda: [30, 35, 40, 45])
+    # task-utility floor (RFC-2b): text-to-image hit@1 of one query per
+    # sampled item against the decoded frames of the sample, measured by
+    # the gate model's text tower. negative = disabled. a rung passes when
+    # hit1_decoded >= max(utility_floor_hit1, hit1_source - utility_tol).
+    utility_floor_hit1: float = -1.0  # absolute floor in [0, 1]
+    utility_queries: int = 0  # queries drawn from the sample; 0 = every sampled item
+    utility_query_template: str = "{label}"  # rendered per item; must keep {label}
+    utility_tol: float = 0.0  # allowed hit@1 loss against the lossless source
 
 
 @dataclass
@@ -89,33 +99,9 @@ class JxlTranscodeSpec:
     keep_metadata: bool = False
 
 
-# dataset profiles: measured recipes (bench 2026-08-31) resolved into knob
-# defaults BEFORE explicit keys are applied — an explicit key always wins,
-# so no use case is closed off by choosing one.
-#   near-dup: corpora with visual near-duplicates (card reprints, frames,
-#             scans): cluster ordering + per-segment gop lets inter pay
-#             (-29% on same-artwork reprints) without losing O(1) access
-#             on unique segments.
-#   stills:   unique images: all-intra + still tune (best size at O(1) seek).
-#   archive:  byte-reversible JPEG repack (jxl-transcode, 1.12x, sha256-
-#             verified roundtrip): for corpora where loss is not acceptable.
-#   retrieval: the corpus only serves search, nobody looks at the pixels.
-#             all-intra + still tune at a fixed crf 50, speed 6. measured
-#             2026-09-03 on 38627 cards: 532671548 B self-contained, 7.46x
-#             vs the jpeg source, no measurable txt@1 loss on 100 queries;
-#             the default drift floor (p10 0.942 < 0.98) would have vetoed
-#             it, so this profile pins crf instead of running the gate.
-MEDIA_PROFILES: dict[str, dict] = {
-    "near-dup": {"order": "cluster", "gop": "auto", "tune": "still"},
-    "stills": {"gop": "intra", "tune": "still"},
-    "archive": {"backend": "jxl-transcode"},
-    "retrieval": {"gop": "intra", "tune": "still", "speed": 6, "crf": 50},
-}
-
-
 @dataclass
 class MediaSpec:
-    profile: str = ""  # "" | near-dup | stills | archive | retrieval (MEDIA_PROFILES)
+    profile: str = ""  # "" | a MEDIA_PROFILES name (media_profiles.py)
     backend: str = "av1"  # av1 | avif | jxl | jxl-transcode | control
     width: int = 1024
     crf: int | str = 35  # int | "auto"
@@ -255,7 +241,7 @@ def _parse(data: dict, spec_path: str) -> CorpusSpec:
                 raise SpecError(
                     f"media.profile: unknown '{profile}' (valid: {sorted(MEDIA_PROFILES)})"
                 )
-            m = {**MEDIA_PROFILES[profile], **m, "profile": profile}
+            m = {**merge_profile(MEDIA_PROFILES[profile], m), "profile": profile}
         quality = _section(QualitySpec, dict(m.pop("quality", {})), "media.quality")
         cluster = _section(ClusterSpec, dict(m.pop("cluster", {})), "media.cluster")
         jxl = _section(JxlTranscodeSpec, dict(m.pop("jxl_transcode", {})), "media.jxl_transcode")
