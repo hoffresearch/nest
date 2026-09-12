@@ -60,7 +60,7 @@ def _media_files_ok(media_dir: Path, media: dict, frame_uris: list[str]) -> bool
     segments = media.get("segments")
     if not segments:
         # per-image backends (jxl/avif/control): every frame's file must
-        # still exist non-empty — a bare "the dir has entries" check would
+        # still exist non-empty; a bare "the dir has entries" check would
         # let resume package deleted or truncated media.
         for uri in frame_uris:
             p = media_dir / uri.removeprefix("media://").split("#frame=")[0]
