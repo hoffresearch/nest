@@ -2,7 +2,8 @@
 
 Carved out of `forge/image_encode.py`; both arms go through `encode_av1`
 there, so the frame-count and pix_fmt guards apply to the probe exactly as
-they do to the build.
+they do to the build. `resolve_keyint` turns a gop_policy into the keyint the
+stream backend ships, running the probe only for `auto`.
 """
 
 from __future__ import annotations
@@ -161,3 +162,27 @@ def _probe_arm_quality(sample: Sequence[Path], canvas, tmp: Path) -> dict:
         scores[f"{arm}_ssim2"] = round(float(np.mean(vals)), 2)
     scores["quality_tolerance"] = PROBE_QUALITY_TOL
     return scores
+
+
+def resolve_keyint(paths, canvas, crf, speed, pix_fmt, gop_policy, all_intra, tune, contiguous):
+    """Turn the policy into a keyint, plus the record the manifest keeps.
+
+    `auto` runs the probe encode and lets the bytes decide (fase 0, CP-0.5:
+    embedding cosine does not separate the regimes, so the policy is a
+    measured encode decision, with intra as the tie-break for O(1) access).
+    The legacy `all_intra` flag forces intra, as does `gop_policy="intra"`.
+    """
+    if all_intra or gop_policy == "intra":
+        return 1, {"policy": "intra" if not all_intra else "flag", "decision": "intra"}
+    # inter uses a BOUNDED gop (keyint=16), not the encoder default: measured
+    # 2026-08-31 on 2787 same-artwork reprints, g=16 beat both single-keyframe
+    # (85.0 vs 95.0 MB) and g=8/g=32, is -29% vs intra, and caps random-access
+    # decode at 16 frames. encode_av1 pairs it with scd=0 (cards are not
+    # scene cuts; scene detection re-inserts the keyframes inter exists to
+    # avoid).
+    if gop_policy == "inter":
+        return INTER_KEYINT, {"policy": "inter", "decision": "inter", "keyint": INTER_KEYINT}
+    probe = probe_gop(
+        paths, canvas, crf=crf, preset=speed, pix_fmt=pix_fmt, tune=tune, contiguous=contiguous
+    )
+    return (1 if probe["decision"] == "intra" else INTER_KEYINT), probe

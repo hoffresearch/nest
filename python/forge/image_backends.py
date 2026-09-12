@@ -53,10 +53,12 @@ def _letterbox_all(
 def _control(render_paths, output_path, dataset_name, canvas) -> dict:
     """Letterbox-lossless control corpus: the ruler the codec cost is
     measured against (fase 0, CP-0.1). Its byte size is recorded so every
-    variant can be reported against the SAME ruler. every backend's
-    `source_bytes` is the sum of the ORIGINAL source files (the avif path
-    keeps its letterboxed png sum apart as `letterboxed_input_bytes`), so
-    `compression_ratio` is the same quantity across backends."""
+    variant can be reported against the SAME ruler; the control itself
+    records `output_bytes` only. every codec backend (av1, avif, jxl,
+    jxl-transcode) records `source_bytes` as the sum of the ORIGINAL source
+    files (the avif path keeps its letterboxed png sum apart as
+    `letterboxed_input_bytes`), so `compression_ratio` is the same quantity
+    across them."""
     png_dir = image_media.media_dir_for(output_path) / f"{dataset_name}-png"
     written = _letterbox_all(render_paths, canvas, png_dir)
     media = {

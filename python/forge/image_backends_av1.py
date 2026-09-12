@@ -3,7 +3,8 @@
 Carved out of `forge/image_backends.py`, which keeps the dispatcher
 (`build_media`), the per-image backends (control, avif, jxl) and the
 resume-path frames iterator. The stream is the only backend with an
-ordering permutation and a gop decision, so both live here.
+ordering permutation, so it lives here; the gop decision (`resolve_keyint`)
+sits next to the probe in `image_gop_probe.py`.
 """
 
 from __future__ import annotations
@@ -15,31 +16,7 @@ import numpy as np
 from . import image_media
 from .image_decode import decode_frames
 from .image_encode import INTER_KEYINT, encode_av1, provenance_sha256
-from .image_gop_probe import probe_gop
-
-
-def _resolve_keyint(paths, canvas, crf, speed, pix_fmt, gop_policy, all_intra, tune, contiguous):
-    """Turn the policy into a keyint, plus the record the manifest keeps.
-
-    `auto` runs the probe encode and lets the bytes decide (fase 0, CP-0.5:
-    embedding cosine does not separate the regimes, so the policy is a
-    measured encode decision, with intra as the tie-break for O(1) access).
-    The legacy `all_intra` flag forces intra, as does `gop_policy="intra"`.
-    """
-    if all_intra or gop_policy == "intra":
-        return 1, {"policy": "intra" if not all_intra else "flag", "decision": "intra"}
-    # inter uses a BOUNDED gop (keyint=16), not the encoder default: measured
-    # 2026-08-31 on 2787 same-artwork reprints, g=16 beat both single-keyframe
-    # (85.0 vs 95.0 MB) and g=8/g=32, is -29% vs intra, and caps random-access
-    # decode at 16 frames. encode_av1 pairs it with scd=0 (cards are not
-    # scene cuts; scene detection re-inserts the keyframes inter exists to
-    # avoid).
-    if gop_policy == "inter":
-        return INTER_KEYINT, {"policy": "inter", "decision": "inter", "keyint": INTER_KEYINT}
-    probe = probe_gop(
-        paths, canvas, crf=crf, preset=speed, pix_fmt=pix_fmt, tune=tune, contiguous=contiguous
-    )
-    return (1 if probe["decision"] == "intra" else INTER_KEYINT), probe
+from .image_gop_probe import probe_gop, resolve_keyint
 
 
 def _av1_sharded(
@@ -165,7 +142,7 @@ def build_av1(
         # each shard on its own (RFC-2 pendencia 2).
         keyint, gop_record = None, None
     else:
-        keyint, gop_record = _resolve_keyint(
+        keyint, gop_record = resolve_keyint(
             paths, canvas, crf, speed, pix_fmt, gop_policy, all_intra, tune, ordered
         )
     media_dir = image_media.media_dir_for(output_path)
