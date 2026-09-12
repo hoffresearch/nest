@@ -86,6 +86,7 @@ prefer release_check.sh before merge, it is the project gate; .github/workflows/
 - doc/usage.md
 - doc/benchmarks.md
 - doc/CHANGELOG
+- https://github.com/hoffresearch/mtg-nest-benchmark (the image-corpus benchmark: code, specs, corpora, results; the .nest artifacts on the hugging face dataset of the same name; private for now)
 
 made it simple, but signifcant.
 Hoff Research - hoffresearch.com
