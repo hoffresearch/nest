@@ -36,6 +36,7 @@ tests/test_space_bridge.py
 python/forge/model_registry.py
 python/forge/embed_st.py
 python/forge/build_spec.py
+python/forge/spec_paths.py
 python/forge/corpus_sources.py
 python/forge/forge_pipeline.py
 python/forge/forge_cache.py
