@@ -583,7 +583,7 @@ class ImageCorpusTest(unittest.TestCase):
         """Red edge on black: chroma subsampling blurs it, 444 blurs less."""
         if not have_avif():
             self.skipTest("avifenc/avifdec not available")
-        from forge import image_decode, image_encode
+        from forge import image_decode, image_encode_still
         from PIL import Image
 
         pattern = self.tmp / "edge.png"
@@ -597,10 +597,40 @@ class ImageCorpusTest(unittest.TestCase):
         err = {}
         for yuv in ("420", "444"):
             out_dir = self.tmp / f"avif{yuv}"
-            image_encode.encode_avif([pattern], out_dir, quality=40, yuv=yuv)
+            image_encode_still.encode_avif([pattern], out_dir, quality=40, yuv=yuv)
             decoded = image_decode.decode_avif(sorted(out_dir.glob("*.avif"))[0])
             err[yuv] = float(np.abs(decoded.astype(np.int16) - src).mean())
         self.assertLess(err["444"], err["420"])
+
+    def test_encode_avif_records_the_source_bytes_it_is_given(self):
+        """`source_bytes` describes the ORIGINAL files, not the encoder input.
+
+        The backend feeds avifenc letterboxed pngs from a tempdir; summing
+        those recorded 21.45 GB for a 3.975 GB jpeg corpus (ratio 18.61x
+        instead of 3.45x). The record must echo the caller's number and keep
+        the encoder-input sum apart; without a caller number both are the
+        input sum.
+        """
+        if not have_avif():
+            self.skipTest("avifenc/avifdec not available")
+        from forge import image_encode_still
+
+        pattern = sorted(self.src.glob("*.png"))[0]
+        png_bytes = pattern.stat().st_size
+
+        given = image_encode_still.encode_avif(
+            [pattern], self.tmp / "avif-given", quality=40, yuv="420", source_bytes=123
+        )
+        self.assertEqual(given["source_bytes"], 123)
+        self.assertEqual(given["letterboxed_input_bytes"], png_bytes)
+        self.assertEqual(given["compression_ratio"], round(123 / given["output_bytes"], 2))
+
+        plain = image_encode_still.encode_avif(
+            [pattern], self.tmp / "avif-plain", quality=40, yuv="420"
+        )
+        self.assertEqual(plain["source_bytes"], png_bytes)
+        self.assertEqual(plain["letterboxed_input_bytes"], png_bytes)
+        self.assertEqual(plain["compression_ratio"], round(png_bytes / plain["output_bytes"], 2))
 
     # ---- F2.7: the avif backend is a first-class corpus ----
 
@@ -611,7 +641,15 @@ class ImageCorpusTest(unittest.TestCase):
 
         result = self._build("avicorpus", compress=True, backend="avif")
         manifest = json.loads(Path(result["manifest"]).read_text())
-        self.assertEqual(manifest["media"]["backend"], "avif")
+        media = manifest["media"]
+        self.assertEqual(media["backend"], "avif")
+        # the manifest accounts the ORIGINAL sources, like av1 and jxl do; the
+        # letterboxed pngs avifenc actually read are a different number
+        # (320x240 sources onto the 256-wide canvas) and are kept apart
+        expected = sum(p.stat().st_size for p in sorted(self.src.glob("*.png")))
+        self.assertEqual(media["source_bytes"], expected)
+        self.assertEqual(media["compression_ratio"], round(expected / media["output_bytes"], 2))
+        self.assertNotEqual(media["letterboxed_input_bytes"], expected)
         for item in manifest["items"]:
             self.assertTrue(item["source_uri"].startswith("media://avicorpus-avif/"))
             self.assertNotIn(str(self.tmp), item["source_uri"])

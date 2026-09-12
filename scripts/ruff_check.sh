@@ -20,8 +20,11 @@ python/forge/embed_image.py
 python/forge/image_items.py
 python/forge/image_media.py
 python/forge/image_encode.py
+python/forge/image_encode_still.py
+python/forge/image_gop_probe.py
 python/forge/image_decode.py
 python/forge/image_backends.py
+python/forge/image_backends_av1.py
 python/forge/image_order.py
 python/forge/image_corpus.py
 python/tools/nest_build_image_corpus.py
