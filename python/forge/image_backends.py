@@ -72,7 +72,7 @@ def _control(render_paths, output_path, dataset_name, canvas) -> dict:
     return {"media": media, "uris": uris, "frames": frames}
 
 
-def _avif(render_paths, output_path, dataset_name, canvas, pix_fmt, avif_quality) -> dict:
+def _avif(render_paths, output_path, dataset_name, canvas, pix_fmt, avif_quality, speed) -> dict:
     """One avif per image. The value is per-image O(1) semantics and real
     yuv444 (CP-0.6 asks for it on medical corpora), not compression: the
     stream won the size-matched matrix. Letterboxed onto the same canvas,
@@ -86,7 +86,12 @@ def _avif(render_paths, output_path, dataset_name, canvas, pix_fmt, avif_quality
         tmp_pngs = _letterbox_all(render_paths, canvas, Path(tmp))
         yuv = {"yuv420p": "420", "yuv444p": "444"}[pix_fmt]
         media = encode_avif(
-            tmp_pngs, avif_dir, quality=avif_quality, yuv=yuv, source_bytes=source_bytes
+            tmp_pngs,
+            avif_dir,
+            quality=avif_quality,
+            yuv=yuv,
+            speed=speed,
+            source_bytes=source_bytes,
         )
     media["canvas"] = [canvas[0], canvas[1]]
     uris = [f"media://{dataset_name}-avif/{i:06d}.avif" for i in range(len(render_paths))]
@@ -129,7 +134,7 @@ def build_media(
     if control:
         return _control(render_paths, output_path, dataset_name, canvas)
     if backend == "avif":
-        return _avif(render_paths, output_path, dataset_name, canvas, pix_fmt, avif_quality)
+        return _avif(render_paths, output_path, dataset_name, canvas, pix_fmt, avif_quality, speed)
     if backend in ("jxl", "jxl-transcode"):
         return _jxl(
             render_paths, output_path, dataset_name, backend == "jxl-transcode", jxl_transcode
