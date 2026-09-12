@@ -211,7 +211,7 @@ def decoded_frames_fn(media_dir: Path, media: dict, frame_uris: Sequence[str]):
 
     def per_image_frames(batch_size: int = 32) -> Iterator[list[np.ndarray]]:
         # per-image decode is one subprocess per file: fan it out on a
-        # bounded window (order preserved, ~window frames in flight) —
+        # bounded window (order preserved, ~window frames in flight):
         # sequential djxl over a 38k corpus is hours, this is minutes.
         # decoding is deterministic, so bytes are unchanged.
         import os
