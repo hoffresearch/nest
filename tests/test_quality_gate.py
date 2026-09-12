@@ -31,7 +31,7 @@ HAVE = all(shutil.which(t) for t in ("ffmpeg", "ssimulacra2", "cjxl", "djxl"))
 class LocalityAdapter:
     """Deterministic no-ML gate model WITH locality: 4x4 mean-pool of RGB,
     L2-normalized. Small pixel changes move the vector a little, not
-    randomly — what the drift leg needs to be testable."""
+    randomly, which is what the drift leg needs to be testable."""
 
     batch_size = 8
     model_hash = "sha256:" + "ab" * 32
