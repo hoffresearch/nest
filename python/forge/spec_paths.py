@@ -3,19 +3,21 @@
 Specs stay machine-portable: a data root is written once as `${MTG_DATA}`
 and the operator exports it. Only the braced form expands, so a bare `$`
 inside a sql `query` or a text `template` survives, and `{col}` format
-placeholders are never touched. An unset variable is a SpecError naming
-the dotted key: corpus_sources._Blank would otherwise turn a leftover
-`${VAR}` into "$" silently and the build would read the wrong path.
-Split from build_spec (the dataclass contract + parser) to keep that file
-under the 300-line rule.
+placeholders are never touched. An unset or empty variable is a SpecError
+naming the dotted key: corpus_sources._Blank would otherwise turn a
+leftover `${VAR}` into "$" silently, and an empty root would make
+`${MTG_DATA}/mtg.sqlite` read `/mtg.sqlite`. Split from build_spec (the
+dataclass contract + parser) to keep that file under the 300-line rule.
+
+Importable on its own: SpecError is resolved lazily at raise time because
+build_spec imports this module at its bottom (build_spec is the entry
+module of the contract, same seam as spec_rules).
 """
 
 from __future__ import annotations
 
 import os
 import re
-
-from forge.build_spec import SpecError
 
 _BRACED = re.compile(r"\$\{(\w+)\}")
 
@@ -35,12 +37,16 @@ def expand_paths(node, where: str = ""):
 def _expand_str(value: str, where: str) -> str:
     def sub(m: re.Match) -> str:
         name = m.group(1)
-        if name not in os.environ:
+        found = os.environ.get(name)
+        if not found:
+            from forge.build_spec import SpecError
+
+            state = "is empty" if found is not None else "is not set"
             raise SpecError(
-                f"{where}: ${{{name}}} is not set; export {name}=/path "
+                f"{where}: ${{{name}}} {state}; export {name}=/path "
                 "(spec paths stay portable, see doc/usage.md section 13)"
             )
-        return os.environ[name]
+        return found
 
     value = _BRACED.sub(sub, value)
     # today's rule kept: "~/..." instead of a hardcoded home, and the

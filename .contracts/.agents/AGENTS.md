@@ -78,7 +78,7 @@ forge-core/            SEPARATE cargo workspace at the repo root, OUTSIDE crates
                        the sovereign crates; not in the `--workspace` set. .fci is versioned independently.
 
 python/                writer pipeline (builder.py), model fingerprint, query embedders, forge/
-                       tools incl the declarative build surface (build_spec + spec_rules +
+                       tools incl the declarative build surface (build_spec + spec_rules + spec_paths +
                        corpus_sources + forge_pipeline + forge_emit + forge_cache + forge_manifest),
                        the model registry (model_registry + model_adapters + embed_st +
                        embed_st_worker) and the dual quality gate (quality_gate)

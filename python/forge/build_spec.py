@@ -273,7 +273,8 @@ def _parse(data: dict, spec_path: str) -> CorpusSpec:
 
 
 # re-exported rules: callers import the whole contract from build_spec.
-# spec_paths and spec_rules import SpecError from here, so they load last.
+# spec_rules imports SpecError from here, so it loads last; spec_paths
+# resolves SpecError lazily and stays importable on its own.
 from forge.spec_paths import expand_paths  # noqa: E402
 from forge.spec_rules import default_model, emitted_spaces, validate  # noqa: E402
 

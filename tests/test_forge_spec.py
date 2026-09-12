@@ -12,6 +12,7 @@ Run: .venv/bin/python tests/test_forge_spec.py
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -190,54 +191,82 @@ def test_media_profiles(base: Path) -> None:
 
 
 def test_env_expansion(base: Path) -> None:
-    """${VAR} in spec strings expands strictly: set -> build runs; unset ->
-    SpecError naming the key; bare $ and ~ mid-string survive; ~/ still expands."""
+    prior = os.environ.get("NEST_FORGE_TEST_DATA")
+    try:
+        _env_expansion_body(base)
+    finally:
+        if prior is None:
+            os.environ.pop("NEST_FORGE_TEST_DATA", None)
+        else:
+            os.environ["NEST_FORGE_TEST_DATA"] = prior
+    print("test_env_expansion: OK")
+
+
+def _env_expansion_body(base: Path) -> None:
     d = base / "env"
     (d / "data").mkdir(parents=True)
     rows = [{"id": f"r{i}", "title": f"Row {i}"} for i in range(3)]
     (d / "data" / "rows.jsonl").write_text("\n".join(json.dumps(r) for r in rows))
     spec_p = d / "env.toml"
-    spec_p.write_text("""
+    spec_p.write_text(f"""
 [corpus]
 name = "envtest"
 chunker_version = "v"
 [source]
 kind = "jsonl"
-path = "${NEST_FORGE_TEST_DATA}/rows.jsonl"
+path = "${{NEST_FORGE_TEST_DATA}}/rows.jsonl"
 order_by = ["id"]
 [source.text]
-template = "{title} costs $5 ${NEST_FORGE_TEST_DATA}"
+template = "{{title}} costs $5"
 [[models]]
 preset = "potion"
 text = "default"
 [output]
-dir = "${NEST_FORGE_TEST_DATA}/out"
+dir = "{d / "out"}"
 """)
     os.environ["NEST_FORGE_TEST_DATA"] = str(d / "data")
     spec = load_spec(spec_p)
     validate(spec)
     assert spec.source.path == str(d / "data" / "rows.jsonl"), "braced var must expand"
-    assert spec.output.dir == str(d / "data" / "out")
-    assert spec.source.text.template == f"{{title}} costs $5 {d / 'data'}", (
-        "bare $5 and {col} placeholders must survive; the braced var expands"
+    assert spec.source.text.template == "{title} costs $5", (
+        "bare $5 and {col} placeholders must survive"
     )
     result = build(spec)
     assert result["n_items"] == 3
     nest.open(result["outputs"]["envtest.nest"]["file"]).validate()
-    os.environ.pop("NEST_FORGE_TEST_DATA")
-    try:
-        load_spec(spec_p)
-    except SpecError as e:
-        msg = str(e)
-        assert "source.path" in msg and "NEST_FORGE_TEST_DATA" in msg and "export" in msg, msg
-    else:
-        raise AssertionError("an unset ${VAR} must be a SpecError, never a silent '$'")
+    # the lock stores the expanded path; a rebuild under a moved data root
+    # (same rows, another location) must still claim L3 under --strict-env
+    shutil.copytree(d / "data", d / "data-b")
+    os.environ["NEST_FORGE_TEST_DATA"] = str(d / "data-b")
+    again = build(load_spec(spec_p), rebuild_only=True, strict_env=True)
+    assert (
+        again["outputs"]["envtest.nest"]["file_hash"]
+        == (result["outputs"]["envtest.nest"]["file_hash"])
+    ), "rebuild-only under another data root must stay byte-identical"
+    for state, setup in (("is not set", None), ("is empty", "")):
+        if setup is None:
+            os.environ.pop("NEST_FORGE_TEST_DATA")
+        else:
+            os.environ["NEST_FORGE_TEST_DATA"] = setup
+        try:
+            load_spec(spec_p)
+        except SpecError as e:
+            msg = str(e)
+            assert "source.path" in msg and "NEST_FORGE_TEST_DATA" in msg, msg
+            assert state in msg and "export" in msg, msg
+        else:
+            raise AssertionError(f"a ${{VAR}} that {state} must be a SpecError, never a silent '$'")
     # no expanduser mid-string, bare $ untouched, and ~/ still expands
     from forge.spec_paths import expand_paths
 
     os.environ["NEST_FORGE_TEST_DATA"] = "/x"
-    out = expand_paths({"source": {"db": "${NEST_FORGE_TEST_DATA}/~x", "query": "cost > $5"}})
+    out = expand_paths(
+        {"source": {"db": "${NEST_FORGE_TEST_DATA}/~x", "query": "cost > $5"}},
+    )
     assert out == {"source": {"db": "/x/~x", "query": "cost > $5"}}, out
+    assert expand_paths({"text": {"template": "{t} $5 ${NEST_FORGE_TEST_DATA}"}}) == {
+        "text": {"template": "{t} $5 /x"}
+    }, "the braced var expands inside a template while {col} and $5 survive"
     assert expand_paths(["~/x"]) == [os.path.expanduser("~/x")]
     os.environ["NEST_FORGE_TEST_DATA"] = "~/via-var"
     assert expand_paths("${NEST_FORGE_TEST_DATA}/y") == os.path.expanduser("~/via-var/y"), (
@@ -249,8 +278,15 @@ dir = "${NEST_FORGE_TEST_DATA}/out"
         assert str(e).startswith("models[1].model_path:"), str(e)
     else:
         raise AssertionError("dotted key path must reach into lists")
-    os.environ.pop("NEST_FORGE_TEST_DATA")
-    print("test_env_expansion: OK")
+    # the module must import on its own in a fresh interpreter (build_spec
+    # imports it at its bottom; SpecError is resolved lazily at raise time)
+    probe = subprocess.run(
+        [sys.executable, "-c", "from forge.spec_paths import expand_paths"],
+        cwd=REPO / "python",
+        capture_output=True,
+        text=True,
+    )
+    assert probe.returncode == 0, probe.stderr
 
 
 def test_total_ordering(base: Path) -> None:
