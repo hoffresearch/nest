@@ -71,11 +71,19 @@ class QualitySpec:
         default_factory=lambda: ["resolution", "entropy", "has_text", "alpha", "source_format"]
     )
     sample_per_bucket: int = 12
-    visual_floor_p10: float = 85.0
-    visual_floor_min: float = 72.0
-    drift_floor_p10: float = 0.98  # negative = the drift leg is disabled
+    # floors a real corpus can reach. measured on the mtg cards at 488x680
+    # yuv420 (2048 sample, av1 still speed 6): crf30 gives ssim2 p10 65.3,
+    # min 58.6, drift p10 0.967; crf35 gives p50 62.7, p10 55.7, min 45.3,
+    # drift p10 0.965. the earlier floors (p10 85, min 72, drift 0.98) were
+    # set for large photos and no rung of the ladder reached them, so the
+    # gate always fell back to the smallest crf with a warning. with these
+    # defaults crf30 passes and crf35 fails on p10: a default that picks a
+    # rung. a spec overrides each floor under [media.quality].
+    visual_floor_p10: float = 60.0
+    visual_floor_min: float = 45.0
+    drift_floor_p10: float = 0.95  # negative = the drift leg is disabled
     gate_model: str = ""
-    crf_ladder: list[int] = field(default_factory=lambda: [30, 35, 40, 45])
+    crf_ladder: list[int] = field(default_factory=lambda: [25, 30, 35, 40, 45, 50])
     # task-utility floor (RFC-2b): text-to-image hit@1 of one query per
     # sampled item against the decoded frames of the sample, measured by
     # the gate model's text tower. negative = disabled. a rung passes when
@@ -104,7 +112,7 @@ class MediaSpec:
     profile: str = ""  # "" | a MEDIA_PROFILES name (media_profiles.py)
     backend: str = "av1"  # av1 | avif | jxl | jxl-transcode | control
     width: int = 1024
-    crf: int | str = 35  # int | "auto"
+    crf: int | str = 35  # int | "auto"; the avif backend maps it to avifenc -q
     tune: str = "default"  # default | still
     speed: int = 8
     fps: int = 1
