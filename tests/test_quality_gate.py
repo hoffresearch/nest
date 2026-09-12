@@ -1,6 +1,9 @@
 """Prove the dual quality gate (RFC-2): stratified SSIMULACRA2 floors and
 the embedding-drift floor are BOTH enforced (either alone can reject a crf);
 an unattainable floor falls back to the smallest ladder crf with a warning;
+the task-utility leg (text-to-image hit@1 within utility_tol of the source)
+passes on a labeled sample, rejects on its own with the report naming the
+leg, and refuses a gate model without a text tower by naming the key;
 jxl-transcode round-trips JPEG bytes exactly and follows the fallback policy
 for non-JPEG sources.
 
@@ -28,7 +31,7 @@ HAVE = all(shutil.which(t) for t in ("ffmpeg", "ssimulacra2", "cjxl", "djxl"))
 class LocalityAdapter:
     """Deterministic no-ML gate model WITH locality: 4x4 mean-pool of RGB,
     L2-normalized. Small pixel changes move the vector a little, not
-    randomly — what the drift leg needs to be testable."""
+    randomly, which is what the drift leg needs to be testable."""
 
     batch_size = 8
     model_hash = "sha256:" + "ab" * 32
@@ -41,6 +44,53 @@ class LocalityAdapter:
             pooled = f[: h * 4, : w * 4].reshape(4, h, 4, w, 3).mean(axis=(1, 3)).ravel()
             out.append(pooled / (np.linalg.norm(pooled) or 1.0))
         return np.stack(out)
+
+
+class TextImageAdapter(LocalityAdapter):
+    """LocalityAdapter plus a text tower: the query for label `i` is the
+    pooled vector of the source image it names (a perfect caption model),
+    or of the NEXT image when `confused` (a caption model that always
+    retrieves the wrong item, so hit@1 is 0 even on the lossless source)."""
+
+    def __init__(self, refs: dict[str, np.ndarray], confused: bool = False):
+        self.refs = refs
+        self.order = list(refs)
+        self.confused = confused
+        self.seen_roles: list[str] = []
+
+    def embed_texts(self, texts, role="document"):
+        self.seen_roles.append(role)
+        out = []
+        for t in texts:
+            label = t.removeprefix("card named ")
+            if self.confused:
+                label = self.order[(self.order.index(label) + 1) % len(self.order)]
+            out.append(self.refs[label])
+        return np.stack(out)
+
+
+def _block_images(base: Path) -> tuple[list[Path], list[str]]:
+    """8 distinct 4x4 colour-block images (each block one flat colour, so
+    the 4x4 pooling adapter separates them and av1 keeps them apart)."""
+    from PIL import Image
+
+    rng = np.random.default_rng(11)
+    paths, labels = [], []
+    for i in range(8):
+        blocks = rng.integers(0, 255, (4, 4, 3), dtype=np.uint8)
+        arr = np.repeat(np.repeat(blocks, 24, axis=0), 24, axis=1)
+        p = base / f"blk{i}.png"
+        Image.fromarray(arr).save(p)
+        paths.append(p)
+        labels.append(f"item{i}")
+    return paths, labels
+
+
+def _refs(paths: list[Path], labels: list[str]) -> dict[str, np.ndarray]:
+    from PIL import Image
+
+    arrays = [np.asarray(Image.open(p).convert("RGB")) for p in paths]
+    return dict(zip(labels, LocalityAdapter().embed_arrays(arrays), strict=True))
 
 
 def _images(base: Path) -> list[Path]:
@@ -103,6 +153,80 @@ def test_drift_floor_rejects_alone(base: Path) -> None:
     print("test_drift_floor_rejects_alone: OK")
 
 
+def test_utility_floor_passes(base: Path) -> None:
+    from forge.quality_gate import choose_crf
+
+    paths, labels = _block_images(base)
+    m = _media(
+        visual_floor_p10=-1e9,
+        visual_floor_min=-1e9,
+        drift_floor_p10=-1.0,
+        utility_floor_hit1=0.0,
+        utility_tol=0.02,
+        utility_query_template="card named {label}",
+    )
+    adapter = TextImageAdapter(_refs(paths, labels))
+    crf, report = choose_crf(paths, (96, 96), m, adapter, labels=labels)
+    assert crf == 50 and report["warning"] is None, report
+    u = report["utility"]
+    assert u["hit1_source"] == 1.0 and u["n_queries"] == report["n_sampled"]
+    assert u["threshold"] == 0.98, "max(floor 0.0, source 1.0 - tol 0.02)"
+    assert u["query_template"] == "card named {label}"
+    assert adapter.seen_roles == ["query"], "queries are embedded once, as queries"
+    for rung in report["ladder"].values():
+        assert rung["hit1"] == 1.0 and rung["utility_pass"] is True
+        assert rung["drift_pass"] is True, "negative drift floor = leg disabled"
+        assert rung["visual_pass"] is True and rung["pass"] is True
+    m2 = _media(visual_floor_p10=-1e9, visual_floor_min=-1e9, drift_floor_p10=-2)
+    _, plain = choose_crf(paths, (96, 96), m2, LocalityAdapter())
+    assert "utility" not in plain and "hit1" not in plain["ladder"]["35"]
+    print("test_utility_floor_passes: OK")
+
+
+def test_utility_floor_rejects_alone(base: Path) -> None:
+    from forge.quality_gate import choose_crf
+
+    paths, labels = _block_images(base)
+    m = _media(
+        visual_floor_p10=-1e9,
+        visual_floor_min=-1e9,
+        drift_floor_p10=-1.0,
+        utility_floor_hit1=0.5,
+        utility_queries=2,
+    )
+    adapter = TextImageAdapter(_refs(paths, labels), confused=True)
+    crf, report = choose_crf(paths, (96, 96), m, adapter, labels=labels)
+    assert crf == 35 and "utility hit@1>=0.5" in report["warning"], report["warning"]
+    assert report["utility"]["hit1_source"] == 0.0 and report["utility"]["n_queries"] == 2
+    for rung in report["ladder"].values():
+        assert rung["pass"] is False and rung["utility_pass"] is False
+        assert rung["drift_pass"] is True and rung["visual_pass"] is True, "utility alone"
+    print("test_utility_floor_rejects_alone: OK")
+
+
+def test_utility_needs_text_tower(base: Path) -> None:
+    from forge.build_spec import SpecError
+    from forge.quality_gate import choose_crf
+
+    paths, labels = _block_images(base)
+    m = _media(visual_floor_p10=-1e9, visual_floor_min=-1e9, utility_floor_hit1=0.0)
+    for bad_labels in (labels, None):
+        try:
+            choose_crf(paths, (96, 96), m, LocalityAdapter(), labels=bad_labels)
+        except SpecError as e:
+            assert "utility_floor_hit1" in str(e), e
+        else:
+            raise AssertionError("an image-only gate model must be a SpecError")
+    m = _media(visual_floor_p10=-1e9, utility_floor_hit1=0.0, utility_query_template="{label} {x}")
+    try:
+        choose_crf(paths, (96, 96), m, TextImageAdapter(_refs(paths, labels)), labels=labels)
+    except SpecError as e:
+        assert "utility_query_template" in str(e), e
+    else:
+        raise AssertionError("a template with a stray placeholder must be a SpecError")
+    print("test_utility_needs_text_tower: OK")
+
+
 def test_jxl_transcode_roundtrip(base: Path) -> None:
     from PIL import Image
 
@@ -160,6 +284,9 @@ def main() -> None:
         test_gate_structure_and_choice(base)
         test_visual_floor_rejects(base)
         test_drift_floor_rejects_alone(base)
+        test_utility_floor_passes(base)
+        test_utility_floor_rejects_alone(base)
+        test_utility_needs_text_tower(base)
         test_jxl_transcode_roundtrip(base)
     print("all quality gate tests passed")
 
