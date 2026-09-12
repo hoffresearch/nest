@@ -138,6 +138,13 @@ def validate(spec: CorpusSpec, *, allow_heavy: bool = False) -> None:
         # gates on quality.gate_model, ordering clusters on cluster.space,
         # both falling back to the first image model, never on each other.
         if m.crf == "auto":
+            # the gate encodes the ladder with the av1 stream; an av1 crf
+            # is not an avifenc -q, and the jxl backends ignore crf.
+            need(
+                m.backend == "av1",
+                'media.crf: "auto" gates the av1 ladder only (backend = "av1", '
+                'or profile = "stills-av1"); the avif and jxl backends take a fixed crf',
+            )
             gate = m.quality.gate_model or (image_presets[0] if image_presets else "")
             need(bool(gate), "media.quality.gate_model: crf=auto needs an image model")
             need(

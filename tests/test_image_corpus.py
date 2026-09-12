@@ -139,11 +139,13 @@ class ImageCorpusTest(unittest.TestCase):
         dtype=None,
         preset="compressed",
         src=None,
+        speed=8,
     ) -> dict:
         from tools import nest_build_image_corpus as builder
 
         return builder.build_corpus(
             all_intra=all_intra,
+            speed=speed,
             input_dir=src or self.src,
             output_path=self.tmp / name / f"{name}.nest",
             dataset_name=dataset or name,
@@ -639,10 +641,14 @@ class ImageCorpusTest(unittest.TestCase):
             self.skipTest("avifenc/avifdec not available")
         import nest
 
-        result = self._build("avicorpus", compress=True, backend="avif")
+        result = self._build("avicorpus", compress=True, backend="avif", speed=9)
         manifest = json.loads(Path(result["manifest"]).read_text())
         media = manifest["media"]
         self.assertEqual(media["backend"], "avif")
+        # `speed` reaches avifenc (the stills profile pins it; it used to be
+        # dropped on the way to the per-image backend)
+        self.assertEqual(media["speed"], 9)
+        self.assertEqual(media["toolchain"]["params"]["speed"], 9)
         # the manifest accounts the ORIGINAL sources, like av1 and jxl do; the
         # letterboxed pngs avifenc actually read are a different number
         # (320x240 sources onto the 256-wide canvas) and are kept apart

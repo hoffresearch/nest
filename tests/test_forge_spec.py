@@ -189,10 +189,15 @@ def test_media_profiles(base: Path) -> None:
     m = parse('[media]\nprofile = "archive"').media
     assert m.backend == "jxl-transcode"
     m = parse('[media]\nprofile = "stills"').media
-    assert (m.gop, m.tune) == ("intra", "still")
+    assert (m.backend, m.crf, m.speed) == ("avif", 48, 8), "stills = one avif per image"
+    assert (m.gop, m.tune) == ("auto", "default"), "stream knobs stay at the schema defaults"
+    m = parse('[media]\nprofile = "stills"\ncrf = 40').media
+    assert m.crf == 40 and m.backend == "avif", "explicit crf wins over the profile"
+    m = parse('[media]\nprofile = "stills-av1"').media
+    assert (m.backend, m.gop, m.tune, m.crf) == ("av1", "intra", "still", 35), "old stills"
     m = parse('[media]\nprofile = "retrieval"').media
     assert (m.gop, m.tune, m.speed, m.crf) == ("intra", "still", 6, 50)
-    assert m.backend == "av1" and m.quality.drift_floor_p10 == 0.98, "gate defaults untouched"
+    assert m.backend == "av1" and m.quality.drift_floor_p10 == 0.95, "gate defaults untouched"
     m = parse('[media]\nprofile = "retrieval"\ncrf = 45').media
     assert m.crf == 45 and m.speed == 6, "explicit crf wins, the rest of the profile stays"
     m = parse('[media]\nprofile = "retrieval-auto"').media
@@ -207,7 +212,14 @@ def test_media_profiles(base: Path) -> None:
     m = parse("[media]").media
     assert m.profile == "" and m.gop == "auto", "no profile keeps the schema defaults"
     assert m.quality.utility_floor_hit1 == -1.0, "utility leg is off by default"
-    assert set(MEDIA_PROFILES) == {"near-dup", "stills", "archive", "retrieval", "retrieval-auto"}
+    assert set(MEDIA_PROFILES) == {
+        "near-dup",
+        "stills",
+        "stills-av1",
+        "archive",
+        "retrieval",
+        "retrieval-auto",
+    }
     gated = (
         '[[models]]\npreset="potion"\ntext="default"\n[[models]]\npreset="fake-test"\nimage="space"\n'
         '[source.image]\npath_template = "{id}.png"\n'
@@ -225,11 +237,48 @@ def test_media_profiles(base: Path) -> None:
     validate(load_spec(p))
     assert load_spec(p).media.quality.utility_floor_hit1 == 0.0
     _expect_spec_error(
+        MINIMAL.format(models=gated, extra='[media]\nprofile = "stills"\ncrf = "auto"'),
+        "media.crf",
+        base,
+    )
+    _expect_spec_error(
         MINIMAL.format(models=models, extra='[media]\nprofile = "cards"'),
         "media.profile",
         base,
     )
     print("test_media_profiles: OK")
+
+
+def test_quality_defaults(base: Path) -> None:
+    """the gate floors default to values a real corpus reaches (the mtg cards
+    at 488x680: crf30 p10 65.3 passes, crf35 p10 55.7 fails), and a spec
+    still overrides each floor and the ladder under [media.quality]."""
+    from forge.build_spec import QualitySpec
+
+    q = QualitySpec()
+    assert (q.visual_floor_p10, q.visual_floor_min, q.drift_floor_p10) == (60.0, 45.0, 0.95)
+    assert q.crf_ladder == [25, 30, 35, 40, 45, 50]
+    assert 55.7 < q.visual_floor_p10 <= 65.3, "crf30 must pass and crf35 fail on p10"
+    assert q.visual_floor_min <= 45.3 and q.drift_floor_p10 <= 0.965, "crf35 fails on p10 only"
+    models = '[[models]]\npreset="potion"\ntext="default"\n'
+    p = base / "floors.toml"
+    p.write_text(MINIMAL.format(models=models, extra="[media]"))
+    assert load_spec(p).media.quality == QualitySpec(), "no [media.quality] = the defaults"
+    p.write_text(
+        MINIMAL.format(
+            models=models,
+            extra="[media]\n[media.quality]\nvisual_floor_p10 = 85\nvisual_floor_min = 72\n"
+            "drift_floor_p10 = 0.98\ncrf_ladder = [30, 35, 40, 45]",
+        )
+    )
+    q = load_spec(p).media.quality
+    assert (q.visual_floor_p10, q.visual_floor_min, q.drift_floor_p10) == (85.0, 72.0, 0.98)
+    assert q.crf_ladder == [30, 35, 40, 45], "the old floors are one override away"
+    one = "[media]\n[media.quality]\ndrift_floor_p10 = -1"
+    p.write_text(MINIMAL.format(models=models, extra=one))
+    q = load_spec(p).media.quality
+    assert q.drift_floor_p10 == -1 and q.visual_floor_p10 == 60.0, "one key, the rest stays"
+    print("test_quality_defaults: OK")
 
 
 def test_env_expansion(base: Path) -> None:
@@ -644,6 +693,7 @@ def main() -> None:
         os.environ["NEST_CACHE_DIR"] = str(CACHE_ROOT)
         test_validation_errors(base)
         test_media_profiles(base)
+        test_quality_defaults(base)
         test_env_expansion(base)
         test_total_ordering(base)
         test_e2e_fake(base)
