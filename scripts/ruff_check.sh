@@ -43,6 +43,8 @@ python/forge/spec_paths.py
 python/forge/corpus_sources.py
 python/forge/forge_pipeline.py
 python/forge/forge_cache.py
+python/forge/forge_recipe.py
+python/forge/forge_media_stage.py
 python/forge/forge_manifest.py
 python/forge/quality_gate.py
 python/forge/embed_query_model.py
