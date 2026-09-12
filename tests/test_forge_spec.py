@@ -8,7 +8,10 @@ ${VAR} in spec paths expands strictly (unset names the key); the
 embed cache is content-addressed under one shared root (NEST_CACHE_DIR or
 xdg), so two specs with the same rows share one potion table, a media
 knob change adds an entry instead of overwriting, `[output] cache_dir`
-wins over the env var, and `<out>/.cache` is never created.
+wins over the env var, the same root via another override source still
+claims L3 (the lock never records the cache location), `<out>/.cache` is
+never created, a conflicting model_hash probe is corrected by the loaded
+model, and an unusable cache root is a SpecError naming the setting.
 
 Run: .venv/bin/python tests/test_forge_spec.py
 """
@@ -412,16 +415,37 @@ def test_triad_invalidation(base: Path) -> None:
     print("test_triad_invalidation: OK")
 
 
+def _new_entries(preset_dir: Path, before: set[str]) -> set[Path]:
+    return {p for p in preset_dir.glob("*.npz") if p.name not in before}
+
+
 def test_corrupt_cache_recomputed(base: Path) -> None:
+    """a torn entry is recomputed, never reused: corrupt the very npz the
+    build wrote (its own salt keeps the triad apart from every other
+    fixture, so the first build is a miss and writes exactly one entry),
+    then prove the second build rewrote it and its sidecar is valid again."""
+    import hashlib
+
     d = base / "corrupt"
     d.mkdir()
-    spec_p = _fixture(d, with_media=False, mode="single")
+    spec_p = _fixture(d, with_media=False, mode="single", salt=" torn")
+    potion = CACHE_ROOT / "embed" / "potion"
+    before = {p.name for p in potion.glob("*.npz")} if potion.is_dir() else set()
     build(load_spec(spec_p))
     assert not (d / "out" / ".cache").exists(), "the embed cache must not live in the output dir"
-    cache = next((CACHE_ROOT / "embed" / "potion").glob("*.npz"))
-    cache.write_bytes(cache.read_bytes()[:-7])  # torn write
+    (cache,) = _new_entries(potion, before)  # exactly one entry, the one this build wrote
+    sidecar = cache.with_suffix(".npz.sha256")
+    assert sidecar.read_text().strip() == hashlib.sha256(cache.read_bytes()).hexdigest()
+    mtime = cache.stat().st_mtime_ns
+    cache.write_bytes(cache.read_bytes()[:-7])  # torn write: sidecar no longer matches
     result = build(load_spec(spec_p))  # must recompute, not crash or reuse
     nest.open(result["outputs"]["faketest.nest"]["file"]).validate()
+    assert cache.stat().st_mtime_ns != mtime, "a torn entry must be rewritten, not reused"
+    assert sidecar.read_text().strip() == hashlib.sha256(cache.read_bytes()).hexdigest(), (
+        "the recompute must leave a valid checksum sidecar"
+    )
+    assert _new_entries(potion, before) == {cache}, "the recompute reuses the same entry name"
+    assert build(load_spec(spec_p), rebuild_only=True)["timings"]["embed.potion"] == 0.0
     print("test_corrupt_cache_recomputed: OK")
 
 
@@ -495,11 +519,92 @@ def test_cache_shared_across_specs(base: Path) -> None:
     assert len(list((local / "embed" / "potion").glob("*.npz"))) == 1, (
         "a fresh root has no entry to hit: the potion table must be written under cache_dir"
     )
-    assert (local / "models" / "model_hash.potion.json").is_file(), "probe joins the root"
+    assert list((local / "models").glob("model_hash.potion.*.json")), "probe joins the root"
     assert {p.name for p in potion.glob("*.npz")} - before_potion == new_potion, (
         "the env root must be untouched when the spec overrides it"
     )
+
+    # the cache location is not identity: the same root supplied through
+    # NEST_CACHE_DIR instead of the spec must still claim L3 under --strict-env,
+    # and the lock never records where the cache lived.
+    spec_p.write_text(spec_p.read_text().replace(f'cache_dir = "{local}"\n', ""))
+    assert "cache_dir" not in spec_p.read_text()
+    env_root = os.environ["NEST_CACHE_DIR"]
+    os.environ["NEST_CACHE_DIR"] = str(local)
+    try:
+        r5 = build(load_spec(spec_p), rebuild_only=True, strict_env=True)
+    finally:
+        os.environ["NEST_CACHE_DIR"] = env_root
+    assert r5["timings"]["embed.potion"] == 0.0, "same root via env must hit the spec's entries"
+    lock = json.loads(Path(r5["build_lock"]).read_text())
+    assert "cache_dir" not in lock["resolved_spec"]["output"], "cache root is not in the lock"
+    assert str(local) not in Path(r5["build_lock"]).read_text(), "no cache path in the lock"
     print("test_cache_shared_across_specs: OK")
+
+
+def test_probe_conflict(base: Path) -> None:
+    """the model_hash probe is keyed by the knobs that enter the fingerprint,
+    and a planted probe that disagrees with the loaded model is corrected,
+    not fatal: the second spec still builds and the entry is keyed by the
+    real hash."""
+    from forge import forge_recipe
+    from forge.build_spec import ModelSpec
+
+    a = ModelSpec(preset="potion", text="default")
+    b = ModelSpec(preset="potion", text="default", normalize=False)
+    c = ModelSpec(preset="potion", text="default", dtype="float16")
+    paths = {forge_recipe.probe_path(CACHE_ROOT, m) for m in (a, b, c)}
+    assert len(paths) == 3, "normalize and dtype must select different probes"
+    assert all(p.name.startswith("model_hash.potion.") for p in paths)
+
+    d = base / "probe"
+    d.mkdir()
+    spec_p = _fixture(d, with_media=False, mode="single", salt=" probe")
+    probe = forge_recipe.probe_path(CACHE_ROOT, a)
+    assert probe.is_file(), "earlier builds must have written the default-knob potion probe"
+    real = json.loads(probe.read_text())["model_hash"]
+    # plant a conflicting probe with a matching dir fingerprint (potion is
+    # vendored: no model dir, fingerprint None), as another spec's stale probe
+    probe.write_text(json.dumps({"model_hash": "sha256:" + "0" * 64, "dir_fingerprint": None}))
+    result = build(load_spec(spec_p))
+    nest.open(result["outputs"]["faketest.nest"]["file"]).validate()
+    lock = json.loads(Path(result["build_lock"]).read_text())
+    assert lock["models"]["potion"] == real, "the loaded model is the ground truth"
+    assert json.loads(probe.read_text())["model_hash"] == real, "the probe must be corrected"
+    assert build(load_spec(spec_p), rebuild_only=True)["timings"]["embed.potion"] == 0.0, (
+        "the entry must be keyed by the real hash so the rebuild hits it"
+    )
+    print("test_probe_conflict: OK")
+
+
+def test_cache_root_errors(base: Path) -> None:
+    """a cache root that cannot be a directory is a typed SpecError naming
+    the setting, not an OSError traceback out of the cli."""
+    d = base / "badroot"
+    d.mkdir()
+    spec_p = _fixture(d, with_media=False, mode="single")
+    not_a_dir = base / "cache-as-file"
+    not_a_dir.write_text("x")
+    env_root = os.environ["NEST_CACHE_DIR"]
+    os.environ["NEST_CACHE_DIR"] = str(not_a_dir)
+    try:
+        build(load_spec(spec_p))
+    except SpecError as e:
+        assert "output.cache_dir" in str(e) and "NEST_CACHE_DIR" in str(e), str(e)
+    else:
+        raise AssertionError("a file as cache root must be a SpecError")
+    finally:
+        os.environ["NEST_CACHE_DIR"] = env_root
+    spec_p.write_text(
+        spec_p.read_text().replace("[output]", f'[output]\ncache_dir = "{not_a_dir}"')
+    )
+    try:
+        build(load_spec(spec_p))
+    except SpecError as e:
+        assert "output.cache_dir" in str(e)
+    else:
+        raise AssertionError("a file as [output] cache_dir must be a SpecError")
+    print("test_cache_root_errors: OK")
 
 
 def main() -> None:
@@ -520,6 +625,8 @@ def main() -> None:
         test_triad_invalidation(base)
         test_corrupt_cache_recomputed(base)
         test_cache_shared_across_specs(base)
+        test_probe_conflict(base)
+        test_cache_root_errors(base)
         assert (CACHE_ROOT / "embed" / "potion").is_dir(), "builds must have used the env root"
     assert _listing(user_cache) == user_before, "the suite must never touch the user's cache"
     print("all forge spec tests passed")

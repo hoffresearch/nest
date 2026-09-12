@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 
 from forge import forge_recipe, image_media, model_registry
-from forge.build_spec import CorpusSpec, validate
+from forge.build_spec import CorpusSpec, SpecError, validate
 from forge.corpus_sources import Row, corpus_input_hash, load_rows
 from forge.forge_cache import EmbedCache, cache_root, canonical_hash
 from forge.forge_media_stage import media_stage
@@ -81,7 +81,7 @@ def build(
     ctx.out_dir.mkdir(parents=True, exist_ok=True)
     ctx.state_dir.mkdir(exist_ok=True)
     ctx.tmp_dir.mkdir(exist_ok=True)
-    ctx.cache_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_cache_root(ctx.cache_dir)
 
     t0 = time.time()
     ctx.rows = load_rows(spec, sample=sample, seed=seed)
@@ -98,6 +98,23 @@ def build(
     result = forge_emit._emit(ctx)
     forge_emit._finalize(ctx, result, strict_env=strict_env, rebuild_only=rebuild_only)
     return result
+
+
+def _ensure_cache_root(path: Path) -> None:
+    """First touch of a user-controlled path: name the setting on failure
+    instead of leaking an OSError traceback out of the cli."""
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        raise SpecError(
+            f"output.cache_dir: cache root {path} is not a usable directory ({e.strerror}); "
+            "set via [output] cache_dir, --cache-dir or NEST_CACHE_DIR"
+        ) from e
+    if not path.is_dir():
+        raise SpecError(
+            f"output.cache_dir: cache root {path} is not a directory; "
+            "set via [output] cache_dir, --cache-dir or NEST_CACHE_DIR"
+        )
 
 
 def _dedup(ctx: _Ctx) -> None:
@@ -172,14 +189,17 @@ def _embed_stage(ctx: _Ctx, *, rebuild_only: bool) -> None:
             n = sum(a.shape[0] for a in arrays.values())
             ctx.timings[f"embed.{ms.preset}"] = round(elapsed, 3)
             ctx.model_meta.setdefault(ms.preset, {})["items_per_s"] = round(n / elapsed, 2)
+            # the loaded model is the ground truth: a probe that disagrees is
+            # stale (planted by a spec with other knobs, or an unfingerprinted
+            # model swap). rewrite it and key the entry by the real hash.
+            if adapter.model_hash != model_hash:
+                model_hash = adapter.model_hash
+                forge_recipe.write_probe(ctx.cache_dir, preset, ms, model_hash)
+                triad["model_hash"] = model_hash
+                cache = EmbedCache(ctx.cache_dir, ms.preset, triad)
             cache.store(arrays)
         else:
             ctx.timings[f"embed.{ms.preset}"] = 0.0
-        # model_hash was probed without loading when cached; verify on real loads only
-        if adapter is not None and adapter.model_hash != model_hash:
-            raise ForgeError(
-                f"model_hash drift for '{ms.preset}': stale model_hash probe under the cache root"
-            )
         if adapter is not None and hasattr(adapter, "close"):
             adapter.close()  # st workers: return the model's memory before the next model
         ctx.vectors[ms.preset] = arrays

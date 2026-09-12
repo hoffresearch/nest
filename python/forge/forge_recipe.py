@@ -63,18 +63,44 @@ def recipe(spec: CorpusSpec, media: dict | None, ms: ModelSpec, preset) -> dict:
     return out
 
 
+def probe_knobs(ms: ModelSpec) -> dict:
+    """The spec knobs that enter an st model_hash (embed_st.fingerprint_for:
+    normalize + dtype policy, the latter resolved from the device) plus the
+    model path. Two specs that differ on any of these have different
+    model_hashes for the same preset, so they must not share a probe."""
+    return {
+        "normalize": ms.normalize,
+        "model_dtype": ms.dtype,
+        "device_class": ms.device or "auto",
+        "model_path": ms.model_path or None,
+    }
+
+
+def probe_path(cache_dir: Path, ms: ModelSpec) -> Path:
+    knobs = canonical_hash(probe_knobs(ms)).removeprefix("sha256:")[:16]
+    return cache_dir / "models" / f"model_hash.{ms.preset}.{knobs}.json"
+
+
+def write_probe(cache_dir: Path, preset, ms: ModelSpec, model_hash: str) -> None:
+    dir_fp = model_dir_fingerprint(preset, ms.model_path or None)
+    payload = {"model_hash": model_hash, "dir_fingerprint": dir_fp, "knobs": probe_knobs(ms)}
+    atomic_write_json(probe_path(cache_dir, ms), payload)
+
+
 def probe_model_hash(cache_dir: Path, preset, ms: ModelSpec, get_adapter) -> str:
     """The triad needs model_hash, which needs a loaded model. Cache a probe
-    of it under `<cache_dir>/models/`, keyed by a cheap fingerprint of the
-    resolved model dir, so swapping the snapshot on disk invalidates the
-    probe instead of silently emitting the old model's vectors. The probe
-    is spec-independent, so it lives in the shared cache root."""
+    of it under `<cache_dir>/models/`, keyed by preset + the knobs that enter
+    the fingerprint, and guarded by a cheap fingerprint of the resolved model
+    dir, so swapping the snapshot on disk invalidates the probe instead of
+    silently emitting the old model's vectors. The probe is spec-independent,
+    so it lives in the shared cache root. A loaded model is the ground truth:
+    the embed stage overwrites a probe that disagrees with it (write_probe)."""
     dir_fp = model_dir_fingerprint(preset, ms.model_path or None)
-    probe_file = cache_dir / "models" / f"model_hash.{ms.preset}.json"
+    probe_file = probe_path(cache_dir, ms)
     if probe_file.is_file():
         probed = json.loads(probe_file.read_text())
         if probed.get("dir_fingerprint") == dir_fp:
             return probed["model_hash"]
     model_hash = get_adapter().model_hash
-    atomic_write_json(probe_file, {"model_hash": model_hash, "dir_fingerprint": dir_fp})
+    write_probe(cache_dir, preset, ms, model_hash)
     return model_hash
