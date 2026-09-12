@@ -133,7 +133,15 @@ def check_lock(previous: dict, current: dict) -> list[str]:
             diffs.append(f"{prefix}: {_short(a)} -> {_short(b)}")
 
     walk("", previous, current)
-    return [d for d in diffs if not re.match(r"resolved_spec\.(spec_path|output\.dir)", d)]
+    # where the spec, the outputs and the inputs live is not a byte-affecting
+    # parameter (row content is guarded per item by input_hash), so a rebuild
+    # under another data root (${VAR} re-exported, another home) stays L3.
+    return [d for d in diffs if not _LOCATION_KEYS.match(d)]
+
+
+_LOCATION_KEYS = re.compile(
+    r"resolved_spec\.(spec_path|output\.dir|source\.(path|db|image\.path_template))\b"
+)
 
 
 def _short(v) -> str:
