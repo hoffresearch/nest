@@ -573,6 +573,7 @@ measured on a 30,725-chunk pt-br corpus (`dat/measure/ladder.json`, gated in ci)
 - [doc/SECURITY.md](doc/SECURITY.md): reporting, scope, hardening notes (denied lints, the mutation-fuzz harness, the nightly soak), and the data-governance posture for distributed `.nest` files
 - [doc/CHANGELOG](doc/CHANGELOG): releases and unreleased deltas, with measured numbers
 - [dat/demo/Instructions.md](dat/demo/Instructions.md): the pt-br demo corpus sources and rebuild
+- [hoffresearch/mtg-nest-benchmark](https://github.com/hoffresearch/mtg-nest-benchmark): the image-corpus benchmark (38,627 card scans in single-file `.nest` containers): code, specs, corpora as id lists, results per experiment; the `.nest` artifacts are on the hugging face dataset of the same name. private for now
 
 </details>
 
