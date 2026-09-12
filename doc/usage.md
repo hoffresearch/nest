@@ -61,7 +61,7 @@ a corpus is one file. `corpora/my-derm.nest` carries the index, the media blobs,
 
 `--shard-size N` splits the stream into consecutive segments of about N frames, one blob per shard, which caps decode memory and improves cold seek on large corpora. `--order-similarity` tries a greedy nearest-neighbour frame order before encoding; measured on 1210 wsi tiles it cost 0.15 percent instead of helping, so it stays off by default.
 
-`--backend av1` (the default) won the size-matched matrix; `--backend avif` writes one avif per image and is the only backend that accepts `--pix-fmt yuv444p`. `--crf` (default 35) sets the av1 rate, `--avif-quality` (default 35) the avif one. `--control` builds the letterbox-lossless png control corpus that codec cost is measured against.
+`--backend av1` (the default) won the size-matched matrix; `--backend avif` writes one avif per image and is the only backend that accepts `--pix-fmt yuv444p`. `--crf` (default 35) sets the av1 rate, `--avif-quality` (default 35) the avif one. `--control` builds the letterbox-lossless png control corpus that codec cost is measured against. for every backend the manifest's `media.source_bytes` is the byte size of the original source files and `compression_ratio` is that over `output_bytes`; the avif path records the letterboxed pngs it actually feeds avifenc apart as `letterboxed_input_bytes`, so the ratio is comparable across av1, avif and jxl.
 
 `--dtype float32|float16|int8|int4` overrides the preset's vector dtype for the image space (int4 needs the dim divisible by 64). measured: quantization was not the driver of quality loss (the melanoma delta is identical at f16 and int8, and similar at int4), while the vectors themselves shrink 214 KB to 112.6 KB to 63.8 KB on ph2.
 
