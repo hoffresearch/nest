@@ -1,4 +1,4 @@
-"""nest_model_bench.py — three-tier model comparison over a multi-space .nest
+"""nest_model_bench.py: three-tier model comparison over a multi-space .nest
 (RFC-5). Tiers are measured and reported SEPARATELY, never aggregated:
 
   T1 pipeline stability : identity self-retrieval@k with fresh SOURCE-image
@@ -32,7 +32,9 @@ sys.path.insert(0, str(REPO / "python"))
 
 import nest
 import numpy as np
+from _model_bench_report import print_table
 from forge import model_registry
+from forge.forge_manifest import manifest_items
 
 
 def load_sidecars(index: Path) -> dict:
@@ -71,7 +73,9 @@ def make_adapter(manifest: dict, preset: str):
 
 
 def pick_items(manifest: dict, n: int, seed: int) -> list[dict]:
-    items = [it for it in manifest["items"] if it.get("image_path")]
+    # a compact manifest (provenance minimal) has no image_path to embed
+    # fresh source queries from: manifest_items names the fix.
+    items = [it for it in manifest_items(manifest, need=("image_path",)) if it.get("image_path")]
     rng = np.random.default_rng(seed)
     idx = sorted(rng.choice(len(items), size=min(n, len(items)), replace=False).tolist())
     return [items[i] for i in idx]
@@ -180,7 +184,7 @@ def bench_queries_file(db, manifest: dict, qfile: Path, ks: list[int]) -> dict:
     """Real operator queries: [{query, expected_keys[], negative_keys[]?}]."""
     queries = json.loads(qfile.read_text())
     chunk_ids = db.chunk_ids()
-    by_key = {it["key"]: chunk_ids[it["ordinal"]] for it in manifest["items"]}
+    by_key = {it["key"]: chunk_ids[it["ordinal"]] for it in manifest_items(manifest)}
     out: dict[str, dict] = {}
     for s in manifest["spaces"]:
         if s["modality"] != "image":
@@ -214,46 +218,6 @@ def bench_queries_file(db, manifest: dict, qfile: Path, ks: list[int]) -> dict:
                 "negative_leakage": round(leak / n, 4),
             }
     return out
-
-
-def print_table(report: dict, ks: list[int]) -> None:
-    print("\n== T1 pipeline stability (identity@k, inflated by construction) ==")
-    for _preset, rep in report["models"].items():
-        for name, sp in rep["spaces"].items():
-            print(
-                f"  {name:<24} "
-                + "  ".join(f"id@{k}={sp['t1_identity_recall'][f'@{k}']:.3f}" for k in ks)
-            )
-    print("\n== T2 codec cost (drift cosine: source-embed vs stored decoded) ==")
-    for _preset, rep in report["models"].items():
-        for name, sp in rep["spaces"].items():
-            d = sp["t2_drift_cosine"]
-            print(f"  {name:<24} p10={d['p10']}  p50={d['p50']}")
-    print("\n== T3 task utility (never compare against T1/T2 numbers) ==")
-    for _preset, rep in report["models"].items():
-        for name, sp in rep["spaces"].items():
-            if "t3_text_to_image_hit" in sp:
-                print(
-                    f"  {name:<24} "
-                    + "  ".join(f"txt@{k}={sp['t3_text_to_image_hit'][f'@{k}']:.3f}" for k in ks)
-                    + f"  [{sp['t3_ruler']}]"
-                )
-    print("\n== cost ==")
-    for _preset, rep in report["models"].items():
-        for name, sp in rep["spaces"].items():
-            mb = (sp.get("band_bytes") or 0) / 1e6
-            print(
-                f"  {name:<24} {mb:7.2f} MB  lat p50={sp['latency_ms']['p50']}ms "
-                f"p95={sp['latency_ms']['p95']}ms  embed={rep['embed_side_items_per_s']} it/s"
-            )
-    if report.get("operator_queries"):
-        print("\n== T3 operator queries ==")
-        for name, r in report["operator_queries"].items():
-            print(
-                f"  {name:<24} "
-                + "  ".join(f"hit@{k}={r['hit'][f'@{k}']}" for k in ks)
-                + f"  mrr={r['mrr']} leak={r['negative_leakage']}"
-            )
 
 
 def main() -> int:

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -20,6 +19,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "python"))
 
 import _nest  # noqa: E402
+from forge.forge_manifest import frame_resolver, manifest_items  # noqa: E402
 
 
 def load_manifest(index: Path) -> dict:
@@ -60,17 +60,12 @@ def media_resolver(db, manifest: dict):
     return resolve
 
 
-FRAME_RE = re.compile(r"#frame=(\d+)")
-
-
-def item_frame(it: dict) -> int:
-    m = FRAME_RE.search(it.get("media_uri") or "")
-    return int(m.group(1)) if m else it.get("ordinal", 0)
-
-
 def cmd_browse(db, manifest, args) -> dict:
-    items = manifest.get("items") or []
+    # a compact manifest (provenance minimal) has no label: the title falls
+    # back to the key, and the frame is derived from the ordinal.
+    items = manifest_items(manifest)
     resolve = media_resolver(db, manifest)
+    item_frame = frame_resolver(manifest)
     ids = db.chunk_ids()
     page = []
     for it in items[args.offset : args.offset + args.limit]:
@@ -93,9 +88,7 @@ def embed_query(preset_name: str, dim: int, query: str):
     from forge import model_registry
 
     allowed = frozenset(
-        p.strip()
-        for p in os.environ.get("NEST_ALLOW_REMOTE_CODE", "").split(",")
-        if p.strip()
+        p.strip() for p in os.environ.get("NEST_ALLOW_REMOTE_CODE", "").split(",") if p.strip()
     )
     adapter = model_registry.create_embedder(
         preset_name, allow_remote_code=allowed, allow_heavy=True, batch_size=4
@@ -107,7 +100,7 @@ def embed_query(preset_name: str, dim: int, query: str):
 
 
 def cmd_search(db, manifest, args) -> dict:
-    items = manifest.get("items") or []
+    items = manifest_items(manifest)
     by_ordinal = {it["ordinal"]: it for it in items}
     ids = db.chunk_ids()
     ord_of = {cid: i for i, cid in enumerate(ids)}
