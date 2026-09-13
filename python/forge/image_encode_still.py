@@ -17,6 +17,8 @@ from pathlib import Path
 
 from .image_encode import _tool_version, provenance_sha256
 
+AVIF_JOBS = 8  # see encode_avif: >= 2 is one byte-identical class, 1 is another
+
 
 def encode_avif(
     image_paths: Sequence[Path],
@@ -41,6 +43,13 @@ def encode_avif(
     which the measured melanoma breakdown (CP-0.6) asks for on medical
     corpora. The requested `yuv` is verified with `avifdec --info` on the
     first file.
+
+    `-j` is pinned to AVIF_JOBS. libaom writes different bytes with one
+    worker than with two or more (measured 2026-09-13 on 256 cards, libavif
+    1.4.2 / aom 3.15.0: every file differed between -j 1 and -j 2, and -j 2,
+    3, 4, 8, 16 and all were byte-identical), so avifenc's default of "all"
+    made the output a function of the machine's core count. A pinned count
+    keeps the file_hash a property of the recipe and the toolchain.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     input_bytes = 0
@@ -50,7 +59,7 @@ def encode_avif(
         out = out_dir / f"{Path(path).stem}.avif"
         # fmt: off
         cmd = [
-            "avifenc", "-q", str(quality), "--speed", str(speed),
+            "avifenc", "-j", str(AVIF_JOBS), "-q", str(quality), "--speed", str(speed),
             "--yuv", yuv, str(path), str(out),
         ]
         # fmt: on
@@ -71,7 +80,7 @@ def encode_avif(
     toolchain = {
         "ffmpeg": _tool_version(["avifenc", "--version"]),
         "encoder": "avifenc/aom",
-        "params": {"quality": quality, "speed": speed, "yuv": actual_yuv},
+        "params": {"quality": quality, "speed": speed, "yuv": actual_yuv, "jobs": AVIF_JOBS},
     }
     if source_bytes is None:
         source_bytes = input_bytes
