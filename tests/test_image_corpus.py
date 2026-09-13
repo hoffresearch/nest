@@ -498,12 +498,17 @@ class ImageCorpusTest(unittest.TestCase):
         result = self._build("batch", compress=True)
         video = self.tmp / "batch" / "batch.media" / "batch-av1.mp4"
         canvas = tuple(result["media"]["canvas"])
-        wanted = [1, 5, 11]
-        frames = image_decode.decode_frames_at(video, canvas, wanted)
-        self.assertEqual(len(frames), len(wanted))
-        for ordinal, frame in zip(wanted, frames, strict=True):
-            single = image_decode.decode_frame(video, canvas, ordinal)
-            np.testing.assert_array_equal(frame, single, f"batch frame {ordinal} diverged")
+        # two spans: one that ends on the last frame and one that stops
+        # early. the second one is the real-corpus case (k hits out of
+        # 38627 frames, measured 2026-09-13): ffmpeg still has frames to
+        # write when the reader is done, and closing the pipe must not
+        # turn into a raised broken-pipe error.
+        for wanted in ([1, 5, 11], [1, 5]):
+            frames = image_decode.decode_frames_at(video, canvas, wanted)
+            self.assertEqual(len(frames), len(wanted))
+            for ordinal, frame in zip(wanted, frames, strict=True):
+                single = image_decode.decode_frame(video, canvas, ordinal)
+                np.testing.assert_array_equal(frame, single, f"batch frame {ordinal} diverged")
 
     # ---- F2.2: the codec toolchain is part of provenance ----
 
@@ -600,8 +605,15 @@ class ImageCorpusTest(unittest.TestCase):
         for yuv in ("420", "444"):
             out_dir = self.tmp / f"avif{yuv}"
             image_encode_still.encode_avif([pattern], out_dir, quality=40, yuv=yuv)
-            decoded = image_decode.decode_avif(sorted(out_dir.glob("*.avif"))[0])
+            avif = sorted(out_dir.glob("*.avif"))[0]
+            decoded = image_decode.decode_avif(avif)
             err[yuv] = float(np.abs(decoded.astype(np.int16) - src).mean())
+            # the uncompressed-png intermediate must hand back the same
+            # pixels avifdec's default png does
+            ref_png = self.tmp / f"ref{yuv}.png"
+            subprocess.run(["avifdec", str(avif), str(ref_png)], check=True, capture_output=True)
+            with Image.open(ref_png) as ref:
+                np.testing.assert_array_equal(decoded, np.asarray(ref.convert("RGB")))
         self.assertLess(err["444"], err["420"])
 
     def test_encode_avif_records_the_source_bytes_it_is_given(self):
