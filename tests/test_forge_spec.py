@@ -190,7 +190,11 @@ def test_media_profiles(base: Path) -> None:
     assert m.backend == "jxl-transcode"
     m = parse('[media]\nprofile = "stills"').media
     assert (m.backend, m.crf, m.speed) == ("avif", 48, 8), "stills = one avif per image"
-    assert (m.gop, m.tune) == ("auto", "default"), "stream knobs stay at the schema defaults"
+    assert (m.gop, m.tune) == ("auto", "still"), "stream knobs stay at the schema defaults"
+    m = parse("[media]\n").media
+    assert m.tune == "still", "the bare default is the still tune, like every av1 profile"
+    m = parse('[media]\ntune = "default"').media
+    assert m.tune == "default", "svt-av1's own tune stays reachable"
     m = parse('[media]\nprofile = "stills"\ncrf = 40').media
     assert m.crf == 40 and m.backend == "avif", "explicit crf wins over the profile"
     m = parse('[media]\nprofile = "stills-av1"').media

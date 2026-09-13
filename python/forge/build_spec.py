@@ -113,7 +113,13 @@ class MediaSpec:
     backend: str = "av1"  # av1 | avif | jxl | jxl-transcode | control
     width: int = 1024
     crf: int | str = 35  # int | "auto"; the avif backend maps it to avifenc -q
-    tune: str = "default"  # default | still
+    # still | default. svt-av1's still-picture tune, probed against the local
+    # encoder (image_encode.probe_tune_still). measured 2026-09-12 on 2048
+    # cards at crf 35: ssimulacra2 p50 62.7 against 51.8 for the default
+    # tune, for +10% bytes. every av1 profile already set it; the bare
+    # default follows. asdict(media) enters the media state key, so an av1
+    # build that relied on the implicit default re-encodes once on --resume.
+    tune: str = "still"
     speed: int = 8
     fps: int = 1
     pix_fmt: str = "yuv420p"
