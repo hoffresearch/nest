@@ -13,6 +13,7 @@ Run: .venv/bin/python tests/test_quality_gate.py
 """
 
 import shutil
+import subprocess
 import sys
 import tempfile
 from dataclasses import replace
@@ -250,6 +251,20 @@ def test_jxl_transcode_roundtrip(base: Path) -> None:
         raise AssertionError("policy=error must raise on non-jpeg")
     lossless = encode_jxl_dir([png], base / "jxl-ll", transcode=False)
     assert lossless["backend"] == "jxl" and lossless["frame_count"] == 1
+    # the read side goes through a ppm intermediate now; lossless jxl must
+    # still come back as the exact source pixels, and the transcoded jpeg
+    # as the exact pixels PIL decodes from the original jpeg
+    from forge.image_decode import decode_jxl
+
+    src_png = np.asarray(Image.open(png).convert("RGB"))
+    got = decode_jxl(base / "jxl-ll" / "000000.jxl")
+    assert np.array_equal(got, src_png), "ppm path lost pixels"
+    # a transcoded jpeg decodes through djxl's own idct, so it is compared
+    # against djxl's png output, not against PIL's libjpeg decode
+    ref = base / "ref.png"
+    subprocess.run(["djxl", str(out / "000000.jxl"), str(ref)], check=True, capture_output=True)
+    ref_px = np.asarray(Image.open(ref).convert("RGB"))
+    assert np.array_equal(decode_jxl(out / "000000.jxl"), ref_px), "ppm and png decodes differ"
     print("test_jxl_transcode_roundtrip: OK")
 
 

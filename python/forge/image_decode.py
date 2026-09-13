@@ -121,9 +121,16 @@ def decode_frames_at(
     first, last = order[0], order[-1]
     wanted = set(order)
     ts = first if fps <= 1 else (first - 0.499) / fps
+    # -frames:v bounds the walk to the span: without it ffmpeg keeps
+    # decoding past `last` and dies on the closed pipe with a nonzero exit
+    # once the pipe buffer is full, which on any real-size stream (k hits
+    # out of thousands of frames, measured 2026-09-13 on 38627 cards)
+    # turned every batched resolve into a raised RuntimeError. the 12-frame
+    # test stream hid it because its last hit was the last frame.
     # fmt: off
     cmd = [
         "ffmpeg", "-v", "error", "-ss", str(ts), "-i", str(video_path),
+        "-frames:v", str(last - first + 1),
         "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
     ]
     # fmt: on
@@ -155,11 +162,17 @@ def decode_frames_at(
 
 
 def decode_avif(path: Path) -> np.ndarray:
-    """Decode one avif to an RGB array through avifdec (dav1d)."""
+    """Decode one avif to an RGB array through avifdec (dav1d).
+
+    The intermediate png is written uncompressed: avifdec's default png
+    compression was 127 of the 145 ms one 488x680 card took to decode
+    (measured 2026-09-13, 8x), and the bytes are the same either way.
+    """
     from PIL import Image
 
     out_path = Path(path).with_suffix(".decoded.png")
-    proc = subprocess.run(["avifdec", str(path), str(out_path)], capture_output=True)
+    cmd = ["avifdec", "--png-compress", "0", str(path), str(out_path)]
+    proc = subprocess.run(cmd, capture_output=True)
     if proc.returncode != 0:
         raise RuntimeError(f"avifdec failed on {path}: {proc.stderr.decode()[-400:]}")
     try:
@@ -209,7 +222,9 @@ def decode_jxl(path: Path) -> np.ndarray:
             return np.asarray(img.convert("RGB"), dtype=np.uint8)
     import tempfile
 
-    with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
+    # ppm, not png: same 8-bit rgb, no deflate on the way out. 30 ms to
+    # 11 ms per 488x680 card (measured 2026-09-13).
+    with tempfile.NamedTemporaryFile(suffix=".ppm") as tmp:
         proc = subprocess.run(["djxl", str(path), tmp.name], capture_output=True)
         if proc.returncode != 0:
             raise RuntimeError(f"djxl failed for {path}: {proc.stderr.decode()[:200]}")
