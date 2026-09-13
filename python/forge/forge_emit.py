@@ -68,7 +68,7 @@ def _spaces_payload(ctx, only_preset: str | None = None) -> list[dict]:
         if only_preset and ms.preset != only_preset:
             continue
         arrays = ctx.vectors[ms.preset]
-        if modality == "image":  # noqa: SIM108 — the branch is clearer than a ternary here
+        if modality == "image":  # noqa: SIM108, the branch is clearer than a ternary here
             vecs = arrays["image_unique"][ctx.frame_of_row]
         else:
             vecs = arrays["text"]
@@ -220,6 +220,9 @@ def _finalize(ctx, result: dict, *, strict_env: bool, rebuild_only: bool) -> Non
             }
             for i, r in enumerate(ctx.rows)
         ],
+        # row -> unique frame; write_manifest keeps it only for a compact
+        # manifest whose dedup collapsed rows (full items carry media_uri).
+        "frame_of_row": list(ctx.frame_of_row),
     }
     write_manifest(ctx.out_dir / f"{spec.name}.manifest.json", manifest, mode, spec_dir)
     result["manifest"] = str(ctx.out_dir / f"{spec.name}.manifest.json")

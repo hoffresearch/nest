@@ -4,6 +4,8 @@ fake e2e build emits valid multi-space files in all three output modes
 with dedup'd media, shared blob spans and citation-consistent chunk_ids;
 the N2 triad invalidates caches on any content change; --rebuild-only is
 byte-identical (L3); a corrupted cache is recomputed, never reused;
+provenance = "minimal" writes compact items (key + ordinal, items_compact,
+the dedup map) and readers refuse dropped fields with a clear error;
 ${VAR} in spec paths expands strictly (unset names the key); the
 embed cache is content-addressed under one shared root (NEST_CACHE_DIR or
 xdg), so two specs with the same rows share one potion table, a media
@@ -47,6 +49,9 @@ def _fixture(
     mode: str = "both",
     embed_media: bool = False,
     salt: str = "",
+    provenance: str = "",
+    spec_name: str = "spec.toml",
+    out_dir: str = "out",
 ) -> Path:
     from PIL import Image
 
@@ -88,7 +93,7 @@ label_template = "{title}"
         else ""
     )
     fake_image = 'image = "space"' if with_media else ""
-    spec = base / "spec.toml"
+    spec = base / spec_name
     spec.write_text(f"""
 [corpus]
 name = "faketest"
@@ -122,8 +127,9 @@ dtype = "int8"
 
 [output]
 mode = "{mode}"
-dir = "{base / "out"}"
+dir = "{base / out_dir}"
 {"embed_media = true" if embed_media else ""}
+{f'provenance = "{provenance}"' if provenance else ""}
 """)
     return spec
 
@@ -449,6 +455,86 @@ def test_e2e_fake(base: Path) -> None:
     print("test_e2e_fake: OK")
 
 
+def test_provenance_minimal(base: Path) -> None:
+    """provenance = "minimal" writes items[] as key + ordinal only, flagged
+    by items_compact, keeps the dedup map when it is not the identity, and
+    the .nest is byte-for-byte the standard build's (the manifest is a
+    sidecar, never part of the file)."""
+    if not HAVE_FFMPEG:
+        print("test_provenance_minimal: SKIP (no ffmpeg)")
+        return
+    from forge.forge_manifest import frame_resolver, manifest_items
+
+    d = base / "prov"
+    d.mkdir()
+    build(load_spec(_fixture(d, mode="single")))
+    build(
+        load_spec(
+            _fixture(d, mode="single", provenance="minimal", spec_name="min.toml", out_dir="min")
+        )
+    )
+    full = json.loads((d / "out" / "faketest.manifest.json").read_text())
+    compact = json.loads((d / "min" / "faketest.manifest.json").read_text())
+    assert full["items_compact"] is False and compact["items_compact"] is True
+    assert compact["provenance_mode"] == "minimal" and "sql" not in compact
+    assert all(set(it) == {"key", "ordinal"} for it in compact["items"]), compact["items"][0]
+    assert [it["key"] for it in compact["items"]] == [it["key"] for it in full["items"]]
+    assert {"image_path", "label", "media_uri"} <= set(full["items"][0]), "standard keeps full"
+    assert "frame_of_row" not in full, "full items carry media_uri; no dedup map"
+    assert compact["frame_of_row"][1] == compact["frame_of_row"][5] == compact["frame_of_row"][9]
+    assert len(set(compact["frame_of_row"])) == 10, "10 unique frames for 12 rows"
+    # the derived frame of every compact item equals the full item's frame
+    rf, rc = frame_resolver(full), frame_resolver(compact)
+    assert [rf(it) for it in full["items"]] == [rc(it) for it in compact["items"]]
+    assert rc(compact["items"][5]) == rc(compact["items"][1]), "dup rows share one frame"
+    # the file is the same: the manifest is a sidecar
+    a = nest.open(str(d / "out" / "faketest.nest"))
+    b = nest.open(str(d / "min" / "faketest.nest"))
+    assert a.file_hash == b.file_hash, "provenance mode must not touch the .nest"
+    assert (d / "out" / "faketest.manifest.json").stat().st_size > (
+        d / "min" / "faketest.manifest.json"
+    ).stat().st_size
+    # readers: key + ordinal never raise; a dropped field is a clear error
+    assert len(manifest_items(compact)) == 12
+    assert len(manifest_items(compact, need=("key", "ordinal"))) == 12
+    assert len(manifest_items(full, need=("image_path", "label"))) == 12
+    for field in ("image_path", "label", "media_uri"):
+        try:
+            manifest_items(compact, need=(field,))
+        except ValueError as e:
+            msg = str(e)
+            assert field in msg and 'provenance = "standard"' in msg and "minimal" in msg, msg
+        else:
+            raise AssertionError(f"compact items must refuse need={field!r}")
+    # the ui bridge browses both: same blob uri + frame per ordinal, the
+    # compact title falls back to the key (no label recorded)
+    pages = []
+    for out in ("out", "min"):
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(REPO / "python" / "tools" / "nest_ui_bridge.py"),
+                str(d / out / "faketest.nest"),
+                "browse",
+                "--limit",
+                "12",
+            ],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "NEST_ENABLE_FAKE_PRESET": "1"},
+        )
+        assert proc.returncode == 0, proc.stderr
+        pages.append(json.loads(proc.stdout))
+
+    def strip(page: dict) -> list[tuple]:
+        return [(i["ordinal"], i["uri"], i["frame"], i["chunk_id"]) for i in page["items"]]
+
+    assert strip(pages[0]) == strip(pages[1]) and pages[1]["total"] == 12
+    assert pages[0]["items"][3]["title"] == "Item 3" and pages[1]["items"][3]["title"] == "k03"
+    assert pages[1]["items"][5]["frame"] == pages[1]["items"][1]["frame"]
+    print("test_provenance_minimal: OK")
+
+
 def test_embed_media(base: Path) -> None:
     if not HAVE_FFMPEG:
         print("test_embed_media: SKIP (no ffmpeg)")
@@ -701,6 +787,7 @@ def main() -> None:
         test_env_expansion(base)
         test_total_ordering(base)
         test_e2e_fake(base)
+        test_provenance_minimal(base)
         test_embed_media(base)
         test_triad_invalidation(base)
         test_corrupt_cache_recomputed(base)
