@@ -616,6 +616,36 @@ class ImageCorpusTest(unittest.TestCase):
                 np.testing.assert_array_equal(decoded, np.asarray(ref.convert("RGB")))
         self.assertLess(err["444"], err["420"])
 
+    def test_avif_jobs_are_pinned_and_recorded(self):
+        """The worker count is part of the recipe, not of the machine.
+
+        libaom writes different bytes with one worker than with two or
+        more (measured 2026-09-13, libavif 1.4.2 / aom 3.15.0, 256 cards:
+        every file differed between -j 1 and -j 2; 2, 3, 4, 8, 16 and all
+        were byte-identical). avifenc defaults to "all", which made the
+        file_hash a function of the build machine's core count. The backend
+        pins `-j`, records it, and its bytes equal a direct `-j 2` encode.
+        """
+        if not have_avif():
+            self.skipTest("avifenc/avifdec not available")
+        from forge import image_encode_still
+        from PIL import Image
+
+        png = self.tmp / "pinned.png"
+        rng = np.random.default_rng(3)
+        Image.fromarray(rng.integers(0, 255, (96, 128, 3), dtype=np.uint8)).save(png)
+        out_dir = self.tmp / "pinned-avif"
+        media = image_encode_still.encode_avif([png], out_dir, quality=40, yuv="420", speed=9)
+        self.assertEqual(media["toolchain"]["params"]["jobs"], image_encode_still.AVIF_JOBS)
+        ref = self.tmp / "pinned-j2.avif"
+        # fmt: off
+        subprocess.run(
+            ["avifenc", "-j", "2", "-q", "40", "--speed", "9", "--yuv", "420", str(png), str(ref)],
+            check=True, capture_output=True,
+        )
+        # fmt: on
+        self.assertEqual((out_dir / "pinned.avif").read_bytes(), ref.read_bytes())
+
     def test_encode_avif_records_the_source_bytes_it_is_given(self):
         """`source_bytes` describes the ORIGINAL files, not the encoder input.
 
