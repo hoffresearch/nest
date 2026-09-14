@@ -52,6 +52,8 @@ python/forge/media_profiles.py
 python/forge/embed_query_model.py
 python/tools/nest_forge.py
 python/tools/nest_model_bench.py
+python/tools/_model_bench_report.py
+python/tools/nest_ui_bridge.py
 tests/test_forge_spec.py
 tests/test_quality_gate.py
 tests/test_cli_space.py
