@@ -47,16 +47,76 @@ def redact_path(value: str, mode: str, spec_dir: Path) -> str:
         return out
 
 
+# what the compact items[] of a minimal manifest leaves out: the two
+# redacted source fields and the media uri (derived, see item_frame).
+COMPACT_DROPPED = ("image_path", "label", "media_uri")
+
+
 def write_manifest(path: Path, payload: dict, mode: str, spec_dir: Path) -> None:
     payload = dict(payload, manifest_schema_version=MANIFEST_SCHEMA_VERSION, provenance_mode=mode)
+    frame_of_row = payload.pop("frame_of_row", None)
+    payload["items_compact"] = mode == "minimal"
     if mode == "minimal":
+        # 38627 items with image_path, key, label, media_uri and ordinal
+        # were 12 MB of a 13 to 16 MB file. key + ordinal is the identity
+        # a reader needs; the media frame is derived (item_frame), the
+        # source path and the label are what minimal redacts anyway.
         payload.pop("sql", None)
-        for item in payload.get("items", []):
-            item.pop("label", None)
+        payload["items"] = [
+            {"key": it["key"], "ordinal": it["ordinal"]} for it in payload.get("items", [])
+        ]
+        if frame_of_row and any(f != i for i, f in enumerate(frame_of_row)):
+            # dedup collapsed rows: the row -> unique frame map is not the
+            # identity and nothing else in the manifest records it.
+            payload["frame_of_row"] = list(frame_of_row)
     missing = [k for k in _REQUIRED if k not in payload]
     if missing:
         raise ValueError(f"manifest missing required fields: {missing}")
     atomic_write_bytes(path, json.dumps(payload, sort_keys=True, indent=1).encode())
+
+
+def manifest_items(manifest: dict, need: tuple[str, ...] = ()) -> list[dict]:
+    """items[] of a forge manifest. `need` names the per-item fields the
+    caller reads; a compact manifest (provenance = "minimal") carries key
+    and ordinal only, and asking for a dropped field is a clear error naming
+    the provenance mode that records it, never a KeyError deep in a loop."""
+    items = manifest.get("items") or []
+    if manifest.get("items_compact"):
+        dropped = [f for f in need if f in COMPACT_DROPPED]
+        if dropped:
+            raise ValueError(
+                f'manifest items are compact (provenance = "minimal"): '
+                f"{', '.join(dropped)} not recorded per item; rebuild with "
+                f'output.provenance = "standard" (or "full") to read it'
+            )
+    return items
+
+
+_FRAME_RE = re.compile(r"^media://([^#]*)#frame=(\d+)$")
+
+
+def frame_resolver(manifest: dict):
+    """item -> global stream frame (the index media_resolver-style readers
+    map to a segment and a shard-local frame). the dedup map (frame_of_row,
+    identity when absent) and the similarity/cluster permutation of the
+    media block are enough for a compact manifest; a full item whose
+    media_uri names a segment keeps that as the authority (older manifests
+    with a collapsed dedup map carry no frame_of_row)."""
+    media = manifest.get("media") or {}
+    starts = {s.get("uri"): s.get("start_frame", 0) for s in media.get("segments") or []}
+    perm = media.get("order_permutation")
+    stream_pos = {item: pos for pos, item in enumerate(perm)} if perm else None
+    frame_of_row = manifest.get("frame_of_row")
+
+    def resolve(item: dict) -> int:
+        m = _FRAME_RE.match(item.get("media_uri") or "")
+        if m:
+            return starts.get(m.group(1), 0) + int(m.group(2))
+        ordinal = int(item["ordinal"])
+        frame = frame_of_row[ordinal] if frame_of_row else ordinal
+        return stream_pos[frame] if stream_pos else frame
+
+    return resolve
 
 
 def _tool_fingerprint(name: str) -> dict | None:
