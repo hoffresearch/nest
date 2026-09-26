@@ -12,26 +12,43 @@
 //! source) would run that binary before any socket is involved. set
 //! `URNA_PYTHON` to pin the interpreter explicitly there; the resolved
 //! interpreter is always logged to stderr so the choice is never silent.
+//!
+//! `urna setup` creates a managed venv (`<data root>/urna/venv`, see
+//! `paths`) that carries the deps by construction; it ranks right after
+//! `URNA_PYTHON`, ahead of the walk-up heuristic, so an installed urna run
+//! from inside some other project's `.venv` still embeds with its own.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Set by the terminal ui: its screen owns stderr, so the interpreter note
+/// is kept out of it (the ui shows the interpreter in its own doctor view).
+static QUIET: AtomicBool = AtomicBool::new(false);
+
+#[cfg_attr(not(feature = "tui"), allow(dead_code))]
+pub fn set_quiet(quiet: bool) {
+    QUIET.store(quiet, Ordering::Relaxed);
+}
 
 /// The python interpreter the embedder scripts run under. `URNA_PYTHON` wins;
-/// otherwise prefer the repo's `.venv` (it carries numpy + tokenizers for the
-/// potion table) so `search-text`, `ask`, and `retrieve` work without extra
-/// setup; else fall back to `python3` on PATH.
+/// then the venv `urna setup` created; otherwise prefer the repo's `.venv`
+/// (it carries numpy + tokenizers for the potion table) so `search-text`,
+/// `ask`, and `retrieve` work without extra setup; else fall back to
+/// `python3` on PATH.
 pub fn resolve_interpreter() -> String {
-    let interp = resolve_interpreter_from(
-        std::env::var("URNA_PYTHON").ok(),
-        std::env::current_dir().ok(),
-    );
+    let explicit = std::env::var("URNA_PYTHON").ok().filter(|s| !s.is_empty());
+    let managed = super::paths::setup_python().map(|p| p.to_string_lossy().into_owned());
+    let interp = resolve_interpreter_from(explicit.or(managed), std::env::current_dir().ok());
     // surface the choice: discovery can execute a `.venv` found by filesystem
     // proximity, so the selected interpreter must never be silent.
-    eprintln!("[urna] embedder interpreter: {interp}");
+    if !QUIET.load(Ordering::Relaxed) {
+        eprintln!("[urna] embedder interpreter: {interp}");
+    }
     interp
 }
 
-/// Testable core of [`resolve_interpreter`]: an explicit `URNA_PYTHON` wins,
-/// then the nearest `.venv/bin/python` walking up to four ancestors of `start`,
+/// Testable core of [`resolve_interpreter`]: an explicit interpreter (the
+/// `URNA_PYTHON` value, else the managed setup venv) wins, then the nearest `.venv/bin/python` walking up to four ancestors of `start`,
 /// then `python3`.
 fn resolve_interpreter_from(urna_python: Option<String>, start: Option<PathBuf>) -> String {
     if let Some(p) = urna_python {

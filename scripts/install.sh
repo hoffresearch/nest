@@ -135,4 +135,5 @@ case ":$PATH:" in
     *":$BIN_DIR:"*) ;;
     *) say "urna-install: note: $BIN_DIR is not on your PATH" ;;
 esac
-say "urna-install: run \`urna doctor\` to validate the install (offline)"
+say "urna-install: next: \`urna setup\` builds the python env and runs the checks,"
+say "urna-install:       then \`urna tui\` opens the explorer (\`urna doctor\` re-checks, offline)"

@@ -2,7 +2,7 @@
 
 `urna` is a single-file binary container for distributing semantic knowledge bases. one file: chunks, canonical text, byte-spans, embeddings, search contract, hashes. copy it, share it, search it.
 
-this guide covers the commands you'll actually use: the agent verbs `ask`, `retrieve` and `build` (the front door; they shell out to the offline python embedder or the forge), and the engine subcommands beneath them (validate, stats, inspect, media, search/search-ann/search-graph/search-space/search-text, benchmark, cite, doctor), which take a file and a vector and never run python. `urna --help` lists them in the same two groups. getting the binary onto a machine (every install channel, verification, offline notes, the maintainer checklist) is the reference section at the end of this document; the short form is `curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/scripts/install.sh | sh` followed by `urna doctor`.
+this guide covers the commands you'll actually use: the agent verbs `ask`, `retrieve` and `build` (the front door; they shell out to the offline python embedder or the forge), and the engine subcommands beneath them (validate, stats, inspect, media, search/search-ann/search-graph/search-space/search-text, benchmark, cite, doctor), which take a file and a vector and never run python. `urna --help` lists them in the same two groups. getting the binary onto a machine (every install channel, verification, offline notes, the maintainer checklist) is the reference section at the end of this document; the short form is `curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/scripts/install.sh | sh` (or brew, npm, cargo) followed by `urna setup`, the interactive installer that completes every channel (section 16).
 
 ## quickstart
 
@@ -359,7 +359,9 @@ urna doctor
 
 the exit code is typed so installers and ci branch on codes, not text: `0` ok, `2` python interpreter missing, `3` python deps missing, `4` potion embedder script not found, `5` potion table missing or a git-lfs pointer, `6` embedder run failed. a scalar simd fallback prints a warning but still exits `0`. the embedder check opens no socket, so doctor itself stays offline-by-construction.
 
-the embedder script resolves in this order: the repo layout (`python/forge/embed_query_potion.py`, dev checkout), then `${XDG_DATA_HOME:-~/.local/share}/urna/forge/` (one-liner installs), then `<exe>/../share/urna/forge/` (tarball and homebrew-style layouts).
+the embedder script resolves in this order: the repo layout (`python/forge/embed_query_potion.py`, dev checkout), then `<root>/urna/forge/` for each data root in turn: `URNA_DATA_DIR`, `XDG_DATA_HOME`, `~/.local/share`, `%LOCALAPPDATA%` (where `install.ps1` and `urna setup` on windows put it), `<exe>/../share` (tarball layouts). the interpreter resolves in this order: `URNA_PYTHON`, the venv `urna setup` builds (`<root>/urna/venv`), the nearest `.venv` walking up from the working directory, then `python3` on `PATH`.
+
+a failing doctor names its fix: every code except `6` prints `next: urna setup`, which lays down the payload and the python env and then re-runs these checks (section 16).
 
 ## 12. model registry and multi-model spaces
 
@@ -471,13 +473,58 @@ urna media corpus.urna --export DIR    # write every inlined blob to DIR, verify
 
 `--export` fails on the first blob whose bytes do not hash to the recorded `content_hash`; `urna validate` performs the same proof over every inlined blob without writing anything. the python side reads one blob without exporting the store: `UrnaFile.blob_bytes(i)`. the section is content_hash-excluded, so an embedded corpus and its sidecar twin carry the same citations.
 
+## 16. setup and the terminal explorer (`urna setup`, `urna tui`)
+
+the package channels (homebrew, npm, crates.io) ship the bare binary; the binary cannot carry the ~30 mb embedder payload or a python env. `urna setup` lays both down and proves the install:
+
+```sh
+urna setup
+```
+
+on a terminal it runs inline, in four steps with the screen left in the scrollback when it ends:
+
+1. scan: how urna got here (homebrew, npm, cargo, install script, dev build), the data dir, whether the payload and a python with numpy + tokenizers are present, and which tools the steps can use (`curl`, `uv`, a `python3` with `venv`). read-only.
+2. plan: one checkbox per step. a satisfied step starts unticked (ticking it reinstalls); a step this machine cannot run is shown blocked with the reason.
+3. install: the payload (`urna-embedder-payload.tar.gz` from the release that matches the binary's version, its sha256 checked while it streams, unpacked into a staging dir and swapped in only when complete) and the python env (`<data root>/urna/venv`, built with `uv` when it is on `PATH`, else `python3 -m venv` + pip), with the tools' output live in a log.
+4. verify: the doctor checks (section 11), then what to run next, or on failure each step's error and how to retry.
+
+```sh
+urna setup --yes                     # the default plan, no questions, plain lines (ci, scripts)
+urna setup --version v0.5.0 --force  # reinstall the payload from a given release
+urna setup --no-python               # payload only; bring your own interpreter via URNA_PYTHON
+urna setup --uninstall               # remove the payload and the env (never the binary)
+```
+
+without a terminal on both ends (a pipe, ci, a postinstall hook) setup behaves as `--yes`. exit codes extend doctor's: `0` ready, `2`..`6` a doctor check failed after the steps ran, `10` download failed, `11` the payload does not match the release checksum (nothing is installed), `12` unpack failed, `13` the python env failed, `14` a step the machine needs is blocked here (no `curl`, no `uv` and no `python3`, no data dir, or `URNA_PYTHON` pins an interpreter without the deps).
+
+the binary links no network stack: setup downloads through the system `curl` (https only, no downgrade on redirect), the same tool `install.sh` uses, and `URNA_RELEASE_BASE` points it at a mirror or a `file://` directory for air-gapped machines.
+
+the explorer opens a `.urna` and shows it: the manifest and the verdict of the same checks `urna validate` runs, the section table with a size bar per section, an ask tab that embeds offline through the same routed embedder and `model_hash` gate as `urna ask` and shows each hit's stored text, citation and source, and the doctor checks.
+
+```sh
+urna tui corpus.urna
+urna                                 # a bare urna on a terminal opens the explorer
+```
+
+| key | where | action |
+|---|---|---|
+| `tab` / `shift+tab`, mouse click | everywhere | next / previous tab |
+| `o` (`ctrl+o` in ask) | everywhere | open a `.urna` (dirs and `.urna` files only) |
+| `1`..`9` | home | open a `.urna` found in the working dir or one level below |
+| `enter`, `↑↓`, `pgup/pgdn`, `esc` | ask | ask, pick a hit, scroll its text, clear the query |
+| `r` | health | re-run the checks |
+| `s` | everywhere but ask | hand the terminal to `urna setup`, then come back with the same corpus open |
+| `q` (`ctrl+q` in ask), `esc` on home | everywhere | quit |
+
+both screens follow the terminal: 24-bit color when the terminal advertises it (`COLORTERM=truecolor` and the known truecolor terminals), the nearest xterm-256 color otherwise (Terminal.app, tmux without `Tc`), and no color with `NO_COLOR` set or `URNA_COLOR=none`. `URNA_COLOR=truecolor|256|none` overrides the probe. `cargo install urna-cli --no-default-features` builds the cli without the `tui` feature: every engine and agent verb, no `setup`, no `tui`.
+
 ## reference
 
 every way to get `urna` onto a machine, what each channel lays down, how to verify what you got, and what a maintainer has to set up once before a release can feed these channels. each item is collapsed; open the one you need.
 
-status: the release pipeline (`.github/workflows/release.yml` via cargo-dist, `.github/workflows/pypi.yml`, `.github/workflows/install-test.yml`) serves from `v0.4.0` (2026-09-17) on; `v0.3.0` predates it and carries no artifacts. the maintainer checklist below is what each channel needs on the account side; a channel whose prerequisite is missing fails its own job and leaves the github release intact.
+status: the release pipeline (`.github/workflows/release.yml` via cargo-dist, `.github/workflows/pypi.yml`, `.github/workflows/install-test.yml`) serves from `v0.5.0` (2026-09-26) on; `v0.4.0` was never tagged and `v0.3.0` predates the pipeline, so neither carries artifacts. the maintainer checklist below is what each channel needs on the account side; a channel whose prerequisite is missing fails its own job and leaves the github release intact.
 
-the product is offline by construction: the installers are the only thing that ever opens a socket. after install, `urna doctor` validates the surface without network.
+the product is offline by construction: the installers are the only thing that ever opens a socket (`urna setup` does it through a `curl` child process). after install, `urna setup` completes the channel and `urna doctor` validates the surface without network.
 
 ### environment variables
 
@@ -485,10 +532,12 @@ every `URNA_*` variable read anywhere in the codebase (installers, cli, forge, d
 
 | variable | scope | default | what it does |
 |---|---|---|---|
-| `URNA_RELEASE_BASE` | install | github release url | url prefix `install.sh` / `install.ps1` fetch the four release files from (`file://` works for air-gapped installs) |
+| `URNA_RELEASE_BASE` | install, setup | github release url | url prefix `install.sh` / `install.ps1` fetch the four release files from, and `urna setup` the payload from (`file://` works for air-gapped installs) |
 | `URNA_BIN_DIR` | install | `~/.local/bin` (`~\.local\bin` on windows) | where the installer puts the `urna` binary |
-| `URNA_DATA_DIR` | install | `${XDG_DATA_HOME:-~/.local/share}` (`%LOCALAPPDATA%` on windows) | parent dir for the embedder payload the installer extracts |
-| `URNA_PYTHON` | runtime, dev | `python3`, or `./.venv/bin/python` if present (`release_check.sh`) | python interpreter the cli, `urna doctor`, and the dev scripts shell out to; must carry the forge deps (numpy, tokenizers) |
+| `URNA_DATA_DIR` | install, setup, runtime | `${XDG_DATA_HOME:-~/.local/share}` (`%LOCALAPPDATA%` on windows) | parent dir for the embedder payload and the `urna setup` venv; the cli searches it first (section 11) |
+| `URNA_PYTHON` | runtime, dev | the `urna setup` venv, else the nearest `.venv`, else `python3` | python interpreter the cli, `urna doctor`, and the dev scripts shell out to; must carry the forge deps (numpy, tokenizers). it wins over the setup venv, so setup reports it as blocking when it lacks the deps |
+| `URNA_COLOR` | runtime | probed from the terminal | `truecolor`, `256` or `none`: color depth of `urna setup`, `urna tui` and the colored `doctor` output |
+| `NO_COLOR` | runtime | unset | any value turns every color off (no-color.org); modifiers stay |
 | `URNA_FORCE_SCALAR` | runtime | unset | forces the scalar simd kernel over avx2 / neon, for a/b benchmarking |
 | `URNA_ALLOW_DOWNLOAD` | runtime, build | unset (offline) | lets `search-text`, `embed_query.py`, `model_fingerprint.py`, and the corpus builder fetch a sentence-transformers model instead of failing offline |
 | `URNA_ALLOW_REMOTE_CODE` | runtime, build | unset (empty) | comma-separated preset names allowed to load `trust_remote_code` model-repo code (`ask` / `retrieve` routing, `urna_model_bench.py`, `urna_ui_bridge.py`) |
@@ -511,7 +560,7 @@ every `URNA_*` variable read anywhere in the codebase (installers, cli, forge, d
 
 ```sh
 curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/scripts/install.sh | sh
-urna doctor
+urna setup
 ```
 
 `scripts/install.sh` (posix sh; needs `curl`, `tar`, and `sha256sum` or `shasum`):
@@ -520,7 +569,7 @@ urna doctor
 2. downloads four files from the github release: `urna-cli-<target>.tar.xz`, its `.sha256`, `urna-embedder-payload.tar.gz`, its `.sha256`.
 3. verifies both sha256 sums before anything touches the install dirs. a mismatch aborts with the two hashes printed.
 4. installs the binary to `~/.local/bin/urna` and extracts the payload to `${XDG_DATA_HOME:-~/.local/share}/urna/forge/` (the potion embedder script plus its vendored table).
-5. warns if `~/.local/bin` is not on `PATH`.
+5. warns if `~/.local/bin` is not on `PATH`, and points at `urna setup`, which then only has the python env left to build.
 
 | flag | effect |
 |---|---|
@@ -538,7 +587,7 @@ the linux binaries are static musl, so they run on any distro and inside `scratc
 
 ```powershell
 irm https://raw.githubusercontent.com/hoffresearch/urna/main/scripts/install.ps1 | iex
-urna doctor
+urna setup
 ```
 
 `scripts/install.ps1` mirrors the shell installer: `-Version vX.Y.Z`, `-Uninstall`, the same `URNA_RELEASE_BASE` / `URNA_BIN_DIR` / `URNA_DATA_DIR` overrides. the binary goes to `~\.local\bin\urna.exe`, the payload to `%LOCALAPPDATA%\urna\forge\`. the payload is a `.tar.gz`; `tar` ships with windows 10 1803+. the windows archive is a `.zip`.
@@ -566,9 +615,10 @@ the wheel is staged by `scripts/stage_wheel.py` into `packaging/staging/` (gitig
 
 ```sh
 brew install hoffresearch/urna/urna
+urna setup
 ```
 
-the formula lives in the `hoffresearch/homebrew-urna` tap and is generated by cargo-dist on every release (`installers = ["homebrew"]` in `Cargo.toml`). known gap, tracked in `.contracts/.agents/AGENTS.md`: the generated formula installs the binary only. a brew-installed `urna` reports exit `4` from `urna doctor` until the payload is laid down, either by running the one-liner (it overwrites nothing brew owns) or by copying `python/forge/` from a checkout into `${XDG_DATA_HOME:-~/.local/share}/urna/forge/`. a custom formula that ships the payload is deferred until the tap sees real use.
+the formula lives in the `hoffresearch/homebrew-urna` tap and is generated by cargo-dist on every release (`installers = ["homebrew"]` in `Cargo.toml`). the generated formula installs the binary only; `urna setup` lays the payload and the python env down under the data dir (nothing brew owns is touched), so `brew upgrade` and `brew uninstall` keep working as usual. `urna setup --uninstall` removes what setup added.
 
 </details>
 
@@ -577,10 +627,11 @@ the formula lives in the `hoffresearch/homebrew-urna` tap and is generated by ca
 
 ```sh
 npm install -g @urna/cli
+urna setup
 npx @urna/cli validate file.urna
 ```
 
-the `@urna/cli` package is generated by cargo-dist on every release (`installers = ["npm"]`, `npm-scope = "@urna"` in `Cargo.toml`, `npm-package = "cli"` in `crates/urna-cli/Cargo.toml`). it carries no binary of its own: on install it fetches the release archive for the platform from the github release and exposes it as the `urna` command. same payload gap as homebrew: run the one-liner (or copy `python/forge/`) before `urna doctor`.
+the `@urna/cli` package is generated by cargo-dist on every release (`installers = ["npm"]`, `npm-scope = "@urna"` in `Cargo.toml`, `npm-package = "cli"` in `crates/urna-cli/Cargo.toml`). it carries no binary of its own: on install it fetches the release archive for the platform from the github release and exposes it as the `urna` command. the package ships the binary only: `urna setup` completes it (npm hides postinstall output, so setup is a step you run, not a hook).
 
 </details>
 
@@ -592,7 +643,7 @@ cargo binstall urna-cli     # prebuilt binary from the github release
 cargo install urna-cli      # compile from crates.io
 ```
 
-`urna-format`, `urna-runtime` and `urna-cli` are published to crates.io on every release by `.github/workflows/publish-crates.yml`, in that order; `urna-python` ships as the wheel and is not a crate. a rust project that reads or writes `.urna` files depends on `urna-format` (container) and `urna-runtime` (search). `[package.metadata.binstall]` in `crates/urna-cli/Cargo.toml` maps the crate to the cargo-dist archive names (`.tar.xz`, `.zip` on windows), so binstall downloads the released binary instead of compiling. same payload gap as homebrew. to build the unreleased tree instead: `cargo install --git https://github.com/hoffresearch/urna urna-cli`.
+`urna-format`, `urna-runtime` and `urna-cli` are published to crates.io on every release by `.github/workflows/publish-crates.yml`, in that order; `urna-python` ships as the wheel and is not a crate. a rust project that reads or writes `.urna` files depends on `urna-format` (container) and `urna-runtime` (search). `[package.metadata.binstall]` in `crates/urna-cli/Cargo.toml` maps the crate to the cargo-dist archive names (`.tar.xz`, `.zip` on windows), so binstall downloads the released binary instead of compiling. either way the binary comes alone: `urna setup` completes it. to build the unreleased tree instead: `cargo install --git https://github.com/hoffresearch/urna urna-cli`.
 
 </details>
 
@@ -631,7 +682,7 @@ sha256sum -c urna-cli-x86_64-unknown-linux-musl.tar.xz.sha256
 gh attestation verify urna-cli-x86_64-unknown-linux-musl.tar.xz --repo hoffresearch/urna
 ```
 
-the attestation is sigstore keyless provenance produced in the release job (`attestations: write`, `actions/attest`), binding the artifact digest to the workflow, the commit, and the tag. the pypi wheels carry pep 740 attestations produced by trusted publishing (no stored token), visible on the file's pypi page.
+the attestation is sigstore keyless provenance produced in the release job (`attestations: write`, `actions/attest`), binding the artifact digest to the workflow, the commit, and the tag. the pypi wheels carry pep 740 attestations produced by trusted publishing (no stored token), visible on the file's pypi page; the first release (`0.5.0`) went out with a bootstrap token and carries none (maintainer checklist step 4).
 
 every release also carries a cyclonedx sbom per built package (`urna-cli.cdx.xml`, generated by `cargo cyclonedx` in the build job and attested like the binaries), and the binaries are built with `cargo auditable`, so the dependency tree can be read back out of the executable:
 
@@ -664,7 +715,7 @@ the release workflows assume external state that a fresh org does not have. as o
 1. **homebrew tap**: the public repo `hoffresearch/homebrew-urna` exists with an empty `Formula/` directory (created 2026-09-26); the `publish-homebrew-formula` job in `release.yml` checks it out and pushes `Formula/urna.rb` to it. the job authenticates with the `HOMEBREW_TAP_TOKEN` secret, a fine-grained token (`urna-homebrew-tap`, resource owner `hoffresearch`) with contents read and write on that repo only, expiring 2027-09-26 (the org caps fine-grained tokens at 365 days). github has no api that mints one: rotate it by hand in the account settings and replace the secret. without it the job fails and the rest of the release stands.
 2. **npm**: `@urna/cli` publishes under the `urna` npm org with the `NPM_TOKEN` secret, a granular token with package and org write on that org (user `notlikedev`). granular tokens expire: the current one expires 2026-12-11, rotate it before a release that falls after that date. the name `@urna/cli` is unclaimed until the first publish.
 3. **crates.io**: `publish-crates.yml` publishes with the `CARGO_REGISTRY_TOKEN` secret (crates.io user `brennercruvinel`). the three names are unclaimed until the first publish. after it, the token can be swapped for crates.io trusted publishing (github oidc, no stored token, configured per crate on crates.io) the same way pypi works; that change replaces the secret with `rust-lang/crates-io-auth-action` in the workflow.
-4. **pypi**: on pypi.org, add a pending trusted publisher for the project name `urna` (owner `hoffresearch`, repository `urna`, workflow `pypi.yml`, environment `pypi`), and create the `pypi` environment in the github repo settings. `urna` is not published yet; the first successful `pypi.yml` run claims the name. no api token is stored anywhere.
+4. **pypi**: the `pypi` environment exists in the github repo (created 2026-09-26) and carries a `PYPI_API_TOKEN` secret, a bootstrap token that publishes the first release because a trusted publisher can only be attached once the project exists (a pending publisher needs a web login). releases published with it carry no pep 740 attestations. after the first publish: on pypi.org add the trusted publisher to the `urna` project (owner `hoffresearch`, repository `urna`, workflow `pypi.yml`, environment `pypi`; the publish log prints a direct link), delete the `PYPI_API_TOKEN` environment secret, and revoke the token on pypi.org. with the secret gone the empty `password` input selects OIDC trusted publishing again and no api token is stored anywhere.
 5. **git-lfs**: release and wheel builds pull the potion table (`.github/dist-build-setup.yml`, `lfs: true` in `pypi.yml`). check the lfs bandwidth quota before a release; five targets plus four wheels each fetch the ~30 mb table.
 6. **attestations**: nothing to configure. `release.yml` already requests `attestations: write`, `pypi.yml` requests `id-token: write`.
 7. **short url**: `get.hoffresearch.com` is not registered (nxdomain). the scripts and the README use the raw github url. if the short form is wanted, point the dns at a 302 to the raw script and update the README plus both script headers in the same change.

@@ -52,19 +52,19 @@ pub fn run(file: PathBuf) -> Result<()> {
     // what `search-space` can address without `inspect --json`.
     if let Ok(entry) = view.entry(urna_format::layout::SECTION_SPACE_TABLE) {
         let _ = entry;
-        if let Ok(payload) = view.decoded_section(urna_format::layout::SECTION_SPACE_TABLE) {
-            if let Ok(spaces) = urna_format::sections::decode_space_table(&payload) {
-                println!("spaces:       {}", spaces.len());
-                for s in &spaces {
-                    println!(
-                        "  {:<24} dim={:<5} dtype={:<8} n={:<7} model_hash={}",
-                        s.name,
-                        s.dim,
-                        s.dtype_str(),
-                        s.n_vectors,
-                        s.model_hash
-                    );
-                }
+        if let Ok(payload) = view.decoded_section(urna_format::layout::SECTION_SPACE_TABLE)
+            && let Ok(spaces) = urna_format::sections::decode_space_table(&payload)
+        {
+            println!("spaces:       {}", spaces.len());
+            for s in &spaces {
+                println!(
+                    "  {:<24} dim={:<5} dtype={:<8} n={:<7} model_hash={}",
+                    s.name,
+                    s.dim,
+                    s.dtype_str(),
+                    s.n_vectors,
+                    s.model_hash
+                );
             }
         }
     }
