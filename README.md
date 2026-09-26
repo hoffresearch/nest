@@ -13,7 +13,7 @@ brew install hoffresearch/urna/urna
 ```
 
 ```sh
-npm install -g urna
+npm install -g @urna/cli
 ```
 
 ```sh
