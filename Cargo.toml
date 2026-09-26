@@ -85,6 +85,10 @@ plan-jobs = ["./tag-verify"]
 # whole workspace per target, and urna-python's cdylib cannot be built for
 # the musl targets, which failed the first 0.5.0 tag on both linux builds.
 precise-builds = true
+# no source.tar.gz: dist builds it with git archive, which smudges every
+# lfs file (the demo corpora) and fails while the lfs budget is exhausted.
+# github attaches the source archives to every release anyway.
+source-tarball = false
 
 # the embedder payload stages the potion table; the build setup fetches it
 # from its upstream and checks it against the lfs pointer (no git-lfs).
