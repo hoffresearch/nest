@@ -15,7 +15,7 @@
 # the tag's signature is verified first (tag-verify.yml).
 # prerequisite (one-time, external): the `pypi` environment, plus either the
 # trusted publisher entry on PyPI or the bootstrap token; see the maintainer
-# checklist in docs/usage.md.
+# checklist in docs/USAGE.md.
 
 name: pypi
 

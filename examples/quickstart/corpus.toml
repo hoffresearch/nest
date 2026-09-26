@@ -6,7 +6,7 @@
 #   urna build --spec examples/quickstart/corpus.toml
 #
 # the full contract (sqlite/csv/image sources, media, several models):
-# docs/usage.md section 13.
+# docs/USAGE.md section 13.
 
 [corpus]
 name = "quickstart"

@@ -49,6 +49,6 @@ with and every query is checked against).
 replace `docs.jsonl` with your rows and keep the spec. `source.kind` also
 takes `csv`, `sqlite` (a query), `image_dir` and `pdf_dir`; `[[models]]` takes
 any preset in the registry. the full contract, with a worked multi-model spec:
-`docs/usage.md` section 13.
+`docs/USAGE.md` section 13.
 
 `out/` is a build artifact and is gitignored.
