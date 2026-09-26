@@ -9,7 +9,7 @@ alone.
 
 MRL: `mrl.dims` is the ladder the model card validates. Slicing at any other
 dim is mathematically possible and semantically unsupported, so it is refused
-— a generic "slice anywhere" would be false advertising (RFC-3).
+- a generic "slice anywhere" would be false advertising (RFC-3).
 
 remote code: a preset with `trust_remote_code` loads ONLY when the caller
 passes its name in `allow_remote_code` AND every code file matches the pinned
@@ -66,7 +66,7 @@ class ModelPreset:
     image_max_side: int = 0  # 0 = model-native; recipe-hashed preprocessing
     # how an image document is handed to ST encode(): "dict" = {"image", "text": prompt}
     # (wemm's contract); "bare" = the PIL image alone (jina: the dict form collapses
-    # its image embeddings onto the shared prompt text — measured, sims 0.99 across
+    # its image embeddings onto the shared prompt text - measured, sims 0.99 across
     # different images vs 0.45 bare). recipe-hashed.
     image_doc_format: str = "dict"
     encode_kwargs: tuple[tuple[str, object], ...] = ()  # ST encode() extras (recipe-hashed)

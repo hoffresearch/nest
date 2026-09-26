@@ -1,6 +1,6 @@
 //! Zero-copy view over a `.urna` byte slice.
 //!
-//! The reader does no I/O — callers pass an `&[u8]` (e.g. backed by an
+//! The reader does no I/O - callers pass an `&[u8]` (e.g. backed by an
 //! `mmap`). Parsing validates magic, header checksum, file_size, all
 //! section checksums, footer hash, manifest schema, and the presence of
 //! every required section.

@@ -187,7 +187,7 @@ pub const CANONICAL_SECTIONS: &[(u32, &str)] = &[
 /// missing one of these with `MissingRequiredSection`.
 pub const REQUIRED_SECTIONS: &[(u32, &str)] = CANONICAL_SECTIONS;
 
-/// Optional sections — present when their corresponding capability is
+/// Optional sections - present when their corresponding capability is
 /// advertised in the manifest. They do NOT participate in content_hash
 /// (which is over the canonical six only) so adding an optional section
 /// to a corpus does not invalidate citations.

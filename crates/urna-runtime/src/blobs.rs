@@ -26,7 +26,7 @@ pub struct OpenBlobData {
 }
 
 /// Open the 0x17 blob_data offset table when the section is present.
-/// The table must be RAW (never compressed — lazy slicing depends on it)
+/// The table must be RAW (never compressed - lazy slicing depends on it)
 /// and must parallel the 0x14 record order, so a length mismatch against
 /// `n_refs` is a typed format error.
 pub(crate) fn open_blob_data(

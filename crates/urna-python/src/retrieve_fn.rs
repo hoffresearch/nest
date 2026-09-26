@@ -68,7 +68,7 @@ pub fn retrieve(
     // honesty gate: when the caller passes the model_hash of the embedder it
     // used for `query`, reject a corpus built with a different model. A bare
     // query vector carries no model identity, so the runtime cannot gate
-    // unconditionally the way the CLI does — the caller opts in by passing the
+    // unconditionally the way the CLI does - the caller opts in by passing the
     // hash (forge/retrieve.py does so by default). Without it, behaviour is
     // unchanged, but a mismatch would silently return cosine-valid, wrong hits.
     if let Some(expected) = &expected_model_hash {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# release_check.sh — full release verification pipeline.
+# release_check.sh - full release verification pipeline.
 #
 # Runs every CI gate end-to-end:
 #   1. cargo build/test/clippy/fmt (release profile)
@@ -13,11 +13,11 @@
 # presets).
 #
 # Override knobs (env vars):
-#   URNA_BASELINE  — baseline JSON to compare against (default: data/measure/baseline.json)
-#   URNA_QUERIES   — measure_presets query count (default: 100)
-#   URNA_K         — measure_presets top-k (default: 10)
-#   URNA_PYTHON    — python interpreter (default: ./.venv/bin/python if present, else python3)
-#   URNA_OUT       — where to write the post-run JSON (default: /tmp/release_check_post.json)
+#   URNA_BASELINE  - baseline JSON to compare against (default: data/measure/baseline.json)
+#   URNA_QUERIES   - measure_presets query count (default: 100)
+#   URNA_K         - measure_presets top-k (default: 10)
+#   URNA_PYTHON    - python interpreter (default: ./.venv/bin/python if present, else python3)
+#   URNA_OUT       - where to write the post-run JSON (default: /tmp/release_check_post.json)
 
 set -euo pipefail
 

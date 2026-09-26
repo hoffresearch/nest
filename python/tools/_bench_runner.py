@@ -1,7 +1,7 @@
 """Latency-bench helpers used by `measure_presets.py`.
 
 Pure functions over a `urna.UrnaFile` plus a list of `(qvec, qtext)`
-queries — no `.urna` I/O, no result formatting. Internal to
+queries - no `.urna` I/O, no result formatting. Internal to
 `python/tools/`.
 """
 

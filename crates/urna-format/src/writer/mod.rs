@@ -6,11 +6,11 @@
 //!
 //! Encoding choices:
 //!
-//! - `SectionEncoding::Raw` (default) — sections stored verbatim.
-//! - `SectionEncoding::Zstd` — text-heavy sections (canonical/spans/
+//! - `SectionEncoding::Raw` (default) - sections stored verbatim.
+//! - `SectionEncoding::Zstd` - text-heavy sections (canonical/spans/
 //!   provenance/contract) are zstd-compressed on disk; the reader
 //!   decompresses transparently.
-//! - `EmbeddingDType::Float32 | Float16 | Int8` — controls the on-disk
+//! - `EmbeddingDType::Float32 | Float16 | Int8` - controls the on-disk
 //!   representation of the embeddings section. The runtime always
 //!   accumulates dot products in f32 regardless of dtype.
 
@@ -37,7 +37,7 @@ pub struct UrnaFileBuilder {
     pub(super) text_encoding: SectionEncoding,
     pub(super) dtype: EmbeddingDType,
     /// Optional HNSW index payload, fully encoded by the caller. The
-    /// builder doesn't know how to build an HNSW graph itself — that's
+    /// builder doesn't know how to build an HNSW graph itself - that's
     /// the runtime's job.
     pub(super) hnsw_index: Option<Vec<u8>>,
     pub(super) bm25_index: Option<Vec<u8>>,
@@ -101,7 +101,7 @@ impl UrnaFileBuilder {
     /// Reproducible build mode. When enabled, the writer overrides the
     /// manifest's `created` timestamp to `REPRODUCIBLE_CREATED` so that
     /// two builds with identical inputs produce byte-identical output.
-    /// Provenance JSON is not rewritten — callers are responsible for
+    /// Provenance JSON is not rewritten - callers are responsible for
     /// keeping provenance deterministic if they want bit-for-bit equality.
     pub fn reproducible(mut self, on: bool) -> Self {
         self.reproducible = on;

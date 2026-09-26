@@ -1,4 +1,4 @@
-//! `urna inspect <file> [--json]` — header, section table, manifest,
+//! `urna inspect <file> [--json]` - header, section table, manifest,
 //! hashes. JSON variant mirrors `MmapUrnaFile::inspect_json` for
 //! programmatic consumers.
 

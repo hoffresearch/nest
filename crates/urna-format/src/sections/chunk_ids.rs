@@ -1,5 +1,5 @@
 //! `chunk_ids` section (`SECTION_CHUNK_IDS = 0x01`). Length-prefixed
-//! UTF-8 strings of the form `sha256:<64 hex>` — one per chunk.
+//! UTF-8 strings of the form `sha256:<64 hex>` - one per chunk.
 //!
 //! the raw encoding stores each id as 71 ascii bytes. the `intpack`
 //! repack (encoding id 4, kind 0) stores only the 32 raw digest bytes

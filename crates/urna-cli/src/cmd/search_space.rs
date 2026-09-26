@@ -1,4 +1,4 @@
-//! `urna search-space <file> <qvec> --space NAME -k K` — exact search over
+//! `urna search-space <file> <qvec> --space NAME -k K` - exact search over
 //! one named multimodal space (0x15 + its band). The query vector must be
 //! embedded with the model the space's model_hash fingerprints and have the
 //! space's dim; the runtime's typed errors (SpaceNotFound, dim mismatch,

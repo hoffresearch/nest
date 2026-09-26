@@ -168,7 +168,7 @@ impl UrnaFile {
         self.rt.chunk_ids().to_vec()
     }
 
-    /// One inlined blob's raw bytes (0x17), by blob_refs index — pulls a
+    /// One inlined blob's raw bytes (0x17), by blob_refs index - pulls a
     /// single asset without exporting the whole store.
     fn blob_bytes<'py>(
         &self,

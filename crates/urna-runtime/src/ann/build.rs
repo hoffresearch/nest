@@ -89,8 +89,8 @@ impl HnswIndex {
                     &mut visited,
                 );
                 // The new node always picks `m` neighbors (Algorithm 4 with
-                // M=m). The asymmetry — layer 0 allowing up to `m_max0`
-                // neighbors per node — only kicks in via backlinks: when
+                // M=m). The asymmetry - layer 0 allowing up to `m_max0`
+                // neighbors per node - only kicks in via backlinks: when
                 // neighbor's list overflows `cap_layer`, we re-select with
                 // the heuristic to bring it back down to `cap_layer`.
                 let cap_layer = if layer == 0 { m_max0 } else { m };

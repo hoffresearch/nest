@@ -213,7 +213,7 @@ pub fn build(
         .embedding_dtype(dt);
 
     // HNSW: build the index from f32 vectors (we have them in chunk_inputs
-    // already). The runtime materializes f32 vectors at open time too —
+    // already). The runtime materializes f32 vectors at open time too -
     // here we use the originals so build is independent of dtype loss. The
     // index is also the source of top-m SEMANTIC edges for the optional graph,
     // so build it whenever hnsw OR the graph is wanted; only attach the hnsw

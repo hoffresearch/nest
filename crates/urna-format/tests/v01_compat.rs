@@ -89,7 +89,7 @@ fn v01_decoded_section_is_borrowed_for_raw() {
     let view = UrnaView::from_bytes(GOLDEN).unwrap();
     for (id, _name) in CANONICAL_SECTIONS {
         let decoded = view.decoded_section(*id).unwrap();
-        // Cow::Borrowed for raw — no allocation. Cow::Owned would mean
+        // Cow::Borrowed for raw - no allocation. Cow::Owned would mean
         // we copied bytes to decompress, which only happens for zstd.
         assert!(
             matches!(decoded, std::borrow::Cow::Borrowed(_)),

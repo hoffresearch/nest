@@ -3,12 +3,12 @@ latency for the four presets against a baseline `data/corpus_next.v1.urna`.
 
 Pipeline:
 
-  1. Open the baseline (`exact` preset) — this is the recall=1.0 ground
+  1. Open the baseline (`exact` preset) - this is the recall=1.0 ground
      truth for both ranking and score.
   2. Decode embeddings + canonical texts + chunk_ids out of the baseline.
   3. For each variant in {compressed, tiny, hybrid}, rebuild a .urna with
      the same corpus and the variant preset.
-  4. For N random queries (sampled from the corpus' own embeddings —
+  4. For N random queries (sampled from the corpus' own embeddings -
      deterministic given a seed):
        - exact (baseline) top-k
        - variant top-k (exact / ann / hybrid as appropriate)
@@ -27,8 +27,8 @@ real-query (mteb-style) ruler is gate-zero; see the ruler note in
 docs/CHANGELOG.
 
 Helpers live in private siblings:
-  `_baseline_decoder.py`  — section-table parser
-  `_bench_runner.py`      — percentile / build_variant / run_bench
+  `_baseline_decoder.py`  - section-table parser
+  `_bench_runner.py`      - percentile / build_variant / run_bench
 """
 
 from __future__ import annotations

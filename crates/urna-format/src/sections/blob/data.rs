@@ -2,8 +2,8 @@
 //! the 0x14 catalog.
 //!
 //! OPTIONAL and EXCLUDED from content_hash. The payload opens with an
-//! offset table PARALLEL to the blob_refs (0x14) record order — entry i
-//! describes where record i's bytes live — followed by the concatenated
+//! offset table PARALLEL to the blob_refs (0x14) record order - entry i
+//! describes where record i's bytes live - followed by the concatenated
 //! blob bytes. A record kept out-of-line (`inlined = false`) has a
 //! (0, 0) table entry. Offsets are relative to the first data byte, so
 //! the table can be decoded alone and the heavy bytes sliced lazily off

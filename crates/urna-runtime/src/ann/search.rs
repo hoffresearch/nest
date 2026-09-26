@@ -38,7 +38,7 @@ impl HnswIndex {
             .unwrap_or(&[])
     }
 
-    /// Search for the `ef` closest candidates to `q`. Returns ids only —
+    /// Search for the `ef` closest candidates to `q`. Returns ids only -
     /// the runtime reranks with the exact dot product to produce the
     /// final cosine score.
     pub fn search(&self, q: &[f32], ef: usize) -> Vec<usize> {
@@ -121,8 +121,8 @@ pub(super) fn layer_search(
 ) -> Vec<Candidate> {
     let mut scratch = store.scratch(dim);
     // BinaryHeap orderings:
-    //   `frontier` — min-heap by distance (closest first to expand).
-    //   `result`   — max-heap by distance (so we can prune the farthest).
+    //   `frontier` - min-heap by distance (closest first to expand).
+    //   `result`   - max-heap by distance (so we can prune the farthest).
     let mut frontier: BinaryHeap<ByDistAsc> = BinaryHeap::new();
     let mut result: BinaryHeap<ByDistDesc> = BinaryHeap::new();
 
