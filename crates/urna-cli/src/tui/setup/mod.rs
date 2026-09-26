@@ -61,7 +61,7 @@ pub fn uninstall() -> anyhow::Result<i32> {
 /// Runs the interactive installer; returns the exit code.
 fn interactive(opts: Opts) -> anyhow::Result<i32> {
     let (_, rows) = crossterm::terminal::size().unwrap_or((80, 24));
-    let height = rows.saturating_sub(2).clamp(12, 20);
+    let height = rows.saturating_sub(2).clamp(12, 22);
     let mut terminal = term::inline(height)?;
     let mut ui = ui::Ui::new(opts);
     let res = (|| -> anyhow::Result<i32> {

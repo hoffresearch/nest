@@ -118,7 +118,7 @@ pub fn human(bytes: u64) -> String {
 }
 
 pub fn render(buf: &mut Buffer, body: Rect, corpus: &Corpus, scroll: usize) {
-    let lw = (body.width * 2 / 5).clamp(30.min(body.width), 56);
+    let lw = (body.width * 9 / 20).clamp(30.min(body.width), 56);
     let left = Rect::new(body.x + 1, body.y, lw, body.height);
     let name = corpus
         .path
@@ -186,15 +186,25 @@ fn sections(buf: &mut Buffer, area: Rect, corpus: &Corpus, scroll: usize) {
         return;
     }
     let head = pal::faint();
+    // the name column is as wide as the longest name, so narrow panels keep
+    // room for the size bar.
+    let name_w = corpus
+        .sections
+        .iter()
+        .map(|s| s.name.len())
+        .max()
+        .unwrap_or(4)
+        .clamp(4, 24)
+        + 2;
     hud::spans(
         buf,
         inner.x,
         inner.y,
         &[
-            ("id    ", head),
-            ("name                     ", head),
-            ("encoding  ", head),
-            ("size", head),
+            ("id   ", head),
+            (&format!("{:<name_w$}", "name"), head),
+            ("encoding ", head),
+            ("     size", head),
         ],
         inner.width,
     );
@@ -207,8 +217,8 @@ fn sections(buf: &mut Buffer, area: Rect, corpus: &Corpus, scroll: usize) {
         .unwrap_or(1)
         .max(1) as f64;
     let start = scroll.min(corpus.sections.len().saturating_sub(rows));
-    let bar_x = inner.x + 52;
-    let bar_w = inner.right().saturating_sub(bar_x + 2);
+    let bar_x = inner.x + 5 + name_w as u16 + 9 + 9 + 2;
+    let bar_w = inner.right().saturating_sub(bar_x + 2).min(24);
     for (i, s) in corpus.sections.iter().skip(start).take(rows).enumerate() {
         let y = inner.y + 1 + i as u16;
         let share = (s.size as f64).ln_1p() / max.ln_1p();
@@ -217,14 +227,14 @@ fn sections(buf: &mut Buffer, area: Rect, corpus: &Corpus, scroll: usize) {
             inner.x,
             y,
             &[
-                (&format!("0x{:02x}  ", s.id), pal::dim()),
-                (&format!("{:<25}", s.name), Style::new().fg(pal::INK)),
-                (&format!("{:<10}", s.encoding), pal::accent()),
+                (&format!("0x{:02x} ", s.id), pal::dim()),
+                (&format!("{:<name_w$}", s.name), Style::new().fg(pal::INK)),
+                (&format!("{:<9}", s.encoding), pal::accent()),
                 (&format!("{:>9}", human(s.size)), pal::dim()),
             ],
             inner.width,
         );
-        if bar_w > 4 {
+        if bar_w >= 4 {
             hud::gauge(buf, bar_x, y, bar_w, share, pal::thermo(share as f32));
         }
     }

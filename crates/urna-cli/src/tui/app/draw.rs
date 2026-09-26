@@ -44,8 +44,10 @@ impl App {
                 ),
                 (None, None) => "no corpus open".into(),
             };
-            self.tab_hits = chrome::header(buf, area, self.tab, &right);
-            let body = Rect::new(area.x, area.y + 3, area.width, area.height - 4);
+            let (hits, mark) = chrome::header(buf, area, self.tab, &right);
+            self.tab_hits = hits;
+            let top = chrome::HEADER_ROWS + 1;
+            let body = Rect::new(area.x, area.y + top, area.width, area.height - top - 1);
             let footer = Rect::new(area.x, area.bottom() - 1, area.width, 1);
             chrome::footer(
                 buf,
@@ -103,6 +105,7 @@ impl App {
             if !self.booted {
                 self.booted = true;
                 self.fx.add_effect(fx::boot(area));
+                self.fx.add_unique_effect("mark", fx::shimmer(mark));
             }
             self.fx.process_effects(dt.into(), buf, area);
             pal::fit(buf, area, self.depth);
