@@ -47,11 +47,10 @@ urna-runtime = { path = "crates/urna-runtime", version = "0.5.0" }
 [workspace.metadata.dist]
 cargo-dist-version = "0.32.0"
 ci = ["github"]
-# npm ships the same release archive behind `npm i -g @urna/cli` (the
-# package fetches the binary on install; name set in crates/urna-cli).
+# npm ships the same release archive behind `npm i -g urna` (the package
+# fetches the binary on install; name set in crates/urna-cli).
 installers = ["homebrew", "npm"]
 tap = "hoffresearch/homebrew-urna"
-npm-scope = "@urna"
 targets = [
     "aarch64-apple-darwin",
     "x86_64-apple-darwin",
@@ -82,7 +81,7 @@ cargo-cyclonedx = true
 cargo-auditable = true
 plan-jobs = ["./tag-verify"]
 
-# build only the packages that ship (urna-cli). without it dist compiles the
+# build only the packages that ship (the `urna` cli crate). without it dist compiles the
 # whole workspace per target, and urna-python's cdylib cannot be built for
 # the musl targets, which failed the first 0.5.0 tag on both linux builds.
 precise-builds = true
@@ -96,12 +95,12 @@ github-build-setup = "../dist-build-setup.yml"
 # one-liner installer can lay it down under the data dir and a released
 # binary passes `urna doctor` with no network and no repo checkout.
 [[workspace.metadata.dist.extra-artifacts]]
+# the payload is built in dist's global job, which does not run
+# github-build-setup, so the build fetches the potion table itself.
 build = [
-    "python3",
-    "scripts/stage_embedder_payload.py",
-    "target/dist-payload",
-    "--tar",
-    "target/urna-embedder-payload.tar.gz",
+    "sh",
+    "-c",
+    "sh scripts/fetch_potion.sh && python3 scripts/stage_embedder_payload.py target/dist-payload --tar target/urna-embedder-payload.tar.gz",
 ]
 artifacts = [
     "target/urna-embedder-payload.tar.gz",

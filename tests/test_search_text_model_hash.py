@@ -29,7 +29,7 @@ import urna  # noqa: E402
 # Path to the release CLI binary.
 CLI = REPO / "target" / "release" / "urna"
 if not CLI.exists():
-    raise SystemExit("build the CLI first: cargo build --release -p urna-cli")
+    raise SystemExit("build the CLI first: cargo build --release -p urna")
 
 # A fake embedder script that ignores the model and returns a fixed
 # vector + a fingerprint chosen by an env var. Lets us simulate any

@@ -119,12 +119,12 @@ jobs:
           dirname "$(brew --prefix)/bin/urna" >> "$GITHUB_PATH"
       - name: install (npm)
         if: matrix.channel == 'npm'
-        run: npm install -g "@urna/cli@${TAG#v}"
+        run: npm install -g "urna@${TAG#v}"
       - name: install (cargo binstall)
         if: matrix.channel == 'binstall'
         run: |
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-          cargo binstall -y urna-cli --version "${TAG#v}"
+          cargo binstall -y urna --version "${TAG#v}"
 
       - name: the bare binary reports what is missing
         working-directory: ${{ runner.temp }}

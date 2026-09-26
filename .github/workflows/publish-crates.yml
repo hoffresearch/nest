@@ -4,7 +4,7 @@
 # signature check or the build never reaches crates.io.
 #
 # order matters (each crate depends on the one before it): urna-format,
-# urna-runtime, urna-cli. urna-python and forge-core are `publish = false`.
+# urna-runtime, urna (the cli). urna-python and forge-core are `publish = false`.
 # a crate whose version is already on crates.io is skipped, so re-running a
 # half-finished release picks up where it stopped instead of failing.
 #
@@ -40,8 +40,8 @@ jobs:
         run: |
           set -eu
           version=$(cargo metadata --no-deps --format-version 1 \
-            | jq -r '.packages[] | select(.name == "urna-cli") | .version')
-          for crate in urna-format urna-runtime urna-cli; do
+            | jq -r '.packages[] | select(.name == "urna") | .version')
+          for crate in urna-format urna-runtime urna; do
             if curl -sfA "$UA" "https://crates.io/api/v1/crates/$crate/$version" >/dev/null; then
               echo "$crate $version is already on crates.io, skipping"
               continue
