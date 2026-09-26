@@ -11,7 +11,7 @@ use ratatui::widgets::Widget;
 use ratatui_cheese::help::{Binding, Help, HelpStyles};
 
 use super::Tab;
-use crate::tui::{hud, pal};
+use crate::tui::{art, hud, pal};
 
 pub const TABS: [(Tab, &str); 4] = [
     (Tab::Home, "home"),
@@ -20,17 +20,22 @@ pub const TABS: [(Tab, &str); 4] = [
     (Tab::Health, "health"),
 ];
 
-/// Draws the header; returns the rect of each tab (mouse hit-testing).
-pub fn header(buf: &mut Buffer, area: Rect, active: Tab, right: &str) -> Vec<(Tab, Rect)> {
-    let y = area.y;
-    let mut x = hud::spans(
-        buf,
-        area.x + 1,
-        y,
-        &[("⣾⠃⠘⣷ ", pal::accent()), ("urna", pal::title())],
-        area.width,
-    );
-    x += 3;
+/// Rows the header takes (the three-row mark).
+pub const HEADER_ROWS: u16 = 3;
+
+/// Draws the header: the mark, `urna` and the open corpus on the first
+/// row, the tabs as pills on the second, a rule on the third. Returns the
+/// rect of each tab (mouse hit-testing) and the mark's rect.
+pub fn header(buf: &mut Buffer, area: Rect, active: Tab, right: &str) -> (Vec<(Tab, Rect)>, Rect) {
+    let mark = art::mark(buf, area.x + 2, area.y);
+    let tx = mark.right() + 2;
+    let title_end = hud::put(buf, tx, area.y, "urna", pal::title(), area.width);
+    let rw = right.chars().count() as u16;
+    if area.right() > title_end + rw + 3 {
+        hud::put(buf, area.right() - rw - 2, area.y, right, pal::dim(), rw);
+    }
+    let y = area.y + 1;
+    let mut x = tx.saturating_sub(1);
     let mut hits = Vec::new();
     for (tab, name) in TABS.iter() {
         let on = *tab == active;
@@ -41,18 +46,12 @@ pub fn header(buf: &mut Buffer, area: Rect, active: Tab, right: &str) -> Vec<(Ta
         }
         let rect = Rect::new(x, y, w, 1);
         if on {
+            let pill = Style::new()
+                .fg(pal::INK_HI)
+                .bg(pal::RAISED)
+                .add_modifier(Modifier::BOLD);
             hud::put(buf, x, y, "▐", Style::new().fg(pal::RAISED), 1);
-            hud::put(
-                buf,
-                x + 1,
-                y,
-                &label,
-                Style::new()
-                    .fg(pal::INK_HI)
-                    .bg(pal::RAISED)
-                    .add_modifier(Modifier::BOLD),
-                w,
-            );
+            hud::put(buf, x + 1, y, &label, pill, w);
             hud::put(buf, x + w - 1, y, "▌", Style::new().fg(pal::RAISED), 1);
         } else {
             hud::put(buf, x + 1, y, &label, pal::faint(), w);
@@ -60,14 +59,10 @@ pub fn header(buf: &mut Buffer, area: Rect, active: Tab, right: &str) -> Vec<(Ta
         hits.push((*tab, rect));
         x += w + 1;
     }
-    let rw = right.chars().count() as u16;
-    if area.right() > x + rw + 2 {
-        hud::put(buf, area.right() - rw - 1, y, right, pal::dim(), rw);
+    for cx in tx..area.right().saturating_sub(1) {
+        hud::put(buf, cx, area.y + 2, "─", Style::new().fg(pal::SURFACE), 1);
     }
-    for cx in area.x..area.right() {
-        hud::put(buf, cx, y + 1, "─", Style::new().fg(pal::SURFACE), 1);
-    }
-    hits
+    (hits, mark)
 }
 
 pub fn footer(buf: &mut Buffer, area: Rect, tab: Tab, has_corpus: bool, picking: bool) {
@@ -126,13 +121,15 @@ mod tests {
 
     #[test]
     fn header_reports_a_hit_rect_per_visible_tab() {
-        let area = Rect::new(0, 0, 100, 2);
+        let area = Rect::new(0, 0, 100, 3);
         let mut buf = Buffer::empty(area);
-        let hits = header(&mut buf, area, Tab::Ask, "corpus.urna · 1.3 KB");
+        let (hits, mark) = header(&mut buf, area, Tab::Ask, "corpus.urna · 1.3 KB");
         assert_eq!(hits.len(), 4);
+        assert_eq!(mark.height, HEADER_ROWS);
+        assert!(hits.iter().all(|(_, r)| r.y == 1 && r.x > mark.right()));
         // a narrow terminal drops tabs instead of overflowing.
-        let narrow = Rect::new(0, 0, 30, 2);
+        let narrow = Rect::new(0, 0, 30, 3);
         let mut nb = Buffer::empty(narrow);
-        assert!(header(&mut nb, narrow, Tab::Home, "x").len() < 4);
+        assert!(header(&mut nb, narrow, Tab::Home, "x").0.len() < 4);
     }
 }

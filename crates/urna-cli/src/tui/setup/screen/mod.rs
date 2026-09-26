@@ -20,7 +20,7 @@ use ratatui_cheese::help::{Binding, Help, HelpStyles};
 
 use super::ui::{Step, Ui};
 use crate::tui::hud::{self};
-use crate::tui::{fx, pal};
+use crate::tui::{art, fx, pal};
 
 pub fn draw(f: &mut Frame, ui: &mut Ui, dt: Duration) {
     let area = f.area();
@@ -37,8 +37,9 @@ pub fn draw(f: &mut Frame, ui: &mut Ui, dt: Duration) {
         );
         return;
     }
-    header(buf, area, ui);
-    let body = Rect::new(area.x, area.y + 1, area.width, area.height - 2);
+    let mark = header(buf, area, ui);
+    let top = header_rows(area);
+    let body = Rect::new(area.x, area.y + top, area.width, area.height - top - 1);
     footer(
         buf,
         Rect::new(area.x, area.bottom() - 1, area.width, 1),
@@ -53,6 +54,9 @@ pub fn draw(f: &mut Frame, ui: &mut Ui, dt: Duration) {
     }
     if ui.entered {
         ui.entered = false;
+        if let Some(r) = mark {
+            ui.fx.add_unique_effect("mark", fx::shimmer(r));
+        }
         if ui.step != Step::Splash {
             ui.fx.add_unique_effect("page", fx::page_in(body));
         }
@@ -65,23 +69,53 @@ pub fn draw(f: &mut Frame, ui: &mut Ui, dt: Duration) {
     pal::fit(buf, area, ui.depth);
 }
 
-fn header(buf: &mut Buffer, area: Rect, ui: &Ui) {
-    let y = area.y;
-    let x = hud::spans(
-        buf,
-        area.x + 1,
-        y,
-        &[("⣾⠃⠘⣷ ", pal::accent()), ("urna setup", pal::title())],
-        area.width,
-    );
+/// Rows the header takes: the three-row mark when the viewport can spare
+/// them, a single plain row on a short terminal.
+fn header_rows(area: Rect) -> u16 {
+    if area.height >= 20 { 3 } else { 1 }
+}
+
+/// The header: the mark, the title and the version, the stepper, a rule.
+/// Returns the mark's rect (the frame keeps it breathing).
+fn header(buf: &mut Buffer, area: Rect, ui: &Ui) -> Option<Rect> {
+    let v = format!("v{} ", env!("CARGO_PKG_VERSION"));
+    let vx = area.right().saturating_sub(v.len() as u16);
+    if header_rows(area) == 1 {
+        let x = hud::put(
+            buf,
+            area.x + 1,
+            area.y,
+            "urna setup",
+            pal::title(),
+            area.width,
+        );
+        let end = stepper(buf, x + 4, area.y, area.right(), ui.step);
+        if vx > end + 1 {
+            hud::put(buf, vx, area.y, &v, pal::faint(), v.len() as u16);
+        }
+        return None;
+    }
+    let mark = art::mark(buf, area.x + 2, area.y);
+    let tx = mark.right() + 2;
+    hud::put(buf, tx, area.y, "urna setup", pal::title(), area.width);
+    hud::put(buf, vx, area.y, &v, pal::faint(), v.len() as u16);
+    stepper(buf, tx, area.y + 1, area.right(), ui.step);
+    for x in tx..area.right().saturating_sub(1) {
+        hud::put(buf, x, area.y + 2, "─", Style::new().fg(pal::SURFACE), 1);
+    }
+    Some(mark)
+}
+
+/// `■ scan ── ● plan ── ○ install ── ○ verify` from x; returns where it ends.
+fn stepper(buf: &mut Buffer, x: u16, y: u16, right: u16, step: Step) -> u16 {
     let steps = [
         ("scan", Step::Scan),
         ("plan", Step::Plan),
         ("install", Step::Run),
         ("verify", Step::Done),
     ];
-    let at = steps.iter().position(|(_, s)| *s == ui.step);
-    let mut cx = x + 4;
+    let at = steps.iter().position(|(_, s)| *s == step);
+    let mut cx = x;
     for (i, (name, _)) in steps.iter().enumerate() {
         let (dot, st) = match at {
             Some(a) if i < a => ("■ ", pal::ok()),
@@ -98,17 +132,13 @@ fn header(buf: &mut Buffer, area: Rect, ui: &Ui) {
             cx,
             y,
             &[(dot, st), (name, label)],
-            area.right().saturating_sub(cx),
+            right.saturating_sub(cx),
         );
         if i + 1 < steps.len() {
             cx = hud::put(buf, cx + 1, y, "──", Style::new().fg(pal::LINE), 2) + 1;
         }
     }
-    let v = format!("v{} ", env!("CARGO_PKG_VERSION"));
-    let vx = area.right().saturating_sub(v.len() as u16);
-    if vx > cx + 1 {
-        hud::put(buf, vx, y, &v, pal::faint(), v.len() as u16);
-    }
+    cx
 }
 
 fn footer(buf: &mut Buffer, area: Rect, step: Step) {

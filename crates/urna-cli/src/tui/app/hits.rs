@@ -75,9 +75,13 @@ pub fn render(buf: &mut Buffer, body: Rect, ask: &mut Ask, spinner: &str) {
         .map(|a| a.score)
         .unwrap_or(1.0)
         .max(1e-6);
-    for (i, a) in ask.answers.iter().enumerate() {
-        let y = list.y + i as u16 * 2;
-        if y + 1 > list.bottom() {
+    // two rows per hit; the window scrolls so the selected hit stays in it.
+    let fits = ((list.height.saturating_sub(1)) / 2).max(1) as usize;
+    let first = ask.sel.saturating_sub(fits - 1);
+    for (i, a) in ask.answers.iter().enumerate().skip(first) {
+        let y = list.y + (i - first) as u16 * 2;
+        // a hit is two rows (text + score bar); both must clear the border.
+        if y + 1 >= list.bottom() {
             break;
         }
         let sel = i == ask.sel;
