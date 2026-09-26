@@ -92,7 +92,7 @@ else
     BASE="https://github.com/$REPO/releases/latest/download"
 fi
 
-ARCHIVE="urna-cli-$TARGET.tar.xz"
+ARCHIVE="urna-$TARGET.tar.xz"
 PAYLOAD="urna-embedder-payload.tar.gz"
 
 TMP="$(mktemp -d)"
@@ -125,7 +125,7 @@ say "urna-install: checksums verified"
 
 mkdir -p "$BIN_DIR" "$DATA_DIR"
 tar -xJf "$TMP/$ARCHIVE" -C "$TMP"
-cp "$TMP/urna-cli-$TARGET/urna" "$BIN_DIR/urna"
+cp "$TMP/urna-$TARGET/urna" "$BIN_DIR/urna"
 chmod +x "$BIN_DIR/urna"
 tar -xzf "$TMP/$PAYLOAD" -C "$DATA_DIR"
 

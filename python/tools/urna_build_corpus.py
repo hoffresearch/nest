@@ -210,7 +210,7 @@ def main():
     if URNA_BIN.exists():
         subprocess.run([str(URNA_BIN), "validate", str(out_path)], check=True)
     else:
-        print(f"   (skipped: {URNA_BIN} not found — run `cargo build --release -p urna-cli`)")
+        print(f"   (skipped: {URNA_BIN} not found — run `cargo build --release -p urna`)")
 
     _print_source_report(raw, sources, labels)
 

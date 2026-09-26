@@ -52,7 +52,7 @@ if ($env:URNA_RELEASE_BASE) {
     $Base = "https://github.com/$Repo/releases/latest/download"
 }
 
-$Archive = "urna-cli-$Target.zip"
+$Archive = "urna-$Target.zip"
 $Payload = "urna-embedder-payload.tar.gz"
 
 $Tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("urna-install-" + [System.IO.Path]::GetRandomFileName())
@@ -78,7 +78,7 @@ try {
     New-Item -ItemType Directory -Force $BinDir | Out-Null
     New-Item -ItemType Directory -Force $DataDir | Out-Null
     Expand-Archive -Force (Join-Path $Tmp $Archive) $Tmp
-    Copy-Item (Join-Path $Tmp "urna-cli-$Target\urna.exe") (Join-Path $BinDir "urna.exe")
+    Copy-Item (Join-Path $Tmp "urna-$Target\urna.exe") (Join-Path $BinDir "urna.exe")
     # the payload is a .tar.gz; tar ships with windows 10 1803+.
     tar -xzf (Join-Path $Tmp $Payload) -C $DataDir
 
