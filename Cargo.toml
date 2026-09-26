@@ -47,8 +47,11 @@ urna-runtime = { path = "crates/urna-runtime", version = "0.5.0" }
 [workspace.metadata.dist]
 cargo-dist-version = "0.32.0"
 ci = ["github"]
-# npm ships the same release archive behind `npm i -g urna` (the package
-# fetches the binary on install; name set in crates/urna-cli).
+# npm ships the same release archive behind `npm i -g @urna/cli` (the
+# package fetches the binary on install; name set in crates/urna-cli). npm
+# refuses the bare name `urna` (too similar to url, lerna, ora), so it lives
+# in the `urna` org.
+npm-scope = "@urna"
 installers = ["homebrew", "npm"]
 tap = "hoffresearch/homebrew-urna"
 targets = [
