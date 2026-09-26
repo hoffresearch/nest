@@ -87,6 +87,7 @@ python/                writer pipeline (builder.py), model fingerprint, query em
                        the model registry (model_registry + model_adapters + embed_st +
                        embed_st_worker) and the dual quality gate (quality_gate)
 tests/                 python test scripts (plain scripts, not pytest)
+assets/images/         the readme header, the social thumbs and the `urna setup` / `urna tui` screenshots
 docs/                  arc/ architecture pair, usage.md (with the install reference), CHANGELOG, SECURITY.md (with the data-governance posture)
 data/                  corpus_next.v1.urna (LFS demo corpus), measure/ regression baselines, demo/ sources
 scripts/               release_check.sh (the merge gate), pre-commit (PHI/data backstop hook),

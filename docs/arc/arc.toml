@@ -359,6 +359,12 @@ path = [
 summary = "same synthetic rows, same queries, same machine: urna exact / hybrid against usearch, hnswlib, sqlite-vec and lancedb on build time, bytes on disk, cold open + first query, warm p50/p99, recall@10 vs brute force, byte-identical rebuild, integrity check, citation stability across text re-encoding; every hnsw path at m=16 / ef_c=200 / ef=100"
 
 [[inventory.root]]
+path = "assets/images"
+kind = "directory"
+purpose = "every image the readme and the repo pages use: the header, the social thumbnails, and the `urna setup` / `urna tui` screenshots (docs/ keeps text only, plus sovereign-ai.png)"
+links = ["README.md"]
+
+[[inventory.root]]
 path = ".editorconfig"
 kind = "config"
 purpose = "editor defaults plus binary-safe .urna handling"
