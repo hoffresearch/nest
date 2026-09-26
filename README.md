@@ -36,7 +36,7 @@ Python only, no setup step needed:
 pip install "urna[embed]"
 ```
 
-Windows, docker, `cargo binstall` and how to verify a download are in the [install reference](https://github.com/hoffresearch/urna/blob/main/docs/usage.md#reference).
+Windows, docker, `cargo binstall` and how to verify a download are in the [install reference](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md#reference).
 
 ## In the terminal
 
@@ -76,7 +76,7 @@ urna cite examples/quickstart/out/quickstart.urna 'urna://sha256:1147b256.../sha
 urna validate examples/quickstart/out/quickstart.urna
 ```
 
-`ask` prints the answer with its citation, `retrieve` prints json for another program, `cite` turns a citation back into the stored text, and `validate` checks every hash. To build from your own rows, see [usage section 13](https://github.com/hoffresearch/urna/blob/main/docs/usage.md).
+`ask` prints the answer with its citation, `retrieve` prints json for another program, `cite` turns a citation back into the stored text, and `validate` checks every hash. To build from your own rows, see [usage section 13](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
 
 ## What the file guarantees
 
@@ -153,7 +153,7 @@ urna retrieve my_corpus.urna "can I use this offline" -k 5 --format jsonl
 urna build --spec corpus.toml --dry-run
 ```
 
-`build` reads one toml: the source (sqlite, csv, jsonl, an image dir), the media settings, and one or more embedding models from the registry (`potion`, `clip-vit-b32`, `siglip2`, `wemm-2b`, ...). Each model becomes a named vector space in the same file. The full spec is in [usage section 13](https://github.com/hoffresearch/urna/blob/main/docs/usage.md).
+`build` reads one toml: the source (sqlite, csv, jsonl, an image dir), the media settings, and one or more embedding models from the registry (`potion`, `clip-vit-b32`, `siglip2`, `wemm-2b`, ...). Each model becomes a named vector space in the same file. The full spec is in [usage section 13](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
 
 </details>
 
@@ -228,7 +228,7 @@ urna doctor
 | lancedb | 16.7 | 19.4 | 612 |
 | sqlite-vec | 19.8 | 24.8 | 50 |
 
-Both urna rows return recall@10 = 1.000. Urna's cold open includes checking every section hash before the first answer. Urna does not do updates, filters or concurrent writers. Method and the full table: [docs/benchmarks.md](https://github.com/hoffresearch/urna/blob/main/docs/benchmarks.md).
+Both urna rows return recall@10 = 1.000. Urna's cold open includes checking every section hash before the first answer. Urna does not do updates, filters or concurrent writers. Method and the full table: [docs/BENCH.md](https://github.com/hoffresearch/urna/blob/main/docs/BENCH.md).
 
 <details>
 <summary>Presets: size vs recall</summary>
@@ -242,7 +242,7 @@ Both urna rows return recall@10 = 1.000. Urna's cold open includes checking ever
 | `nano` | int4 | hnsw | 0.209 | 0.913 |
 | `hybrid` | float32 | hnsw + bm25 | 0.609 | 1.000 |
 
-Measured on a 30,725-chunk pt-br corpus. Recall here is rank stability under quantization, not real-query quality. Details in [usage section 6](https://github.com/hoffresearch/urna/blob/main/docs/usage.md).
+Measured on a 30,725-chunk pt-br corpus. Recall here is rank stability under quantization, not real-query quality. Details in [usage section 6](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
 
 </details>
 
@@ -261,11 +261,11 @@ Text-to-image hit@1 over every card: siglip2 0.750, wemm-2b 0.744, jina 0.336, c
 
 ## Reference
 
-- [docs/usage.md](https://github.com/hoffresearch/urna/blob/main/docs/usage.md): every verb, presets, models, builds, install channels
-- [docs/benchmarks.md](https://github.com/hoffresearch/urna/blob/main/docs/benchmarks.md): how the numbers were measured
+- [docs/USAGE.md](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md): every verb, presets, models, builds, install channels
+- [docs/BENCH.md](https://github.com/hoffresearch/urna/blob/main/docs/BENCH.md): how the numbers were measured
 - [docs/SECURITY.md](https://github.com/hoffresearch/urna/blob/main/docs/SECURITY.md): reporting, hardening, data governance
 - [docs/CHANGELOG](https://github.com/hoffresearch/urna/blob/main/docs/CHANGELOG): releases with measured numbers
-- [docs/arc/arc.toml](https://github.com/hoffresearch/urna/blob/main/docs/arc/arc.toml): the architecture map
+- [docs/arc/ARC.toml](https://github.com/hoffresearch/urna/blob/main/docs/arc/ARC.toml): the architecture map
 - [AGENTS.md](https://github.com/hoffresearch/urna/blob/main/.contracts/.agents/AGENTS.md): notes for contributors and agents
 
 The crates are `urna-format` (the container), `urna-runtime` (search), `urna` (the binary) and `urna-python` (the bridge).
