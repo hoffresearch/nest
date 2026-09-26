@@ -119,7 +119,7 @@ jobs:
           dirname "$(brew --prefix)/bin/urna" >> "$GITHUB_PATH"
       - name: install (npm)
         if: matrix.channel == 'npm'
-        run: npm install -g "urna@${TAG#v}"
+        run: npm install -g "@urna/cli@${TAG#v}"
       - name: install (cargo binstall)
         if: matrix.channel == 'binstall'
         run: |
