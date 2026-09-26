@@ -54,7 +54,7 @@ quadrantChart
     "sqlite-vec": [0.92, 0.76] radius: 5, color: #8E44AD
 ```
 
-The two urna points verify every byte before the first answer and return recall@10 = 1.000. Numbers per point: [docs/benchmarks.md](docs/benchmarks.md).
+The two urna points verify every byte before the first answer and return recall@10 = 1.000. Numbers per point: [docs/benchmarks.md](https://github.com/hoffresearch/urna/blob/main/docs/benchmarks.md).
 
 ## Sovereign, enforced by the format
 
@@ -69,32 +69,65 @@ Four properties, held by the bytes.
 
 ## Install
 
-```sh
-curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/scripts/install.sh | sh
-```
+Pick the channel you already use; each one gets the `urna` binary onto the machine.
+
+| Channel | Command | What it lays down |
+|---------|---------|-------------------|
+| macOS, linux | `curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/scripts/install.sh \| sh` | binary + offline embedder payload, both sha256-verified |
+| Windows | `irm https://raw.githubusercontent.com/hoffresearch/urna/main/scripts/install.ps1 \| iex` | binary + offline embedder payload |
+| Homebrew | `brew install hoffresearch/urna/urna` | binary |
+| npm | `npm install -g @urna/cli` | binary (fetched from the github release) |
+| crates.io | `cargo binstall urna-cli` or `cargo install urna-cli` | binary (prebuilt, or compiled) |
+| PyPI | `pip install "urna[embed]"` | python library + bundled potion table |
+
+Then, whatever the channel:
 
 ```sh
 urna setup
 ```
 
-`urna setup` is the installer every channel ends in: it lays down the offline embedder, builds a python env with numpy and tokenizers, and proves the result with the doctor checks, in an interactive screen (plain lines with `--yes`, or when there is no terminal). The package channels ship the binary alone and `urna setup` completes them:
+`urna setup` finishes the install. It lays down the offline embedder payload (the release that matches the binary's version, sha256 checked while it streams), builds a python env with numpy and tokenizers, and proves the result with the doctor checks. Interactive on a terminal, plain lines with `--yes` for scripts and CI. The binary links no network stack: the download goes through the system `curl`, and after setup nothing opens a socket.
 
 ```sh
-brew install hoffresearch/urna/urna && urna setup
+urna doctor       # re-check any time, offline; exit code names the failing layer
 ```
 
-```sh
-npm install -g @urna/cli && urna setup
-```
-
-```sh
-pip install "urna[embed]"     # python; offline embedding via the bundled potion table
-```
-
-Also windows (`install.ps1`), `cargo install urna-cli` (or `cargo binstall urna-cli`), docker. Artifacts carry sha256 + sigstore attestations. Channels, verification, offline notes, and the maintainer checklist: the reference section of [docs/usage.md](docs/usage.md#reference). The release channels serve from `v0.5.0` on; earlier versions carry no artifacts.
+The pypi wheel is self-contained: `pip install "urna[embed]"` already carries the potion table and the offline embedder, so the python surface needs no setup step.
 
 <details>
-<summary>Dev build (rust edition 2024, python 3.12+)</summary>
+<summary>As a rust library</summary>
+
+```toml
+[dependencies]
+urna-format = "0.5"    # the container: reader, writer, sections, hashes
+urna-runtime = "0.5"   # mmap open, simd, exact / hnsw / bm25 / graph search with exact rerank
+```
+
+</details>
+
+<details>
+<summary>Verify what you downloaded</summary>
+
+Every release artifact carries a sha256 file, sigstore keyless provenance and a cyclonedx sbom:
+
+```sh
+gh attestation verify urna-cli-x86_64-unknown-linux-musl.tar.xz --repo hoffresearch/urna
+```
+
+The binaries are built with `cargo auditable`, so `cargo audit bin $(which urna)` reads the dependency tree out of the executable. Every channel, the offline and air-gapped notes, and the maintainer checklist: [the install reference](https://github.com/hoffresearch/urna/blob/main/docs/usage.md#reference).
+
+</details>
+
+<details>
+<summary>Docker, and the dev build (rust edition 2024, python 3.12+)</summary>
+
+A static musl binary on `scratch`, the engine verbs only (no python inside):
+
+```sh
+docker build -f docker/Dockerfile -t urna .
+```
+
+From a checkout:
 
 ```sh
 cargo build --release --workspace
@@ -111,6 +144,38 @@ cp target/release/lib_urna.dylib python/_urna.so   # macOS
 ```sh
 cp target/release/lib_urna.so python/_urna.so      # linux
 ```
+
+</details>
+
+## In the terminal
+
+A bare `urna` on a terminal opens the explorer; `urna setup` is the installer above. Both are the same binary, drawn in the colors of [urna.dev](https://urna.dev).
+
+The installer: scan the machine, check the plan, install, verify. It shows where every byte goes before it writes one, and ends on the doctor checks:
+
+<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-setup.png" alt="urna setup: the verify step, every doctor check passing, and what to run next" width="100%">
+
+The explorer: open a `.urna`, read its manifest (with the verdict of the same checks `urna validate` runs) and its sections, ask it through the same offline embedder and model gate as `urna ask`, and run the health checks. Every hit shows its exact-rerank score, the stored text, and the `urna://` citation:
+
+```sh
+urna tui my_corpus.urna
+```
+
+<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-tui.png" alt="urna tui: the ask tab, hits with their exact-rerank score and the cited text of the selected hit" width="100%">
+
+<details>
+<summary>Keys, colors, exit codes</summary>
+
+| Key | Where | Action |
+|-----|-------|--------|
+| `tab` / `shift+tab`, click | everywhere | next / previous tab |
+| `o` (`ctrl+o` in ask) | everywhere | open a `.urna` |
+| `1`..`9` | home | open a `.urna` found in the working dir or one level below |
+| `enter`, `↑↓`, `pgup/pgdn` | ask | ask, pick a hit, scroll its text |
+| `s` | everywhere but ask | run `urna setup`, then come back with the same corpus open |
+| `q` (`ctrl+q` in ask) | everywhere | quit |
+
+Truecolor where the terminal has it, the nearest xterm-256 color elsewhere (Terminal.app, tmux without `Tc`), no color under `NO_COLOR` or in a pipe; `URNA_COLOR=truecolor|256|none` overrides. `urna setup` exits 0 when ready, 2 to 6 for a doctor check, 10 download, 11 checksum, 12 unpack, 13 python env, 14 a step this machine cannot run. `cargo install urna-cli --no-default-features` builds the cli without the terminal ui.
 
 </details>
 
@@ -148,14 +213,14 @@ urna cite examples/quickstart/out/quickstart.urna 'urna://sha256:1147b256.../sha
 urna validate examples/quickstart/out/quickstart.urna
 ```
 
-`ask` prints the paragraph and its citation; `retrieve` prints one json object per hit, and the `citation_id` in it is what `cite` takes. The same flow on the python surface, with the embedder visible, is `python examples/quickstart/quickstart.py` (below). To build your own corpus, point the spec at your rows: [docs/usage.md](docs/usage.md) section 13.
+`ask` prints the paragraph and its citation; `retrieve` prints one json object per hit, and the `citation_id` in it is what `cite` takes. The same flow on the python surface, with the embedder visible, is `python examples/quickstart/quickstart.py` (below). To build your own corpus, point the spec at your rows: [docs/usage.md](https://github.com/hoffresearch/urna/blob/main/docs/usage.md) section 13.
 
 ## CLI
 
 <details>
 <summary>One binary, two groups of verbs</summary>
 
-The engine takes a file and a vector and never runs python; the agent verbs take text or a build spec, shell out to the offline python embedder or the forge, and speak in cited answers. Every printed score is the exact-cosine rerank value.
+The engine verbs take a file and a vector and never run python; the agent verbs take text or a build spec, shell out to the offline python embedder or the forge, and speak in cited answers; `setup` and `tui` are the terminal ui (above). `urna --help` lists them in those three groups. Every printed score is the exact-cosine rerank value.
 
 </details>
 
@@ -186,7 +251,7 @@ Plan and dependency status without loading anything:
 urna build --spec corpus.toml --dry-run
 ```
 
-`build` takes one toml describing the source (sqlite query, csv/jsonl, image dir), the media (av1/avif/jxl, dedup, `crf="auto"` dual quality gate), and one or several embedding models from the registry (`potion`, `clip-vit-b32`, `siglip2`, `wemm-2b`, ...), each a named vector space in the same file. `ask`/`retrieve` embed offline and validate `model_hash` against the manifest. Contract and knobs, with a full worked spec: [docs/usage.md](docs/usage.md) section 13.
+`build` takes one toml describing the source (sqlite query, csv/jsonl, image dir), the media (av1/avif/jxl, dedup, `crf="auto"` dual quality gate), and one or several embedding models from the registry (`potion`, `clip-vit-b32`, `siglip2`, `wemm-2b`, ...), each a named vector space in the same file. `ask`/`retrieve` embed offline and validate `model_hash` against the manifest. Contract and knobs, with a full worked spec: [docs/usage.md](https://github.com/hoffresearch/urna/blob/main/docs/usage.md) section 13.
 
 </details>
 
@@ -281,29 +346,6 @@ Install health check, exit code per layer:
 ```sh
 urna doctor
 ```
-
-</details>
-
-<details>
-<summary>Terminal: the installer and the explorer</summary>
-
-The installer: scan, plan, install, verify. It downloads only through the system `curl` (the binary links no network stack), checks the payload's sha256 against the release, and never touches the binary itself. Exit codes: 0 ready, 2 to 6 a doctor check, 10 download, 11 checksum, 12 unpack, 13 python env, 14 a needed step blocked on this machine.
-
-```sh
-urna setup
-```
-
-<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-setup.png" alt="urna setup: the verify step, every doctor check passing, and what to run next" width="100%">
-
-The explorer: open a `.urna`, read its manifest and sections, ask it (the same offline embedder and model gate as `urna ask`), and run the health checks. A bare `urna` on a terminal opens it.
-
-```sh
-urna tui my_corpus.urna
-```
-
-<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-tui.png" alt="urna tui: the ask tab, hits with their exact-rerank score and the cited text of the selected hit" width="100%">
-
-Both follow the terminal: truecolor where it exists, the xterm-256 fallback elsewhere (Terminal.app), no color under `NO_COLOR` or in a pipe. `cargo install urna-cli --no-default-features` builds the engine-only cli without them.
 
 </details>
 
@@ -429,7 +471,7 @@ urna.build(..., preset="micro", mrl_dim=256)
 <details>
 <summary>Urna vs usearch, hnswlib, sqlite-vec, lancedb, and the preset ladder</summary>
 
-[docs/benchmarks.md](docs/benchmarks.md): urna against usearch, hnswlib, sqlite-vec and lancedb on the same 100,000 x 384 rows, same machine, same ruler. Urna hybrid answers at recall@10 = 1.000 with p50 0.72 ms (hnsw candidates, exact-cosine rerank), rebuilds byte-identically, and is the only store in the table that proves its own bytes; the price is a cold open of ~290 ms (every checksum is verified before the first query) and an hnsw build 2.1x slower than hnswlib single-threaded (was 2.4x before the build loop was tuned). The table also lists what urna does not do (updates, filters, concurrent writers).
+[docs/benchmarks.md](https://github.com/hoffresearch/urna/blob/main/docs/benchmarks.md): urna against usearch, hnswlib, sqlite-vec and lancedb on the same 100,000 x 384 rows, same machine, same ruler. Urna hybrid answers at recall@10 = 1.000 with p50 0.72 ms (hnsw candidates, exact-cosine rerank), rebuilds byte-identically, and is the only store in the table that proves its own bytes; the price is a cold open of ~290 ms (every checksum is verified before the first query) and an hnsw build 2.1x slower than hnswlib single-threaded (was 2.4x before the build loop was tuned). The table also lists what urna does not do (updates, filters, concurrent writers).
 
 <details>
 <summary>Preset ladder: size vs recall</summary>
@@ -658,7 +700,7 @@ What the benchmark put into urna: `${VAR}` in spec paths and the `retrieval` / `
 | `nano`       | zstd | int4        | yes | no   |     0.209  |   0.9130  |
 | `hybrid`     | zstd | float32     | yes | yes  |     0.609  |   1.0000  |
 
-Measured on a 30,725-chunk pt-br corpus (`data/measure/ladder.json`, gated in ci). The recall ruler is self-perturbation, so it reports rank stability under quantization, not real-query quality; sub-int8 scores are real cosine at the stored precision, disclosed on every result. Full honesty notes, the mrl curve, and the lever guide: [docs/usage.md](docs/usage.md) section 6.
+Measured on a 30,725-chunk pt-br corpus (`data/measure/ladder.json`, gated in ci). The recall ruler is self-perturbation, so it reports rank stability under quantization, not real-query quality; sub-int8 scores are real cosine at the stored precision, disclosed on every result. Full honesty notes, the mrl curve, and the lever guide: [docs/usage.md](https://github.com/hoffresearch/urna/blob/main/docs/usage.md) section 6.
 
 </details>
 
@@ -667,11 +709,11 @@ Measured on a 30,725-chunk pt-br corpus (`data/measure/ladder.json`, gated in ci
 <details>
 <summary>Docs</summary>
 
-- [docs/usage.md](docs/usage.md): every verb, presets, offline mode, model registry, declarative builds, compression levers, and the install reference (channels, verification, maintainer checklist)
-- [docs/benchmarks.md](docs/benchmarks.md): the competitor table, the charts, and how it was measured
-- [docs/SECURITY.md](docs/SECURITY.md): reporting, scope, hardening notes (denied lints, the mutation-fuzz harness, the nightly soak), and the data-governance posture for distributed `.urna` files
-- [docs/CHANGELOG](docs/CHANGELOG): releases and unreleased deltas, with measured numbers
-- [data/demo/Instructions.md](data/demo/Instructions.md): the pt-br demo corpus sources and rebuild
+- [docs/usage.md](https://github.com/hoffresearch/urna/blob/main/docs/usage.md): every verb, presets, offline mode, model registry, declarative builds, compression levers, and the install reference (channels, verification, maintainer checklist)
+- [docs/benchmarks.md](https://github.com/hoffresearch/urna/blob/main/docs/benchmarks.md): the competitor table, the charts, and how it was measured
+- [docs/SECURITY.md](https://github.com/hoffresearch/urna/blob/main/docs/SECURITY.md): reporting, scope, hardening notes (denied lints, the mutation-fuzz harness, the nightly soak), and the data-governance posture for distributed `.urna` files
+- [docs/CHANGELOG](https://github.com/hoffresearch/urna/blob/main/docs/CHANGELOG): releases and unreleased deltas, with measured numbers
+- [data/demo/Instructions.md](https://github.com/hoffresearch/urna/blob/main/data/demo/Instructions.md): the pt-br demo corpus sources and rebuild
 - [brennercruvinel/mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark): the image-corpus benchmark (38,627 card scans in single-file `.urna` containers): code, specs, corpora as id lists, results per experiment; the `.urna` artifacts are on the hugging face dataset of the same name. Private for now
 
 </details>
@@ -683,27 +725,27 @@ Python builds a deterministic container; a rust runtime mmaps it and answers exa
 
 - `urna-format`: frozen v1 container (layout, manifest, sections, encodings, hashes)
 - `urna-runtime`: mmap, simd dispatch, indices, search with mandatory exact rerank
-- `urna-cli`: the `urna` binary (engine verbs + `ask`/`retrieve` + declarative `build`)
+- `urna-cli`: the `urna` binary (engine verbs, `ask`/`retrieve`, declarative `build`, and the `setup` / `tui` terminal ui)
 - `urna-python`: pyo3 bridge (`urna.open`, `urna.build`, `UrnaFile.retrieve`)
 - `python/`: writer pipeline, model registry, offline embedders, forge tooling
 
-The full map (flows, contracts, inventory, and the visual sequence diagram) lives in [docs/arc/arc.toml](docs/arc/arc.toml).
+The full map (flows, contracts, inventory, and the visual sequence diagram) lives in [docs/arc/arc.toml](https://github.com/hoffresearch/urna/blob/main/docs/arc/arc.toml).
 
 </details>
 
 <details>
 <summary>Contracts</summary>
 
-- [.contracts/.agents/AGENTS.md](.contracts/.agents/AGENTS.md): the single instruction source for agents and contributors
+- [.contracts/.agents/AGENTS.md](https://github.com/hoffresearch/urna/blob/main/.contracts/.agents/AGENTS.md): the single instruction source for agents and contributors
 - `./scripts/release_check.sh`: the merge gate; it documents itself by being the gate
 - Binary format v1 is frozen; encodings 4-255 and section ids 0x09+ are reserved inside v1, and `content_hash` is excluded from every additive section
-- A malformed `.urna` that panics the runtime is a security bug: [docs/SECURITY.md](docs/SECURITY.md)
+- A malformed `.urna` that panics the runtime is a security bug: [docs/SECURITY.md](https://github.com/hoffresearch/urna/blob/main/docs/SECURITY.md)
 
 </details>
 
 ## License
 
-MIT, see [docs/LICENSE](docs/LICENSE). [Hoff Research](https://hoffresearch.com)
+MIT, see [docs/LICENSE](https://github.com/hoffresearch/urna/blob/main/docs/LICENSE). [Hoff Research](https://hoffresearch.com)
 
 Made it simple, but significant (∂μfμν = jν)
 
