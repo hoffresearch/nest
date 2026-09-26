@@ -48,8 +48,9 @@ jobs:
           - { os: windows-latest, target: x86_64-pc-windows-msvc }
     steps:
       - uses: actions/checkout@v6
-        with:
-          lfs: true # the wheel bundles the potion table (git-lfs)
+      - name: fetch the potion table the wheel bundles (verified against its lfs pointer)
+        shell: bash
+        run: sh scripts/fetch_potion.sh
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"

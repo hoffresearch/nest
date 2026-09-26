@@ -136,8 +136,9 @@ jobs:
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           fi
-      - name: "fetch git-lfs objects (potion table for the embedder payload)"
-        run: "git lfs install && git lfs pull"
+      - name: "fetch the potion table (embedder payload), verified against its lfs pointer"
+        run: "sh scripts/fetch_potion.sh"
+        shell: "bash"
       - name: Install dist
         run: ${{ matrix.install_dist.run }}
       # Get the dist-manifest
