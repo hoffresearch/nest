@@ -82,8 +82,13 @@ cargo-cyclonedx = true
 cargo-auditable = true
 plan-jobs = ["./tag-verify"]
 
-# the embedder payload stages the git-lfs potion table, so release builds
-# must fetch lfs objects first (checkout only pulls pointers by default).
+# build only the packages that ship (urna-cli). without it dist compiles the
+# whole workspace per target, and urna-python's cdylib cannot be built for
+# the musl targets, which failed the first 0.5.0 tag on both linux builds.
+precise-builds = true
+
+# the embedder payload stages the potion table; the build setup fetches it
+# from its upstream and checks it against the lfs pointer (no git-lfs).
 github-build-setup = "../dist-build-setup.yml"
 
 # the offline embedder payload (staged by scripts/stage_embedder_payload.py
