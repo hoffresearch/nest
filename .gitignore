@@ -18,7 +18,6 @@ wheels/
 .mypy_cache/
 .ruff_cache/
 .python-version
-data/demos/
 
 # Virtual environments
 .venv
@@ -37,22 +36,10 @@ Thumbs.db
 *~
 
 # Project specific
-# demo datasets are local-only and intentionally not tracked.
-data/demo/corpus-combined/
-data/demo/corpus-next/
-data/demo/factck-br/
-data/demo/Fake.br-Corpus/
-data/demo/FakeBr-hf/
-data/demo/FakeRecogna/
-data/demo/FakeTrue.Br/
-data/demo/FakeTrue.Br-hf/
-data/demo/portuguese-fake-news-classifier-bilstm-combined/
-data/demo/truw-built/
-
 # data/corpus_next.v1.urna remains tracked via Git LFS.
 # Per-phase preset .urna files (data/measure/corpus_*.urna) are
 # regeneration artifacts: re-derivable in minutes by measure_presets.py
-# from the LFS-tracked baseline. Do NOT commit them — they'd inflate the
+# from the LFS-tracked baseline. Do NOT commit them: they'd inflate the
 # LFS bandwidth quota every phase. We commit only the JSON checksums and
 # metrics next to them.
 data/measure/corpus_*.urna
@@ -62,16 +49,13 @@ data/measure/*.urna-*
 # Temporary workspace for agent sessions.
 tmp/
 
-# Dermatology demo datasets downloaded for local benchmarking.
-data/demo/derm/
-
 # Local symlink to external hoff database (not part of this repo)
 data/hoff.db
 
-# PHI / clinical artifacts — NEVER commit. clinical data lives OUTSIDE this repo
+# PHI / clinical artifacts: NEVER commit. clinical data lives OUTSIDE this repo
 # (e.g. /Volumes/<redacted>/dat/psy/work, which is NOT under any git repo). these
 # patterns are defense-in-depth so a misdirected --out into the repo tree can
-# never be staged or pushed by any auto-committer — INCLUDING a `git add -A`
+# never be staged or pushed by any auto-committer, INCLUDING a `git add -A`
 # from a `--no-verify` commit, which still honors .gitignore.
 #
 # Ignore ALL .urna by default (a PHI export with any name, not just cohort_*),
@@ -83,16 +67,14 @@ data/hoff.db
 !crates/urna-format/tests/fixtures/golden_v1_minimal.urna
 !data/measure/fakerecogna_exact.urna
 
+# demo datasets are local-only (data/demo/Instructions.md says how to fetch them).
 data/demo/*
 !data/demo/Instructions.md
 .env
 
 # wheel staging (scripts/stage_wheel.py output)
 packaging/staging/
-# mtg corpus artifacts (specs/scripts/results stay tracked)
-data/mtg/release/
-data/mtg/benchmark/sample-2048/runs/
-data/mtg/benchmark/sample-2048/iframe/samples/
+# mtg corpus artifacts (the benchmark lives in its own repository)
 data/mtg/
 
 # cargo-fuzz working state (seeds/ stays tracked)
