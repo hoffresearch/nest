@@ -1,5 +1,5 @@
 [package]
-name = "urna-cli"
+name = "urna"
 description = "sovereign embedded vector database: single-file .urna container with content-addressable citations, offline-first"
 version.workspace = true
 edition.workspace = true
@@ -20,7 +20,7 @@ workspace = true
 name = "urna"
 path = "src/main.rs"
 
-# cargo-binstall: `cargo binstall urna-cli` fetches the prebuilt binary from
+# cargo-binstall: `cargo binstall urna` fetches the prebuilt binary from
 # the github release instead of compiling (issue #75). names match the
 # cargo-dist archive layout; windows ships a .zip, everything else .tar.xz.
 [package.metadata.binstall]
@@ -29,11 +29,11 @@ pkg-fmt = "txz"
 [package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
 pkg-fmt = "zip"
 
-# channel names: npm `@urna/cli` (under the workspace `npm-scope`) and the
+# channel names: npm `urna` (unscoped) and the
 # homebrew formula `urna` (`brew install hoffresearch/urna/urna`); the binary
 # is `urna` in both.
 [package.metadata.dist]
-npm-package = "cli"
+npm-package = "urna"
 formula = "urna"
 
 [dependencies]
@@ -52,7 +52,7 @@ coolor = "1.1"
 
 # the terminal ui: `urna setup` (the interactive installer every channel
 # ends in) and `urna tui` (the corpus explorer). on by default so brew, npm,
-# crates.io and the tarballs ship the same binary; `cargo install urna-cli
+# crates.io and the tarballs ship the same binary; `cargo install urna
 # --no-default-features` builds the engine-only cli without any of it.
 # there is no http client here on purpose: `urna setup` downloads through the
 # system `curl`, so the binary itself never links a network stack.

@@ -218,7 +218,7 @@ mod tests {
             Channel::Homebrew
         );
         assert_eq!(
-            c("/usr/lib/node_modules/@urna/cli/node_modules/.bin_real/urna"),
+            c("/usr/lib/node_modules/urna/node_modules/.bin_real/urna"),
             Channel::Npm
         );
         assert_eq!(c("/home/u/.cargo/bin/urna"), Channel::Cargo);
