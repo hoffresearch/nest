@@ -361,7 +361,7 @@ summary = "same synthetic rows, same queries, same machine: urna exact / hybrid 
 [[inventory.root]]
 path = "assets/images"
 kind = "directory"
-purpose = "every image the readme and the repo pages use: the header, the social thumbnails, and the `urna setup` / `urna tui` screenshots (docs/ keeps text only, plus sovereign-ai.png)"
+purpose = "every image the readme and the repo pages use: the header (urna-hoff-research-db-iage-thumb-git.png), its social thumbnail variant, and the `urna setup` / `urna tui` screenshots; the readme links them by raw main url so crates.io and pypi render them too (docs/ keeps text only; sovereign-ai.png sits here unreferenced)"
 links = ["README.md"]
 
 [[inventory.root]]
