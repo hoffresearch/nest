@@ -14,8 +14,9 @@ yanked = "deny"
 ignore = []
 
 [licenses]
-# exactly the set present in the three lockfiles on 2026-09-10 (90 packages
-# in the workspace, 14 in forge-core, 56 in fuzz). every expression below
+# the set present in the three lockfiles, rechecked on 2026-09-26 when the
+# terminal ui (ratatui, tachyonfx) brought the workspace lock to 294 entries
+# (it was 128), with forge-core and fuzz unchanged; no new license entered. every expression below
 # resolves through one of these; `r-efi` (MIT OR Apache-2.0 OR LGPL) enters
 # through MIT, `libfuzzer-sys` ((MIT OR Apache-2.0) AND NCSA) needs NCSA.
 # adding a copyleft-only crate fails the check on purpose.
