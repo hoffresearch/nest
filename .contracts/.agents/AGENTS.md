@@ -5,7 +5,7 @@ operating notes for ai agents and human contributors working in this repo. the p
 # build and test
 
 - `cargo build --workspace` / `cargo build --release --workspace`
-- `cargo test --workspace`: all rust tests (unit + integration + golden), 434/434 on the current state (0.5.0, with the terminal ui) (`forge-core` adds 6 more on its own manifest)
+- `cargo test --workspace`: all rust tests (unit + integration + golden), 435/435 on the current state (0.5.0, with the terminal ui) (`forge-core` adds 6 more on its own manifest)
 - `cargo fmt --all --check`: formatting check
 - `cargo clippy --workspace --all-targets -- -D warnings`: linting (warnings are errors)
 - `ruff check .` / `ruff format --check .`: python linting and formatting (config in `pyproject.toml`)
@@ -66,7 +66,7 @@ crates/urna-format    frozen v1 container: layout, manifest, sections, encodings
 crates/urna-runtime   depends on urna-format: mmap open, SIMD dispatcher, MmapUrnaFile, ann::HnswIndex,
                        bm25::Bm25Index, graph::CsrIndex, exact/ann/graph/hybrid search with mandatory
                        exact rerank
-crates/urna-cli        depends on urna-format + urna-runtime: clap binary `urna`, twelve engine
+crates/urna-cli        published as the crate `urna`; depends on urna-format + urna-runtime: clap binary `urna`, twelve engine
                        subcommands in cmd/*.rs (incl media, search-space, doctor) + the three
                        agent verbs ask/retrieve/build in cmd/agent/*.rs; `--help` tags and orders
                        the two groups; the clap surface lives in cli.rs, the one three-layer
@@ -88,7 +88,7 @@ python/                writer pipeline (builder.py), model fingerprint, query em
                        embed_st_worker) and the dual quality gate (quality_gate)
 tests/                 python test scripts (plain scripts, not pytest)
 assets/images/         the readme header, the social thumbs and the `urna setup` / `urna tui` screenshots
-docs/                  arc/ architecture pair, USAGE.md (with the install reference), CHANGELOG, SECURITY.md (with the data-governance posture)
+docs/                  arc/ARC.toml (the one architecture file), USAGE.md, BENCH.md (with the install reference), CHANGELOG, SECURITY.md (with the data-governance posture)
 data/                  corpus_next.v1.urna (LFS demo corpus), measure/ regression baselines, demo/ sources
 scripts/               release_check.sh (the merge gate), pre-commit (PHI/data backstop hook),
                        install.sh / install.ps1, stage_wheel.py, stage_embedder_payload.py
