@@ -2419,6 +2419,15 @@ purpose = "potion self-test (numpy+tokenizers): semantic jump, determinism, f32-
 links = ["python/forge/embed_potion.py"]
 
 [[inventory.data_docs_python_scripts_tests]]
+path = "python/forge/test_embed_st.py"
+kind = "python-test"
+purpose = "manual st-backend self-test against the local wemm-2b snapshot: worker isolation, dim/norm contracts, model_hash stability, cross-modal sanity; skips without the deps or the snapshot, not run by release_check.sh (loads a 2b model)"
+links = [
+    "python/forge/embed_st.py",
+    "python/forge/embed_st_worker.py",
+]
+
+[[inventory.data_docs_python_scripts_tests]]
 path = "python/forge/recall_harness.py"
 kind = "python-tool"
 purpose = "side-by-side per-query recall of potion vs the lexical floor on demo_corpus"
