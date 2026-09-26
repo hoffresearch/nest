@@ -8,7 +8,7 @@ format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). version
 
 ## [0.5.0] - 2026-09-26
 
-the project is `urna` now, and the first tag the release pipeline serves: cli archives on the github release, the homebrew tap, npm `urna`, crates.io (`urna-format`, `urna-runtime`, `urna`) and the pypi wheel `urna`. no format change; a `.nest` from 0.4.0 still opens.
+the project is `urna` now, and the first tag the release pipeline serves: cli archives on the github release, the homebrew tap, npm `@urna/cli`, crates.io (`urna-format`, `urna-runtime`, `urna`) and the pypi wheel `urna`. no format change; a `.nest` from 0.4.0 still opens.
 
 ### added
 
