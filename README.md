@@ -15,11 +15,11 @@ brew install hoffresearch/urna/urna
 ```
 
 ```sh
-npm install -g @urna/cli
+npm install -g urna
 ```
 
 ```sh
-cargo install urna-cli
+cargo install urna
 ```
 
 ```sh
@@ -270,7 +270,7 @@ Text-to-image hit@1 over every card: siglip2 0.750, wemm-2b 0.744, jina 0.336, c
 - [docs/arc/arc.toml](https://github.com/hoffresearch/urna/blob/main/docs/arc/arc.toml): the architecture map
 - [AGENTS.md](https://github.com/hoffresearch/urna/blob/main/.contracts/.agents/AGENTS.md): notes for contributors and agents
 
-The crates are `urna-format` (the container), `urna-runtime` (search), `urna-cli` (the binary) and `urna-python` (the bridge).
+The crates are `urna-format` (the container), `urna-runtime` (search), `urna` (the binary) and `urna-python` (the bridge).
 
 ## License
 
