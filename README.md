@@ -267,7 +267,7 @@ Text-to-image hit@1 over every card: siglip2 0.750, wemm-2b 0.744, jina 0.336, c
 - [docs/CHANGELOG](https://github.com/hoffresearch/urna/blob/main/docs/CHANGELOG): releases with measured numbers
 - [docs/arc/arc.toml](https://github.com/hoffresearch/urna/blob/main/docs/arc/arc.toml): the architecture map
 - [AGENTS.md](https://github.com/hoffresearch/urna/blob/main/.contracts/.agents/AGENTS.md): notes for contributors and agents
-- 
+
 The crates are `urna-format` (the container), `urna-runtime` (search), `urna` (the binary) and `urna-python` (the bridge).
 
 > Renamed from `nest` after 0.4.0. A `.nest` file written by 0.4.0 still opens.
