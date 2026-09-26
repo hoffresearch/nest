@@ -138,6 +138,35 @@ mod tests {
     use ratatui::layout::Rect;
 
     #[test]
+    fn the_hit_list_scrolls_to_keep_the_selection_visible() {
+        let answers = (0..10)
+            .map(|i| Answer {
+                citation: format!("urna://c/{i}"),
+                source: "s".into(),
+                score: 1.0 - i as f32 / 10.0,
+                text: format!("hit number {i}"),
+            })
+            .collect();
+        let mut ask = Ask {
+            answers,
+            sel: 9,
+            ..Ask::default()
+        };
+        let area = Rect::new(0, 0, 100, 16);
+        let mut buf = Buffer::empty(area);
+        super::super::hits::render(&mut buf, area, &mut ask, "·");
+        let screen: String = (0..16)
+            .map(|y| {
+                (0..100)
+                    .map(|x| buf[(x, y)].symbol().to_string())
+                    .collect::<String>()
+            })
+            .collect();
+        assert!(screen.contains("hit number 9"));
+        assert!(!screen.contains("hit number 0"));
+    }
+
+    #[test]
     fn explain_points_at_setup_for_install_errors() {
         assert!(
             explain("embedder script not found: x (override with --embedder)").contains("setup")
