@@ -1,4 +1,4 @@
-![urna](https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-hoff-research-db.png)
+![urna: offline-first vector database, rust and python](https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-hoff-research-db-iage-thumb-git.png)
 
 # Urna
 
@@ -293,7 +293,7 @@ The installer: scan, plan, install, verify. It downloads only through the system
 urna setup
 ```
 
-<img src="assets/images/urna-setup.png" alt="urna setup: the verify step, every doctor check passing, and what to run next" width="100%">
+<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-setup.png" alt="urna setup: the verify step, every doctor check passing, and what to run next" width="100%">
 
 The explorer: open a `.urna`, read its manifest and sections, ask it (the same offline embedder and model gate as `urna ask`), and run the health checks. A bare `urna` on a terminal opens it.
 
@@ -301,7 +301,7 @@ The explorer: open a `.urna`, read its manifest and sections, ask it (the same o
 urna tui my_corpus.urna
 ```
 
-<img src="assets/images/urna-tui.png" alt="urna tui: the ask tab, hits with their exact-rerank score and the cited text of the selected hit" width="100%">
+<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-tui.png" alt="urna tui: the ask tab, hits with their exact-rerank score and the cited text of the selected hit" width="100%">
 
 Both follow the terminal: truecolor where it exists, the xterm-256 fallback elsewhere (Terminal.app), no color under `NO_COLOR` or in a pipe. `cargo install urna-cli --no-default-features` builds the engine-only cli without them.
 
