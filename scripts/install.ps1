@@ -77,8 +77,13 @@ try {
 
     New-Item -ItemType Directory -Force $BinDir | Out-Null
     New-Item -ItemType Directory -Force $DataDir | Out-Null
-    Expand-Archive -Force (Join-Path $Tmp $Archive) $Tmp
-    Copy-Item (Join-Path $Tmp "urna-$Target\urna.exe") (Join-Path $BinDir "urna.exe")
+    $Unzip = Join-Path $Tmp "unzip"
+    Expand-Archive -Force (Join-Path $Tmp $Archive) $Unzip
+    # dist's windows zip holds urna.exe at its root; older archives nested it
+    # under urna-<target>\. take whichever is there.
+    $Exe = Get-ChildItem -Path $Unzip -Recurse -Filter "urna.exe" | Select-Object -First 1
+    if (-not $Exe) { throw "urna-install: urna.exe not found in $Archive" }
+    Copy-Item $Exe.FullName (Join-Path $BinDir "urna.exe")
     # the payload is a .tar.gz; tar ships with windows 10 1803+.
     tar -xzf (Join-Path $Tmp $Payload) -C $DataDir
 
