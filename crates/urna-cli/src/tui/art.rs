@@ -44,6 +44,12 @@ pub const SYMBOL_M: [&str; 10] = [
     "   ⠙⠻⠿⣿⣿⣿⣿⣿⠿⠟⠋   ",
 ];
 
+/// 3 rows x 5 cols: the header mark. Too small for a straight raster (the
+/// horns vanish at 12 dots), so it is drawn dot by dot on the coverage
+/// the svg has at 10x12: the tips flaring out, the teardrop slit, the full
+/// round base.
+pub const MARK: [&str; 3] = [" ⣳ ⣞ ", "⣾⠃ ⠘⣷", "⠹⢷⣤⡾⠏"];
+
 /// 4 rows x 34 cols: the wordmark.
 pub const WORD: [&str; 4] = [
     "⣶⣶⣶⡆   ⢰⣶⣶⡆⢰⣶⣶⣶⣠⣶⣾⡇⣶⣶⣶⡆⣤⣶⣿⣿⣷⣦⡀  ⣶⣾⣿⣿⣿⣿⣷⣦⡀",
@@ -77,6 +83,12 @@ pub fn paint(buf: &mut Buffer, x: u16, y: u16, art: &[&str], from: Color, to: Co
     }
 }
 
+/// The header mark at (x, y) in the title gradient; returns its rect.
+pub fn mark(buf: &mut Buffer, x: u16, y: u16) -> Rect {
+    paint(buf, x, y, &MARK, pal::TITLE_FROM, pal::TITLE_TO);
+    Rect::new(x, y, width(&MARK), MARK.len() as u16).intersection(buf.area)
+}
+
 /// Paints art centered horizontally in `area`, starting at `area.y`.
 /// Returns the rect the art occupies (clipped to `area`).
 pub fn paint_centered(buf: &mut Buffer, area: Rect, art: &[&str]) -> Rect {
@@ -92,7 +104,7 @@ mod tests {
 
     #[test]
     fn every_row_of_an_art_has_the_same_width() {
-        for art in [&SYMBOL_L[..], &SYMBOL_M[..], &WORD[..]] {
+        for art in [&SYMBOL_L[..], &SYMBOL_M[..], &MARK[..], &WORD[..]] {
             let w = art[0].chars().count();
             assert!(art.iter().all(|l| l.chars().count() == w));
         }
