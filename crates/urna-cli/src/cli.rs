@@ -19,11 +19,12 @@ use crate::cmd;
 #[command(
     about = "urna: single-file, memory-mapped, hash-verified vector database with stable citations",
     long_about = None,
-    after_help = "start here (the five verbs that cover the loop):\n  build     creates the base       rows + embedding model in, one .urna out     urna build --spec corpus.toml\n  ask       queries it             text in, one cited answer out                urna ask corpus.urna \"question\"\n  retrieve  results for a program  json/jsonl of cited spans, exact score       urna retrieve corpus.urna \"question\" --format jsonl\n  cite      resolves the source    a urna:// citation back to its stored text   urna cite corpus.urna 'urna://...'\n  validate  proves the file        every checksum, every hash, the contract     urna validate corpus.urna\n\nverb groups:\n  engine  inspect, validate, stats, media, search, search-ann, search-graph,\n          search-space, search-text, benchmark, cite, doctor  (file + vector in, hits out; no python)\n  agent   ask, retrieve, build  (text or spec in, cited answers out; shells out to the offline python embedder / forge)\n\na corpus to try: examples/quickstart/ in the repo (urna build --spec examples/quickstart/corpus.toml)"
+    after_help = "start here (the five verbs that cover the loop):\n  build     creates the base       rows + embedding model in, one .urna out     urna build --spec corpus.toml\n  ask       queries it             text in, one cited answer out                urna ask corpus.urna \"question\"\n  retrieve  results for a program  json/jsonl of cited spans, exact score       urna retrieve corpus.urna \"question\" --format jsonl\n  cite      resolves the source    a urna:// citation back to its stored text   urna cite corpus.urna 'urna://...'\n  validate  proves the file        every checksum, every hash, the contract     urna validate corpus.urna\n\nverb groups:\n  engine  inspect, validate, stats, media, search, search-ann, search-graph,\n          search-space, search-text, benchmark, cite, doctor  (file + vector in, hits out; no python)\n  agent   ask, retrieve, build  (text or spec in, cited answers out; shells out to the offline python embedder / forge)\n  setup   setup, tui  (the installer every channel ends in, and the terminal explorer)\n\nfirst run: urna setup (a bare `urna` on a terminal opens the explorer)\na corpus to try: examples/quickstart/ in the repo (urna build --spec examples/quickstart/corpus.toml)"
 )]
 pub struct Cli {
+    /// none on a terminal opens `urna tui`; none in a pipe prints this help.
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -259,4 +260,35 @@ pub enum Commands {
     /// missing, 6 embedder run failed).
     #[command(display_order = 12)]
     Doctor,
+    /// [setup] Interactive installer: the offline embedder payload and a
+    /// python env (numpy + tokenizers), proven by the doctor checks. plain
+    /// output with --yes or without a terminal. exit: 0 ready, 2..=6 a doctor
+    /// check, 10 download, 11 checksum, 12 unpack, 13 python env, 14 blocked.
+    #[cfg(feature = "tui")]
+    #[command(display_order = 30)]
+    Setup {
+        /// Run the default plan with no questions (ci, scripts).
+        #[arg(long, short)]
+        yes: bool,
+        /// Release tag to fetch the payload from (default: this binary's).
+        #[arg(long)]
+        version: Option<String>,
+        /// Reinstall the payload even when one is present.
+        #[arg(long)]
+        force: bool,
+        /// Skip the embedder payload step.
+        #[arg(long)]
+        no_payload: bool,
+        /// Skip the python env step (bring your own via URNA_PYTHON).
+        #[arg(long)]
+        no_python: bool,
+        /// Remove the payload and the env setup created (never the binary).
+        #[arg(long, conflicts_with_all = ["force", "no_payload", "no_python", "version"])]
+        uninstall: bool,
+    },
+    /// [setup] Terminal explorer: open a .urna, read its sections, ask it,
+    /// check the install. what a bare `urna` opens on a terminal.
+    #[cfg(feature = "tui")]
+    #[command(display_order = 31)]
+    Tui { file: Option<PathBuf> },
 }

@@ -6,12 +6,17 @@ use clap::Parser;
 
 mod cli;
 mod cmd;
+#[cfg(feature = "tui")]
+mod tui;
 
 use cli::{Cli, Commands};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    match cli.command {
+    let Some(command) = cli.command else {
+        return no_command();
+    };
+    match command {
         Commands::Inspect { file, json } => cmd::inspect::run(file, json),
         Commands::Validate { file } => cmd::validate::run(file),
         Commands::Media { file, export } => cmd::media::run(file, export),
@@ -98,5 +103,42 @@ fn main() -> Result<()> {
             model_path,
         } => cmd::agent::retrieve::run(file, query, k, format, embedder, candidates, model_path),
         Commands::Doctor => cmd::doctor::run(),
+        #[cfg(feature = "tui")]
+        Commands::Setup {
+            yes,
+            version,
+            force,
+            no_payload,
+            no_python,
+            uninstall,
+        } => {
+            let code = if uninstall {
+                tui::setup::uninstall()?
+            } else {
+                tui::setup::run(tui::setup::Opts {
+                    yes,
+                    version,
+                    force,
+                    no_payload,
+                    no_python,
+                })?
+            };
+            std::process::exit(code)
+        }
+        #[cfg(feature = "tui")]
+        Commands::Tui { file } => std::process::exit(tui::app::run(file)?),
     }
+}
+
+/// A bare `urna`: the explorer when a person is at a terminal, the help
+/// (exit 2, as clap does for a missing subcommand) for scripts and pipes.
+fn no_command() -> Result<()> {
+    #[cfg(feature = "tui")]
+    if std::io::IsTerminal::is_terminal(&std::io::stdin())
+        && std::io::IsTerminal::is_terminal(&std::io::stdout())
+    {
+        std::process::exit(tui::app::run(None)?);
+    }
+    let _ = <Cli as clap::CommandFactory>::command().print_help();
+    std::process::exit(2);
 }

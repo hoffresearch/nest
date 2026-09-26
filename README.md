@@ -74,14 +74,24 @@ curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/scripts/insta
 ```
 
 ```sh
-urna doctor
+urna setup
+```
+
+`urna setup` is the installer every channel ends in: it lays down the offline embedder, builds a python env with numpy and tokenizers, and proves the result with the doctor checks, in an interactive screen (plain lines with `--yes`, or when there is no terminal). The package channels ship the binary alone and `urna setup` completes them:
+
+```sh
+brew install hoffresearch/urna/urna && urna setup
+```
+
+```sh
+npm install -g @urna/cli && urna setup
 ```
 
 ```sh
 pip install "urna[embed]"     # python; offline embedding via the bundled potion table
 ```
 
-Also windows (`install.ps1`), `brew install hoffresearch/urna/urna`, `npm install -g @urna/cli`, `cargo install urna-cli` (or `cargo binstall urna-cli`), docker. Artifacts carry sha256 + sigstore attestations. Channels, verification, offline notes, and the maintainer checklist: the reference section of [docs/usage.md](docs/usage.md#reference). The release channels serve from `v0.4.0` on; `v0.3.0` predates the pipeline and carries no artifacts.
+Also windows (`install.ps1`), `cargo install urna-cli` (or `cargo binstall urna-cli`), docker. Artifacts carry sha256 + sigstore attestations. Channels, verification, offline notes, and the maintainer checklist: the reference section of [docs/usage.md](docs/usage.md#reference). The release channels serve from `v0.5.0` on; earlier versions carry no artifacts.
 
 <details>
 <summary>Dev build (rust edition 2024, python 3.12+)</summary>
@@ -271,6 +281,29 @@ Install health check, exit code per layer:
 ```sh
 urna doctor
 ```
+
+</details>
+
+<details>
+<summary>Terminal: the installer and the explorer</summary>
+
+The installer: scan, plan, install, verify. It downloads only through the system `curl` (the binary links no network stack), checks the payload's sha256 against the release, and never touches the binary itself. Exit codes: 0 ready, 2 to 6 a doctor check, 10 download, 11 checksum, 12 unpack, 13 python env, 14 a needed step blocked on this machine.
+
+```sh
+urna setup
+```
+
+<img src="docs/urna-setup.png" alt="urna setup: the verify step, every doctor check passing, and what to run next" width="100%">
+
+The explorer: open a `.urna`, read its manifest and sections, ask it (the same offline embedder and model gate as `urna ask`), and run the health checks. A bare `urna` on a terminal opens it.
+
+```sh
+urna tui my_corpus.urna
+```
+
+<img src="docs/urna-tui.png" alt="urna tui: the ask tab, hits with their exact-rerank score and the cited text of the selected hit" width="100%">
+
+Both follow the terminal: truecolor where it exists, the xterm-256 fallback elsewhere (Terminal.app), no color under `NO_COLOR` or in a pipe. `cargo install urna-cli --no-default-features` builds the engine-only cli without them.
 
 </details>
 
