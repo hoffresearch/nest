@@ -4,7 +4,7 @@ jina-embeddings-v5-omni (RFC-3).
 Asymmetric contract: queries and documents go through DIFFERENT encode
 routes when the model provides them (`encode_query` / `encode_document`);
 the roles and the image prompt come from the preset's usage fields, spec-
-overridable, and all of it lives in the embedding_recipe_hash — never
+overridable, and all of it lives in the embedding_recipe_hash - never
 hidden in free-form kwargs.
 
 model_hash identifies THE MODEL: weights/tokenizer/processor fingerprint

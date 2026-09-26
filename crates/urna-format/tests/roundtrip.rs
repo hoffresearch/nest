@@ -209,7 +209,7 @@ fn truncated_file_rejected() {
     let res = UrnaView::from_bytes(&[0u8; 32]);
     assert!(matches!(res, Err(urna_format::UrnaError::FileTruncated)));
 
-    // Exactly header + footer worth of bytes is still not a valid file —
+    // Exactly header + footer worth of bytes is still not a valid file -
     // it has neither a section table nor a manifest, and the magic is
     // wrong, so the reader rejects with MagicMismatch first.
     let res = UrnaView::from_bytes(&[0u8; URNA_HEADER_SIZE + URNA_FOOTER_SIZE]);
@@ -486,7 +486,7 @@ fn missing_required_section_fails() {
     header.compute_checksum();
     buf[..URNA_HEADER_SIZE].copy_from_slice(header.as_bytes());
 
-    // chunk_ids missing — reader rejects.
+    // chunk_ids missing - reader rejects.
     let res = UrnaView::from_bytes(&buf).err();
     let kind = res.as_ref().map(|e| format!("{}", e)).unwrap_or_default();
     assert!(
@@ -602,7 +602,7 @@ fn padding_zeros_are_not_part_of_section_hash() {
     bytes[off] ^= 0xFF;
 
     // The footer hash covers everything pre-footer including the
-    // padding, so corruption is caught — but as a `FooterHashMismatch`,
+    // padding, so corruption is caught - but as a `FooterHashMismatch`,
     // not a section checksum mismatch.
     let res = UrnaView::from_bytes(&bytes);
     assert!(matches!(
@@ -680,7 +680,7 @@ fn reader_rejects_future_format_version() {
     }
 
     // Refresh section checksums for sections that may have shifted? They
-    // didn't shift — only manifest bytes changed. But footer hash covers
+    // didn't shift - only manifest bytes changed. But footer hash covers
     // the whole pre-footer payload, so recompute.
     let body_end = bytes.len() - URNA_FOOTER_SIZE;
     let len = bytes.len();

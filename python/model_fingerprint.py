@@ -1,7 +1,7 @@
 """Reproducible model fingerprint for sentence-transformers / HF models.
 
 The corpus' `model_hash` must uniquely identify the model that produced
-the embeddings — otherwise `urna search-text` could feed a query
+the embeddings - otherwise `urna search-text` could feed a query
 embedded by a *different* model and return cosine-valid garbage.
 
 A naive `sha256(model_dir)` is unstable: it pulls in cache files,
@@ -110,7 +110,7 @@ def compute_model_fingerprint(
     """Compute a reproducible fingerprint of a model snapshot directory.
 
     `model_dir` should be the local path of an unpacked HF / sentence-
-    transformers model — the same directory `SentenceTransformer` would
+    transformers model - the same directory `SentenceTransformer` would
     load. Missing files are tolerated (some models don't ship every
     relevant file); `RELEVANT_FILES` order is the canonical order.
 
@@ -185,7 +185,7 @@ def is_placeholder(model_hash: str) -> bool:
 
 def hf_cache_snapshot(model_id: str) -> Path | None:
     """Resolve the HF Hub cache snapshot dir for `model_id`, picking the
-    revision that `refs/main` points to — the one HF actually loads — rather
+    revision that `refs/main` points to - the one HF actually loads - rather
     than an arbitrary alphabetical snapshot.
 
     Returns `None` if the model is not cached, or if the loaded revision
@@ -227,7 +227,7 @@ def resolve_model_dir(model_name_or_path: str) -> Path:
          sentence-transformers compatibility).
 
     Raises `FileNotFoundError` with an actionable message if nothing
-    works — the caller should pass `--model-path` explicitly.
+    works - the caller should pass `--model-path` explicitly.
     """
     p = Path(model_name_or_path).expanduser()
     if p.is_dir():

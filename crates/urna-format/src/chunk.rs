@@ -2,7 +2,7 @@
 //!
 //! `chunk_id` is a deterministic SHA-256 over the canonical text plus the
 //! original location and the chunker version. The exact preimage is fixed
-//! by spec — anything else would let two runs of the same chunker produce
+//! by spec - anything else would let two runs of the same chunker produce
 //! different IDs for the same content, which breaks reproducibility.
 
 use crate::error::UrnaError;
@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 ///
 /// `embedding` must be a normalized f32 vector of the embedding dimension
 /// declared in the manifest. The writer validates dimensions and rejects
-/// NaN/Inf — callers do not get to pass garbage in.
+/// NaN/Inf - callers do not get to pass garbage in.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChunkInput {
     pub canonical_text: String,
@@ -24,7 +24,7 @@ pub struct ChunkInput {
 
 /// Compute the canonical chunk_id for the given inputs.
 ///
-/// Preimage layout (UTF-8, no separators ambiguity — all length-prefixed):
+/// Preimage layout (UTF-8, no separators ambiguity - all length-prefixed):
 ///
 /// ```text
 ///   "urna:chunk_id:v1\n"

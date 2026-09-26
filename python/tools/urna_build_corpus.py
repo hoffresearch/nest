@@ -1,4 +1,4 @@
-"""urna_build_corpus.py — build a deterministic .urna from the seven
+"""urna_build_corpus.py - build a deterministic .urna from the seven
 PT-BR fake-news datasets under `data/demo/`.
 
 Steps:
@@ -210,7 +210,7 @@ def main():
     if URNA_BIN.exists():
         subprocess.run([str(URNA_BIN), "validate", str(out_path)], check=True)
     else:
-        print(f"   (skipped: {URNA_BIN} not found — run `cargo build --release -p urna`)")
+        print(f"   (skipped: {URNA_BIN} not found - run `cargo build --release -p urna`)")
 
     _print_source_report(raw, sources, labels)
 

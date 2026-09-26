@@ -123,7 +123,7 @@ class _SubprocessSTAdapter:
     dynamic-module machinery (measured: jina's custom_st ends up wrapping
     wemm's weights); a worker per model is the isolation that actually holds,
     and closing the adapter returns the model's memory to the OS. Identity
-    (fingerprint/model_hash) is computed IN-PROCESS from the files alone —
+    (fingerprint/model_hash) is computed IN-PROCESS from the files alone -
     no model load needed for a warm-cache triad check.
     """
 

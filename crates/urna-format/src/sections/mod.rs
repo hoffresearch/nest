@@ -3,12 +3,12 @@
 //! Each non-binary section starts with a 12-byte header:
 //!
 //! ```text
-//! [0..4)   u32 version  (LE) — currently 1
-//! [4..12)  u64 count    (LE) — number of entries
+//! [0..4)   u32 version  (LE) - currently 1
+//! [4..12)  u64 count    (LE) - number of entries
 //! ```
 //!
 //! Then a payload that depends on the section. Embeddings use a different
-//! shape (no per-entry header — dim/count come from the file header).
+//! shape (no per-entry header - dim/count come from the file header).
 //!
 //! All multi-byte integers are little-endian. Strings are raw UTF-8 bytes
 //! prefixed by a u32 length (no NUL terminators).

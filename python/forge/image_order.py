@@ -50,7 +50,7 @@ def cluster_order(vectors: np.ndarray, threshold: float = 0.92) -> list[int]:
     whose centroid is most similar IF that similarity >= threshold (ties
     break to the LOWEST cluster index via argmax-first-occurrence), else it
     opens a new cluster. The emitted order concatenates clusters by (size
-    desc, first-ordinal asc), members in ordinal order — near-duplicates
+    desc, first-ordinal asc), members in ordinal order - near-duplicates
     become adjacent so per-segment inter coding has something to predict.
 
     O(n * n_clusters * d) time, O(n) memory. Callers cap n (~50k) with a

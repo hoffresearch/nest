@@ -1,10 +1,10 @@
 //! zstd compression for non-embedding sections. Embeddings are never
-//! zstd-compressed — they live in mmap and the runtime reads them via
+//! zstd-compressed - they live in mmap and the runtime reads them via
 //! SIMD straight from disk.
 
 use crate::error::UrnaError;
 
-/// Default zstd compression level. 19 is in the "high" tier — slow to
+/// Default zstd compression level. 19 is in the "high" tier - slow to
 /// encode but a one-time cost and yields ~30% smaller text payloads
 /// than the default level 3.
 pub const DEFAULT_ZSTD_LEVEL: i32 = 19;

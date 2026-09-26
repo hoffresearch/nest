@@ -5,7 +5,7 @@ collides in transformers' dynamic-module machinery (measured this session:
 jina's custom_st ends up wrapping wemm's weights and every image forward
 raises "You must specify exactly one of input_ids or inputs_embeds"; purging
 sys.modules is not enough). So each st_multimodal adapter owns a worker
-process with exactly one model — no collision, and the model's memory is
+process with exactly one model - no collision, and the model's memory is
 returned to the OS when the adapter closes.
 
 Protocol (parent = model_registry._SubprocessSTAdapter):
@@ -75,7 +75,7 @@ def main() -> int:
                 raise ValueError(f"unknown op {op}")
             np.savez(task["out"], vectors=vecs)
             print(f"ok {task['out']}", flush=True)
-        except Exception as e:  # noqa: BLE001 — the parent turns this into a typed error
+        except Exception as e:  # noqa: BLE001 - the parent turns this into a typed error
             print(f"err {type(e).__name__}: {e}", flush=True)
     return 0
 

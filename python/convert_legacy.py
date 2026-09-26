@@ -141,7 +141,7 @@ def convert(src: str, dst: str, *, reproducible: bool) -> None:
     }
 
     # resolve the model snapshot and compute a real fingerprint. We
-    # require the snapshot to be locally available — if it isn't, the
+    # require the snapshot to be locally available - if it isn't, the
     # caller can re-download it via `python -c "from sentence_transformers
     # import SentenceTransformer; SentenceTransformer('<id>')"`. The
     # placeholder zero-hash is no longer accepted by the manifest.

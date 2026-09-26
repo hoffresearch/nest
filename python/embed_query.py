@@ -4,7 +4,7 @@ the corpus was built with.
 Invoked by the Rust CLI's `urna search-text` subcommand. Stays in
 Python because (a) sentence-transformers is the same toolchain used at
 build time, so vectors are bit-identical (modulo float ops), and (b)
-keeping the CLI binary lean — no candle/onnxruntime dependency.
+keeping the CLI binary lean - no candle/onnxruntime dependency.
 
 Output: a single-line JSON document on stdout with the structured
 shape the CLI expects:
@@ -36,7 +36,7 @@ from pathlib import Path
 
 # Force HuggingFace/sentence-transformers OFFLINE by default, BEFORE the
 # (lazy) sentence_transformers import ever runs. A hostile or misconfigured
-# corpus model name must never trigger a hub download mid-run — especially
+# corpus model name must never trigger a hub download mid-run - especially
 # while the box is handling PHI (see the data governance section of
 # docs/SECURITY.md). Opt into the
 # first-time model fetch explicitly with URNA_ALLOW_DOWNLOAD=1.
@@ -78,7 +78,7 @@ def _resolve_local_path(model, fallback: str) -> str:
        points to a real directory (older sentence-transformers).
     3. Resolve the HF cache path
        (`~/.cache/huggingface/hub/models--<org>--<name>/snapshots/<rev>`)
-       — works for sentence-transformers v3+ which only stores the HF
+       - works for sentence-transformers v3+ which only stores the HF
        id in the config.
     """
     p = Path(fallback).expanduser()

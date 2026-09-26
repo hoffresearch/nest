@@ -15,7 +15,7 @@
 //!   catches a flipped byte after the fact, regardless of encoding.
 //! - **Different content yields different content_hash**: a corpus
 //!   where one chunk's canonical text is changed must produce a
-//!   different `content_hash` than the original — even though both
+//!   different `content_hash` than the original - even though both
 //!   files individually pass `validate()`.
 //!
 //! Together: physical and semantic guarantees are independent.

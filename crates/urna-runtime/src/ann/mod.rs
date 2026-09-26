@@ -13,17 +13,17 @@
 //!
 //! ```text
 //!   u32 LE  payload_version = 1
-//!   u32 LE  m                 — out-degree at non-zero levels
-//!   u32 LE  m_max0            — out-degree at level 0 (typically 2*m)
+//!   u32 LE  m                 - out-degree at non-zero levels
+//!   u32 LE  m_max0            - out-degree at level 0 (typically 2*m)
 //!   u32 LE  ef_construction
-//!   u32 LE  entry_point       — node id of the entry vertex
-//!   u32 LE  max_level         — highest layer with any node (0-based)
-//!   u32 LE  n_nodes           — equal to header.n_embeddings
+//!   u32 LE  entry_point       - node id of the entry vertex
+//!   u32 LE  max_level         - highest layer with any node (0-based)
+//!   u32 LE  n_nodes           - equal to header.n_embeddings
 //!   for each node i in 0..n_nodes:
-//!       u32 LE  level_i       — top layer this node lives in
+//!       u32 LE  level_i       - top layer this node lives in
 //!       for layer in 0..=level_i:
-//!           u32 LE  k_i_l     — neighbor count at this layer
-//!           u32 LE * k_i_l    — neighbor ids
+//!           u32 LE  k_i_l     - neighbor count at this layer
+//!           u32 LE * k_i_l    - neighbor ids
 //! ```
 //!
 //! Construction uses HNSW (Malkov & Yashunin, 2018) with a deterministic
@@ -52,7 +52,7 @@ pub const HNSW_PAYLOAD_VERSION: u32 = 2;
 /// flat enough that the default is fine.
 pub const DEFAULT_M: usize = 16;
 /// Default candidate-list size during construction. Larger = better
-/// recall, slower build. 400 is our chosen production default —
+/// recall, slower build. 400 is our chosen production default -
 /// empirically gives recall@10 ≥ 0.95 at typical corpus sizes
 /// (n ≤ 100k, dim ≤ 768) when paired with `ef_search ≥ 400`. Lower
 /// values save build time but require larger `ef_search` to match.
@@ -180,7 +180,7 @@ mod tests {
     #[test]
     fn small_index_recall_against_exact() {
         // 200 random vectors, dim 32. Recall@10 vs exact should be very
-        // high — small enough that the graph is fully connected.
+        // high - small enough that the graph is fully connected.
         let n = 200;
         let dim = 32;
         let vecs = random_vectors(n, dim, 0xDEAD_BEEF);
