@@ -90,24 +90,12 @@ fn installed_script(name: &str) -> PathBuf {
 
 /// One resolution ladder for every shipped python script: repo layout
 /// (`python/<subdir>/<name>` walking up from cwd, then beside the exe),
-/// then the installed data dir, then `<exe>/../share` (issue #75 layouts).
+/// then every data root in `paths::data_roots` (issue #75 layouts).
 pub(crate) fn installed_script_in(subdir: &str, name: &str) -> PathBuf {
     if let Some(p) = repo_script(&["python", subdir, name]) {
         return p;
     }
-    let data_home = std::env::var("XDG_DATA_HOME")
-        .ok()
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var("HOME")
-                .ok()
-                .map(|h| PathBuf::from(h).join(".local").join("share"))
-        });
-    let exe_share = std::env::current_exe()
-        .ok()
-        .and_then(|e| e.parent().map(|p| p.to_path_buf()))
-        .map(|bin| bin.join("..").join("share"));
-    for base in [data_home, exe_share].into_iter().flatten() {
+    for base in super::paths::data_roots() {
         let c = base.join("urna").join(subdir).join(name);
         if c.exists() {
             return c;

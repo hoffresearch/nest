@@ -60,6 +60,8 @@ jobs:
         run: cargo fmt --all --check
       - name: clippy (workspace deny lints)
         run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: clippy (engine-only cli, no terminal ui)
+        run: cargo clippy -p urna-cli --no-default-features --all-targets -- -D warnings
       - name: build
         run: cargo build --workspace --all-targets
       - name: test
@@ -82,6 +84,25 @@ jobs:
           cargo fmt --manifest-path forge-core/Cargo.toml --all --check
           cargo clippy --manifest-path forge-core/Cargo.toml --all-targets -- -D warnings
           cargo test --manifest-path forge-core/Cargo.toml
+
+  # the terminal ui (`urna setup`, `urna tui`) ships in the windows
+  # release archive too, and the rust job above never compiles for windows:
+  # this job is the only check of the crossterm/console path, the
+  # `Scripts\python.exe` venv layout and the `%LOCALAPPDATA%` data root
+  # before a tag. unit tests + the file:// setup end to end.
+  cli-windows:
+    name: cli windows (setup + tui)
+    if: github.event_name != 'schedule'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: toolchain
+        run: rustup toolchain install stable --profile minimal --component clippy && rustup default stable
+      - uses: Swatinem/rust-cache@v2
+      - name: clippy
+        run: cargo clippy -p urna-cli --all-targets -- -D warnings
+      - name: test (unit + setup end to end)
+        run: cargo test -p urna-cli --bins --test setup_e2e
 
   fuzz:
     name: cargo-fuzz smoke

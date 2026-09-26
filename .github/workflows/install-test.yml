@@ -2,8 +2,12 @@
 # the build. for every released platform this downloads the release
 # artifacts exactly the way a user does (one-liner installer against the
 # release download url), then runs `urna validate` on the golden fixture
-# and `urna doctor` with real numpy/tokenizers. a second job pip-installs
-# the published wheel and repeats validate + the uvx console entry point.
+# and `urna doctor` with real numpy/tokenizers. a second job installs the
+# binary through each package channel (homebrew, npm, cargo binstall),
+# which ships the bare binary, and proves `urna setup --yes` completes it:
+# payload from the tagged release, a python env built from a runner python
+# that has no numpy, then `urna doctor`. a third job pip-installs the
+# published wheel and repeats validate + the uvx console entry point.
 #
 # trigger: a published github release (created by the dist workflow), or
 # manual dispatch with a tag. if this fails, the release is broken for
@@ -56,22 +60,85 @@ jobs:
 
       - name: validate the golden fixture (unix)
         if: runner.os != 'Windows'
+        # from outside the checkout: in the repo the embedder resolves to
+        # python/forge first, whose potion table is an lfs pointer here.
+        working-directory: ${{ runner.temp }}
         env:
           URNA_PYTHON: python
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          urna validate crates/urna-format/tests/fixtures/golden_v1_minimal.urna
+          urna validate "$GITHUB_WORKSPACE/crates/urna-format/tests/fixtures/golden_v1_minimal.urna"
           urna doctor
 
       - name: validate the golden fixture (windows)
         if: runner.os == 'Windows'
         shell: pwsh
+        working-directory: ${{ runner.temp }}
         env:
           URNA_PYTHON: python
         run: |
           $env:PATH = "$HOME\.local\bin;$env:PATH"
-          urna validate crates\urna-format\tests\fixtures\golden_v1_minimal.urna
+          urna validate "$env:GITHUB_WORKSPACE\crates\urna-format\tests\fixtures\golden_v1_minimal.urna"
           urna doctor
+
+  channels:
+    name: ${{ matrix.channel }} ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { channel: homebrew, os: macos-latest }
+          - { channel: homebrew, os: ubuntu-24.04 }
+          - { channel: npm, os: ubuntu-24.04 }
+          - { channel: npm, os: macos-latest }
+          - { channel: npm, os: windows-latest }
+          - { channel: binstall, os: ubuntu-24.04 }
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6 # golden fixture
+      # a bare interpreter on purpose: setup must build the numpy +
+      # tokenizers env itself (pip path; uv is not on the runner).
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v5
+        if: matrix.channel == 'npm'
+        with:
+          node-version: "22"
+
+      - name: install (homebrew)
+        if: matrix.channel == 'homebrew'
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"; fi
+          brew install hoffresearch/urna/urna
+          dirname "$(brew --prefix)/bin/urna" >> "$GITHUB_PATH"
+      - name: install (npm)
+        if: matrix.channel == 'npm'
+        run: npm install -g "@urna/cli@${TAG#v}"
+      - name: install (cargo binstall)
+        if: matrix.channel == 'binstall'
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall -y urna-cli --version "${TAG#v}"
+
+      - name: the bare binary reports what is missing
+        working-directory: ${{ runner.temp }}
+        run: |
+          urna --version
+          urna doctor && exit 1 || echo "doctor fails before setup, as it should (exit $?)"
+      - name: urna setup completes the install
+        working-directory: ${{ runner.temp }}
+        run: urna setup --yes --version "$TAG"
+      - name: doctor and validate after setup
+        working-directory: ${{ runner.temp }}
+        run: |
+          urna doctor
+          urna validate "$GITHUB_WORKSPACE/crates/urna-format/tests/fixtures/golden_v1_minimal.urna"
 
   wheel:
     name: wheel ${{ matrix.os }}

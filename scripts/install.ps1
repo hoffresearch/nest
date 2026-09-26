@@ -87,7 +87,8 @@ try {
     if (-not ($env:PATH -split ";" -contains $BinDir)) {
         Write-Output "urna-install: note: $BinDir is not on your PATH"
     }
-    Write-Output "urna-install: run ``urna doctor`` to validate the install (offline)"
+    Write-Output "urna-install: next: ``urna setup`` builds the python env and runs the checks,"
+    Write-Output "urna-install:       then ``urna tui`` opens the explorer (``urna doctor`` re-checks, offline)"
 } finally {
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $Tmp
 }
