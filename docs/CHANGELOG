@@ -6,6 +6,10 @@ format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). version
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-26
+
+the same binaries as 0.5.0, republished so every registry page shows install commands that work: the 0.5.0 pages on crates.io and npm say `npm install -g urna`, the pypi page says `cargo install urna-cli`, and neither exists. it is also the first tag whose npm package ci publishes itself.
+
 ### changed
 
 - doc names in uppercase like the other top-level docs: `docs/BENCH.md` (was `benchmarks.md`), `docs/USAGE.md` (was `usage.md`), `docs/arc/ARC.toml` (was `arc.toml`). every live pointer follows; the entries below keep the names they had.
