@@ -1,100 +1,28 @@
 # urna
 
-concise context for llm coding agents working in this repository.
+> a vector database in one file, with citations that stay valid. a `.urna` file holds the chunks, the embeddings, the source spans, the indices and the search contract; a rust runtime maps it into memory, checks its hashes and answers offline with exact cosine scores and a `urna://content_hash/chunk_id` citation for every hit. python builds the file, rust serves it.
 
-## what this is
+install with `brew tap hoffresearch/urna && brew install urna`, `cargo install urna`, `npm install -g @urna/cli` or `pip install "urna[embed]"`, then run `urna setup` once. mit license, hoff research. source: https://github.com/hoffresearch/urna
 
-single-file sovereign vector database. the .urna file IS the database: chunks, embeddings, source spans, optional hnsw/bm25/graph indices, and a search contract in one mmap-friendly container. agents get cited, hash-verified answers fully offline: no server, no api call, no socket at query time.
+## docs
 
-## project snapshot
+- [readme](https://github.com/hoffresearch/urna/blob/main/README.md): what it is, install, the two terminal screens, quickstart, the python and cli surfaces, benchmarks
+- [usage](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md): every verb, `urna setup` and `urna tui`, presets, offline mode, citations, the model registry, declarative builds, the compression levers, every install channel and the maintainer checklist
+- [architecture](https://github.com/hoffresearch/urna/blob/main/docs/arc/ARC.toml): the single architecture reference, in toml: narrative, contracts, the file inventory and the mermaid map of the build and query flows
+- [benchmarks](https://github.com/hoffresearch/urna/blob/main/docs/BENCH.md): urna against usearch, hnswlib, sqlite-vec and lancedb on the same rows, same machine
+- [changelog](https://github.com/hoffresearch/urna/blob/main/docs/CHANGELOG): every release, with the why and the measured numbers
+- [security](https://github.com/hoffresearch/urna/blob/main/docs/SECURITY.md): reporting, supported versions, hardening, the data-governance posture
+- [contributing](https://github.com/hoffresearch/urna/blob/main/docs/CONTRIBUTING.md): the contribution flow, the gate, code style
 
-- language stack: rust workspace (format, runtime, cli, pyo3 bindings) + python tooling (builder, embedders, measurement).
-- architecture docs: docs/arc/ARC.toml (human and machine reference, plus the visual mermaid diagram in `diagram.source`). the single source of truth.
-- .contracts/.agents/AGENTS.md is the agent and contributor operating contract and the single agent instruction source; use/update/init only .contracts/.agents/AGENTS.md, no per-tool instruction files.
-- forge-core/ is a SEPARATE cargo workspace (ingestion layer, frozen .fci schema); not in the sovereign --workspace set, build it via --manifest-path forge-core/Cargo.toml.
+## code
 
-## flagship verbs (agent-native)
+- [crates](https://github.com/hoffresearch/urna/tree/main/crates): urna-format (the frozen v1 container), urna-runtime (mmap, simd, exact, hnsw, bm25, graph and hybrid search with exact rerank), urna-cli (the `urna` binary, published as the crate `urna`), urna-python (the pyo3 bridge, shipped as the `urna` wheel)
+- [python/forge](https://github.com/hoffresearch/urna/tree/main/python/forge): the offline embedders, the model registry, declarative builds, the media stage, the quality gate
+- [examples](https://github.com/hoffresearch/urna/tree/main/examples): quickstart (the five-verb loop on twelve cc0 paragraphs), fastapi, flask, jupyter
+- [agents contract](https://github.com/hoffresearch/urna/blob/main/.contracts/.agents/AGENTS.md): the one instruction source for ai coding agents and contributors
 
-text query in, cited answer out. offline by construction: the verbs embed with the vendored potion static table (numpy + tokenizers, no torch, no network) and validate the embedder's model_hash against the manifest.
+## optional
 
-- urna ask <file> "query" -k 3: prints the cited canonical text + a urna://content_hash/chunk_id citation. --disclose explain adds the rerank-source honesty line ("real cosine" vs "real cosine at stored precision").
-- urna retrieve <file> "query" -k 3 --format jsonl: json/jsonl answer-pack; every hit's score IS the exact-cosine rerank value, with the tier-1 stored canonical text + verifying hashes + the citation.
-
-engine subcommands (file + vector in, never run python): inspect, validate, stats, media, search, search-ann, search-graph, search-space, search-text, benchmark, cite, doctor. agent verbs (text or spec in, shell out to the offline python embedder / forge): ask, retrieve, build. `urna --help` groups them the same way; implementations live in crates/urna-cli/src/cmd/ (engine) and cmd/agent/ (agent). terminal ui (feature `tui`, default on, crates/urna-cli/src/tui/): setup (the interactive installer that completes brew / npm / cargo installs: embedder payload + python env + doctor checks; `--yes` for scripts) and tui (the corpus explorer; a bare `urna` on a terminal opens it).
-
-a corpus that builds from a clean checkout with no download: examples/quickstart/ (urna build --spec examples/quickstart/corpus.toml, then ask/retrieve/cite/validate on examples/quickstart/out/quickstart.urna; quickstart.py is the python twin).
-
-## install and terminal ui
-
-- channels: `brew tap hoffresearch/urna && brew install urna`, `cargo install urna`, `npm install -g @urna/cli`, `pip install "urna[embed]"`, scripts/install.sh / install.ps1. brew, npm and cargo lay down the bare binary; `urna setup` finishes the install (embedder payload + python env + doctor checks), `--yes` for scripts.
-- `urna tui [file]` (or a bare `urna` on a terminal) is the corpus explorer: manifest, validate verdict, sections, ask. source in crates/urna-cli/src/tui, behind the default-on `tui` feature.
-
-## python entry
-
-- sys.path.insert(0, "python"); import urna; db = urna.open(path)
-- db.retrieve(qvec, k=5) is the agent-native path: routes by manifest capability, score IS the exact rerank value, each hit carries the tier-1 text + the urna:// citation.
-
-## build and verification
-
-- cargo build --workspace
-- cargo build --release --workspace
-- cargo test --workspace
-- cargo fmt --all --check
-- cargo clippy --workspace --all-targets -- -D warnings
-- ./scripts/release_check.sh
-
-prefer release_check.sh before merge, it is the project gate; .github/workflows/ci.yml runs the same gate (minus the lfs corpus measurement) on every push and pull request, plus the mutation-fuzz harnesses and a cargo-fuzz smoke. forge-core carries its own gate: cargo test --manifest-path forge-core/Cargo.toml.
-- mutation fuzz: cargo test -p urna-format --test mutation_fuzz -p urna-runtime --test mutation_fuzz (URNA_MUTATION_ITERS scales it); coverage-guided targets in fuzz/ (cargo +nightly fuzz run <target>).
-
-## coding practices
-
-- rust edition 2024, resolver 3.
-- no panic in library code, use typed errors.
-- keep files small and single-responsibility.
-- preserve deterministic behavior for hashing and index builds.
-- unsafe: clippy denies undocumented unsafe blocks and unwrap() outside tests (workspace lints). urna-format has zero unsafe; the runtime's unsafe is the simd kernels and two mmap calls, each with a // SAFETY: comment. read fixed-width fields through urna_format::bytes, check header-derived sizes with checked arithmetic, write cursor bounds checks as need > remaining, sort f32 scores through urna_runtime::order.
-- keep markdown lowercase, no emoji, no em dash.
-- every change ships with real tests, no mocks, against real artifacts.
-
-## format and runtime invariants
-
-- format v1 is frozen; new sections and encodings are additive within v1.
-- hash format: sha256:<64 lowercase hex>.
-- content_hash must stay stable across non-semantic encodings.
-- search score contract is cosine with exact rerank for ann/graph/hybrid paths.
-
-## dataset policy
-
-- data/corpus_next.v1.urna is tracked with git lfs.
-- data/demo datasets are local-only and gitignored.
-- dataset fetch commands and provenance are documented in data/demo/Instructions.md.
-- the offline one-gif demo needs no datasets: python python/forge/retrieve.py.
-
-## branch and release flow
-
-- feature work happens on short-lived branches off main; every change reaches main through a pull request, squash-merged.
-- main requires pull requests, verified (ssh-signed) commits, and linear history; delete the branch after merge and start the next one from origin/main.
-- releases are tags on main (v*); the tag drives the release, pypi and install-test workflows (docs/USAGE.md, reference section).
-
-## do not
-
-- do not force-push main.
-- do not bypass release_check.sh.
-- do not bump URNA_FORMAT_VERSION for additive changes.
-- do not commit local demo datasets under data/demo.
-
-## references
-
-- README.md
-- .contracts/.agents/AGENTS.md (the single agent instruction source)
-- docs/CONTRIBUTING.md
-- docs/arc/ARC.toml
-- docs/USAGE.md
-- docs/BENCH.md
-- docs/CHANGELOG
-- https://github.com/brennercruvinel/mtg-urna-benchmark (the image-corpus benchmark: code, specs, corpora, results; the .urna artifacts on the hugging face dataset of the same name; private for now)
-
-made it simple, but significant.
-Hoff Research - hoffresearch.com
-Brenner Cruvinel.
-MIT.
+- [demo datasets](https://github.com/hoffresearch/urna/blob/main/data/demo/Instructions.md): the upstream pt-br sources and how the demo corpus is rebuilt
+- [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark): 38,627 magic card scans in single-file `.urna` containers, five image models; private for now
+- [urna.dev](https://urna.dev): the site

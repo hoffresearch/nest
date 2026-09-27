@@ -1,3 +1,11 @@
+---
+project: urna
+audience: contributors
+status: active
+last-updated: 2026-09-18
+domain: data
+---
+
 # demo corpus (license-clean)
 
 a tiny, vendored, permissively-licensed document folder for the flagship

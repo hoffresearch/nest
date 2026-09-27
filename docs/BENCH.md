@@ -1,3 +1,11 @@
+---
+project: urna
+audience: users evaluating urna against other stores
+status: active
+last-updated: 2026-09-10
+domain: benchmarks
+---
+
 # benchmarks
 
 measured 2026-09-10 on arm64 darwin 25.6.0, python 3.12.14, single thread, n=100,000 synthetic clustered l2-normalized rows x 384 dims (2000 centers), 200 queries, k=10, seed 7. reproduce: `.venv/bin/python python/tools/bench_competitors.py --n 100000 --dim 384 --queries 200`.

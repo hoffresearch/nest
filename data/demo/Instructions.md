@@ -1,3 +1,11 @@
+---
+project: urna
+audience: contributors rebuilding the demo corpus
+status: active
+last-updated: 2026-09-26
+domain: data
+---
+
 # demo
 
 raw and intermediate data used to build the truw corpus that ships with `urna`. each subdirectory is either a public PT-BR fake-news dataset (kept verbatim from its upstream distribution, license intact) or a derived artifact produced from those sources.

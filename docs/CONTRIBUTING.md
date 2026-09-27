@@ -1,3 +1,11 @@
+---
+project: urna
+audience: contributors
+status: active
+last-updated: 2026-09-27
+domain: contributing
+---
+
 # contributing
 
 `urna` is maintained by [hoff research](https://hoffresearch.com). author: brenner cruvinel ([brenner@hoffresearch.com](mailto:brenner@hoffresearch.com)). all contributions are welcome.

@@ -1,3 +1,11 @@
+---
+project: urna
+audience: contributors
+status: active
+last-updated: 2026-06-08
+domain: models
+---
+
 # vendored model: potion-base-8M
 
 a vendored, offline model2vec/potion static embedding table. it is the SEMANTIC

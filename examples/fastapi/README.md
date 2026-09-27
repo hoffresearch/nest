@@ -1,3 +1,11 @@
+---
+project: urna
+audience: integrators
+status: active
+last-updated: 2026-09-18
+domain: examples
+---
+
 # fastapi + urna example
 
 offline cited answers from a single-file corpus. the query is embedded with

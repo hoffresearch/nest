@@ -236,7 +236,26 @@ def main() -> None:
         "file; the table says nothing about workloads that need those."
     )
     tail = f"versions: {json.dumps(versions)}" + (f"; skipped: {skipped}" if skipped else "")
-    report = ["# benchmarks", "", header, "", markdown(results, meta), "", "how to read it:", ""]
+    front = [
+        "---",
+        "project: urna",
+        "audience: users evaluating urna against other stores",
+        "status: active",
+        f"last-updated: {meta['date']}",
+        "domain: benchmarks",
+        "---",
+        "",
+    ]
+    report = front + [
+        "# benchmarks",
+        "",
+        header,
+        "",
+        markdown(results, meta),
+        "",
+        "how to read it:",
+        "",
+    ]
     report += notes + ["", limits, "", tail]
     text = "\n".join(report) + "\n"
     if args.out:
