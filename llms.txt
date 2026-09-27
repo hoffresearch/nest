@@ -9,7 +9,7 @@ single-file sovereign vector database. the .urna file IS the database: chunks, e
 ## project snapshot
 
 - language stack: rust workspace (format, runtime, cli, pyo3 bindings) + python tooling (builder, embedders, measurement).
-- architecture docs: docs/arc/arc.toml (human and machine reference, plus the visual mermaid diagram in `diagram.source`). the single source of truth.
+- architecture docs: docs/arc/ARC.toml (human and machine reference, plus the visual mermaid diagram in `diagram.source`). the single source of truth.
 - .contracts/.agents/AGENTS.md is the agent and contributor operating contract and the single agent instruction source; use/update/init only .contracts/.agents/AGENTS.md, no per-tool instruction files.
 - forge-core/ is a SEPARATE cargo workspace (ingestion layer, frozen .fci schema); not in the sovereign --workspace set, build it via --manifest-path forge-core/Cargo.toml.
 
@@ -69,7 +69,7 @@ prefer release_check.sh before merge, it is the project gate; .github/workflows/
 
 - feature work happens on short-lived branches off main; every change reaches main through a pull request, squash-merged.
 - main requires pull requests, verified (ssh-signed) commits, and linear history; delete the branch after merge and start the next one from origin/main.
-- releases are tags on main (v*); the tag drives the release, pypi and install-test workflows (docs/usage.md, reference section).
+- releases are tags on main (v*); the tag drives the release, pypi and install-test workflows (docs/USAGE.md, reference section).
 
 ## do not
 
@@ -83,9 +83,9 @@ prefer release_check.sh before merge, it is the project gate; .github/workflows/
 - README.md
 - .contracts/.agents/AGENTS.md (the single agent instruction source)
 - docs/CONTRIBUTING.md
-- docs/arc/arc.toml
-- docs/usage.md
-- docs/benchmarks.md
+- docs/arc/ARC.toml
+- docs/USAGE.md
+- docs/BENCH.md
 - docs/CHANGELOG
 - https://github.com/brennercruvinel/mtg-urna-benchmark (the image-corpus benchmark: code, specs, corpora, results; the .urna artifacts on the hugging face dataset of the same name; private for now)
 

@@ -63,7 +63,7 @@ rebuild the benchmark (the control index is not optional: the compressed numbers
     --index tmp/ph2/ph2.urna --baseline tmp/ph2-control/ph2-control.urna -k 1 5 10
 ```
 
-the full variant matrix (av1 crf ladder, avif444, control, dtype rungs, ordering) is one command per dataset with `python/tools/urna_image_sweep.py`; see `docs/usage.md` for the flags and `docs/CHANGELOG` for the measured matrix with confidence intervals.
+the full variant matrix (av1 crf ladder, avif444, control, dtype rungs, ordering) is one command per dataset with `python/tools/urna_image_sweep.py`; see `docs/USAGE.md` for the flags and `docs/CHANGELOG` for the measured matrix with confidence intervals.
 
 ## offline demo (no downloads)
 
