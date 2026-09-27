@@ -30,7 +30,7 @@ pkg-fmt = "txz"
 pkg-fmt = "zip"
 
 # channel names: npm `@urna/cli` (under the workspace `npm-scope`) and the
-# homebrew formula `urna` (`brew install hoffresearch/urna/urna`); the binary
+# homebrew formula `urna` (`brew tap hoffresearch/urna && brew install urna`); the binary
 # is `urna` in both.
 [package.metadata.dist]
 npm-package = "cli"
