@@ -11,6 +11,8 @@ format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). version
 - doc names in uppercase like the other top-level docs: `docs/BENCH.md` (was `benchmarks.md`), `docs/USAGE.md` (was `usage.md`), `docs/arc/ARC.toml` (was `arc.toml`). every live pointer follows; the entries below keep the names they had.
 - npm is `@urna/cli` in the config again: npm refused the bare `urna` (below), so `npm-scope` / `npm-package` point at the name 0.5.0 actually shipped under, and the next tag publishes it from ci.
 - `install-test.yml` runs the x86_64 mac leg on `macos-15-intel`: github retired the `macos-13` runners and that job queued forever.
+- `pillow` joins the `forge` dependency group in `pyproject.toml`: the image paths and the forge tests import it, and it was installed by hand.
+- the release lessons of 0.5.0 are written down: item 11 of the maintainer checklist in `docs/USAGE.md` (lfs, dist, moving a tag, the pypi run, npm naming, runner labels) and new gotchas in AGENTS.md (case-only renames, `git grep -l` for replaces, the macOS exit 137, verifying a signed tag).
 
 ### fixed
 
