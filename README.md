@@ -9,7 +9,8 @@ A `.urna` file holds the chunks, the embeddings, the source spans, the indices a
 ## Install
 
 ```sh
-brew install hoffresearch/urna/urna
+brew tap hoffresearch/urna
+brew install urna
 ```
 
 ```sh

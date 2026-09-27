@@ -26,7 +26,7 @@ a corpus that builds from a clean checkout with no download: examples/quickstart
 
 ## install and terminal ui
 
-- channels: `brew install hoffresearch/urna/urna`, `cargo install urna`, `npm install -g @urna/cli`, `pip install "urna[embed]"`, scripts/install.sh / install.ps1. brew, npm and cargo lay down the bare binary; `urna setup` finishes the install (embedder payload + python env + doctor checks), `--yes` for scripts.
+- channels: `brew tap hoffresearch/urna && brew install urna`, `cargo install urna`, `npm install -g @urna/cli`, `pip install "urna[embed]"`, scripts/install.sh / install.ps1. brew, npm and cargo lay down the bare binary; `urna setup` finishes the install (embedder payload + python env + doctor checks), `--yes` for scripts.
 - `urna tui [file]` (or a bare `urna` on a terminal) is the corpus explorer: manifest, validate verdict, sections, ask. source in crates/urna-cli/src/tui, behind the default-on `tui` feature.
 
 ## python entry
