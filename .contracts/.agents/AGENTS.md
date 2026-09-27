@@ -165,6 +165,8 @@ every file created or modified in a session that exceeds 333 lines must be read 
 
 # audit when finishing a task
 
+every change ends by bringing the docs it touches up to date, in place: run `.contracts/.agents/.skills/AFTERWORK.md` before the pull request. it lists which file owns what (changelog, ARC.toml, this file, tests, readme, usage, examples, format fixtures, packaging, workflows, security) and where a lesson goes. history belongs in `docs/CHANGELOG`, the commit and the pr body, never as "changed x to y" notes in the docs themselves.
+
 run a full audit over every change made in the session, no summarizing, from devops, code quality, and secops angles. write a temporary manifest in markdown under your tmp folder to track tasks executed.
 
 identify every trace of dead code, generated scripts and files no longer useful, items needing update, and items to be moved to the correct location per architecture and design pattern. if the project lacks documented conventions, create them: design notes in `docs/CHANGELOG` for architectural decisions, `.editorconfig` for stack-agnostic base formatting, and an idiomatic linter config per language used.
@@ -237,6 +239,8 @@ these are documented honest limitations of the current code, not bugs to silentl
 - `docs/SECURITY.md`: reporting channel, supported versions, security scope, hardening notes, and the data-governance posture (cleartext datastore, erasure and rectification, provenance as a compliance asset, corpus licensing).
 - `docs/LICENSE`: mit license text.
 - `scripts/release_check.sh`: read it. it documents the gate by being the gate.
+- `.contracts/.agents/.skills/AFTERWORK.md`: the end-of-task walk over every file a change owns.
+- `.github/pull_request_template.md`: the same walk as checkboxes on every pull request.
 
 # agent instructions
 
