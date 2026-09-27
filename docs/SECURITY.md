@@ -1,3 +1,11 @@
+---
+project: urna
+audience: users and security researchers
+status: active
+last-updated: 2026-09-26
+domain: security
+---
+
 # security
 
 `urna` is maintained by [hoff research](https://hoffresearch.com). author: brenner cruvinel.

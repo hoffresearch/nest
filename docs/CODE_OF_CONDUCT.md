@@ -1,3 +1,11 @@
+---
+project: urna
+audience: contributors
+status: active
+last-updated: 2026-09-22
+domain: community
+---
+
 # code of conduct
 
 `urna` is maintained by hoff research. anyone is welcome to use it, contribute, or open issues.

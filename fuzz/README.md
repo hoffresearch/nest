@@ -1,3 +1,11 @@
+---
+project: urna
+audience: contributors
+status: active
+last-updated: 2026-09-22
+domain: fuzzing
+---
+
 # fuzzing
 
 coverage-guided fuzzing of every byte-level entry point in `urna-format` and
