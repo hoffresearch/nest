@@ -38,9 +38,14 @@ secrets live in the github repository secrets (`CARGO_REGISTRY_TOKEN`, `NPM_TOKE
 - `cargo build --workspace`, `cargo build --release --workspace`
 - `cargo test --workspace`: every rust test (unit, integration, golden); the count it prints is the one `docs/CHANGELOG` cites
 - `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings` (warnings are errors)
+- `cargo clippy -p urna --no-default-features --all-targets -- -D warnings`: the engine-only cli, without the terminal ui, has to stay clean too; ci runs both
+- `cargo deny check`: advisories, licenses (the allowlist in `deny.toml`), bans and sources over the lockfile. a yanked crate, a copyleft-only license or a git dependency fails ci; the same policy file covers the other two workspaces with `--manifest-path forge-core/Cargo.toml` and `--manifest-path fuzz/Cargo.toml`
+- `cargo semver-checks -p urna-format --baseline-rev origin/main`: the rust api of the frozen format against the pull request's base; ci fails a pull request that breaks it (in 0.x a minor bump is the major bump)
+- `cargo bench -p urna-runtime --no-run`: the criterion benches (simd, rerank, hnsw_build) have to compile; ci checks that, the numbers are not a gate
 - `sh scripts/ruff_check.sh`: ruff over the one python file list shared with ci (`URNA_PYTHON=.venv/bin/python` picks the interpreter)
-- `./scripts/release_check.sh`: the full pipeline plus the regression gates against `data/measure/baseline.json`; exits non-zero on any failure. it is the definition of pull-request ready
+- `./scripts/release_check.sh`: the full pipeline (the rust suite in release, the extension rebuilt, eight python suites, ruff when importable) plus the regression gates against `data/measure/baseline.json`; exits non-zero on any failure. it is the definition of pull-request ready
 - `forge-core/` is a separate cargo workspace outside `crates/` (the ingestion layer, the frozen `.fci` schema). `--workspace` and `release_check.sh` never reach it; run `cargo build`, `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --all --check` with `--manifest-path forge-core/Cargo.toml`
+- `fuzz/` is the third cargo workspace (cargo-fuzz, nightly toolchain): `sh scripts/fuzz_soak.sh [seconds]` runs every target with the corpus kept under `fuzz/corpus/`; `fuzz/README.md` has the targets and how a finding becomes a test
 
 single targets:
 
@@ -70,6 +75,8 @@ python scripts/stage_wheel.py
 
 `packaging/pyproject.toml` is the one source of the wheel project. the staging script copies it plus `python/urna.py` (as `urna/__init__.py`), `python/urna_cli.py` (as `urna/_cli.py`), `python/forge/embed_potion.py` and the potion table. abi3, python 3.12 and up.
 
+the wheel installs its own console script named `urna` (`python/urna_cli.py`): a read-only shim over the library api (`validate`, `inspect`, `stats`, `search`) so `uvx --from urna urna ...` works. it is not the rust binary; `ask`, `retrieve`, `build`, `doctor` and the terminal ui exist only there. `pip install "urna[embed]"` adds numpy and tokenizers for `urna.embed_potion`; the core surface needs nothing beyond the wheel.
+
 the python tests are plain scripts with `if __name__ == "__main__"`; `pytest tests/` does not work. they need the built `.so` first:
 
 ```
@@ -86,6 +93,8 @@ python tests/test_cli_space.py
 python tests/test_query_embedder_routing.py
 ```
 
+`release_check.sh` runs eight of them; `test_offline_guard.py`, `test_blob_bridge.py` and `test_space_bridge.py` run by hand.
+
 `test_image_corpus.py` covers the forge image pillar (encode and decode, gop probe, sharding, ordering) with a stub embedder and skips cleanly without ffmpeg's av1 and avif encoders. building a real image corpus (`python/forge/embed_image.py`) needs `open_clip` and torch, outside the default forge dependency group.
 
 the forge build-side default embedder is the vendored model2vec/potion-base-8M static table (`python/forge/embed_potion.py`): offline, no torch, no network.
@@ -94,6 +103,7 @@ the forge build-side default embedder is the vendored model2vec/potion-base-8M s
 - the self-test proves the semantic jump (car ~ automobile far above car ~ banana), determinism, f32 stability and that no socket opens at embed time. `python python/forge/recall_harness.py` shows per-query recall against the floor.
 - the lexical bag-of-words floor (`python/forge/embed_default.py`) is stdlib-only, with its own self-test: `python python/forge/test_embed_default.py`.
 - both fingerprint to a `model_hash` recorded in provenance; neither runs in `release_check.sh`.
+- two more forge self-tests, also outside `release_check.sh`: `python python/forge/test_model_registry.py` (the registry contract, no ml deps) and `python python/forge/test_embed_st.py` (the sentence-transformers worker against a local wemm-2b snapshot; skips without it).
 
 python entry point: `sys.path.insert(0, "python"); import urna`. the loader finds `_urna.so` or `lib_urna.dylib`.
 
@@ -106,6 +116,8 @@ crates/urna-cli       the `urna` binary, published as the crate `urna`: engine v
                       the one model gate in cmd/embed_gate.rs, the terminal ui in src/tui (feature `tui`, on by default)
 crates/urna-python    the pyo3 bridge, cdylib `_urna`, abi3-py312; ships as the wheel, not as a crate
 forge-core/           separate cargo workspace: the frozen .fci canonical-intermediate schema of the ingestion layer
+fuzz/                 separate cargo workspace (nightly, cargo-fuzz): four targets, seeds/, README.md; corpus/ is local, never committed
+docker/               Dockerfile: the static musl binary in a scratch image; engine verbs only, no python inside
 python/               the writer pipeline, model fingerprint, query embedders, and forge/ (declarative builds, model registry, quality gate)
 tests/                python test scripts
 data/                 the lfs demo corpus, measure/ regression baselines, demo/ sources (gitignored, see Instructions.md)
@@ -117,6 +129,8 @@ assets/images/        the readme header, the social thumbs, the setup and tui sc
 ```
 
 the full map (every file, the flows, the contracts) is `docs/arc/ARC.toml`. key rust deps: memmap2, rayon, zstd, half, bytemuck, sha2, thiserror, clap, serde.
+
+three cargo workspaces, one policy each: the root `Cargo.toml` (`crates/*`, the one that ships), `forge-core/` and `fuzz/`. `deny.toml` is the cargo-deny policy for all three. `clippy.toml` pins cognitive complexity at 15 (clippy's default is 25) and 7 arguments per function; a legitimate exception gets `#[allow(clippy::...)]` at the site, the threshold never moves. `rustfmt.toml` pins the stable defaults at width 100.
 
 the cli has three groups, which `urna --help` tags and orders:
 
@@ -145,8 +159,9 @@ the format and runtime invariants. a change that touches them needs the tests na
 - `model_hash` fingerprints `(model_id, files_hash, tokenizer_hash, pooling_config_hash, embedding_dim, normalize_embeddings)`. a zero placeholder is rejected at write time; a runtime model that differs from the corpus model fails with a typed error.
 - simd dispatch: avx2 on x86_64, neon on aarch64, scalar fallback, f32 accumulators. `URNA_FORCE_SCALAR=1` forces scalar.
 - the golden fixture `crates/urna-format/tests/fixtures/golden_v1_minimal.urna` is byte-frozen at 1366 bytes.
+- the reader also accepts the `NEST` magic of files written by 0.4.0, before the rename (`tests/legacy_magic.rs`, fixture `legacy_v040_minimal.nest`, same layout and hashes); the writer never emits it, and any other magic is rejected.
 - cli `search` takes a json f32 array; `search-text` shells out to `python/embed_query.py` and checks its `model_hash` against the manifest.
-- python api: `urna.open(path)` returns a `UrnaFile` with `search`, `search_ann`, `search_hybrid`, `retrieve`, `validate`, `inspect`; hits carry `citation_id`, `source_uri`, offsets and the exact-rerank `score`.
+- python api: `urna.open(path)` returns a `UrnaFile` with `search`, `search_ann`, `search_hybrid`, `search_graph`, `search_space`, `retrieve`, `validate`, `inspect`, plus `chunk_ids()` (identity in file order, the key to match hits under any media ordering), `blob_refs()`, `has_blobs` and `blob_bytes(i)` (one inlined blob sliced off the mmap); hits carry `citation_id`, `source_uri`, offsets and the exact-rerank `score`.
 - `cite` is tier-1 only: the stored canonical text plus the verifying hashes, never an original-byte reopen. `ask` and `retrieve` print the same text. no help text or doc claims otherwise.
 - the binary links no network stack and the runtime never opens a socket. setup downloads through the system `curl`.
 
@@ -155,8 +170,10 @@ the format and runtime invariants. a change that touches them needs the tests na
 - remote `git@github.com:hoffresearch/urna.git`, owner hoff research, maintainer brenner cruvinel (`brenner@hoffresearch.com`).
 - `main` is the only long-lived branch. the ruleset requires pull requests, verified ssh-signed commits and linear history; pull requests are squash merged. delete the branch after the merge and start the next one from `origin/main`.
 - tags on `main` only; the workspace version in `Cargo.toml` tracks the latest tag. cutting a release is step 8 of the maintainer checklist in `docs/USAGE.md`; item 11 there is what the 0.5.0 tag taught (lfs, dist, moving a tag, the pypi run, npm naming). read both before touching `release.yml`, `pypi.yml` or the dist config; after editing the dist config run `dist generate`, never hand-edit `release.yml`.
-- `.github/workflows/ci.yml` runs on every push and pull request: fmt, clippy with the deny lints, build and test on ubuntu (avx2) and macos (neon), the mutation-fuzz harnesses, the 639-line guard, forge-core's gate, ruff, and a bounded cargo-fuzz smoke on nightly. it is `release_check.sh` minus the lfs corpus measurement.
+- `.github/workflows/ci.yml` runs on every push to `main` and every pull request: fmt, clippy with the deny lints (the full cli and the engine-only `--no-default-features` cli), build and test on ubuntu (avx2) and macos (neon), the benches compiled, the mutation-fuzz harnesses at a higher count, the 639-line guard, forge-core's gate, cargo-deny on the three workspaces, cargo-semver-checks on `urna-format` against the pull request's base, a windows job (clippy, the cli unit tests and `setup_e2e`: the only windows check before a tag, so a crossterm or path change that breaks only there shows up there), ruff, and a bounded cargo-fuzz smoke on nightly. it is `release_check.sh` minus the lfs corpus measurement.
+- on the nightly schedule (or `workflow_dispatch`) ci instead runs a 30-minute soak per fuzz target with the corpus cached between nights, and `urna-format`'s suite under miri.
 - a `v*` tag runs the release:
+  - `tag-verify.yml` goes first, in dist's plan phase and again before the wheels build: a lightweight or unsigned tag, or a key missing from `.github/allowed_signers`, stops both runs before anything is built or uploaded.
   - `release.yml` (cargo-dist): archives for 5 targets, checksums, sigstore attestations, the homebrew formula `urna`, the npm package `@urna/cli`, the embedder payload, and `publish-crates.yml` for urna-format, urna-runtime and urna.
   - `pypi.yml`: maturin abi3 wheels for 4 platforms, on its own run.
   - `install-test.yml` runs inside the release run once it is announced and tests the installed product per platform and per channel (one-liner, homebrew, npm, bun, pnpm, yarn, binstall, wheel), each ending in `urna setup --yes` and `urna doctor`.
@@ -180,7 +197,7 @@ the format and runtime invariants. a change that touches them needs the tests na
 
 hard limit is 639 lines per code file. human working memory holds 4 plus or minus 1 chunks at once (cowan 2001, refining miller), and a file that does not fit that window forces context switching, heavier diffs and more bugs.
 
-a file created or modified that goes over 639 lines is read in full (what it does, what it depends on, who imports it) and split by responsibility into modules that each do one thing, with imports and the public surface kept and the tests passing with the same count. exempt: tests, data and generated files, lockfiles, json, yaml, toml, ron, jsonl, csv, datasets and vendored files. `release_check.sh` and `ci.yml` enforce the limit on `crates/**/src/**`.
+a file created or modified that goes over 639 lines is read in full (what it does, what it depends on, who imports it) and split by responsibility into modules that each do one thing, with imports and the public surface kept and the tests passing with the same count. exempt: tests, data and generated files, lockfiles, json, yaml, toml, ron, jsonl, csv, datasets and vendored files. `ci.yml` enforces the limit on `crates/**/src/**`; `release_check.sh` counts every non-test `.rs` under `crates/`, benches and examples included.
 
 # finishing a task
 
@@ -191,6 +208,7 @@ run `.contracts/.agents/.skills/AFTERWORK.md`: it names which file owns what and
 - rebuild `python/_urna.so` after every rust change to urna-format, urna-runtime or urna-python. the python tests `dlopen` it, so a stale `.so` passes tests against old code. `release_check.sh` rebuilds it; by hand you must remember.
 - `crates/urna-cli` has its own msrv, 1.88 (ratatui 0.30's floor); urna-format, urna-runtime and urna-python keep the workspace 1.85. with 1.88 clippy suggests let-chains in the cli, which is why its nested `if let`s are collapsed.
 - neon f16: `float16x4_t` and `vcvt_f32_f16` are stable since rustc 1.94, above the workspace msrv. `crates/urna-runtime/build.rs` probes the compiler and emits `cfg(neon_f16)` at 1.94 and up; that cfg gates `simd/neon.rs::dot_f32_f16_neon`, older toolchains take the scalar f16 kernel, and the kernel carries `#[clippy::msrv = "1.94"]`. keep build.rs and the cfg unless the workspace `rust-version` reaches 1.94.
+- `urna-format` runs under miri on the nightly schedule. a new test there that calls zstd (c code miri cannot run), converts f16 through `half` on aarch64 (inline asm) or builds an fsst table (too slow interpreted) carries `#[cfg_attr(miri, ignore)]` with the reason, like the existing ones; the mutation and property harnesses stay native.
 - the terminal ui owns stdout and stderr while a screen is up: no `println!` or `eprintln!` from code the ui calls (`pyenv::set_quiet(true)` silences the interpreter note; workers report through channels). every frame ends with `pal::fit`, the 256-color and `NO_COLOR` fold. to see a screen for real: `tmux new-session -d -x 112 -y 28`, `tmux capture-pane -p -e -N`, render the escapes (sgr state carries across lines; strip osc 8 before measuring columns).
 - hyperrat links go through `hud::link`: hyperrat puts the whole osc 8 sequence in one cell and ratatui's diff then skips that many cells; `hud::link` forces the diff width to the label's. never render `hyperrat::Link` directly.
 - `ask` and `retrieve` embed offline, routed by the manifest model:
@@ -222,7 +240,7 @@ documented limitations, not bugs to fix in passing. flag them in any work that t
 # documentation
 
 - `README.md`: the storefront: what it is, install, the two screens, quickstart, python, cli, benchmarks.
-- `docs/USAGE.md`: how-to for every verb, `urna setup` and `urna tui`, presets, offline mode, citations, the model registry and multi-model spaces (section 12), declarative builds (13), the compression levers and the dual quality gate (14), and the reference section: every install channel, verification, offline notes, the maintainer checklist.
+- `docs/USAGE.md`: how-to for every verb, `urna setup` and `urna tui`, presets, offline mode, citations, the model registry and multi-model spaces (section 12), declarative builds (13), the compression levers and the dual quality gate (14), and the reference section: the table of every `URNA_*` environment variable, every install channel, verification, offline notes, the maintainer checklist.
 - `docs/arc/ARC.toml`: the architecture reference described above.
 - `docs/CHANGELOG`: every release and the unreleased deltas, with the why and the measured numbers.
 - `docs/BENCH.md`: urna against usearch, hnswlib, sqlite-vec and lancedb; regenerated by `python/tools/bench_competitors.py`, never edited by hand.
@@ -230,5 +248,6 @@ documented limitations, not bugs to fix in passing. flag them in any work that t
 - `docs/CONTRIBUTING.md`, `docs/CODE_OF_CONDUCT.md`, `docs/LICENSE` (mit).
 - `data/demo/Instructions.md`: the upstream pt-br datasets and the corpus rebuild.
 - `scripts/release_check.sh`: read it; it documents the gate by being the gate.
+- `fuzz/README.md`: the four cargo-fuzz targets, running a soak, regenerating the seeds, turning a finding into a test.
 - `.contracts/.agents/.skills/AFTERWORK.md`: the end-of-task walk; `.github/pull_request_template.md` carries it as checkboxes.
 - `llms.txt`: discovery for llms and search.
