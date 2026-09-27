@@ -1,3 +1,11 @@
+---
+project: urna
+audience: integrators
+status: active
+last-updated: 2026-09-18
+domain: examples
+---
+
 # jupyter + urna example
 
 `urna_minimal.ipynb` builds a tiny potion-embedded corpus, validates it,

@@ -1,3 +1,11 @@
+---
+project: urna
+audience: users and contributors
+status: active
+last-updated: 2026-09-27
+domain: release-history
+---
+
 # changelog
 
 all notable changes to `urna` are documented here.
@@ -7,6 +15,8 @@ format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). version
 ## [Unreleased]
 
 ### changed
+
+- every doc starts with a yaml header (`project`, `audience`, `status`, `last-updated`, `domain`): usage, bench (its generator emits it), changelog, security, contributing, code of conduct, the demo instructions, the example and fuzz readmes, the vendored model and demo corpus readmes. exempt: the readme (packaged by the registries), the license, the pr template, llms.txt and the demo corpus documents. `llms.txt` follows the llms.txt format now (title, summary, links with a line each) and points at the docs instead of restating the agent contract.
 
 - every change ends with the afterwork walk: `.contracts/.agents/.skills/AFTERWORK.md` lists which file owns what (changelog, ARC.toml, AGENTS.md, tests, readme, usage, examples, format fixtures, packaging, workflows, security) and where a lesson goes, and `.github/pull_request_template.md` carries it as checkboxes. docs are updated in place; history stays in the changelog, the commit and the pull request.
 

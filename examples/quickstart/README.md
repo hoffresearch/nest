@@ -1,3 +1,11 @@
+---
+project: urna
+audience: users
+status: active
+last-updated: 2026-09-26
+domain: examples
+---
+
 # quickstart
 
 the smallest corpus that exercises the whole loop: twelve paragraphs of cc0
