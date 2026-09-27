@@ -1,4 +1,4 @@
-//! `urna validate <file>` — full integrity check.
+//! `urna validate <file>` - full integrity check.
 
 use anyhow::Result;
 use sha2::{Digest, Sha256};

@@ -1,12 +1,12 @@
 #!/bin/sh
-# scripts/pre-commit — defense-in-depth against committing PHI / data artifacts.
+# scripts/pre-commit - defense-in-depth against committing PHI / data artifacts.
 #
 # Clinical data MUST live OUTSIDE this repo (e.g. /Volumes/<redacted>/dat/psy/work).
 # The .gitignore already ignores *.urna / *.sidecar.jsonl / **/pairs/ (a catch-all
 # that negates only the sanctioned public corpora), but this hook is the stronger
 # backstop: it ABORTS any commit that stages a data artifact (.urna /
 # .sidecar.jsonl / a file under pairs/) that is not on the explicit allow-list of
-# sanctioned public corpora below — catching a `git add -f` that bypasses gitignore.
+# sanctioned public corpora below - catching a `git add -f` that bypasses gitignore.
 #
 # Install once per clone (it lives outside .git/hooks so it is version-tracked).
 # Copy it in rather than `core.hooksPath scripts`, which would DISABLE the git-lfs

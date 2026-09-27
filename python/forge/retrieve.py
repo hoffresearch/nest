@@ -38,7 +38,7 @@ def retrieve(urnafile, query: str, k: int = 5, embedder=None, verify_model: bool
     a urna:// citation. `embedder` defaults to the vendored potion table.
 
     honesty gate (on by default): the embedder's `model_hash` is passed to
-    UrnaFile.retrieve, which raises if it does not match the corpus manifest —
+    UrnaFile.retrieve, which raises if it does not match the corpus manifest -
     so a query embedded by a DIFFERENT model can never silently return
     cosine-valid, wrong hits (the invariant the CLI enforces, now on the
     flagship Python surface too). Set `verify_model=False` to bypass."""

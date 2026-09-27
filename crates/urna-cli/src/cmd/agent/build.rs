@@ -1,4 +1,4 @@
-//! `urna build --spec <file>` — launcher for the declarative build (RFC-0
+//! `urna build --spec <file>` - launcher for the declarative build (RFC-0
 //! N13: the build IS a python frontend; this verb resolves the interpreter
 //! and the `urna_forge.py` tool, streams its output, and propagates the
 //! exit code). The heavy lifting (spec validation, media, embedding, emit)

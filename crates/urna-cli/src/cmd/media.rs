@@ -1,4 +1,4 @@
-//! `urna media <file> [--export DIR]` — list the media blobs a corpus
+//! `urna media <file> [--export DIR]` - list the media blobs a corpus
 //! references, and export the inlined ones (0x17) back to standalone
 //! files. Export proves each blob against its blob_refs content_hash
 //! BEFORE writing, so a corrupt section can never fan out to disk.

@@ -70,7 +70,7 @@ static BACKEND: OnceLock<SimdBackend> = OnceLock::new();
 
 /// The SIMD backend selected at runtime. Cached after the first call.
 ///
-/// Set `URNA_FORCE_SCALAR=1` to disable SIMD entirely — useful for
+/// Set `URNA_FORCE_SCALAR=1` to disable SIMD entirely - useful for
 /// before/after SIMD benchmarks on the same binary.
 pub fn detect_backend() -> SimdBackend {
     *BACKEND.get_or_init(|| {

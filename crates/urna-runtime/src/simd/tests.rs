@@ -5,7 +5,7 @@
 use super::*;
 
 fn random_normalized(seed: u64, dim: usize) -> Vec<f32> {
-    // Linear congruential — deterministic, no rand dep needed.
+    // Linear congruential - deterministic, no rand dep needed.
     let mut state = seed
         .wrapping_mul(2862933555777941757)
         .wrapping_add(3037000493);

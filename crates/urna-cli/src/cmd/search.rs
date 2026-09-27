@@ -1,4 +1,4 @@
-//! `urna search <file> <query-as-json> -k K` — exact path with a JSON
+//! `urna search <file> <query-as-json> -k K` - exact path with a JSON
 //! array query vector.
 
 use anyhow::Result;

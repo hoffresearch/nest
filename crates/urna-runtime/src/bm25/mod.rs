@@ -1,6 +1,6 @@
 //! tiny BM25 inverted index for the hybrid search path.
 //!
-//! Tokenization is intentionally simple — lowercase, split on
+//! Tokenization is intentionally simple - lowercase, split on
 //! Unicode-aware whitespace + punctuation, drop tokens with `len < 2`.
 //! Multilingual corpora (PT-BR, EN, ES) get reasonable behavior without
 //! a stemmer or stop list. A future version can pluggable-ize the

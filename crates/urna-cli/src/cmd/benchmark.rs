@@ -1,4 +1,4 @@
-//! `urna benchmark <file> -q N -k K [--ann EF] [--madvise-cold]` —
+//! `urna benchmark <file> -q N -k K [--ann EF] [--madvise-cold]` -
 //! latency stats over random queries, with optional ANN comparison +
 //! recall@k vs exact, plus an opt-in madvise-cold pass.
 
@@ -73,7 +73,7 @@ pub fn run(
 
     if let Some(ef) = ann_ef {
         if !runtime.has_ann() {
-            println!("(no HNSW section — ANN bench skipped)");
+            println!("(no HNSW section - ANN bench skipped)");
             return Ok(());
         }
         let ann_times = run_bench(&runtime, &queries, false, |rt, q| rt.search_ann(q, k, ef))?;

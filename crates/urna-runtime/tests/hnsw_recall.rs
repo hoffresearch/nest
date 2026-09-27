@@ -13,13 +13,13 @@
 //! Recall here is set overlap between approximate and exact top-k.
 //! Queries are sampled from a different seed than the corpus so they
 //! are out-of-distribution (not chunks-of-corpus). This is the strict
-//! production workload — `measure_presets.py` complements with
+//! production workload - `measure_presets.py` complements with
 //! near-corpus auto-queries on the real PT-BR data.
 //!
 //! Today's HNSW impl reaches recall@10 ≥ 0.95 at default `m=16,
 //! ef_construction=400` when paired with `ef_search ≥ 400`. With
 //! smaller `ef_construction` (e.g. 200), recall is ~0.84 at the same
-//! `ef_search` — the production default was bumped to 400 in Phase 2.
+//! `ef_search` - the production default was bumped to 400 in Phase 2.
 //! Tracking a possible 10% recall gap vs the hnswlib reference; the
 //! current numbers are sufficient for the production gate but not yet
 //! optimal.
@@ -105,7 +105,7 @@ fn measure_recall(
 
 #[test]
 fn hnsw_recall_at_10_synthetic() {
-    // Small synthetic at default params — graph is dense at this scale,
+    // Small synthetic at default params - graph is dense at this scale,
     // so recall@10 should be very high.
     let n = 2000;
     let dim = 128;
@@ -125,7 +125,7 @@ fn hnsw_recall_at_10_synthetic() {
     let recall = measure_recall(&idx, &corpus, n, dim, &queries, n_queries, 10, 200);
     assert!(
         recall >= 0.95,
-        "mean recall@10 too low: {:.4} (expected >= 0.95) — Algorithm 4 regression?",
+        "mean recall@10 too low: {:.4} (expected >= 0.95) - Algorithm 4 regression?",
         recall
     );
 }

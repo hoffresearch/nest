@@ -31,7 +31,7 @@ Usage:
     echo $?   # 0 = all gates pass, 1 = any gate failed
 
 The "baseline" file is also used as the reference for exact.p95_ms.
-That makes the latency gate adaptive — production-realistic builds get
+That makes the latency gate adaptive - production-realistic builds get
 the headroom they earned in the baseline run.
 """
 

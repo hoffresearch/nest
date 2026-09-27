@@ -10,7 +10,7 @@ fake embedder that reports a fixed model_hash. Asserts:
      "legacy placeholder" hint, even when the embedder reports the
      same placeholder. Caller must opt-in via --skip-model-hash-check.
 
-Doesn't require real sentence-transformers — the fake embedder is a
+Doesn't require real sentence-transformers - the fake embedder is a
 ~20-line Python script that produces a deterministic unit vector.
 """
 
@@ -120,7 +120,7 @@ def main() -> None:
         embedder = td / "fake_embedder.py"
         embedder.write_text(FAKE_EMBEDDER_SRC)
 
-        # Case 1: match — succeeds.
+        # Case 1: match - succeeds.
         c_match = td / "match.urna"
         build_corpus(c_match, real_hash)
         rc, stdout, stderr = run_search_text(c_match, embedder, real_hash)
@@ -128,7 +128,7 @@ def main() -> None:
         assert "chunk_id=sha256:" in stdout, f"expected hits in output, got:\n{stdout}"
         print("case 1 (match): OK")
 
-        # Case 2: mismatch — fails with typed error.
+        # Case 2: mismatch - fails with typed error.
         c_mismatch = td / "mismatch.urna"
         build_corpus(c_mismatch, real_hash)
         rc, stdout, stderr = run_search_text(c_mismatch, embedder, other_hash)
@@ -138,7 +138,7 @@ def main() -> None:
         )
         print("case 2 (mismatch): OK")
 
-        # Case 3: placeholder — fails even when embedder reports same placeholder.
+        # Case 3: placeholder - fails even when embedder reports same placeholder.
         c_placeholder = td / "placeholder.urna"
         build_corpus(c_placeholder, placeholder)
         rc, stdout, stderr = run_search_text(c_placeholder, embedder, placeholder)
@@ -153,7 +153,7 @@ def main() -> None:
         assert rc == 0, f"placeholder + skip should succeed, got rc={rc}\nstderr={stderr}"
         print("case 4 (placeholder + skip): OK")
 
-        # Case 5: dim mismatch — embedder reports different dim.
+        # Case 5: dim mismatch - embedder reports different dim.
         # Build a corpus with dim=8 (different from the embedder's 4).
         c_dim = td / "dim_mismatch.urna"
         build_corpus(c_dim, real_hash, dim=8)

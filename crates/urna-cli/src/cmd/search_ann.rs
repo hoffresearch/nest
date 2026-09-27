@@ -1,4 +1,4 @@
-//! `urna search-ann <file> <query-json> -k K --ef N` — force the HNSW
+//! `urna search-ann <file> <query-json> -k K --ef N` - force the HNSW
 //! path. Falls back to exact if the file has no HNSW section.
 
 use anyhow::Result;

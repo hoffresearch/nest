@@ -1,7 +1,7 @@
 """Per-dataset loaders for `urna_build_corpus.py`. Each loader returns
 a `pandas.DataFrame` with a fixed shape: `text, label, source, title,
 url`. Adding a new dataset means writing one loader and appending it
-to `SOURCES` — the pipeline stays the same.
+to `SOURCES` - the pipeline stays the same.
 
 Internal to `python/tools/`. The big script imports this for the
 loader registry; nothing else should.

@@ -172,7 +172,7 @@ the image sources carry their own terms: PH2 is research-use only (ADDI project,
 ### corpus license bill of materials
 
 The shipped `data/corpus_next.v1.urna` embeds text derived from all seven sources
-below. **Verify each upstream license before redistributing** — several are
+below. **Verify each upstream license before redistributing** - several are
 research/academic distributions without an explicit redistribution grant, and at
 least one is share-alike (CC-BY-SA), which is viral over the derived corpus.
 
@@ -180,10 +180,10 @@ least one is share-alike (CC-BY-SA), which is viral over the derived corpus.
 |--------|----------|----------------------------|---------------------|
 | `FakeBr-hf` | huggingface `vzani/corpus-fake-br` | see upstream | derived from Fake.br |
 | `FakeTrue.Br-hf` | huggingface `vzani/corpus-faketrue-br` | see upstream | |
-| `Fake.br-Corpus` | github `roneysco/Fake.br-Corpus` | academic (UFG/USP) — verify grant | attribution expected |
-| `FakeTrue.Br` | github `jpchav98/FakeTrue.Br` | academic — verify grant | |
-| `FakeRecogna` | github `Gabriel-Lino-Garcia/FakeRecogna` | academic — verify grant | contains health/political claims about named people |
-| `factck-br` | github `opit-research/factck-br` (agência lupa) | see upstream — likely attribution/share-alike | fact-check ratings; attribution required |
+| `Fake.br-Corpus` | github `roneysco/Fake.br-Corpus` | academic (UFG/USP) - verify grant | attribution expected |
+| `FakeTrue.Br` | github `jpchav98/FakeTrue.Br` | academic - verify grant | |
+| `FakeRecogna` | github `Gabriel-Lino-Garcia/FakeRecogna` | academic - verify grant | contains health/political claims about named people |
+| `factck-br` | github `opit-research/factck-br` (agência lupa) | see upstream - likely attribution/share-alike | fact-check ratings; attribution required |
 | `portuguese-fake-news-classifier-bilstm-combined` | huggingface `vzani/...` | see upstream | held-out test split |
 
 **Obligations for redistributors of a built `.urna`:**
@@ -192,7 +192,7 @@ least one is share-alike (CC-BY-SA), which is viral over the derived corpus.
   share-alike propagates to the whole derived corpus).
 - Carry **attribution**: the built file's manifest sets `license` and records
   per-source provenance, but `urna cite` does not yet surface a per-chunk
-  license/attribution field — carry the attribution alongside the artifact until
+  license/attribution field - carry the attribution alongside the artifact until
   it does.
 - The corpus embeds **personal data about named public figures** (political and
   health claims). See the data governance section of [`docs/SECURITY.md`](../../docs/SECURITY.md#data-governance)
