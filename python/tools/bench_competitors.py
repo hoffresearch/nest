@@ -246,7 +246,16 @@ def main() -> None:
         "---",
         "",
     ]
-    report = front + ["# benchmarks", "", header, "", markdown(results, meta), "", "how to read it:", ""]
+    report = front + [
+        "# benchmarks",
+        "",
+        header,
+        "",
+        markdown(results, meta),
+        "",
+        "how to read it:",
+        "",
+    ]
     report += notes + ["", limits, "", tail]
     text = "\n".join(report) + "\n"
     if args.out:
