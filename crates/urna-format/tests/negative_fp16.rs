@@ -245,7 +245,7 @@ fn fp16_baseline_decodes_with_no_error() {
 #[cfg_attr(all(miri, target_arch = "aarch64"), ignore)] // half converts f16 with inline asm on aarch64, which miri cannot run
 fn f16_codec_roundtrip_within_tolerance() {
     // the f32<->f16 byte codec round-trips within f16 precision (relocated
-    // out of encoding/mod.rs to keep the wire-codec registry under 300 lines).
+    // out of encoding/mod.rs, which keeps the wire-codec registry).
     let v: Vec<f32> = (0..16).map(|i| (i as f32) * 0.05).collect();
     let bytes = urna_format::f32_to_f16_bytes(&v);
     let back = urna_format::f16_bytes_to_f32(&bytes);

@@ -68,17 +68,17 @@ step "cargo fmt --all --check"
 cargo fmt --all --check
 ok "rustfmt clean"
 
-# ---- 300-line guard ----
-step "no Rust file in crates/**/src exceeds 300 lines"
+# ---- 639-line guard ----
+step "no Rust file in crates/**/src exceeds 639 lines"
 overlong="$(find crates -name '*.rs' -not -path '*/tests/*' \
   | xargs wc -l \
-  | awk '$1 > 300 {print}' \
+  | awk '$1 > 639 {print}' \
   | grep -v 'total$' || true)"
 if [[ -n "$overlong" ]]; then
   printf '\033[1;31m  FAIL:\033[0m\n%s\n' "$overlong" >&2
   exit 1
 fi
-ok "all source files ≤ 300 lines"
+ok "all source files ≤ 639 lines"
 
 # ---- rebuild PyO3 .so ----
 step "rebuild python/_urna.so"

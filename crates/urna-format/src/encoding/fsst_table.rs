@@ -1,6 +1,6 @@
 //! fsst symbol table: deterministic greedy build + byte trie for O(1)
-//! longest-match encoding. separated from `fsst.rs` so both files stay
-//! under the 300-line source limit.
+//! longest-match encoding. separated from `fsst.rs`, which keeps the
+//! encoder and decoder.
 
 use super::txt_streams::malformed;
 

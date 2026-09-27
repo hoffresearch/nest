@@ -6,8 +6,8 @@ inside a sql `query` or a text `template` survives, and `{col}` format
 placeholders are never touched. An unset or empty variable is a SpecError
 naming the dotted key: corpus_sources._Blank would otherwise turn a
 leftover `${VAR}` into "$" silently, and an empty root would make
-`${MTG_DATA}/mtg.sqlite` read `/mtg.sqlite`. Split from build_spec (the
-dataclass contract + parser) to keep that file under the 300-line rule.
+`${MTG_DATA}/mtg.sqlite` read `/mtg.sqlite`. Split from build_spec, which keeps the
+dataclass contract and the parser.
 
 Importable on its own: SpecError is resolved lazily at raise time because
 build_spec imports this module at its bottom (build_spec is the entry

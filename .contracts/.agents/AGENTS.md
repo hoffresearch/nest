@@ -10,7 +10,7 @@ operating notes for ai agents and human contributors working in this repo. the p
 - `cargo clippy --workspace --all-targets -- -D warnings`: linting (warnings are errors)
 - `ruff check .` / `ruff format --check .`: python linting and formatting (config in `pyproject.toml`)
 - `./scripts/release_check.sh`: full pipeline + regression gates against `data/measure/baseline.json`. single source of truth for "PR-ready". exits non-zero on any failure.
-- `forge-core` (the ingestion layer) is a SEPARATE cargo workspace OUTSIDE `crates/`; the sovereign `--workspace` commands and `release_check.sh` do not touch it. build and test it on its own manifest: `cargo build --manifest-path forge-core/Cargo.toml`, `cargo test --manifest-path forge-core/Cargo.toml`, `cargo clippy --manifest-path forge-core/Cargo.toml --all-targets -- -D warnings`, `cargo fmt --manifest-path forge-core/Cargo.toml --all --check`. the <=300-line rule applies there too (release_check's guard only scans `crates/`).
+- `forge-core` (the ingestion layer) is a SEPARATE cargo workspace OUTSIDE `crates/`; the sovereign `--workspace` commands and `release_check.sh` do not touch it. build and test it on its own manifest: `cargo build --manifest-path forge-core/Cargo.toml`, `cargo test --manifest-path forge-core/Cargo.toml`, `cargo clippy --manifest-path forge-core/Cargo.toml --all-targets -- -D warnings`, `cargo fmt --manifest-path forge-core/Cargo.toml --all --check`. the 639-line limit applies there too (release_check's guard only scans `crates/`).
 
 # pyo3 extension
 
@@ -119,7 +119,7 @@ python entry: `sys.path.insert(0, "python"); import urna`. dynamic loader finds 
 - golden fixture: `crates/urna-format/tests/fixtures/golden_v1_minimal.urna` (1366 bytes, byte-frozen).
 - CLI `search` takes a JSON f32 array positional arg; `search-text` shells out to `python/embed_query.py` and validates the embedder's `model_hash` against the manifest.
 - python api: `urna.open(path)` returns a `UrnaFile` with `search`, `search_ann`, `search_hybrid`, `retrieve`, `validate`, `inspect`. hits carry `citation_id`, `source_uri`, offsets, and the exact-rerank `score`.
-- file hygiene: every rust source file in `crates/**/src/**` and every first-party python module is at most 300 lines. test files and the `crates/urna-format/tests/roundtrip.rs` carve-out are exempt.
+- file hygiene: no code file over 639 lines (rust sources and first-party python alike); tests are exempt. see `# file hygiene`.
 
 # repo workflow
 
@@ -127,7 +127,7 @@ python entry: `sys.path.insert(0, "python"); import urna`. dynamic loader finds 
 - branches: `main` is the only long-lived branch. work happens on short-lived branches off `main`; every change reaches `main` through a pull request.
 - PRs target `main` and are squash merged (the ruleset requires pull requests, verified ssh-signed commits, and linear history). delete the branch after merge and start the next one from `origin/main`.
 - tags on `main` only (`v0.5.1` is current). `Cargo.toml` workspace version tracks the latest released tag.
-- every push and pull request runs `.github/workflows/ci.yml`: fmt, clippy with the workspace deny lints, build + test on ubuntu (avx2) and macos (neon), the mutation-fuzz harnesses at a higher iteration count, the 300-line guard, forge-core's own gate, ruff via `scripts/ruff_check.sh` (the ONE python file list, shared with release_check.sh), and a bounded cargo-fuzz smoke on nightly. it is release_check.sh minus the lfs corpus measurement.
+- every push and pull request runs `.github/workflows/ci.yml`: fmt, clippy with the workspace deny lints, build + test on ubuntu (avx2) and macos (neon), the mutation-fuzz harnesses at a higher iteration count, the 639-line guard, forge-core's own gate, ruff via `scripts/ruff_check.sh` (the ONE python file list, shared with release_check.sh), and a bounded cargo-fuzz smoke on nightly. it is release_check.sh minus the lfs corpus measurement.
 - pushing a `v*` tag on `main` runs the full release: `.github/workflows/release.yml` (cargo-dist: cli tarballs for 5 targets, checksums, sigstore attestations, homebrew formula `urna`, npm package `@urna/cli`, the embedder payload artifact, and `publish-crates.yml` pushing urna-format / urna-runtime / urna (the cli crate) to crates.io) and `.github/workflows/pypi.yml` (maturin abi3 wheels for 4 platforms, OIDC trusted publishing). `.github/workflows/install-test.yml` then tests the INSTALLED product per platform, and per package channel (homebrew, npm, bun, pnpm, yarn, binstall) ending in `urna setup --yes` + `urna doctor`. maintainer one-time setup for these channels is the maintainer checklist in the reference section of `docs/USAGE.md`.
 - git lfs tracks `*.urna`, `*.safetensors`, datasets, and the vendored potion table (including `data/corpus_next.v1.urna`); golden fixtures under `crates/urna-format/tests/fixtures/` stay in regular git. run `git lfs pull` if a binary is a pointer.
 - demo datasets under `data/demo/` are intentionally gitignored and downloaded locally from upstream sources listed in `data/demo/Instructions.md`.
@@ -159,9 +159,9 @@ at task start, read `docs/arc/ARC.toml` in a short pass to preserve structure an
 
 # file hygiene
 
-hard limit is 333 lines per file. operational target for new files is 220 lines. human working memory holds 4 plus or minus 1 chunks at once (cowan 2001, refining miller). neural networks also work better that way. a file that does not fit the "mental window" forces internal context switching, degrading comprehension and raising bug rates. this is unnecessary cognitive load, the same principle applied in ux.
+hard limit is 639 lines per code file. human working memory holds 4 plus or minus 1 chunks at once (cowan 2001, refining miller), and a file that does not fit that window forces context switching, heavier diffs and more bugs.
 
-every file created or modified in a session that exceeds 333 lines must be read in full and refactored along single-responsibility lines. the rust source carve-out (`crates/**/src/**` at 300 lines) and the test-file exemptions documented above remain in force.
+every file created or modified that goes over 639 lines is read in full (what it does, what it depends on, who imports it) and split by responsibility into modules that each do one thing, with imports and the public surface kept and the tests passing with the same count. exempt: tests, data and generated files, lockfiles, json, yaml, toml, ron, jsonl, csv, datasets and vendored files. `release_check.sh` and `ci.yml` enforce the limit on `crates/**/src/**`.
 
 # audit when finishing a task
 

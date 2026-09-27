@@ -8,6 +8,8 @@ format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). version
 
 ### changed
 
+- the file-size limit is 639 lines per code file. `release_check.sh` and `ci.yml` enforce it on `crates/**/src/**`; tests, data, generated and config files are exempt. AGENTS.md, CONTRIBUTING and ARC.toml say so, and the source comments that justified a split by the old 300-line guard now say what each file holds.
+
 - homebrew is documented as `brew tap hoffresearch/urna` then `brew install urna` (and `brew upgrade urna`); the one-line `brew install hoffresearch/urna/urna` still works. a bare `brew install urna` without the tap needs the formula in homebrew-core, which asks for 75 stars and a build from source.
 
 - bun, pnpm and yarn install `@urna/cli` like npm does (`bun add -g`, `pnpm add -g`, `yarn global add`), now in the readme, `docs/USAGE.md` and `install-test.yml` (bun and pnpm on linux and macos, yarn 1 on linux). bun and pnpm 10 block the package's postinstall; the `urna` wrapper downloads the binary on the first run, so nothing has to be allowed.
