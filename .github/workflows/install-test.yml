@@ -3,7 +3,8 @@
 # artifacts exactly the way a user does (one-liner installer against the
 # release download url), then runs `urna validate` on the golden fixture
 # and `urna doctor` with real numpy/tokenizers. a second job installs the
-# binary through each package channel (homebrew, npm, cargo binstall),
+# binary through each package channel (homebrew, npm, bun, pnpm, yarn,
+# cargo binstall),
 # which ships the bare binary, and proves `urna setup --yes` completes it:
 # payload from the tagged release, a python env built from a runner python
 # that has no numpy, then `urna doctor`. a third job pip-installs the
@@ -100,6 +101,12 @@ jobs:
           - { channel: npm, os: macos-latest }
           - { channel: npm, os: windows-latest }
           - { channel: binstall, os: ubuntu-24.04 }
+          # the same @urna/cli package through the other node package managers.
+          - { channel: bun, os: ubuntu-24.04 }
+          - { channel: bun, os: macos-latest }
+          - { channel: pnpm, os: ubuntu-24.04 }
+          - { channel: pnpm, os: macos-latest }
+          - { channel: yarn, os: ubuntu-24.04 }
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
     defaults:
@@ -113,7 +120,7 @@ jobs:
         with:
           python-version: "3.12"
       - uses: actions/setup-node@v5
-        if: matrix.channel == 'npm'
+        if: contains(fromJSON('["npm", "pnpm", "yarn"]'), matrix.channel)
         with:
           node-version: "22"
 
@@ -126,6 +133,27 @@ jobs:
       - name: install (npm)
         if: matrix.channel == 'npm'
         run: npm install -g "@urna/cli@${TAG#v}"
+      - name: install (bun)
+        if: matrix.channel == 'bun'
+        # bun blocks the package's postinstall; the wrapper fetches the
+        # binary on the first run instead, which the next step exercises.
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+          "$HOME/.bun/bin/bun" add -g "@urna/cli@${TAG#v}"
+      - name: install (pnpm)
+        if: matrix.channel == 'pnpm'
+        run: |
+          npm install -g pnpm@10
+          export PNPM_HOME="$RUNNER_TEMP/pnpm"
+          echo "$PNPM_HOME" >> "$GITHUB_PATH"
+          PATH="$PNPM_HOME:$PATH" pnpm add -g "@urna/cli@${TAG#v}"
+      - name: install (yarn)
+        if: matrix.channel == 'yarn'
+        run: |
+          npm install -g yarn@1
+          yarn global add "@urna/cli@${TAG#v}"
+          yarn global bin >> "$GITHUB_PATH"
       - name: install (cargo binstall)
         if: matrix.channel == 'binstall'
         run: |
