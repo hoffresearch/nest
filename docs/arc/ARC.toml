@@ -581,7 +581,7 @@ links = ["python/tools/bench_competitors.py"]
 [[inventory.root]]
 path = "llms.txt"
 kind = "metadata"
-purpose = "concise llm and agent guidance"
+purpose = "llms.txt discovery file (llmstxt.org format): title, summary, links to the docs with a line each; no instruction, that is AGENTS.md"
 links = [
     ".contracts/.agents/AGENTS.md",
     "docs/CONTRIBUTING.md",

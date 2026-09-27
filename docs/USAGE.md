@@ -1,3 +1,11 @@
+---
+project: urna
+audience: users and integrators
+status: active
+last-updated: 2026-09-26
+domain: usage
+---
+
 # usage
 
 `urna` is a single-file binary container for distributing semantic knowledge bases. one file: chunks, canonical text, byte-spans, embeddings, search contract, hashes. copy it, share it, search it.
