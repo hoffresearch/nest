@@ -23,6 +23,8 @@
 forge = [
     "numpy>=1.26",
     "tokenizers>=0.20",
+    # image paths (image_backends, embed_image, embed_st) and the forge tests.
+    "pillow>=10",
 ]
 
 [tool.ruff]
