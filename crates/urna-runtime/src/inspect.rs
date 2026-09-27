@@ -1,6 +1,6 @@
 //! `MmapUrnaFile::inspect_json`: the `urna inspect --json` document. Kept out
-//! of `mmap_file.rs` so that file stays under the 300-line crate guard; this
-//! is pure presentation (re-parse the mmap, dump header + section table +
+//! of `mmap_file.rs`, which opens and validates the file; this is pure
+//! presentation (re-parse the mmap, dump header + section table +
 //! manifest + hashes + simd backend), no search math.
 
 use urna_format::UrnaError;

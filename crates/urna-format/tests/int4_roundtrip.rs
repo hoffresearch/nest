@@ -1,8 +1,7 @@
 //! int4 block-64 codec round-trip and unit coverage (`encoding=7`).
 //!
 //! These tests live here (not inline in `encoding/int4.rs`) so the codec
-//! source stays under the 300-line rust src guard while keeping full
-//! coverage of pack/unpack, quantize clamping, the section view, and the
+//! source holds the codec alone while the tests keep full coverage of pack/unpack, quantize clamping, the section view, and the
 //! typed malformed-payload rejections. They drive the public api exactly
 //! as a downstream crate would.
 

@@ -1,5 +1,5 @@
-//! The clap surface: `Cli` + `Commands`. Split from `main.rs` (which keeps
-//! the dispatch) so both stay under the 300-line crate guard.
+//! The clap surface: `Cli` + `Commands`. Split from `main.rs`, which keeps
+//! the dispatch.
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;

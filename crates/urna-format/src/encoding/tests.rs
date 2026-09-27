@@ -1,5 +1,5 @@
 //! unit tests for the encoding dispatch (`encoding/mod.rs`), carved out so
-//! the module stays under the 300-line src guard.
+//! the module holds the dispatch alone.
 
 use super::*;
 

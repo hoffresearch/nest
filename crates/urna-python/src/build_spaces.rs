@@ -1,5 +1,5 @@
 //! Space kwarg parsing and band emission for `build()`, carved out of
-//! `build_inputs.rs` so both files stay under the 300-line crate guard.
+//! `build_inputs.rs`, which parses the chunks.
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;

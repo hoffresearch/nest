@@ -12,8 +12,7 @@
 # Cargo.toml, which is the single source of truth.
 
 # Cognitive complexity: clippy default is 25; the 12-file Phase 5
-# refactor proved the codebase fits in ≤ 15 per function with the
-# 300-line file rule. Tighter than the default; lets long functions
+# refactor proved the codebase fits in ≤ 15 per function. Tighter than the default; lets long functions
 # trip earlier than line count alone would.
 cognitive-complexity-threshold = 15
 
