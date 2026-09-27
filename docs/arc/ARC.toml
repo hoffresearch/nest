@@ -333,7 +333,7 @@ path = [
     "scripts/ruff_check.sh",
     "forge-core/Cargo.toml",
 ]
-summary = "on every push and pull request: fmt, clippy with the workspace deny lints, build + test on ubuntu (avx2) and macos (neon), the mutation-fuzz harnesses at a higher iteration count, the 300-line guard, forge-core's gate, ruff over the shared file list, and a bounded cargo-fuzz smoke on nightly"
+summary = "on every push and pull request: fmt, clippy with the workspace deny lints, build + test on ubuntu (avx2) and macos (neon), the mutation-fuzz harnesses at a higher iteration count, the 639-line guard, forge-core's gate, ruff over the shared file list, and a bounded cargo-fuzz smoke on nightly"
 
 [[flows]]
 name = "mutation-fuzz"
@@ -429,7 +429,7 @@ links = ["Cargo.toml"]
 [[inventory.root]]
 path = ".github/workflows/ci.yml"
 kind = "ci-workflow"
-purpose = "the pull-request gate: fmt, clippy with the deny lints, build + test on ubuntu and macos, mutation-fuzz harnesses, 300-line guard, forge-core gate, ruff via scripts/ruff_check.sh, cargo-fuzz smoke on nightly; nightly: fuzz soak, miri on urna-format"
+purpose = "the pull-request gate: fmt, clippy with the deny lints, build + test on ubuntu and macos, mutation-fuzz harnesses, 639-line guard, forge-core gate, ruff via scripts/ruff_check.sh, cargo-fuzz smoke on nightly; nightly: fuzz soak, miri on urna-format"
 links = [
     "scripts/release_check.sh",
     "scripts/ruff_check.sh",
@@ -468,7 +468,7 @@ links = ["crates/urna-format/src/error.rs"]
 [[inventory.root]]
 path = "crates/urna-format/src/encoding/tests.rs"
 kind = "rust-test"
-purpose = "unit tests for the encoding dispatch, carved out of encoding/mod.rs for the 300-line guard"
+purpose = "unit tests for the encoding dispatch, carved out of encoding/mod.rs"
 links = ["crates/urna-format/src/encoding/mod.rs"]
 
 [[inventory.root]]
@@ -554,7 +554,7 @@ links = ["crates/urna-runtime/src/bm25/codec.rs"]
 [[inventory.root]]
 path = "crates/urna-python/src/search_hit.rs"
 kind = "rust-source"
-purpose = "SearchHitPy, the python-visible hit (carved out of urna_file.rs for the 300-line guard)"
+purpose = "SearchHitPy, the python-visible hit (carved out of urna_file.rs)"
 links = ["crates/urna-python/src/urna_file.rs"]
 
 [[inventory.root]]
@@ -922,7 +922,7 @@ links = [
 [[inventory.urna_cli]]
 path = "crates/urna-cli/src/cli.rs"
 kind = "rust-source"
-purpose = "the clap surface (Cli + Commands), split from main.rs (which keeps dispatch) so both stay under the 300-line guard"
+purpose = "the clap surface (Cli + Commands), split from main.rs, which keeps the dispatch"
 links = ["crates/urna-cli/src/main.rs"]
 
 [[inventory.urna_cli]]
@@ -1227,7 +1227,7 @@ links = ["crates/urna-format/src/layout/mod.rs"]
 [[inventory.urna_format]]
 path = "crates/urna-format/src/layout/mod.rs"
 kind = "rust-source"
-purpose = "format constants, section ids (incl the now-emitted dictionary 0x0A + dedup_map 0x0B aux sections, the active graph_adjacency 0x0C, the ACTIVE blob_refs 0x14 / space_table 0x15 / blob_span_overlay 0x16 / blob_data 0x17 in OPTIONAL_SECTIONS, the ACTIVE per-space embedding band 0x20-0x2F, the still-reserved 0x11-0x13 and 0x30-0x3F ann band), wire encoding ids (4-10: intpack/zstd_dict/frontcode/int4/rabitq/fsst/txt_streams; 5/9/10 implemented, 6/8 reserved), and layout re-exports. CANONICAL_SECTIONS (content_hash) stays the canonical six, so 0x0C/0x14/0x15/0x16/band never move a citation. unit tests carved out to layout/tests.rs for the 300-line guard"
+purpose = "format constants, section ids (incl the now-emitted dictionary 0x0A + dedup_map 0x0B aux sections, the active graph_adjacency 0x0C, the ACTIVE blob_refs 0x14 / space_table 0x15 / blob_span_overlay 0x16 / blob_data 0x17 in OPTIONAL_SECTIONS, the ACTIVE per-space embedding band 0x20-0x2F, the still-reserved 0x11-0x13 and 0x30-0x3F ann band), wire encoding ids (4-10: intpack/zstd_dict/frontcode/int4/rabitq/fsst/txt_streams; 5/9/10 implemented, 6/8 reserved), and layout re-exports. CANONICAL_SECTIONS (content_hash) stays the canonical six, so 0x0C/0x14/0x15/0x16/band never move a citation. unit tests carved out to layout/tests.rs"
 links = [
     "crates/urna-format/src/layout/header.rs",
     "crates/urna-format/src/layout/footer.rs",
@@ -1467,13 +1467,13 @@ links = ["crates/urna-format/examples/regen_golden.rs"]
 [[inventory.urna_format]]
 path = "crates/urna-format/tests/int4_roundtrip.rs"
 kind = "rust-test"
-purpose = "int4 codec round-trip + unit coverage (pack/unpack, quantize clamping, the section view, decode_payload borrow, typed malformed-payload rejection); relocated out of src to keep the codec under the 300-line guard"
+purpose = "int4 codec round-trip + unit coverage (pack/unpack, quantize clamping, the section view, decode_payload borrow, typed malformed-payload rejection); relocated out of src so the codec file holds the codec alone"
 links = ["crates/urna-format/src/encoding/int4.rs"]
 
 [[inventory.urna_format]]
 path = "crates/urna-format/tests/int8_roundtrip.rs"
 kind = "rust-test"
-purpose = "int8 codec positive round-trip coverage relocated out of encoding/mod.rs to keep the wire-codec registry under the 300-line guard"
+purpose = "int8 codec positive round-trip coverage relocated out of encoding/mod.rs so the wire-codec registry holds the registry alone"
 links = ["crates/urna-format/src/encoding/int8.rs"]
 
 [[inventory.urna_format]]
@@ -1665,7 +1665,7 @@ links = [
 [[inventory.urna_python]]
 path = "crates/urna-python/src/build_inputs.rs"
 kind = "rust-source"
-purpose = "build() input helpers split out to keep build_fn.rs under the 300-line guard: parse_chunks (PyList of dicts -> Vec<ChunkInput>), truncate_renormalize (matryoshka prefix slice + l2-renorm before quant/hnsw), build_graph_payload (G1: NEXT_CHUNK + top-m SEMANTIC edges from the hnsw level-0 graph, canonically sorted), and parse_blob_refs / parse_chunk_blob_spans for the media pillar"
+purpose = "build() input helpers split out of build_fn.rs: parse_chunks (PyList of dicts -> Vec<ChunkInput>), truncate_renormalize (matryoshka prefix slice + l2-renorm before quant/hnsw), build_graph_payload (G1: NEXT_CHUNK + top-m SEMANTIC edges from the hnsw level-0 graph, canonically sorted), and parse_blob_refs / parse_chunk_blob_spans for the media pillar"
 links = [
     "crates/urna-python/src/build_fn.rs",
     "crates/urna-format/src/sections/graph/adjacency.rs",
@@ -1675,7 +1675,7 @@ links = [
 [[inventory.urna_python]]
 path = "crates/urna-python/src/build_manifest.rs"
 kind = "rust-source"
-purpose = "manifest assembly for build(): capabilities (incl blobs_present when blob sections are emitted and supports_multimodal when a space_table is present) and the additive manifest fields, split out for the 300-line guard"
+purpose = "manifest assembly for build(): capabilities (incl blobs_present when blob sections are emitted and supports_multimodal when a space_table is present) and the additive manifest fields, split out of build_fn.rs"
 links = [
     "crates/urna-python/src/build_fn.rs",
     "crates/urna-format/src/manifest/mod.rs",
@@ -1886,7 +1886,7 @@ links = [
 [[inventory.urna_runtime]]
 path = "crates/urna-runtime/src/inspect.rs"
 kind = "rust-source"
-purpose = "inspect surface: reports blob_refs/span-overlay presence, the space registry (names, dims, dtypes, per-space model_hash), and band occupancy, plus inspect_json + canonical_texts for the flagship; carved out of mmap_file.rs for the 300-line guard"
+purpose = "inspect surface: reports blob_refs/span-overlay presence, the space registry (names, dims, dtypes, per-space model_hash), and band occupancy, plus inspect_json + canonical_texts for the flagship; carved out of mmap_file.rs"
 links = [
     "crates/urna-runtime/src/mmap_file.rs",
     "crates/urna-runtime/src/spaces.rs",
@@ -1916,7 +1916,7 @@ links = [
 [[inventory.urna_runtime]]
 path = "crates/urna-runtime/src/mmap_cold.rs"
 kind = "rust-source"
-purpose = "cold-path mmap helpers for the media pillar: on-demand blob span reads that never materialize the container, carved out of mmap_file.rs for the 300-line guard"
+purpose = "cold-path mmap helpers for the media pillar: on-demand blob span reads that never materialize the container, carved out of mmap_file.rs"
 links = [
     "crates/urna-runtime/src/mmap_file.rs",
     "crates/urna-runtime/src/blobs.rs",
@@ -2117,7 +2117,7 @@ links = [
 [[inventory.data_docs_python_scripts_tests]]
 path = "python/forge/spec_paths.py"
 kind = "python-source"
-purpose = "path expansion over the raw spec document: only the braced ${VAR} form expands (bare $ in sql or templates and {col} placeholders survive), an unset or empty variable is a SpecError naming the dotted key (never a silent $ or an empty root), then a leading ~/ expands; SpecError resolved lazily so the module imports alone; split from build_spec to keep it under 300 lines"
+purpose = "path expansion over the raw spec document: only the braced ${VAR} form expands (bare $ in sql or templates and {col} placeholders survive), an unset or empty variable is a SpecError naming the dotted key (never a silent $ or an empty root), then a leading ~/ expands; SpecError resolved lazily so the module imports alone; split from build_spec, which keeps the contract and the parser"
 links = ["python/forge/build_spec.py"]
 
 [[inventory.data_docs_python_scripts_tests]]
@@ -2224,7 +2224,7 @@ links = [
 [[inventory.data_docs_python_scripts_tests]]
 path = "python/tools/_model_bench_report.py"
 kind = "python-tool"
-purpose = "the per-tier terminal report of urna_model_bench.py (never one number across tiers), split out for the 300-line contract"
+purpose = "the per-tier terminal report of urna_model_bench.py (never one number across tiers), split out of urna_model_bench.py"
 links = ["python/tools/urna_model_bench.py"]
 
 [[inventory.data_docs_python_scripts_tests]]

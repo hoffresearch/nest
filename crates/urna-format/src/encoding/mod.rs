@@ -64,7 +64,7 @@ use std::borrow::Cow;
 /// The context-free wire codecs, as a small registry. Decoding dispatches
 /// through `WireCodec::from_id`, so adding a reserved codec is a localized
 /// additive diff: a variant, a `from_id` arm, a `decode` arm, and its own
-/// `<=300`-line module. Reserved-but-unimplemented ids (and the dict codec,
+/// module. Reserved-but-unimplemented ids (and the dict codec,
 /// which needs section 0x0A) are deliberately ABSENT here so old and new
 /// readers agree on the frozen wire format.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

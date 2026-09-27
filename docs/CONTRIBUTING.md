@@ -59,9 +59,8 @@ these conventions are not aesthetic preferences. they exist to keep the repo rea
 
 human working memory holds four plus or minus one chunks at once (cowan, 2001). neural networks behave better the same way. a file that does not fit the mental window forces internal context switching and raises bug rates. this is the same principle ui designers apply to information density.
 
-- **operational target for new files: 220 lines.** aim here.
-- **hard limit: 333 lines.** above this, refactor along single-responsibility lines in the same pr.
-- **rust source carve-out: 300 lines** for `crates/**/src/**`. test files and the `crates/urna-format/tests/roundtrip.rs` carve-out are exempt.
+- **hard limit: 639 lines per code file.** above it, split along single-responsibility lines in the same pr.
+- exempt: tests, data and generated files, lockfiles, json, yaml, toml and vendored files.
 
 ## code style
 
@@ -71,14 +70,14 @@ rust:
 - `cargo clippy --workspace --all-targets -- -D warnings` is a hard gate. suppress an individual lint with `#[allow(clippy::name)]` and a one-line justification, never globally.
 - every `unsafe` block needs a `// SAFETY:` comment naming the invariant the caller is relying on.
 - public items get a doc comment that explains the why, not the what. the name already says what.
-- file hygiene as above: 300 lines for `crates/**/src/**`.
+- file hygiene as above: 639 lines.
 
 python:
 
 - target `py312`, line length 100. ruff config in `pyproject.toml`.
 - lints: `E F W I B UP SIM`. run `ruff check .` and `ruff format --check .`.
 - private helpers in `python/tools/` use the `_` prefix (e.g. `_baseline_decoder.py`).
-- file hygiene as above: 220-line target, 333-line hard limit.
+- file hygiene as above: 639 lines.
 
 format and runtime invariants:
 

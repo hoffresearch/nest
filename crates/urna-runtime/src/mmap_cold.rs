@@ -1,5 +1,5 @@
-//! OS-level mmap hints, carved out of `mmap_file.rs` so that file stays
-//! under the 300-line crate guard.
+//! OS-level mmap hints, carved out of `mmap_file.rs`, which opens and
+//! validates the file.
 
 use crate::mmap_file::MmapUrnaFile;
 

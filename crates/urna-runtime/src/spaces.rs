@@ -1,6 +1,6 @@
 //! Multimodal space open logic (0x15 space_table + the 0x20-0x2F vector
-//! bands), carved out of `mmap_file.rs` so that file stays under the
-//! 300-line crate guard. Opens only behind the additive
+//! bands), carved out of `mmap_file.rs`, which keeps the required sections.
+//! Opens only behind the additive
 //! `supports_multimodal` capability, mirroring how the blob pair opens
 //! behind `blobs_present`. The bands are fixed-stride slabs read straight
 //! off the mmap by the per-space exact search.

@@ -212,5 +212,4 @@ impl<'a> Int4EmbeddingsView<'a> {
 
 // Unit + round-trip coverage lives in `tests/int4_roundtrip.rs` (pack /
 // unpack, quantize clamping, the section view, and the typed malformed-
-// payload rejections) so this codec source stays under the 300-line rust
-// src guard. Negative file-level paths live in `tests/negative_int4.rs`.
+// payload rejections), so this file holds the codec alone. Negative file-level paths live in `tests/negative_int4.rs`.

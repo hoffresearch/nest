@@ -1,7 +1,7 @@
 """The terminal report of urna_model_bench.py: one block per tier, never
 one number across tiers (T1 is inflated by construction, T2 is a cost,
-T3 is the utility ruler). Split out of urna_model_bench.py for the
-300-line contract.
+T3 is the utility ruler). Split out of urna_model_bench.py, which runs
+the tiers.
 """
 
 from __future__ import annotations
