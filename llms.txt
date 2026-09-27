@@ -24,6 +24,11 @@ engine subcommands (file + vector in, never run python): inspect, validate, stat
 
 a corpus that builds from a clean checkout with no download: examples/quickstart/ (urna build --spec examples/quickstart/corpus.toml, then ask/retrieve/cite/validate on examples/quickstart/out/quickstart.urna; quickstart.py is the python twin).
 
+## install and terminal ui
+
+- channels: `brew install hoffresearch/urna/urna`, `cargo install urna`, `npm install -g @urna/cli`, `pip install "urna[embed]"`, scripts/install.sh / install.ps1. brew, npm and cargo lay down the bare binary; `urna setup` finishes the install (embedder payload + python env + doctor checks), `--yes` for scripts.
+- `urna tui [file]` (or a bare `urna` on a terminal) is the corpus explorer: manifest, validate verdict, sections, ask. source in crates/urna-cli/src/tui, behind the default-on `tui` feature.
+
 ## python entry
 
 - sys.path.insert(0, "python"); import urna; db = urna.open(path)
@@ -89,7 +94,7 @@ prefer release_check.sh before merge, it is the project gate; .github/workflows/
 - docs/CHANGELOG
 - https://github.com/brennercruvinel/mtg-urna-benchmark (the image-corpus benchmark: code, specs, corpora, results; the .urna artifacts on the hugging face dataset of the same name; private for now)
 
-made it simple, but signifcant.
+made it simple, but significant.
 Hoff Research - hoffresearch.com
 Brenner Cruvinel.
 MIT.
