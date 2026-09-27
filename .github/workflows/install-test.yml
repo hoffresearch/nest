@@ -170,7 +170,7 @@ jobs:
             python -m pip install "urna==${TAG#v}" && break
             sleep 30
           done
-          python -m pip show urna | grep -q "^Version: ${TAG#v}$"
+          python -c "import importlib.metadata as m, sys; v = m.version('urna'); assert v == sys.argv[1], v" "${TAG#v}"
           python -c "import urna; assert urna.potion_model_path(), 'potion table must be bundled'"
           python -c "import urna; urna.open('crates/urna-format/tests/fixtures/golden_v1_minimal.urna').validate(); print('validate ok')"
           urna validate crates/urna-format/tests/fixtures/golden_v1_minimal.urna
