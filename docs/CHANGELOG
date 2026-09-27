@@ -27,6 +27,18 @@ format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). version
 
 - `install-test.yml` runs inside every release, as a dist post-announce job. it listened for `release: published`, which never fired: dist creates the release with `GITHUB_TOKEN`, and events from that token start no workflows, so 0.5.0 and 0.5.1 were tested by hand. its wheel job now installs the tag's version (waiting for `pypi.yml`, a separate run) instead of whatever was newest on pypi.
 
+### fixed
+
+- `install-test.yml` skips the package-channel job for a prerelease tag. dist publishes nothing to homebrew, npm or crates.io for one, so a `v0.6.0-rc.1` would have failed its own release run on npm, bun, pnpm, yarn and binstall finding no such version, and tested the previous homebrew formula. the one-liner and wheel jobs still run: the github release and pypi carry the prerelease.
+- `docs/USAGE.md` agrees with the code again:
+  - a citation span depends on the build path: the caller's byte range from `urna.build`, the row's position in the `order_by` order from `urna build --spec`, the blob or frame index for media. the doc promised a byte span everywhere.
+  - the `file_hash` the cli prints is sha-256 of the whole file, footer included (what `sha256sum` prints); the footer stores the hash of the bytes before it.
+  - `inspect --json` lists `blobs` and `spaces[]`.
+  - the search-text interpreter order includes the `urna setup` venv.
+  - `release_check.sh` runs eight python suites, not three.
+  - install-test runs inside the release run, with the channel job.
+  - the env table: `URNA_ST_DEVICE` and `URNA_ST_DTYPE` defaults, `URNA_MUTATION_ITERS` per crate, and `URNA_FILE` from the examples.
+
 ## [0.5.1] - 2026-09-26
 
 the same binaries as 0.5.0, republished so every registry page shows install commands that work: the 0.5.0 pages on crates.io and npm say `npm install -g urna`, the pypi page says `cargo install urna-cli`, and neither exists. it is also the first tag whose npm package ci publishes itself.

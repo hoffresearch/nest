@@ -90,6 +90,10 @@ jobs:
 
   channels:
     name: ${{ matrix.channel }} ${{ matrix.os }}
+    # dist skips homebrew, npm and crates.io for a prerelease tag (release.yml
+    # gates them on the same plan fields), so a prerelease has nothing on
+    # these channels to install. a manual dispatch carries no plan and runs.
+    if: ${{ !inputs.plan || !fromJson(inputs.plan).announcement_is_prerelease || fromJson(inputs.plan).publish_prereleases }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

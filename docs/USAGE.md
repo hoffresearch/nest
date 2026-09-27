@@ -2,7 +2,7 @@
 project: urna
 audience: users and integrators
 status: active
-last-updated: 2026-09-26
+last-updated: 2026-09-27
 domain: usage
 ---
 
@@ -71,7 +71,7 @@ the embedder is any callable that takes the chunk specs and returns one l2-norma
 
 image corpora live in the forge tooling layer because a vision tower needs torch, which the sovereign runtime does not take. the `.urna` they emit is an ordinary `.urna`, served by the same rust runtime from mmap.
 
-the media travels inside the file. the encoded stream is stored as content-addressed blobs (section 0x14), each chunk carries the exact byte span it was embedded from (overlay 0x16), and the image vectors sit in their own named space (registry 0x15, slab in the 0x20-0x2F band) behind the `supports_multimodal` capability, gated by their own `model_hash` in isolation. these sections are excluded from `content_hash`, so adding media never moves an existing citation.
+the media travels inside the file. the encoded stream is stored as content-addressed blobs (section 0x14), each chunk points at the media it was embedded from (overlay 0x16: the whole blob for the per-image backends, the frame index inside its segment for the av1 stream), and the image vectors sit in their own named space (registry 0x15, slab in the 0x20-0x2F band) behind the `supports_multimodal` capability, gated by their own `model_hash` in isolation. these sections are excluded from `content_hash`, so adding media never moves an existing citation.
 
 `python/tools/urna_build_image_corpus.py` letterboxes every image onto one canvas, encodes the sequence, embeds the DECODED frames, and writes one chunk per image or pdf page. embedding the decoded frames rather than the source pixels is deliberate: the index has to describe what a reader can actually get back.
 
@@ -163,7 +163,7 @@ urna inspect my_corpus.urna             # human-readable
 urna inspect my_corpus.urna --json | jq # structured
 ```
 
-schema: `{magic, version_major, version_minor, format_version, schema_version, embedding_dim, n_chunks, n_embeddings, file_size, manifest, sections[], file_hash, content_hash, simd_backend}`.
+schema: `{magic, version_major, version_minor, format_version, schema_version, embedding_dim, n_chunks, n_embeddings, file_size, manifest, sections[], blobs, spaces[], file_hash, content_hash, simd_backend}`. `blobs` is `null` or the media records (`content_hash`, `original_uri`, `byte_len`, `inlined`); `spaces[]` lists each named vector space (`name`, `dim`, `dtype`, `model_hash`, `n_vectors`). `file_hash` is sha-256 over the whole file as written, footer included, so `sha256sum my_corpus.urna` prints the same digest; the footer itself stores sha-256 over the bytes before it, which the reader checks on open.
 
 ## 5. search
 
@@ -230,7 +230,7 @@ urna retrieve my_corpus.urna "can I use this offline" -k 5 --format jsonl
 
 each hit is `{chunk_id, score, score_type=cosine, source_uri, offset_start, offset_end, citation_id, text, file_hash, content_hash, rerank_source}`. the `score` is the exact rerank value (never a candidate-generator proxy), `text` is the tier-1 stored canonical text, and `citation_id` round-trips through `urna cite`. `--format json` emits a single pretty array instead of one object per line.
 
-the embedder picks its interpreter in a fixed order: `URNA_PYTHON` if set, else the repo's `.venv/bin/python` (which carries the forge deps: numpy + tokenizers + the vendored potion table) discovered by walking up from the cwd, else `python3` on PATH. so the repo `.venv` is used automatically; set `URNA_PYTHON` only to force a specific interpreter. the selected interpreter is printed to stderr; and since discovery executes the nearest ancestor `.venv/bin/python`, set `URNA_PYTHON` explicitly if you run `urna` from inside an untrusted directory tree. point `--model-path` at a copied potion table dir for a fully sealed offline run.
+the embedder picks its interpreter in a fixed order: `URNA_PYTHON` if set, else the venv `urna setup` builds (`<data root>/urna/venv`), else the repo's `.venv/bin/python` (which carries the forge deps: numpy + tokenizers + the vendored potion table) discovered by walking up from the cwd, else `python3` on PATH. so the repo `.venv` is used automatically; set `URNA_PYTHON` only to force a specific interpreter. the selected interpreter is printed to stderr; and since discovery executes the nearest ancestor `.venv/bin/python`, set `URNA_PYTHON` explicitly if you run `urna` from inside an untrusted directory tree. point `--model-path` at a copied potion table dir for a fully sealed offline run.
 
 the python convenience is `python python/forge/retrieve.py`: it builds a `.urna` from the cc0 demo corpus with the potion embedder, asks a question, and prints the cited answer with a `urna://` citation, all offline and deterministic (the one-gif demo).
 
@@ -339,7 +339,7 @@ recall@10 here is ANN-vs-exact rank-stability (the ANN index against the exact-c
 
 ## 9. citations
 
-every search hit carries a stable `citation_id` of the form `urna://<content_hash>/<chunk_id>`. resolve it back to the canonical text and original byte span:
+every search hit carries a stable `citation_id` of the form `urna://<content_hash>/<chunk_id>`. resolve it back to the stored canonical text and its span:
 
 ```sh
 urna cite my_corpus.urna 'urna://sha256:1aa9.../sha256:8f314...'
@@ -349,13 +349,15 @@ urna cite my_corpus.urna 'urna://sha256:1aa9.../sha256:8f314...'
 
 `cite` is tier-1: it returns the stored canonical text plus the verifying hashes (`file_hash`, `content_hash`) and the byte span. it does NOT reopen the original source bytes; original-byte reopen with a blob-digest verify is net-new tier-2 work that belongs to catalog mode, not the flagship. `ask` and `retrieve` print the same tier-1 stored canonical text, so the answer you get is exactly what `cite` resolves.
 
+what the span (`offset_start` / `offset_end`) means depends on how the file was built. a file built from python (`urna.build`, section 1) stores the `byte_start` / `byte_end` each chunk dict carried, so it is the byte range in the source the caller chunked. a file built by `urna build --spec` (section 13) stores the row's position in the `order_by` order, `[n, n + 1)`: a stable locator for the row, not a byte range; `source_uri` (the row's `source_uri` column, else `item://<name>/<key>`) is what names the source. media chunks in either path report the blob or frame span of section 1.
+
 ## 10. release verification
 
 ```sh
 ./scripts/release_check.sh
 ```
 
-runs the full pipeline: cargo test, clippy, fmt, all 3 python test suites, ruff, `measure_presets.py`, `compare_measure.py` against the committed baseline. exits non-zero on any failure.
+runs the full pipeline: cargo test, clippy, fmt, the python extension rebuilt, eight python test suites (e2e, builder, search-text model hash, image corpus, forge spec, quality gate, cli space, query embedder routing), ruff, `measure_presets.py`, `compare_measure.py` against the committed baseline. exits non-zero on any failure.
 
 ## 11. install health check (`urna doctor`)
 
@@ -551,13 +553,14 @@ every `URNA_*` variable read anywhere in the codebase (installers, cli, forge, d
 | `URNA_ALLOW_REMOTE_CODE` | runtime, build | unset (empty) | comma-separated preset names allowed to load `trust_remote_code` model-repo code (`ask` / `retrieve` routing, `urna_model_bench.py`, `urna_ui_bridge.py`) |
 | `URNA_ALLOW_HEAVY` | runtime | unset | allows an executable / heavy embedder preset in `embed_query_model.py` |
 | `URNA_CACHE_DIR` | build | `${XDG_CACHE_HOME:-~/.cache}/urna` | forge's triad-addressed embed cache root (declarative builds, section 13) |
-| `URNA_ST_DEVICE` | build | `auto` | sentence-transformers device override (`cpu`, `mps`, `cuda`) for the forge embed workers |
-| `URNA_ST_DTYPE` | build | unset (model default) | sentence-transformers dtype override for the forge embed workers |
+| `URNA_ST_DEVICE` | build | `auto` (cuda, else mps, else cpu) | sentence-transformers device override (`cpu`, `mps`, `cuda`) for the forge embed workers |
+| `URNA_ST_DTYPE` | build | bf16 on cuda, fp16 on mps, fp32 on cpu | sentence-transformers dtype override for the forge embed workers |
 | `URNA_MODEL_DIR_<NAME>` | build | unset | local dir override for a registry preset, e.g. `URNA_MODEL_DIR_WEMM_2B`; wins over the hf cache, loses to an explicit `--model-path` |
 | `URNA_ENABLE_FAKE_PRESET` | test-only | unset | unlocks the `fake-test` model preset used by the registry's own test suite |
-| `URNA_MUTATION_ITERS` | dev | `1500` | iteration count for the mutation-fuzz harness; raise for a soak run |
+| `URNA_MUTATION_ITERS` | dev | `1500` (urna-format), `250` (urna-runtime) | iteration count for the mutation-fuzz harness; raise for a soak run |
 | `URNA_FUZZ_SEED_DIR` | dev | unset | seed corpus dir override for the mutation-fuzz harness |
 | `URNA_FUZZ_TARGETS` | dev | `urna-view section-decoders runtime-indexes mmap-open-search` | space-separated cargo-fuzz targets `scripts/fuzz_soak.sh` runs |
+| `URNA_FILE` | examples | `demo_fastapi.urna` / `demo_flask.urna` | the `.urna` the fastapi and flask examples serve; a missing file is bootstrapped as a small demo corpus |
 | `URNA_BASELINE` | dev | `data/measure/baseline.json` | regression baseline `release_check.sh` compares against |
 | `URNA_QUERIES` | dev | `100` | query count `measure_presets.py` uses via `release_check.sh` |
 | `URNA_K` | dev | `10` | top-k `measure_presets.py` uses via `release_check.sh` |
@@ -712,7 +715,7 @@ cargo audit bin ~/.local/bin/urna
 
 commits on `main` are ssh-signed and the branch ruleset requires verified signatures. release tags are annotated and ssh-signed too: `.github/workflows/tag-verify.yml` checks the tag against `.github/allowed_signers` in the plan phase of the release and before the wheels build, so an unsigned tag, a lightweight tag, or a signature from a key not on that list stops the release before anything is built.
 
-`.github/workflows/install-test.yml` runs after every published release and installs the product the way a user does: the one-liner against the release url on linux x86_64 / aarch64, macos arm64 / x86_64, windows, then `urna validate` on the golden fixture and `urna doctor`; a second job pip-installs the published wheel and runs the `uvx` entry point. a failure there means the release is broken for users: yank and re-cut.
+`.github/workflows/install-test.yml` runs inside every release run (a cargo-dist post-announce job, once every channel has published; or by manual dispatch with a tag) and installs the product the way a user does: the one-liner against the release url on linux x86_64 / aarch64, macos arm64 / x86_64, windows, then `urna validate` on the golden fixture and `urna doctor`; a second job installs through each package channel (homebrew, npm, bun, pnpm, yarn, cargo binstall) and ends in `urna setup --yes` + `urna doctor`, skipped for a prerelease tag since dist publishes no channel for it; a third pip-installs the tag's wheel and runs the `uvx` entry point. a failure there means the release is broken for users: yank and re-cut.
 
 </details>
 
