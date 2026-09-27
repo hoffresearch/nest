@@ -1,4 +1,4 @@
-//! `urna cite <file> urna://...` — resolve a citation URI into the
+//! `urna cite <file> urna://...` - resolve a citation URI into the
 //! canonical text, source span, and verifying hashes.
 
 use anyhow::Result;

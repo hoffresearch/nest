@@ -4,7 +4,7 @@ rebuild it under a different preset without re-embedding.
 This decoder reaches inside the binary container directly (parses the
 section table by hand) instead of using the PyO3 reader because we
 want the raw f32 vectors, the canonical text strings, and the byte
-spans — values the runtime intentionally hides behind its public
+spans - values the runtime intentionally hides behind its public
 search API.
 
 Internal to `python/tools/`. Not a public Python module.

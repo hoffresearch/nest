@@ -1,5 +1,5 @@
 //! `chunks_canonical` section (`SECTION_CHUNKS_CANONICAL = 0x02`).
-//! One length-prefixed UTF-8 string per chunk — the canonical text the
+//! One length-prefixed UTF-8 string per chunk - the canonical text the
 //! `chunk_id` was derived from.
 
 use super::codec::{Cursor, read_prefix, write_lp_str, write_prefix};

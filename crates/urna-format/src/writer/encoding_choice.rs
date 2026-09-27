@@ -30,7 +30,7 @@ impl SectionEncoding {
     }
 }
 
-/// Embedding dtype + on-disk encoding. The two are 1:1 in v1 — float32
+/// Embedding dtype + on-disk encoding. The two are 1:1 in v1 - float32
 /// implies raw f32 LE, float16 implies raw f16 LE, int8 implies the
 /// quantized prefix layout (see `encoding::encode_int8_embeddings`), int4
 /// implies the block-64 per-group layout (see `encode_int4_embeddings`).

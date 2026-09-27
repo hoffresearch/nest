@@ -1,4 +1,4 @@
-//! `UrnaView::from_bytes` — header, section table, manifest, footer
+//! `UrnaView::from_bytes` - header, section table, manifest, footer
 //! parsing. Validation hooks are in `super::validate` and run after the
 //! basic structure has been recognized.
 

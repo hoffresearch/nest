@@ -1,4 +1,4 @@
-"""embed_query_model.py — registry-backed query embedder for the rust CLI.
+"""embed_query_model.py - registry-backed query embedder for the rust CLI.
 
 argv (matching embed_query_potion.py, additively):
   <interp> embed_query_model.py [--model-path P] [--preset NAME] [--mrl-dim N]

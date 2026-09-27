@@ -17,7 +17,7 @@ use crate::sections::{
 impl<'a> UrnaView<'a> {
     /// Logical (decoded) bytes of a section's payload. Borrows for raw
     /// encoding; copies for zstd. Float16/int8 embedding payloads are
-    /// returned as-is — the runtime dispatches on `manifest.dtype`.
+    /// returned as-is - the runtime dispatches on `manifest.dtype`.
     ///
     /// The chunks_canonical (0x02) section gets two extra, content_hash-
     /// invariant rewrites here so its decoded bytes are byte-identical to a
@@ -101,7 +101,7 @@ impl<'a> UrnaView<'a> {
     /// (see `CANONICAL_SECTIONS`). Hashes the **decoded** bytes so two
     /// files that wire-compress the same logical content (zstd vs raw)
     /// produce the same content_hash and therefore stable citations.
-    /// Quantized embeddings (float16 / int8) hash their on-disk bytes —
+    /// Quantized embeddings (float16 / int8) hash their on-disk bytes -
     /// they're already the canonical representation for that precision.
     /// Optional sections (HNSW, BM25, and every reserved 0x09+ section) are
     /// NOT included, and neither is the manifest: the manifest is covered by

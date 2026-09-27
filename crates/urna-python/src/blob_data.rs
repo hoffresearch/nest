@@ -1,5 +1,5 @@
-//! blob_data (0x17) bridge: turn the `blob_data_paths` kwarg — one
-//! optional file path per blob_refs record — into the encoded section
+//! blob_data (0x17) bridge: turn the `blob_data_paths` kwarg - one
+//! optional file path per blob_refs record - into the encoded section
 //! payload. Reading happens here in Rust so the shard bytes never round-
 //! trip through Python objects; peak memory is ~2× the media size (the
 //! read buffers plus the assembled payload), which the spec docs flag for

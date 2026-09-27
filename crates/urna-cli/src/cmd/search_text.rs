@@ -1,4 +1,4 @@
-//! `urna search-text <file> "query" -k K` — embed the query via
+//! `urna search-text <file> "query" -k K` - embed the query via
 //! `python/embed_query.py`, validate model_hash against the manifest
 //! (the shared three-layer gate in `embed_gate`), route to the declared
 //! `index_type`. Keeps `--skip-model-hash-check` for legacy placeholder

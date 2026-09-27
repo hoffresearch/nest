@@ -8,7 +8,7 @@
 //!   unknown dtype, empty name, non-sha256 hash, duplicate index/name).
 //! - the reader rejects a band whose size disagrees with the table, and
 //!   rejects a zstd-encoded band (bands are fixed-stride slabs, never
-//!   zstd) — both through real .urna files.
+//!   zstd) - both through real .urna files.
 
 #![allow(
     clippy::unwrap_used,

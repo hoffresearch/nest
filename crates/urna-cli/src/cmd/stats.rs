@@ -1,4 +1,4 @@
-//! `urna stats <file>` — size, dim, dtype, hashes, per-section sizes,
+//! `urna stats <file>` - size, dim, dtype, hashes, per-section sizes,
 //! SIMD backend.
 
 use anyhow::Result;

@@ -58,7 +58,7 @@ def chunk_text(
     with optional overlap. Returns chunks whose byte spans index into the
     UTF-8 encoding of `text`, so the spans round-trip through `urna cite`.
 
-    The simplest possible thing that's still useful — production callers
+    The simplest possible thing that's still useful - production callers
     will want a sentence-aware splitter, but the chunk_id contract is
     independent of the splitter so it's easy to swap.
     """
@@ -102,13 +102,13 @@ class EmbeddingCache:
     The key includes `model_key` (embedding_model + model_hash). A chunk_id is
     only a function of the text/spans/chunker, NOT the embedding model, so a
     cache keyed on chunk_id alone would silently hand back a PREVIOUS model's
-    vectors when the same corpus is re-embedded with a different model —
+    vectors when the same corpus is re-embedded with a different model -
     shipping a .urna whose vectors do not match its declared model_hash. Keying
     on the model closes that.
 
     Uses table `embeddings_v2`: an old chunk-id-only `embeddings` table (from a
     prior urna version) is simply not reused (chunks are re-embedded), never
-    misread — no in-place migration, no stale-model hit.
+    misread - no in-place migration, no stale-model hit.
     """
 
     SCHEMA = """

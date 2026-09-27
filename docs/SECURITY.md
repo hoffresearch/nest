@@ -31,7 +31,7 @@ things we treat as security bugs:
 - a citation collision (two distinct chunks producing the same `chunk_id`)
 - a `content_hash` collision under the v1 hash domain separation
 - a path that bypasses `model_hash` validation in a text query path (`search-text`, `ask`, `retrieve`) without the user passing an explicit skip flag; `search-space` takes a raw vector and validates only when `--expect-model-hash` is given
-- a path that executes model-repo code (`trust_remote_code` presets) without the explicit opt-in — the spec's `allow_remote_code` at build time, `URNA_ALLOW_REMOTE_CODE` on the query/bench/bridge side (`embed_query_model.py`, `urna_model_bench.py`, `urna_ui_bridge.py`) — or with a code file whose sha256 is outside the pinned allowlist in `python/forge/model_registry.py`
+- a path that executes model-repo code (`trust_remote_code` presets) without the explicit opt-in - the spec's `allow_remote_code` at build time, `URNA_ALLOW_REMOTE_CODE` on the query/bench/bridge side (`embed_query_model.py`, `urna_model_bench.py`, `urna_ui_bridge.py`) - or with a code file whose sha256 is outside the pinned allowlist in `python/forge/model_registry.py`
 - secrets or credentials accidentally committed to the repository
 
 things we do not treat as security bugs:

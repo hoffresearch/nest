@@ -28,7 +28,7 @@ pub const INT8_PREFIX_SIZE: usize = 8;
 pub fn quantize_f32_to_i8(values: &[f32]) -> (f32, Vec<i8>) {
     let max_abs = values.iter().fold(0.0f32, |acc, &v| acc.max(v.abs()));
     if max_abs == 0.0 {
-        // Pathological zero vector — quantize to all zeros with scale 1.
+        // Pathological zero vector - quantize to all zeros with scale 1.
         // The reader's zero-norm guard will reject queries against this.
         return (1.0, vec![0i8; values.len()]);
     }

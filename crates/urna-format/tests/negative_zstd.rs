@@ -113,7 +113,7 @@ fn find_entry(bytes: &[u8], section_id: u32) -> (usize, SectionEntry) {
 
 /// Rewrite the file's `file_hash` in the footer to match the (possibly
 /// tampered) body. Used to isolate a logical bug from a structural
-/// one — physical checksums still pass, the bug is in the encoding /
+/// one - physical checksums still pass, the bug is in the encoding /
 /// payload contract.
 fn rewrite_file_hash(bytes: &mut [u8]) {
     let body_end = bytes.len() - URNA_FOOTER_SIZE;
@@ -147,7 +147,7 @@ fn rejects_unsupported_encoding_value() {
 
 #[test]
 fn rejects_zstd_encoding_on_embeddings_section() {
-    // Embeddings must stay raw / float16 / int8 — never zstd. Even
+    // Embeddings must stay raw / float16 / int8 - never zstd. Even
     // though zstd is otherwise valid, applying it to the embeddings
     // section breaks the SIMD-on-mmap contract.
     let mut bytes = build_raw();

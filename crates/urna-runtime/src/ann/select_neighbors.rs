@@ -10,7 +10,7 @@
 //! - `select_neighbors_heuristic` (Algorithm 4): iteratively pick the
 //!   closest remaining candidate, but reject it if there is already a
 //!   chosen neighbor that is closer to the candidate than the candidate
-//!   is to the query — meaning the candidate is "shadowed" by an
+//!   is to the query - meaning the candidate is "shadowed" by an
 //!   already-chosen point. This gives angular diversity. Refills any
 //!   shortfall from the pruned set so neighbor lists actually reach m.
 //!

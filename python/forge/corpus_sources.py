@@ -1,8 +1,8 @@
 """Row loaders for declarative builds: sqlite/csv/jsonl/image_dir/pdf_dir.
 
 Every loader returns the same shape: an ordered list of Row with the item
-input_hash (RFC-0 N2) computed at load time — sha256 over canonical text,
-source image bytes, label and chunker_version — so any content change
+input_hash (RFC-0 N2) computed at load time - sha256 over canonical text,
+source image bytes, label and chunker_version - so any content change
 invalidates caches by construction. The image byte hash is computed once
 here and reused by media dedup (RFC-1).
 
@@ -11,7 +11,7 @@ key must be UNIQUE across rows or loading fails telling the operator to
 append a unique column. `ordinal` is presentation order, never identity (N3).
 
 source_uri: a row column named `source_uri` wins; otherwise the stable form
-`item://<corpus>/<key>` — deterministic, survives media re-encoding.
+`item://<corpus>/<key>` - deterministic, survives media re-encoding.
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ class _Blank(dict):
 
 def render_template(template: str, row: dict) -> str:
     """Format a text template, dropping lines whose placeholders ALL resolve
-    empty, then cleaning empty punctuation artifacts (`()`, dangling `—`)."""
+    empty, then cleaning empty punctuation artifacts (`()`, dangling `-`)."""
     lines = []
     for line in template.strip().splitlines():
         fields = [f for _, f, _, _ in string.Formatter().parse(line) if f]
@@ -180,7 +180,7 @@ def _load_sqlite(spec: CorpusSpec) -> list[Row]:
         # (sparse localizations) but the operator should see the count.
         if raw and lookup and hits == 0:
             raise SpecError(
-                f"source.joins on '{join.on}': 0 of {len(raw)} rows matched — "
+                f"source.joins on '{join.on}': 0 of {len(raw)} rows matched - "
                 "check the key name and its sqlite type on both sides"
             )
         if raw and hits < len(raw):

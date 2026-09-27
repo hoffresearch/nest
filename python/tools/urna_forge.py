@@ -1,4 +1,4 @@
-"""urna_forge.py — declarative corpus builds from a TOML/JSON spec (RFC-1).
+"""urna_forge.py - declarative corpus builds from a TOML/JSON spec (RFC-1).
 
   python python/tools/urna_forge.py --spec corpus.toml [--sample N] [--models a,b]
       [--out-dir D] [--cache-dir C] [--resume] [--rebuild-only] [--strict-env]

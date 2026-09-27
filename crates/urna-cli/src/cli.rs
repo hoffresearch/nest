@@ -60,7 +60,7 @@ pub enum Commands {
         #[arg(short, long, default_value = "10")]
         k: i32,
     },
-    /// [engine] Search by raw text — embeds the query with the model declared in
+    /// [engine] Search by raw text - embeds the query with the model declared in
     /// the manifest, then runs the appropriate vector path. Honors the
     /// declared `index_type` (exact / hnsw / hybrid). Validates the
     /// embedder's model_hash against the manifest before running search;
@@ -89,7 +89,7 @@ pub enum Commands {
         /// running search-text against a corpus whose `model_hash`
         /// is the legacy zero-placeholder (pre-Phase-3 builds). In
         /// that case the search is still cosine-valid IF the user
-        /// genuinely uses the same embedding model — but there is
+        /// genuinely uses the same embedding model - but there is
         /// no guarantee. Prefer rebuilding the corpus.
         #[arg(long)]
         skip_model_hash_check: bool,
@@ -184,7 +184,7 @@ pub enum Commands {
         ann: Option<usize>,
         /// Force a "madvise-cold" cache between queries by calling
         /// posix_madvise(MADV_DONTNEED) on the mmap. Approximates the
-        /// first hit pos-boot — but it's a hint, not a guarantee.
+        /// first hit pos-boot - but it's a hint, not a guarantee.
         /// See MmapUrnaFile::madvise_cold for caveats.
         #[arg(long)]
         madvise_cold: bool,

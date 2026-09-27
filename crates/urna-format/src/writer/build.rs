@@ -1,4 +1,4 @@
-//! `UrnaFileBuilder::build_bytes` — orchestrates manifest validation,
+//! `UrnaFileBuilder::build_bytes` - orchestrates manifest validation,
 //! payload encoding, layout planning, buffer assembly, and final
 //! checksums + file_hash. Result is byte-deterministic for identical
 //! inputs (and `reproducible(true)`).
@@ -26,7 +26,7 @@ use crate::sections::{
 use sha2::{Digest, Sha256};
 
 impl UrnaFileBuilder {
-    /// Build the file in memory. Pure computation — no I/O.
+    /// Build the file in memory. Pure computation - no I/O.
     pub fn build_bytes(mut self) -> crate::Result<Vec<u8>> {
         if self.reproducible {
             self.manifest.created = Some(REPRODUCIBLE_CREATED.into());
@@ -162,7 +162,7 @@ impl UrnaFileBuilder {
         )?);
 
         if let Some(payload) = self.hnsw_index.take() {
-            // HNSW is binary, mostly random — zstd would barely help and
+            // HNSW is binary, mostly random - zstd would barely help and
             // would defeat mmap-friendly reads. Always raw.
             sections.push((SECTION_HNSW_INDEX, SECTION_ENCODING_RAW, payload));
         }
@@ -186,7 +186,7 @@ impl UrnaFileBuilder {
         }
         if let Some(payload) = self.blob_data.take() {
             // blob_data (0x17) carries the inlined media bytes; they are
-            // already codec-compressed, so ALWAYS raw — the runtime slices
+            // already codec-compressed, so ALWAYS raw - the runtime slices
             // individual blobs lazily off the mmap. OPTIONAL and EXCLUDED
             // from content_hash, like its 0x14 table.
             sections.push((SECTION_BLOB_DATA, SECTION_ENCODING_RAW, payload));
@@ -273,7 +273,7 @@ impl UrnaFileBuilder {
         buf[manifest_off..manifest_off + manifest_json.len()].copy_from_slice(&manifest_json);
 
         // 9. Write section data at its declared (aligned) offset and
-        //    compute checksums over data only — padding stays zero and
+        //    compute checksums over data only - padding stays zero and
         //    is not hashed. Section checksum hashes the **physical** bytes
         //    on disk (so for zstd sections it's over the compressed bytes).
         for (i, (_, _, data)) in sections.iter().enumerate() {

@@ -7,7 +7,7 @@ impl MmapUrnaFile {
     /// Hint to the OS that the mmap pages won't be needed soon. The
     /// next read will fault them back in from disk.
     ///
-    /// **Caveat:** this is `posix_madvise(MADV_DONTNEED)` — an
+    /// **Caveat:** this is `posix_madvise(MADV_DONTNEED)` - an
     /// approximation of cold cache, NOT a guarantee. The OS may
     /// ignore the hint, keep pages around for prefetch, or return
     /// them from the kernel's page cache anyway. Use it for
