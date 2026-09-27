@@ -58,6 +58,15 @@ edit in place, as if the file had always said the right thing. history lives in 
 - `data/demo/Instructions.md`: only when an upstream dataset or the corpus rebuild changes.
 - `.editorconfig`: only for a new language or file type.
 
+## file hygiene
+
+every file the change created or grew:
+
+- over the limit (300 lines in `crates/**/src/**`, 333 elsewhere): read what it does, what it depends on and who imports it, then split it by responsibility into modules that each do one thing. update every import and caller, and keep the public surface where it was. the tests pass before and after, with the same count. exempt: tests, data and generated files, lockfiles, json, yaml, toml, ron, jsonl, csv, datasets, vendored files.
+- dead weight: temporary scripts, logs, backups, stray files, code nothing calls. check that nothing imports it, delete it, run the tests.
+- misplaced: a file outside the folder its role belongs to per ARC.toml, or named against the repo's style (kebab-case dirs and docs, language-idiomatic sources). move or rename it (`git mv`, `git mv -f` for a case-only rename), fix every reference, list it in ARC.toml's inventory.
+- in the code: machine-specific paths and hardcoded values that should come from config or env, and comments that are verbose, stale or narrate history. fix or trim them.
+
 ## lessons
 
 something that failed first and then found its fix is worth a line for the next person:
@@ -70,7 +79,7 @@ no per-session notes files; the lesson lives where the next person will look.
 
 ## before the pull request
 
-- no file over 300 lines in `crates/**/src/**` or over 333 elsewhere (tests, data and generated files exempt).
+- the file hygiene block above is done: no file over its limit, nothing dead or misplaced left.
 - `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, ruff: clean.
 - `forge-core` tested on its own manifest (`--workspace` does not reach it).
 - no temporary script, stray file (a package manager run from the repo root leaves a `package.json`), dead code or orphan import left; `git status` is clean apart from the change.
