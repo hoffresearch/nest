@@ -1,5 +1,5 @@
-//! Manifest assembly for `build()`, carved out of `build_fn.rs` so the
-//! entry point stays under the 300-line crate guard.
+//! Manifest assembly for `build()`, carved out of `build_fn.rs`, which
+//! stays the entry point.
 
 use urna_format::manifest::Manifest;
 

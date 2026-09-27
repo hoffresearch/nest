@@ -1,7 +1,7 @@
 //! Input parsing and build-time vector conditioning for `build()`.
 //!
-//! Kept out of `build_fn.rs` so the entry point stays under the 300-line
-//! crate guard. Two helpers: `parse_chunks` (PyList of dicts ->
+//! Kept out of `build_fn.rs` so the entry point stays the entry point.
+//! Two helpers: `parse_chunks` (PyList of dicts ->
 //! `Vec<ChunkInput>`) and `truncate_renormalize` (matryoshka prefix slice +
 //! L2-renorm applied before quantization/HNSW).
 
@@ -237,7 +237,7 @@ pub(crate) fn build_graph_payload(
 }
 
 /// Build the hnsw index over the chunk embeddings (flattened f32 rows).
-/// carved out of `build_fn.rs` (300-line guard): the index doubles as the
+/// carved out of `build_fn.rs`: the index doubles as the
 /// source of top-m SEMANTIC edges for the optional graph, so it is built
 /// whenever hnsw OR the graph is wanted.
 pub(crate) fn build_hnsw(

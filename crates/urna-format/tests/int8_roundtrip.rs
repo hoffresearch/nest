@@ -1,8 +1,7 @@
 //! int8 codec round-trip coverage (`encoding=3`).
 //!
 //! These positive-path tests live here (not inline in `encoding/mod.rs`)
-//! so the wire-codec registry source stays under the 300-line rust src
-//! guard. Negative file-level paths live in `tests/negative_int8.rs`.
+//! so the wire-codec registry source holds the registry alone. Negative file-level paths live in `tests/negative_int8.rs`.
 
 #![allow(
     clippy::unwrap_used,

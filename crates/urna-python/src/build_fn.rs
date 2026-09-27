@@ -173,7 +173,7 @@ pub fn build(
     };
 
     // Resolve preset defaults; explicit kwargs win (helper lives in
-    // build_inputs so this entry point stays under the 300-line guard).
+    // build_inputs).
     let (text_enc, dt, default_hnsw, default_bm25) = resolve_preset(preset, text_encoding, dtype)?;
     // int4 requires the EFFECTIVE (post-truncation) embedding_dim to be a
     // multiple of the block size so every 64-dim group has its own absmax
@@ -188,8 +188,7 @@ pub fn build(
     let want_hnsw = with_hnsw.unwrap_or(default_hnsw);
     let want_bm25 = with_bm25.unwrap_or(default_bm25);
 
-    // Disclosure metadata + manifest assembly live in build_manifest so
-    // this entry point stays under the 300-line guard.
+    // Disclosure metadata + manifest assembly live in build_manifest.
     let manifest = crate::build_manifest::build_manifest(
         embedding_model,
         embedding_dim,
@@ -217,8 +216,7 @@ pub fn build(
     // here we use the originals so build is independent of dtype loss. The
     // index is also the source of top-m SEMANTIC edges for the optional graph,
     // so build it whenever hnsw OR the graph is wanted; only attach the hnsw
-    // SECTION when hnsw is wanted. helper lives in build_inputs (300-line
-    // guard).
+    // SECTION when hnsw is wanted. helper lives in build_inputs.
     let n = chunk_inputs.len();
     let hnsw_index = if want_hnsw || with_graph {
         Some(crate::build_inputs::build_hnsw(
