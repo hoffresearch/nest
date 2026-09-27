@@ -19,4 +19,5 @@ tick what the change touched; leave the rest. the full walk is `.contracts/.agen
 
 - [ ] `scripts/release_check.sh` passes (fmt, clippy `-D warnings`, tests, ruff)
 - [ ] `forge-core` tested on its own manifest, if touched
-- [ ] no file over the line limits, no stray or temporary files, no em dash or emoji
+- [ ] file hygiene: files over the line limit split by responsibility, nothing dead, stray or misplaced left
+- [ ] no em dash or emoji
