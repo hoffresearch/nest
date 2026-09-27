@@ -67,10 +67,14 @@ pr-run-mode = "plan"
 # crates.io job (.github/workflows/publish-crates.yml) needs
 # CARGO_REGISTRY_TOKEN, all repo secrets; see the maintainer checklist.
 publish-jobs = ["homebrew", "npm", "./publish-crates"]
+# the installed-product test runs after the release is announced. it cannot
+# listen for `release: published`: the release is created with
+# GITHUB_TOKEN, and events from that token start no workflows.
+post-announce-jobs = ["./install-test"]
 # a custom job gets `id-token` + `packages` by default, which zeroes
 # `contents`; the crates job checks out the tag, so it asks for read (and
 # keeps id-token for a later move to crates.io trusted publishing).
-github-custom-job-permissions = { "publish-crates" = { contents = "read", id-token = "write" } }
+github-custom-job-permissions = { "publish-crates" = { contents = "read", id-token = "write" }, "install-test" = { contents = "read" } }
 # sigstore keyless provenance for every release artifact, verifiable with
 # `gh attestation verify` (issue #75).
 github-attestations = true

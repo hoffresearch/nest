@@ -422,3 +422,14 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+
+  custom-install-test:
+    needs:
+      - plan
+      - announce
+    uses: ./.github/workflows/install-test.yml
+    with:
+      plan: ${{ needs.plan.outputs.val }}
+    secrets: inherit
+    permissions:
+      "contents": "read"
