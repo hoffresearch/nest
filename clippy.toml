@@ -4,7 +4,7 @@
 #
 #   cargo clippy --workspace --all-targets -- -D warnings
 #
-# The `-D warnings` flag is what release_check.sh enforces — every
+# The `-D warnings` flag is what release_check.sh enforces: every
 # clippy lint is treated as a hard error. New lints from clippy
 # upgrades will block the gate until reviewed.
 
@@ -17,9 +17,8 @@
 # trip earlier than line count alone would.
 cognitive-complexity-threshold = 15
 
-# Type complexity: dynamic threshold vs concrete count. clippy default
-# is 250; we override down because the format crate uses a few
-# Cow-of-Vec-of-tuple types that test the limit without being unwieldy.
+# Type complexity: pinned at clippy's default (250) so an upgrade that
+# moves the default cannot change what the gate flags.
 type-complexity-threshold = 250
 
 # `too_many_arguments` threshold. Default is 7; runtime crate has a
@@ -28,8 +27,7 @@ type-complexity-threshold = 250
 # at the call site rather than raising the threshold globally.
 too-many-arguments-threshold = 7
 
-# Doc-attribute lints are noisy on a project with cross-crate links;
-# leave the rustdoc gate to rustdoc itself.
+# tests may print; a failing test's output is the point.
 allow-print-in-tests = true
 
 # `unwrap_used` is denied workspace-wide (Cargo.toml [workspace.lints]);
