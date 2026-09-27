@@ -4,8 +4,8 @@
 # release download url), then runs `urna validate` on the golden fixture
 # and `urna doctor` with real numpy/tokenizers. a second job installs the
 # binary through each package channel (homebrew, npm, bun, pnpm, yarn,
-# cargo binstall),
-# which ships the bare binary, and proves `urna setup --yes` completes it:
+# cargo binstall), which ships the bare binary, and proves `urna setup
+# --yes` completes it:
 # payload from the tagged release, a python env built from a runner python
 # that has no numpy, then `urna doctor`. a third job pip-installs the
 # published wheel and repeats validate + the uvx console entry point.
