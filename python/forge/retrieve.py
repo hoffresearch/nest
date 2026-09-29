@@ -3,8 +3,9 @@
 this is the agent-native flagship end to end, OFFLINE and deterministic:
 
   1. embed the query with the default potion static table (no torch, no socket)
-  2. UrnaFile.retrieve(qvec, k) routes by manifest capability and returns cited
-     spans whose `score` IS the exact-cosine rerank value
+  2. UrnaFile.retrieve(qvec, k, query_text=query) routes by what the file
+     carries (bm25 -> hybrid, hnsw -> ann, else exact) and returns cited spans
+     whose `score` IS the exact-cosine rerank value
   3. each hit carries the tier-1 stored canonical text + a urna:// citation that
      `urna cite` resolves back to the same bytes
 
@@ -45,7 +46,9 @@ def retrieve(urnafile, query: str, k: int = 5, embedder=None, verify_model: bool
     emb = embedder or potion_embedder()
     qvec = emb.embed_texts([query])[0]
     expected = emb.model_hash() if (verify_model and hasattr(emb, "model_hash")) else None
-    return urnafile.retrieve(qvec, k, expected_model_hash=expected)
+    # the text rides along so a file with a bm25 section takes the hybrid
+    # route (the lexical leg needs the words, not the vector).
+    return urnafile.retrieve(qvec, k, expected_model_hash=expected, query_text=query)
 
 
 def build_demo(out_path: str) -> str:
