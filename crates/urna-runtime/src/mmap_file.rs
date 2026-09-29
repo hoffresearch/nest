@@ -235,6 +235,13 @@ impl MmapUrnaFile {
     pub fn has_ann(&self) -> bool {
         self.ann_index.is_some()
     }
+    /// the hnsw beam floor (the file's `ef_construction`, 400 for python
+    /// builds): `search_ann(_, _, ef)` searches `max(ef, k, floor)`
+    /// candidates, so an `ef` below the floor changes nothing. `None`
+    /// without an hnsw section.
+    pub fn ann_ef_floor(&self) -> Option<usize> {
+        self.ann_index.as_ref().map(|idx| idx.ef_search)
+    }
     pub fn has_bm25(&self) -> bool {
         self.bm25_index.is_some()
     }

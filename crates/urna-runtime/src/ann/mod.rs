@@ -84,7 +84,9 @@ pub struct HnswIndex {
     pub(super) store: PackedVectors,
     pub(super) dim: usize,
     pub(super) n: usize,
-    /// `ef_search` default. Caller can override per query.
+    /// the search beam floor, `ef_construction` at decode time: a caller's
+    /// `ef` widens the beam above it (`max(ef, ef_search)`) and never
+    /// narrows it, so the recall measured at build stays the floor too.
     pub ef_search: usize,
 }
 
