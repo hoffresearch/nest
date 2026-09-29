@@ -14,6 +14,10 @@ format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). version
 
 ## [Unreleased]
 
+### fixed
+
+- `ask`, `retrieve` and `search-text` route by what the file carries, not by the manifest's `index_type`. the `hybrid` preset writes `index_type = "hnsw"` and marks bm25 as the `supports_bm25` capability (`urna.build` never called the builder's `.hybrid()`), so the string route sent every python-built hybrid file down the hnsw path and its bm25 section was read only by an explicit `search_hybrid` call; the quickstart corpus and every forge default build were in that state. `MmapUrnaFile::search_routed` is the one route the three verbs and the python `UrnaFile.retrieve` share: bm25 section plus query text gives the hybrid path, an hnsw section gives ann, otherwise exact; the graph is reached only through `search-graph`. `UrnaFile.retrieve` gains `query_text=` (the vector carries no words; `forge/retrieve.py` passes it), and its `hops` argument is kept, unused. new `crates/urna-runtime/tests/search_routed.rs` and a `test_e2e.py` case where a chunk sitting at cosine -1 reaches the rerank through its one word.
+
 ### changed
 
 - usage sections 12 to 14 describe the spec the code reads: the flags `urna build` forwards and the three (`--strict-env`, `--seed`, `--json`) that exist only on `urna_forge.py` (section 13 documented `--strict-env` on `urna build`, a clap usage error); the `[build]` table (`preset` defaults to `hybrid`, `with_graph` to true, `mrl_dim` has no ladder check), the `corpus`, `source`, `models` and `media` keys the code reads and the doc did not, `--resume`'s scope, and that the profile name lands in the lock, not the manifest; the registry table's mrl column shows the discrete ladders instead of ranges and stray `;` cells.

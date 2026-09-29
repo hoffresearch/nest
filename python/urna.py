@@ -7,10 +7,12 @@ and re-exports a stable surface:
   - UrnaFile.search(query, k)           -> list[SearchHit] (exact, recall=1.0)
   - UrnaFile.search_ann(query, k, ef)   -> list[SearchHit] (HNSW + exact rerank)
   - UrnaFile.search_hybrid(query, query_text, k, candidates) -> list[SearchHit]
-  - UrnaFile.retrieve(query, k, ...)    -> list[RetrieveHit] (agent-native:
-        routes by manifest capability, score IS the exact-cosine rerank value,
-        each hit carries the tier-1 stored canonical text + verifying hashes +
-        the urna:// citation_id + the rerank_source precision marker. embed the
+  - UrnaFile.retrieve(query, k, ..., query_text=None) -> list[RetrieveHit]
+        (agent-native: routes by what the file carries, hybrid when it has a
+        bm25 section and `query_text` is given, hnsw when it has an hnsw
+        section, exact otherwise; score IS the exact-cosine rerank value, each
+        hit carries the tier-1 stored canonical text + verifying hashes + the
+        urna:// citation_id + the rerank_source precision marker. embed the
         query OFFLINE first; see python/forge/retrieve.py for the potion path.)
   - UrnaFile.embedding_dim
   - UrnaFile.n_embeddings
