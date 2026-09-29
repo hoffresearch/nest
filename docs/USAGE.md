@@ -54,7 +54,7 @@ cfg = BuildConfig(
     embedding_model=emb.embedding_model,
     embedding_dim=emb.embedding_dim,
     chunker_version="my-chunker/v1",
-    model_hash=emb.model_hash(),  # a zero placeholder is rejected at write time
+    model_hash=emb.model_hash(),  # the zero placeholder is refused here, at write time
     preset="exact",  # see §6 for preset choices
     reproducible=True,
 )
@@ -187,10 +187,10 @@ for tuning the candidate set: `--candidates N` (default `4*k`, min 64).
 
 ### force the ANN path
 
-useful for debugging or measuring `ef_search` curves. falls back to exact if the file has no HNSW section.
+useful for debugging or measuring `ef_search` curves above the file's floor. the beam that runs is `max(--ef, k, ef_construction)`, where `ef_construction` is the build's (400 for `urna.build` and the forge), so an `--ef` below 400 changes nothing on those files; the `candidates:` line of the output prints the beam that ran. falls back to exact if the file has no HNSW section.
 
 ```sh
-urna search-ann my_corpus.urna "[0.1, 0.2, ...]" -k 10 --ef 200
+urna search-ann my_corpus.urna "[0.1, 0.2, ...]" -k 10 --ef 800
 ```
 
 ### graph search (chunk-to-chunk)
@@ -310,7 +310,7 @@ no HuggingFace cache hits, no network. the fingerprint is recomputed locally and
 
 ### pre-phase-3 corpora
 
-files built with `model_hash = sha256:0...0` (the legacy placeholder) fail the strict gate by design. two options:
+files built with `model_hash = sha256:0...0` (the legacy placeholder) fail the strict gate by design; `urna.build` no longer writes one unless asked (`allow_placeholder_model_hash=True`, for fixtures). for a file you already have, two options:
 
 - rebuild with a real fingerprint (recommended).
 - pass `--skip-model-hash-check` to proceed at your own risk. the search is still cosine-valid if you genuinely use the same embedding model, but there is no guarantee.
@@ -330,12 +330,12 @@ Exact (100 queries, dim=384, dtype=int8, simd=neon) [hot]:
   p50: 1.28 ms  p95: 1.68 ms
 Exact ... [madvise-cold]:
   p50: 1.95 ms  p95: 2.40 ms
-ANN ef=100 (100 queries) [hot]:
+ANN ef=100 (beam 400, 100 queries) [hot]:
   p50: 0.44 ms  p95: 0.62 ms
   recall@10 (ANN vs exact): 0.9920
 ```
 
-recall@10 here is ANN-vs-exact rank-stability (the ANN index against the exact-cosine top-k on the same queries), NOT real-query retrieval quality, and the printed value mirrors the published tiny ladder number; see the RULER CAVEAT in section 6.
+`beam` is the candidate width that ran, `max(--ann, k, the file's ef_construction)`: on a file built with the default `ef_construction = 400`, `--ann 100` searches 400 candidates, so the latency and recall curves only move above that floor. recall@10 here is ANN-vs-exact rank-stability (the ANN index against the exact-cosine top-k on the same queries), NOT real-query retrieval quality, and the printed value mirrors the published tiny ladder number; see the RULER CAVEAT in section 6.
 
 ## 9. citations
 
@@ -455,7 +455,7 @@ the contract highlights:
 - **embedding.image_input**: `mode = "decoded_media"` (default with media: the index describes what the file serves) | `"source"` (measures the model, not the codec). the decoder fingerprint joins the recipe hash in decoded mode; the two modes answer different questions and are never mixed.
 - **output**: `mode = "single" | "per-model" | "both"` (one media encode, one embed pass per model, shared across outputs; chunk_ids are content-addressed so citations agree across modes), `provenance = "minimal" | "standard" | "full"` (path/sql/label redaction. `standard` writes image paths relative to the spec dir and drops nothing else; `full` keeps absolute paths and the sql; `minimal` drops the sql and writes `items[]` compact: `key` + `ordinal` per item, `items_compact = true` at the top level, and a `frame_of_row` list only when dedup collapsed rows. readers get the media frame from `forge.forge_manifest.frame_resolver` and the items from `manifest_items(manifest, need=(...))`, which refuses a dropped field (`image_path`, `label`, `media_uri`) with an error naming `provenance = "standard"` instead of a KeyError; `urna_model_bench.py` needs `standard` or `full` for its source-image queries. motivation: 38627 items with all five fields were 12 MB of a 13 to 16 MB manifest. the mode never touches the `.urna` itself, the manifest is a sidecar), `allow_remote_code`, `embed_media = true|false` (inline the encoded media into the `.urna` itself, section 0x17, so the corpus is ONE self-contained file with no media sidecar at read time; `urna media <file>` lists the blobs, `urna media <file> --export DIR` writes them back out hash-verified, and `urna validate` proves every inlined blob against its `blob_refs` sha256. the sidecar `.media/` dir remains on disk as the build cache; peak build memory is roughly twice the media bytes, so prefer sidecar mode for very large corpora), `cache_dir` (root of the shared embed cache, see the transactional paragraph below; default `URNA_CACHE_DIR`, else `${XDG_CACHE_HOME:-~/.cache}/urna`).
 
-every build emits `<name>.manifest.json` (`manifest_schema_version = 1`, canonical serialization; a versioned contract, not an ad-hoc log) and `<name>.build.lock.json` (package versions, tool binaries with sha256, model hashes, the materialized spec). reproduction has three declared levels: L1 = same top-k anywhere; L2 = per-vector cosine within 1e-5 on the same device class; L3 = byte-identical `file_hash`, claimable ONLY under a matching lock (`--rebuild-only` re-emits from the triad-keyed caches and compares the lock, which it never rewrites: a divergent rebuild writes its own lock beside it as `<name>.build.lock.rebuild.json`, so the two can be diffed; `--strict-env` turns divergence into an error). builds are transactional: per-stage state under `<out>/.forge-state/`, outputs staged in `<out>/.tmp/` and committed by atomic rename (same filesystem, so both stay in the output dir), `--resume` continues from the last intact stage. embed caches live OUTSIDE the output dir, under `${XDG_CACHE_HOME:-~/.cache}/urna/embed/<preset>/<triad>.npz` (override with `[output] cache_dir` in the spec, `--cache-dir` on `urna build` or `urna_forge.py`, or `URNA_CACHE_DIR`; `--dry-run` prints the resolved root; the location is not identity, so it never enters the lock and any override source claims L3 against the same root): the file name is a hash of the triad plus the arrays the spec needs, so two specs with the same rows and model read one entry whatever their output dir, a changed knob adds a sibling entry instead of overwriting, and a text-only model's entry does not change with the media crf (the decoder fingerprint enters only image-space recipes). the `model_hash` probes sit beside them under `models/`, keyed by preset plus the knobs that enter the fingerprint (normalize, dtype, device, model_path), and the loaded model corrects a probe that disagrees. caches are flock'd with checksum sidecars, and a torn cache is recomputed, never reused. output dirs built before this layout keep an orphaned `<out>/.cache/` that nothing reads; delete it by hand. the `<name>.media/` sidecar is not a cache in sidecar mode: it is the served media, and it stays beside the `.urna`.
+every build emits `<name>.manifest.json` (`manifest_schema_version = 1`, canonical serialization; a versioned contract, not an ad-hoc log) and `<name>.build.lock.json` (package versions, tool binaries with sha256, model hashes, the materialized spec). reproduction has three declared levels: L1 = same top-k anywhere; L2 = per-vector cosine within 1e-5 on the same device class; L3 = byte-identical `file_hash`, claimable ONLY under a matching lock (`--rebuild-only` re-emits from the triad-keyed caches and compares the lock, which it never rewrites: a divergent rebuild prints the divergence as a warning and writes its own lock beside it as `<name>.build.lock.rebuild.json`, so the two can be diffed; `urna_forge.py --strict-env` turns the divergence into an error instead). `--resume` reuses the media stage when its state file matches; rows are reloaded and the embed caches consulted on every run. builds are transactional: per-stage state under `<out>/.forge-state/`, outputs staged in `<out>/.tmp/` and committed by atomic rename (same filesystem, so both stay in the output dir), `--resume` continues from the last intact stage. embed caches live OUTSIDE the output dir, under `${XDG_CACHE_HOME:-~/.cache}/urna/embed/<preset>/<triad>.npz` (override with `[output] cache_dir` in the spec, `--cache-dir` on `urna build` or `urna_forge.py`, or `URNA_CACHE_DIR`; `--dry-run` prints the resolved root; the location is not identity, so it never enters the lock and any override source claims L3 against the same root): the file name is a hash of the triad plus the arrays the spec needs, so two specs with the same rows and model read one entry whatever their output dir, a changed knob adds a sibling entry instead of overwriting, and a text-only model's entry does not change with the media crf (the decoder fingerprint enters only image-space recipes). the `model_hash` probes sit beside them under `models/`, keyed by preset plus the knobs that enter the fingerprint (normalize, dtype, device, model_path), and the loaded model corrects a probe that disagrees. caches are flock'd with checksum sidecars, and a torn cache is recomputed, never reused. output dirs built before this layout keep an orphaned `<out>/.cache/` that nothing reads; delete it by hand. the `<name>.media/` sidecar is not a cache in sidecar mode: it is the served media, and it stays beside the `.urna`.
 
 ## 14. dataset compression levers and the dual quality gate
 

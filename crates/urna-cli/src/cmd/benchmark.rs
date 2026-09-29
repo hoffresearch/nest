@@ -76,13 +76,22 @@ pub fn run(
             println!("(no HNSW section - ANN bench skipped)");
             return Ok(());
         }
+        // the beam that runs is max(ef, k, the file's ef_construction); say
+        // so, or an `--ann 100` reads like a 100-wide search.
+        let beam = ef.max(k as usize).max(runtime.ann_ef_floor().unwrap_or(0));
         let ann_times = run_bench(&runtime, &queries, false, |rt, q| rt.search_ann(q, k, ef))?;
-        println!("ANN ef={} ({} queries) [hot]:", ef, n_queries);
+        println!(
+            "ANN ef={} (beam {}, {} queries) [hot]:",
+            ef, beam, n_queries
+        );
         print_latency(&ann_times);
 
         if madvise_cold {
             let cold = run_bench(&runtime, &queries, true, |rt, q| rt.search_ann(q, k, ef))?;
-            println!("ANN ef={} ({} queries) [madvise-cold]:", ef, n_queries);
+            println!(
+                "ANN ef={} (beam {}, {} queries) [madvise-cold]:",
+                ef, beam, n_queries
+            );
             print_latency(&cold);
         }
 
