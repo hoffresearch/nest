@@ -48,6 +48,7 @@ format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). version
 - bun, pnpm and yarn install `@urna/cli` like npm does (`bun add -g`, `pnpm add -g`, `yarn global add`), now in the readme, `docs/USAGE.md` and `install-test.yml` (bun and pnpm on linux and macos, yarn 1 on linux). bun and pnpm 10 block the package's postinstall; the `urna` wrapper downloads the binary on the first run, so nothing has to be allowed.
 - the npm section of usage says the `urna` command of npm, bun, pnpm and yarn is a node launcher: it needs node on PATH (exit 127 without it, `bunx --bun @urna/cli` runs it under bun) and costs about 40 ms per call against 3 ms for the binary; `install-test.yml` records that its bun legs pass because the runners ship node, and why no leg asserts the no-node case.
 
+- two known-gap bullets in AGENTS.md say what the code does: the bm25 tokenizer turns an unspaced cjk, thai or lao run into one token (not one token per character), and a bare binary's `urna doctor` exits 2, 3 or 4 by the first failing check, not always 4.
 - `install-test.yml` runs inside every release, as a dist post-announce job. it listened for `release: published`, which never fired: dist creates the release with `GITHUB_TOKEN`, and events from that token start no workflows, so 0.5.0 and 0.5.1 were tested by hand. its wheel job now installs the tag's version (waiting for `pypi.yml`, a separate run) instead of whatever was newest on pypi.
 
 ## [0.5.1] - 2026-09-26
