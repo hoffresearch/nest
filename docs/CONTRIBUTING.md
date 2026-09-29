@@ -2,7 +2,7 @@
 project: urna
 audience: contributors
 status: active
-last-updated: 2026-09-27
+last-updated: 2026-09-29
 domain: contributing
 ---
 
@@ -17,25 +17,31 @@ domain: contributing
 3. keep each pr focused on one concern. small is better.
 4. add or update tests for the change. new behavior needs a new test. write real tests against real artifacts (built .urna files, golden fixtures, real corpora), no mocks; cover the happy path, the error path, and one edge case.
 5. if the change alters architecture, module boundaries, data flow, or doc locations, update `docs/arc/ARC.toml` in the same pr. keep it concise and pragmatic. do not add a separate human architecture doc; `ARC.toml` is the machine map, the human reference, and the mermaid diagram all in one file.
-6. run `./scripts/release_check.sh` locally before pushing. `.github/workflows/ci.yml` runs the same gate on the pr (minus the lfs corpus measurement), plus the mutation-fuzz harnesses and a cargo-fuzz smoke.
+6. run `./scripts/release_check.sh` locally before pushing: it is the gate (the rust suite in release, the extension rebuilt, the python suites, ruff, the regression gates against `data/measure/baseline.json`). `.github/workflows/ci.yml` covers the rust side on linux, macos and windows plus checks the local gate does not run (cargo-deny, cargo-semver-checks, the engine-only clippy, the benches compiled, a cargo-fuzz smoke); it runs ruff but not the python suites, so run them locally.
 7. commit with a clear message in plain english. no conventional commits prefix.
 8. open a pr against `main`. the maintainer squash merges it; `main` requires verified (ssh-signed) commits and linear history, so sign your commits (`git config commit.gpgsign true` with an ssh or gpg key registered on github).
 
 ## setup
 
-requires rust edition 2024 (`rustc >= 1.85`) and python 3.12+.
+requires rust edition 2024 (`rustc >= 1.88`: the cli crate's floor, set by ratatui; the format, runtime and python crates alone build on 1.85) and python 3.12+.
 
 ```
 git clone https://github.com/hoffresearch/urna.git
 cd urna
 
 cargo build --release --workspace
+# the python extension is a separate build: `pyo3/extension-module` keeps
+# libpython out of the cdylib (without it the .so segfaults under uv's
+# standalone interpreters)
+cargo build --release -p urna-python --features pyo3/extension-module
 cp target/release/lib_urna.dylib python/_urna.so   # macOS
 cp target/release/lib_urna.so   python/_urna.so    # linux
 
 python3 -m venv .venv && source .venv/bin/activate
-pip install ruff sentence-transformers pandas zstandard pyarrow
+pip install ruff numpy tokenizers pillow sentence-transformers pandas zstandard pyarrow
 ```
+
+`numpy` and `tokenizers` are the forge deps the potion embedder needs; `pillow` is for the image tests; `sentence-transformers` only for the pt-br corpus and `search-text`.
 
 `data/corpus_next.v1.urna` is tracked via git lfs. demo datasets under `data/demo/` are local-only and gitignored; fetch them with the commands documented in `data/demo/Instructions.md`. without those datasets, runtime unit tests still pass.
 
@@ -45,7 +51,7 @@ these conventions are not aesthetic preferences. they exist to keep the repo rea
 
 ### naming
 
-- top-level directories and most root tokens use **3-char codes** (`dat`, `doc`, `ref`). this keeps directory glyphs atomic, easy to scan at a glance, and consistent across the hoff research repos that follow the same pattern. rust workspace conventions (`crates/`, `target/`) and language defaults (`python/`, `scripts/`, `tests/`) are kept as-is so the project stays idiomatic to its stack.
+- directories, docs and assets are **kebab-case english** (`data/`, `docs/`, `examples/`, `assets/images/`); rust workspace conventions (`crates/`, `target/`) and language defaults (`python/`, `scripts/`, `tests/`) stay as their stacks expect.
 - multi-word documentation and asset names use **kebab-case in english** (`code-of-conduct.md`-style filenames, dataset folders, etc.).
 - source files follow the conventions of their language (`snake_case.rs`, `snake_case.py`).
 - when proposing renames or moves, list exact `mv` commands first, execute the move, fix every touched import, and run the test suite after.
@@ -61,7 +67,7 @@ these conventions are not aesthetic preferences. they exist to keep the repo rea
 ### agent instruction files
 
 - `.contracts/.agents/AGENTS.md` is the single instruction source for ai coding agents working in this repo: use/update/init only `.contracts/.agents/AGENTS.md` (the core global agent file).
-- do not create per-tool instruction files (CLAUDE.md, GEMINI.md, CODEX.md, cursor rules). most agentic tooling already reads .contracts/.agents/AGENTS.md by default; point the rest at it on init.
+- do not create per-tool instruction files (GEMINI.md, CODEX.md, cursor rules). the root `CLAUDE.md` is a symlink to that file, not a second source; most agentic tooling already reads `.contracts/.agents/AGENTS.md` by default, point the rest at it on init.
 
 ### file hygiene
 
@@ -89,19 +95,20 @@ python:
 
 format and runtime invariants:
 
-the format is frozen at v1. any byte-level change either fits inside v1 (new section ids and encodings 4-255 are reserved) or bumps `URNA_FORMAT_VERSION` and ships as v2.
+the format is frozen at v1. any byte-level change either fits inside v1 (unused section ids and encoding ids are reserved and additive; the ids already written are listed in the agents contract and named in `crates/urna-format/src/layout/mod.rs`) or bumps `URNA_FORMAT_VERSION` and ships as v2.
 
 ## tests
 
 ```
 cargo test --release --workspace
-python tests/test_e2e.py
-python tests/test_builder.py
-python tests/test_search_text_model_hash.py
+python tests/test_e2e.py                      # the python suites, in the order
+python tests/test_builder.py                  # release_check.sh runs them; that
+python tests/test_search_text_model_hash.py   # script is the list, AGENTS.md names
+python tests/test_forge_spec.py               # the three that run by hand
 ./scripts/release_check.sh
 ```
 
-`release_check.sh` is the source of truth. if it passes locally, ci passes.
+the python tests are plain scripts (`pytest tests/` does not work) and need the built `_urna.so`. `release_check.sh` is the source of truth for the python side; ci runs the rust gates plus deny, semver and the windows job on top of it, so a green local gate is necessary, not sufficient.
 
 two lints are denied workspace-wide and will fail the build: `clippy::unwrap_used` (tests are exempt; parse paths read fields through `urna_format::bytes`) and `clippy::undocumented_unsafe_blocks` (every `unsafe` block states its invariant in a `// SAFETY:` comment). a change to any section decoder or search path should also run the mutation harness, and a new codec gets an arm in `fuzz/fuzz_targets/section_decoders.rs`:
 
@@ -114,7 +121,7 @@ cargo +nightly fuzz run urna-view -- -max_total_time=600      # needs cargo-fuzz
 ## reporting issues
 
 - bugs and feature requests: [github issues](https://github.com/hoffresearch/urna/issues).
-- security vulns: do not open a public issue. email [brenner@hoffresearch.com](mailto:brenner@hoffresearch.com). target ack within 72 hours.
+- security vulns: do not open a public issue. use the private advisory form (<https://github.com/hoffresearch/urna/security/advisories/new>) or email [brenner@hoffresearch.com](mailto:brenner@hoffresearch.com). target ack within 72 hours.
 - questions about the format: open a discussion, or read `docs/arc/ARC.toml`.
 
 bug reports should include the `.urna` `file_hash` and `content_hash` (from `urna stats <file>`), the runtime `simd_backend` (also in `urna stats`), the exact cli or python invocation, and the error output.
