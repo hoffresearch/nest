@@ -55,8 +55,9 @@ with and every query is checked against).
 ## your own corpus
 
 replace `docs.jsonl` with your rows and keep the spec. `source.kind` also
-takes `csv`, `sqlite` (a query), `image_dir` and `pdf_dir`; `[[models]]` takes
-any preset in the registry. the full contract, with a worked multi-model spec:
+takes `csv`, `sqlite` (a query) and `image_dir` (pdf pages are rendered first
+by `python/tools/urna_build_image_corpus.py --pdf`); `[[models]]` takes any
+preset in the registry. the full contract, with a worked multi-model spec:
 `docs/USAGE.md` section 13.
 
 `out/` is a build artifact and is gitignored.
