@@ -71,6 +71,7 @@ def _build(path: str, chunks: list[dict], dim: int, *, with_graph: bool) -> None
         embedding_dim=dim,
         chunker_version="gate/1",
         model_hash="sha256:" + "0" * 64,
+        allow_placeholder_model_hash=True,  # synthetic vectors, no model
         chunks=chunks,
         preset="exact",
         with_graph=with_graph,
