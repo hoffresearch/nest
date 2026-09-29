@@ -43,6 +43,7 @@ def test_pipeline_emits_validated_urna_file():
             embedding_dim=8,
             chunker_version="char/512",
             model_hash="sha256:" + "0" * 64,
+            allow_placeholder_model_hash=True,
             reproducible=True,
         )
         pipe = Pipeline(cfg, embedder=_toy_embed, scratch_db=os.path.join(d, "cache.db"))
@@ -84,6 +85,7 @@ def test_cache_skips_re_embedding_on_second_run():
                 embedding_dim=8,
                 chunker_version="char/8",
                 model_hash="sha256:" + "0" * 64,
+                allow_placeholder_model_hash=True,
                 reproducible=True,
             )
             pipe = Pipeline(cfg, embedder=counting_embed, scratch_db=scratch)
@@ -144,6 +146,7 @@ def test_mrl_truncation_sets_embedding_dim_and_query_stride():
             embedding_dim=full_dim,
             chunker_version="char/512",
             model_hash="sha256:" + "0" * 64,
+            allow_placeholder_model_hash=True,
             chunks=chunks,
             reproducible=True,
             mrl_dim=mrl_dim,
@@ -190,6 +193,7 @@ def test_mrl_dim_validation_rejects_oversized_and_zero():
                     embedding_dim=4,
                     chunker_version="char/512",
                     model_hash="sha256:" + "0" * 64,
+                    allow_placeholder_model_hash=True,
                     chunks=chunks,
                     reproducible=True,
                     mrl_dim=bad,
@@ -269,8 +273,82 @@ def test_retrieve_model_hash_gate():
         assert raised, "a mismatched expected_model_hash must raise"
 
 
+def test_placeholder_model_hash_refused_at_write_time():
+    """the zero fingerprint is refused by urna.build and by the Pipeline
+    unless the caller opts in; a real-looking hash passes; the opt-in still
+    writes the legacy file (the fixture every other suite here relies on)."""
+    chunks = [
+        dict(
+            canonical_text="um chunk",
+            source_uri="t.txt",
+            byte_start=0,
+            byte_end=8,
+            embedding=[1.0, 0.0, 0.0, 0.0],
+        )
+    ]
+    with tempfile.TemporaryDirectory() as d:
+        out = os.path.join(d, "ph.urna")
+        raised = False
+        try:
+            urna.build(
+                output_path=out,
+                embedding_model="toy",
+                embedding_dim=4,
+                chunker_version="char/512",
+                model_hash="sha256:" + "0" * 64,
+                chunks=chunks,
+            )
+        except ValueError as e:
+            raised = True
+            assert "placeholder" in str(e) and "model_hash()" in str(e), str(e)
+        assert raised, "the zero placeholder must be refused at write time"
+        assert not os.path.exists(out), "nothing is written on refusal"
+
+        cfg = BuildConfig(
+            output_path=out,
+            embedding_model="toy",
+            embedding_dim=8,
+            chunker_version="char/512",
+            model_hash="sha256:" + "0" * 64,
+        )
+        pipe = Pipeline(cfg, embedder=_toy_embed, scratch_db=os.path.join(d, "c.db"))
+        pipe.add_many(chunk_text("uma frase", "a.txt", max_chars=512))
+        raised = False
+        try:
+            pipe.emit()
+        except ValueError as e:
+            raised = True
+            assert "placeholder" in str(e), str(e)
+        finally:
+            pipe.close()
+        assert raised, "the Pipeline passes the refusal through"
+
+        # a real fingerprint (any other well-formed hash) writes.
+        urna.build(
+            output_path=out,
+            embedding_model="toy",
+            embedding_dim=4,
+            chunker_version="char/512",
+            model_hash="sha256:" + "ab" * 32,
+            chunks=chunks,
+        )
+        assert urna.open(out).n_embeddings == 1
+        # the opt-in keeps the legacy placeholder for fixtures.
+        urna.build(
+            output_path=out,
+            embedding_model="toy",
+            embedding_dim=4,
+            chunker_version="char/512",
+            model_hash="sha256:" + "0" * 64,
+            chunks=chunks,
+            allow_placeholder_model_hash=True,
+        )
+        assert urna.open(out).n_embeddings == 1
+
+
 if __name__ == "__main__":
     test_chunk_text_byte_spans_round_trip()
+    test_placeholder_model_hash_refused_at_write_time()
     test_pipeline_emits_validated_urna_file()
     test_cache_skips_re_embedding_on_second_run()
     test_cache_keyed_by_model_no_stale_reuse()

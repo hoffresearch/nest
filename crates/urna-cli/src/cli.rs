@@ -103,6 +103,9 @@ pub enum Commands {
         query: String,
         #[arg(short, long, default_value = "10")]
         k: i32,
+        /// HNSW beam width. The beam that runs is max(ef, k, the file's
+        /// ef_construction): values below that floor (400 for python
+        /// builds) change nothing; the `candidates:` line shows the beam.
         #[arg(long, default_value = "100")]
         ef: usize,
     },
@@ -180,7 +183,9 @@ pub enum Commands {
         queries: usize,
         #[arg(short, long, default_value = "10")]
         k: i32,
-        /// If set, also benchmark `search_ann` with the given ef.
+        /// If set, also benchmark `search_ann` with the given ef. The beam
+        /// that runs is max(ef, k, the file's ef_construction) and is
+        /// printed next to the ef.
         #[arg(long)]
         ann: Option<usize>,
         /// Force a "madvise-cold" cache between queries by calling

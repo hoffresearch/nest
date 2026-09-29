@@ -79,6 +79,8 @@ def build_corpus(out_path: Path, model_hash: str, dim: int = 4) -> None:
         model_hash=model_hash,
         chunks=chunks,
         reproducible=True,
+        # case 3 builds the legacy placeholder corpus on purpose
+        allow_placeholder_model_hash=True,
     )
 
 
@@ -153,6 +155,13 @@ def main() -> None:
         assert rc == 0, f"placeholder + skip should succeed, got rc={rc}\nstderr={stderr}"
         print("case 4 (placeholder + skip): OK")
 
+        # Case 4b: a real fingerprint that disagrees is never skipped: the flag
+        # covers the placeholder only (case 4 above), and the error says so.
+        rc, stdout, stderr = run_search_text(c_mismatch, embedder, other_hash, skip_check=True)
+        assert rc != 0, f"mismatch + skip must still fail, got rc=0\nstdout={stdout}"
+        assert "model_hash mismatch" in stderr and "legacy placeholder only" in stderr, stderr
+        print("case 4b (mismatch + skip still fails): OK")
+
         # Case 5: dim mismatch - embedder reports different dim.
         # Build a corpus with dim=8 (different from the embedder's 4).
         c_dim = td / "dim_mismatch.urna"
@@ -161,13 +170,6 @@ def main() -> None:
         assert rc != 0, "dim mismatch should fail, got rc=0"
         assert "dim mismatch" in stderr, f"expected 'dim mismatch' in stderr, got:\n{stderr}"
         print("case 5 (dim mismatch): OK")
-
-        # Case 6: a real fingerprint that disagrees is never skipped: the flag
-        # covers the placeholder only (case 4), and the error says so.
-        rc, stdout, stderr = run_search_text(c_mismatch, embedder, other_hash, skip_check=True)
-        assert rc != 0, f"mismatch + skip must still fail, got rc=0\nstdout={stdout}"
-        assert "model_hash mismatch" in stderr and "legacy placeholder only" in stderr, stderr
-        print("case 6 (mismatch + skip still fails): OK")
 
     print("all model_hash gate tests passed")
 
