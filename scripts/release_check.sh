@@ -137,6 +137,13 @@ step "python tests/test_query_embedder_routing.py"
 "$PY" tests/test_query_embedder_routing.py
 ok "query embedder routing (4 cases)"
 
+# the release payload, staged and run from outside the checkout: both query
+# embedders answer, the registry route names its missing deps, a half tree
+# does not stage.
+step "python tests/test_embedder_payload.py"
+"$PY" tests/test_embedder_payload.py
+ok "embedder payload (2 cases)"
+
 # ---- ruff (best-effort) ----
 # the file list lives in scripts/ruff_check.sh so ci.yml and this gate stay
 # in lockstep; ruff missing from $PY is a skip here, a failure in ci.
