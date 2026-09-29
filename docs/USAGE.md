@@ -2,7 +2,7 @@
 project: urna
 audience: users and integrators
 status: active
-last-updated: 2026-09-26
+last-updated: 2026-09-29
 domain: usage
 ---
 
@@ -138,7 +138,7 @@ direct API (no chunker): `urna.build(output_path, embedding_model, embedding_dim
 
 ## 2. validate
 
-full integrity check: magic, header checksum, every section's SHA-256 (over physical bytes), footer hash (over the whole file), manifest schema, contract cross-check against the manifest, NaN/Inf walk over the embeddings.
+full integrity check: magic, the header checksum (the first 8 bytes of the sha-256 over the header), every section's checksum (the same 8-byte prefix over its physical bytes), the footer hash (the full sha-256 of everything before the footer), manifest schema, contract cross-check against the manifest, a NaN/Inf walk over the default embeddings, and, when the file inlines its media (section 0x17), every blob against its `blob_refs` digest. the `file_hash` it prints is the sha-256 of the whole file, footer included.
 
 ```sh
 urna validate my_corpus.urna
@@ -163,7 +163,7 @@ urna inspect my_corpus.urna             # human-readable
 urna inspect my_corpus.urna --json | jq # structured
 ```
 
-schema: `{magic, version_major, version_minor, format_version, schema_version, embedding_dim, n_chunks, n_embeddings, file_size, manifest, sections[], file_hash, content_hash, simd_backend}`.
+schema: `{magic, version_major, version_minor, format_version, schema_version, embedding_dim, n_chunks, n_embeddings, file_size, manifest, sections[], blobs, spaces, file_hash, content_hash, simd_backend}`; `blobs` is the 0x14 table (or null) and `spaces` the 0x15 table (or null).
 
 ## 5. search
 
