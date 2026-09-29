@@ -100,7 +100,7 @@ emb = potion_embedder()
 db = urna.open("my_corpus.urna")
 qvec = emb.embed_texts(["can I use this offline"])[0]
 
-hits = db.retrieve(qvec, 5, expected_model_hash=emb.model_hash())
+hits = db.retrieve(qvec, 5, expected_model_hash=emb.model_hash(), query_text="can I use this offline")
 print(hits[0].citation_id, hits[0].score, hits[0].text)
 ```
 
@@ -139,7 +139,7 @@ urna.build(
 
 ## CLI
 
-The engine verbs take a file and a vector and never run python. The agent verbs (`ask`, `retrieve`, `build`) take text and use the offline embedder. `setup` and `tui` are the terminal ui. `urna --help` lists all three groups.
+The engine verbs take a file and a vector and never run python. The agent verbs (`ask`, `retrieve`, `build`) take text and use the offline embedder; `ask` and `retrieve` search by what the file carries: bm25 plus vectors when the file has a bm25 index, hnsw when it has one, exact otherwise. `setup` and `tui` are the terminal ui. `urna --help` lists all three groups.
 
 <details>
 <summary>Agent verbs</summary>
