@@ -23,19 +23,30 @@ def _unit_vec(rng: random.Random, dim: int) -> list[float]:
     return [x / n for x in v]
 
 
-def make_urna(path: str, dim: int, n: int, *, reproducible: bool = False, seed: int = 0):
+def make_urna(
+    path: str,
+    dim: int,
+    n: int,
+    *,
+    reproducible: bool = False,
+    seed: int = 0,
+    preset: str = "exact",
+    override: dict[int, list[float]] | None = None,
+    text_override: dict[int, str] | None = None,
+    **build_kwargs,
+):
     rng = random.Random(seed)
     chunks = []
     cursor = 0
     for i in range(n):
-        text = f"chunk_{i}"
+        text = (text_override or {}).get(i) or f"chunk_{i}"
         chunks.append(
             dict(
                 canonical_text=text,
                 source_uri="doc.txt",
                 byte_start=cursor,
                 byte_end=cursor + len(text),
-                embedding=_unit_vec(rng, dim),
+                embedding=(override or {}).get(i) or _unit_vec(rng, dim),
             )
         )
         cursor += len(text)
@@ -47,7 +58,9 @@ def make_urna(path: str, dim: int, n: int, *, reproducible: bool = False, seed: 
         model_hash="sha256:" + "0" * 64,
         chunks=chunks,
         reproducible=reproducible,
+        preset=preset,
         allow_placeholder_model_hash=True,
+        **build_kwargs,
     )
 
 
@@ -182,8 +195,61 @@ def test_retrieve_score_equals_search_score_exactly():
         os.unlink(path)
 
 
+def test_retrieve_routes_by_capability_and_runs_the_lexical_leg():
+    """retrieve routes by what the file carries, not by the declared
+    index_type. two files: the `hybrid` preset (index_type "hnsw" + a bm25
+    section) accepts `query_text` and keeps the exact rerank scores; a file
+    with a bm25 section and no hnsw shows the lexical leg at work: its
+    vector leg is the exact top-`candidates`, so a chunk sitting at cosine
+    -1 can only reach the rerank through its words, and it does."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".urna") as f:
+        path = f.name
+    try:
+        dim, n = 8, 1000
+        q = _unit_vec(random.Random(0xC0FFEE), dim)
+        # chunk 7 sits at cosine -1 from the query and is the only chunk with
+        # the word "lotus" (the tokenizer drops one-character tokens, so the
+        # bare "7" of "chunk_7" would not do).
+        far = [-x for x in q]
+        text7 = "chunk_7 lotus"
+        chunk7 = urna.chunk_id(text7, "doc.txt", 49, 49 + len(text7), "test-chunker/1")
+        shape = dict(dim=dim, n=n, seed=5, override={7: far}, text_override={7: text7})
+
+        make_urna(path, preset="hybrid", **shape)
+        db = urna.open(path)
+        assert db.has_ann and db.has_bm25
+        assert db.inspect()["manifest"]["index_type"] == "hnsw"
+        exact = {h.chunk_id: h.score for h in db.search(q, n)}
+        assert exact[chunk7] == min(exact.values())
+        for h in db.retrieve(q, 5, query_text="lotus") + db.retrieve(q, 5):
+            assert h.score == exact[h.chunk_id], "the score is the exact rerank value"
+
+        make_urna(path, preset="exact", with_bm25=True, **shape)
+        db = urna.open(path)
+        assert not db.has_ann and db.has_bm25
+        exact = {h.chunk_id: h.score for h in db.search(q, n)}
+        assert exact[chunk7] == min(exact.values())
+        # k = n shows the whole candidate union: the top-100 by cosine from
+        # the vector leg (candidates=64 is floored by ef=100) plus the one
+        # bm25 hit for "lotus".
+        with_text = db.retrieve(q, n, candidates=64, query_text="lotus")
+        ids = [h.chunk_id for h in with_text]
+        assert len(ids) == 101, len(ids)
+        assert chunk7 in ids, "the lexical leg must bring the word match into the rerank"
+        assert ids[-1] == chunk7, "and the order is still cosine: the farthest vector is last"
+        for h in with_text:
+            assert h.score == exact[h.chunk_id]
+        # no text: no lexical leg, and no hnsw section, so the route is exact.
+        without = db.retrieve(q, n, candidates=64)
+        assert len(without) == n
+        print("retrieve routes by capability and runs the lexical leg OK")
+    finally:
+        os.unlink(path)
+
+
 if __name__ == "__main__":
     test_python_build_then_python_search()
+    test_retrieve_routes_by_capability_and_runs_the_lexical_leg()
     test_validate_via_pyo3()
     test_reproducible_builds_match_byte_for_byte()
     test_search_hit_carries_full_contract()
