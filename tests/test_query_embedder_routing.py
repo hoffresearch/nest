@@ -2,7 +2,9 @@
 embedding_model is a registry model routes ask/retrieve through
 embed_query_model.py (observable: the fake preset's env gate error surfaces
 when the env var is missing, and the query succeeds when it is set); a
-corpus built with mrl_dim gets --mrl-dim so the truncated-dim gate passes.
+corpus built with mrl_dim gets --mrl-dim so the truncated-dim gate passes;
+and the sentence-transformers path (embed_query.py, behind search-text)
+slices a query the same way the registry does.
 The three-layer gate itself is covered by test_search_text_model_hash.py.
 
 Run: .venv/bin/python tests/test_query_embedder_routing.py
@@ -106,6 +108,23 @@ def main() -> None:
         hits = db.search([float(x) for x in q], k=1)
         assert hits[0].score > 0.999
         print("case 4 (slice_renorm query == stored truncation): OK")
+
+        # the search-text embedder slices the same way (one geometry for both
+        # query paths), and refuses an out-of-range dim.
+        import embed_query
+
+        full = [float(x) for x in emb.embed_texts(["fake chunk number 2"])[0]]
+        st_q = embed_query.slice_renorm(full, 4)
+        assert len(st_q) == 4
+        assert all(abs(a - float(b)) < 1e-6 for a, b in zip(st_q, q, strict=True))
+        assert db.search(st_q, k=1)[0].score > 0.999
+        proc = subprocess.run(
+            [sys.executable, str(REPO / "python" / "embed_query.py"), "--help"],
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 0 and "--mrl-dim" in proc.stdout, proc.stdout
+        print("case 5 (embed_query.slice_renorm == registry slice_renorm): OK")
 
     print("all query embedder routing tests passed")
 

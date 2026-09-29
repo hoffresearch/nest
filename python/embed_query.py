@@ -52,6 +52,16 @@ from model_fingerprint import (  # noqa: E402
 )
 
 
+def slice_renorm(vec: list[float], n: int) -> list[float]:
+    """The builder's matryoshka truncation on one query vector: keep the first
+    `n` components and re-normalize, so a truncated corpus (urna.build
+    mrl_dim=n) is queried at its own dim with the same geometry. the model
+    fingerprint is untouched: it names the model, not the slice."""
+    head = [float(x) for x in vec[:n]]
+    norm = math.sqrt(sum(x * x for x in head))
+    return [x / norm for x in head] if norm > 0 else head
+
+
 def _embed(model_name_or_path: str, query: str) -> tuple[list[float], int, str]:
     """Return (vector, dim, resolved_local_path) for `query`."""
     from sentence_transformers import SentenceTransformer  # local import: heavy
@@ -128,6 +138,16 @@ def main() -> int:
             "--model-path at it forever."
         ),
     )
+    p.add_argument(
+        "--mrl-dim",
+        type=int,
+        default=None,
+        help=(
+            "slice the vector to its first N components and re-normalize, for a "
+            "corpus whose default space was built with mrl_dim (the cli passes the "
+            "manifest dim when full_dim is recorded); the model_hash is unchanged"
+        ),
+    )
     p.add_argument("model", help="HF id or local path; --model-path overrides")
     p.add_argument("query", nargs="?", default="")
     args = p.parse_args()
@@ -143,6 +163,12 @@ def main() -> int:
         return 2
 
     vec, dim, local_path = _embed(model_arg, args.query)
+    if args.mrl_dim:
+        if not 0 < args.mrl_dim <= dim:
+            print(f"error: --mrl-dim must be in 1..={dim}, got {args.mrl_dim}", file=sys.stderr)
+            return 2
+        vec = slice_renorm(vec, args.mrl_dim)
+        dim = args.mrl_dim
     fp = compute_model_fingerprint(local_path, model_id=args.model)
     model_hash = fingerprint_to_model_hash(fp)
     payload = {
