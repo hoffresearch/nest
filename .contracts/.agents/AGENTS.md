@@ -156,7 +156,7 @@ the format and runtime invariants. a change that touches them needs the tests na
   - int4 needs the effective dim divisible by 64, so its ladder is 256, 192, 128. content_hash covers the truncated vectors.
   - the shipped MiniLM corpus is not mrl-trained, so truncation costs measured recall (`measure_presets.py --variants mrl<DIM>-<dtype>`).
 - hnsw builds are deterministic given a seed; the bm25 index is sorted by term.
-- `model_hash` fingerprints `(model_id, files_hash, tokenizer_hash, pooling_config_hash, embedding_dim, normalize_embeddings)`. a zero placeholder is rejected at write time; a runtime model that differs from the corpus model fails with a typed error.
+- `model_hash` fingerprints `(model_id, files_hash, tokenizer_hash, pooling_config_hash, embedding_dim, normalize_embeddings)`. `urna.build` (and `builder.Pipeline`) refuse the zero placeholder at write time unless `allow_placeholder_model_hash=True` (test fixtures); the rust `UrnaFileBuilder` accepts any well-formed hash (the frozen golden fixture carries the placeholder), and the cli gate refuses a placeholder corpus at query time. a runtime model that differs from the corpus model fails with a typed error.
 - simd dispatch: avx2 on x86_64, neon on aarch64, scalar fallback, f32 accumulators. `URNA_FORCE_SCALAR=1` forces scalar.
 - the golden fixture `crates/urna-format/tests/fixtures/golden_v1_minimal.urna` is byte-frozen at 1366 bytes.
 - the reader also accepts the `NEST` magic of files written by 0.4.0, before the rename (`tests/legacy_magic.rs`, fixture `legacy_v040_minimal.nest`, same layout and hashes); the writer never emits it, and any other magic is rejected.

@@ -2,7 +2,7 @@
 project: urna
 audience: users and contributors
 status: active
-last-updated: 2026-09-27
+last-updated: 2026-09-29
 domain: release-history
 ---
 
@@ -13,6 +13,10 @@ all notable changes to `urna` are documented here.
 format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). versioning follows [semver](https://semver.org/spec/v2.0.0.html). the on-disk container format is frozen at v1; breaking changes bump `URNA_FORMAT_VERSION` (binary) or `URNA_SCHEMA_VERSION` (manifest fields).
 
 ## [Unreleased]
+
+### fixed
+
+- `urna.build` refuses the zero `model_hash` placeholder at write time, as `docs/USAGE.md` and the agents contract had claimed for a while; the refusal names `emb.model_hash()`. `allow_placeholder_model_hash=True` (also on `BuildConfig`) keeps the legacy placeholder for test fixtures and synthetic benchmarks; the rust `UrnaFileBuilder` and the byte-frozen golden fixture are unchanged, and the cli gate still refuses a placeholder corpus at query time. `test_builder.py` covers the refusal, the pass-through of the pipeline, a real hash and the opt-in.
 
 ### changed
 
