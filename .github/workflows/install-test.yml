@@ -137,6 +137,13 @@ jobs:
         if: matrix.channel == 'bun'
         # bun blocks the package's postinstall; the wrapper fetches the
         # binary on the first run instead, which the next step exercises.
+        # the wrapper is a node script (`#!/usr/bin/env node`): these legs
+        # pass because the runner image ships node, not because bun runs it.
+        # a machine with bun and no node gets exit 127 from `urna`; the
+        # usage doc's npm section says so and names `bunx --bun` as the way
+        # around it. no leg asserts that here on purpose: hiding the
+        # runner's node reliably differs per image and a false red on a tag
+        # blocks the release.
         run: |
           curl -fsSL https://bun.sh/install | bash
           echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
