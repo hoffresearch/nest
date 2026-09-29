@@ -36,7 +36,16 @@ def validate(spec: CorpusSpec, *, allow_heavy: bool = False) -> None:
 
     need(bool(spec.name), "corpus.name: required")
     need(bool(spec.chunker_version), "corpus.chunker_version: required")
-    kinds = {"sqlite", "image_dir", "pdf_dir", "csv", "jsonl"}
+    kinds = {"sqlite", "image_dir", "csv", "jsonl"}
+    if spec.source.kind == "pdf_dir":
+        # pdf pages are rendered by python/tools/urna_build_image_corpus.py
+        # --pdf, not by the declarative build; the kind used to pass here and
+        # fail at row loading, every time.
+        raise SpecError(
+            "source.kind: pdf_dir is not a declarative source; render the pages with "
+            "python/tools/urna_build_image_corpus.py --pdf, or point image_dir at the "
+            f"rendered pages (kinds: {sorted(kinds)})"
+        )
     need(spec.source.kind in kinds, f"source.kind: must be one of {sorted(kinds)}")
     if spec.source.kind == "sqlite":
         need(bool(spec.source.db) and bool(spec.source.query), "source.db/source.query: required")
@@ -44,7 +53,7 @@ def validate(spec: CorpusSpec, *, allow_heavy: bool = False) -> None:
     if spec.source.kind in ("csv", "jsonl"):
         need(bool(spec.source.path), "source.path: required")
         need(bool(spec.source.order_by), "source.order_by: required for total ordering (RFC-0 N1)")
-    if spec.source.kind in ("image_dir", "pdf_dir"):
+    if spec.source.kind == "image_dir":
         need(bool(spec.source.input_dir), "source.input_dir: required")
 
     need(
@@ -76,9 +85,7 @@ def validate(spec: CorpusSpec, *, allow_heavy: bool = False) -> None:
             need("text" in preset.modalities, f"models.{m.preset}: preset has no text tower")
         if m.image == "space":
             need("image" in preset.modalities, f"models.{m.preset}: preset has no image tower")
-            has_images = spec.source.kind in ("image_dir", "pdf_dir") or bool(
-                spec.source.image.path_template
-            )
+            has_images = spec.source.kind == "image_dir" or bool(spec.source.image.path_template)
             need(has_images, f"models.{m.preset}.image=space: source declares no images")
             image_presets.append(m.preset)
         if m.dims:
