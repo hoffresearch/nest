@@ -2,7 +2,7 @@
 project: urna
 audience: users and security researchers
 status: active
-last-updated: 2026-09-26
+last-updated: 2026-09-29
 domain: security
 ---
 
@@ -16,9 +16,8 @@ only the latest minor on `main` is supported.
 
 | version | status |
 |---------|--------|
-| 0.3.x   | supported (current) |
-| 0.2.x   | not supported, please upgrade |
-| 0.1.x   | not supported, please upgrade |
+| 0.5.x   | supported (current) |
+| 0.4.x and earlier | not supported, please upgrade (the reader still opens 0.4.0 files, see the `NEST` magic note in the agents contract) |
 
 ## reporting a vulnerability
 
