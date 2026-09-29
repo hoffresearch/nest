@@ -54,7 +54,7 @@ cfg = BuildConfig(
     embedding_model=emb.embedding_model,
     embedding_dim=emb.embedding_dim,
     chunker_version="my-chunker/v1",
-    model_hash=emb.model_hash(),  # a zero placeholder is rejected at write time
+    model_hash=emb.model_hash(),  # the zero placeholder is refused here, at write time
     preset="exact",  # see §6 for preset choices
     reproducible=True,
 )
@@ -187,10 +187,10 @@ for tuning the candidate set: `--candidates N` (default `4*k`, min 64).
 
 ### force the ANN path
 
-useful for debugging or measuring `ef_search` curves. falls back to exact if the file has no HNSW section.
+useful for debugging or measuring `ef_search` curves above the file's floor. the beam that runs is `max(--ef, k, ef_construction)`, where `ef_construction` is the build's (400 for `urna.build` and the forge), so an `--ef` below 400 changes nothing on those files; the `candidates:` line of the output prints the beam that ran. falls back to exact if the file has no HNSW section.
 
 ```sh
-urna search-ann my_corpus.urna "[0.1, 0.2, ...]" -k 10 --ef 200
+urna search-ann my_corpus.urna "[0.1, 0.2, ...]" -k 10 --ef 800
 ```
 
 ### graph search (chunk-to-chunk)
@@ -310,7 +310,7 @@ no HuggingFace cache hits, no network. the fingerprint is recomputed locally and
 
 ### pre-phase-3 corpora
 
-files built with `model_hash = sha256:0...0` (the legacy placeholder) fail the strict gate by design. two options:
+files built with `model_hash = sha256:0...0` (the legacy placeholder) fail the strict gate by design; `urna.build` no longer writes one unless asked (`allow_placeholder_model_hash=True`, for fixtures). for a file you already have, two options:
 
 - rebuild with a real fingerprint (recommended).
 - pass `--skip-model-hash-check` to proceed at your own risk. the search is still cosine-valid if you genuinely use the same embedding model, but there is no guarantee.
@@ -332,12 +332,12 @@ Exact (100 queries, dim=384, dtype=int8, simd=neon) [hot]:
   p50: 1.28 ms  p95: 1.68 ms
 Exact ... [madvise-cold]:
   p50: 1.95 ms  p95: 2.40 ms
-ANN ef=100 (100 queries) [hot]:
+ANN ef=100 (beam 400, 100 queries) [hot]:
   p50: 0.44 ms  p95: 0.62 ms
   recall@10 (ANN vs exact): 0.9920
 ```
 
-recall@10 here is ANN-vs-exact rank-stability (the ANN index against the exact-cosine top-k on the same queries), NOT real-query retrieval quality, and the printed value mirrors the published tiny ladder number; see the RULER CAVEAT in section 6.
+`beam` is the candidate width that ran, `max(--ann, k, the file's ef_construction)`: on a file built with the default `ef_construction = 400`, `--ann 100` searches 400 candidates, so the latency and recall curves only move above that floor. recall@10 here is ANN-vs-exact rank-stability (the ANN index against the exact-cosine top-k on the same queries), NOT real-query retrieval quality, and the printed value mirrors the published tiny ladder number; see the RULER CAVEAT in section 6.
 
 ## 9. citations
 
