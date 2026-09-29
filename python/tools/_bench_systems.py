@@ -77,6 +77,7 @@ class UrnaSystem:
             embedding_dim=int(rows.shape[1]),
             chunker_version="bench/1",
             model_hash="sha256:" + "0" * 64,
+            allow_placeholder_model_hash=True,  # synthetic vectors, no model
             chunks=chunks,
             reproducible=True,
             preset=self.preset,
