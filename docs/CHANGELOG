@@ -16,6 +16,7 @@ format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). version
 
 ### fixed
 
+- `urna setup` no longer ends by recommending `urna build --spec corpus.toml` to an installed binary that cannot run it (the forge is not in any release artifact): the success screen and the plain `--yes` log say the build runs from a checkout of the repo, and the `build` launcher's error names the clone instead of a "forge payload" that never existed.
 - `ask`, `retrieve` and `search-text` route by what the file carries, not by the manifest's `index_type`. the `hybrid` preset writes `index_type = "hnsw"` and marks bm25 as the `supports_bm25` capability (`urna.build` never called the builder's `.hybrid()`), so the string route sent every python-built hybrid file down the hnsw path and its bm25 section was read only by an explicit `search_hybrid` call; the quickstart corpus and every forge default build were in that state. `MmapUrnaFile::search_routed` is the one route the three verbs and the python `UrnaFile.retrieve` share: bm25 section plus query text gives the hybrid path, an hnsw section gives ann, otherwise exact; the graph is reached only through `search-graph`. `UrnaFile.retrieve` gains `query_text=` (the vector carries no words; `forge/retrieve.py` passes it), and its `hops` argument is kept, unused. new `crates/urna-runtime/tests/search_routed.rs` and a `test_e2e.py` case where a chunk sitting at cosine -1 reaches the rerank through its one word.
 
 ### changed
