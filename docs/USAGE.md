@@ -2,7 +2,7 @@
 project: urna
 audience: users and integrators
 status: active
-last-updated: 2026-09-26
+last-updated: 2026-09-29
 domain: usage
 ---
 
@@ -54,7 +54,7 @@ cfg = BuildConfig(
     embedding_model=emb.embedding_model,
     embedding_dim=emb.embedding_dim,
     chunker_version="my-chunker/v1",
-    model_hash=emb.model_hash(),  # a zero placeholder is rejected at write time
+    model_hash=emb.model_hash(),  # the zero placeholder is refused here, at write time
     preset="exact",  # see §6 for preset choices
     reproducible=True,
 )
@@ -310,7 +310,7 @@ no HuggingFace cache hits, no network. the fingerprint is recomputed locally and
 
 ### pre-phase-3 corpora
 
-files built with `model_hash = sha256:0...0` (the legacy placeholder) fail the strict gate by design. two options:
+files built with `model_hash = sha256:0...0` (the legacy placeholder) fail the strict gate by design; `urna.build` no longer writes one unless asked (`allow_placeholder_model_hash=True`, for fixtures). for a file you already have, two options:
 
 - rebuild with a real fingerprint (recommended).
 - pass `--skip-model-hash-check` to proceed at your own risk. the search is still cosine-valid if you genuinely use the same embedding model, but there is no guarantee.

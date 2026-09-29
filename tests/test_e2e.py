@@ -47,6 +47,7 @@ def make_urna(path: str, dim: int, n: int, *, reproducible: bool = False, seed: 
         model_hash="sha256:" + "0" * 64,
         chunks=chunks,
         reproducible=reproducible,
+        allow_placeholder_model_hash=True,
     )
 
 
