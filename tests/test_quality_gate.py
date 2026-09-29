@@ -4,6 +4,8 @@ an unattainable floor falls back to the smallest ladder crf with a warning;
 the task-utility leg (text-to-image hit@1 within utility_tol of the source)
 passes on a labeled sample, rejects on its own with the report naming the
 leg, and refuses a gate model without a text tower by naming the key;
+the gate's utility queries fall back to a row's canonical text when it has
+no label (an unlabeled image_dir must not crash the gated build);
 jxl-transcode round-trips JPEG bytes exactly and follows the fallback policy
 for non-JPEG sources.
 
@@ -290,8 +292,34 @@ def test_cluster_order_deterministic() -> None:
     print("test_cluster_order_deterministic: OK")
 
 
+def test_gate_labels_fall_back_to_canonical_text() -> None:
+    from forge.corpus_sources import Row
+    from forge.forge_media_stage import gate_labels
+
+    def row(ordinal: int, label: str | None) -> Row:
+        return Row(
+            ordinal=ordinal,
+            key=f"k{ordinal}",
+            canonical_text=f"image {ordinal}",
+            source_uri=f"file:///img{ordinal}.jpg",
+            image_path=Path(f"/img{ordinal}.jpg"),
+            image_sha256=None,
+            label=label,
+            item_input_hash="sha256:" + "00" * 32,
+        )
+
+    # labeled, unlabeled (image_dir without a labels file), and an empty
+    # rendered label_template: the gate gets one non-empty query per frame.
+    rows = [row(0, "Black Lotus"), row(1, None), row(2, "")]
+    labels = gate_labels(rows)
+    assert labels == ["Black Lotus", "image 1", "image 2"], labels
+    assert len(labels) == len(rows) and all(labels)
+    print("test_gate_labels_fall_back_to_canonical_text: OK")
+
+
 def main() -> None:
     test_cluster_order_deterministic()
+    test_gate_labels_fall_back_to_canonical_text()
     if not HAVE:
         print("SKIP: ffmpeg/ssimulacra2/cjxl/djxl not all present (brew install jpeg-xl)")
         return

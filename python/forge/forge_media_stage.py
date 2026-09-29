@@ -92,6 +92,14 @@ def _gate_adapter(ctx: _Ctx, preset_name: str):
     )
 
 
+def gate_labels(rows) -> list[str]:
+    """One utility query per unique frame for the crf gate: the row's image
+    label, else its canonical text (the identity-only text an unlabeled
+    image row carries). `Row` has no `text` field; this is the one place the
+    fallback is spelled, so an unlabeled corpus never dies here."""
+    return [r.label or r.canonical_text for r in rows]
+
+
 def _encode_media(ctx: _Ctx, media_dir: Path) -> tuple[dict, list[str]]:
     from forge import image_backends
 
@@ -105,7 +113,7 @@ def _encode_media(ctx: _Ctx, media_dir: Path) -> tuple[dict, list[str]]:
         from forge import quality_gate
 
         gate = _gate_adapter(ctx, m.quality.gate_model or first_image_preset(ctx.spec))
-        labels = [r.label or r.text for r in ctx.unique]  # utility queries, one per frame
+        labels = gate_labels(ctx.unique)  # utility queries, one per frame
         crf, quality_report = quality_gate.choose_crf(paths, canvas, m, gate, labels=labels)
 
     order = None
