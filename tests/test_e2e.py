@@ -59,6 +59,7 @@ def make_urna(
         chunks=chunks,
         reproducible=reproducible,
         preset=preset,
+        allow_placeholder_model_hash=True,
         **build_kwargs,
     )
 
