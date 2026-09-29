@@ -2,7 +2,7 @@
 project: urna
 audience: users and integrators
 status: active
-last-updated: 2026-09-26
+last-updated: 2026-09-29
 domain: usage
 ---
 
@@ -687,7 +687,7 @@ cargo build --release -p urna-python --features pyo3/extension-module
 cp target/release/lib_urna.dylib python/_urna.so   # macos (.so on linux)
 ```
 
-rust edition 2024 (`rustc >= 1.85`), python 3.12+. the potion table is git-lfs: `git lfs pull` before `urna doctor` or any `ask` / `retrieve`, a pointer file is rejected with exit `5`. setup details, hooks and the merge gate are in `docs/CONTRIBUTING.md`.
+rust edition 2024 (`rustc >= 1.88` for the cli crate, 1.85 for the format, runtime and python crates), python 3.12+. the potion table is git-lfs: `git lfs pull` before `urna doctor` or any `ask` / `retrieve`, a pointer file is rejected with exit `5`. setup details, hooks and the merge gate are in `docs/CONTRIBUTING.md`.
 
 </details>
 
