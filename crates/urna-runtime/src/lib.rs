@@ -26,6 +26,7 @@ pub mod simd;
 mod space_search;
 mod spaces;
 
+pub use blobs::apply_blob_span_overlay;
 pub use dtype::DType;
 pub use error::RuntimeError;
 pub use mmap_file::MmapUrnaFile;

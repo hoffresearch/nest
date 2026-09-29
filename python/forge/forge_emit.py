@@ -166,6 +166,10 @@ def _finalize(ctx, result: dict, *, strict_env: bool, rebuild_only: bool) -> Non
     lock = build_lock(spec, model_hashes, device=os.environ.get("URNA_ST_DEVICE", "auto"))
     lock_path = ctx.out_dir / f"{spec.name}.build.lock.json"
     if rebuild_only and lock_path.is_file():
+        # --rebuild-only verifies a build, it does not redefine it: the lock
+        # on disk is the record of the original build and is never rewritten
+        # here. a divergent rebuild leaves its own lock next to it, so the
+        # two can be diffed after the run.
         diffs = check_lock(json.loads(lock_path.read_text()), lock)
         if diffs:
             msg = "build.lock divergence (L3 not claimable): " + "; ".join(diffs[:8])
@@ -173,8 +177,14 @@ def _finalize(ctx, result: dict, *, strict_env: bool, rebuild_only: bool) -> Non
                 from forge.forge_pipeline import ForgeError
 
                 raise ForgeError(msg)
+            rebuilt = ctx.out_dir / f"{spec.name}.build.lock.rebuild.json"
+            atomic_write_json(rebuilt, lock)
+            result["rebuild_lock"] = str(rebuilt)
             print(f"[forge] warning: {msg}")
-    if ctx.models_filtered and lock_path.is_file():
+            print(f"[forge] kept {lock_path.name}; the rebuild's lock is {rebuilt.name}")
+        else:
+            print(f"[forge] --rebuild-only: {lock_path.name} matches, kept as is")
+    elif ctx.models_filtered and lock_path.is_file():
         # a --models subset run must not poison the full build's lock: a
         # later full --rebuild-only would diff its models against the
         # subset and fail even though every cached vector is identical.
