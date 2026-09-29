@@ -2,7 +2,7 @@
 project: urna
 audience: users and contributors
 status: active
-last-updated: 2026-09-27
+last-updated: 2026-09-29
 domain: release-history
 ---
 
@@ -13,6 +13,10 @@ all notable changes to `urna` are documented here.
 format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). versioning follows [semver](https://semver.org/spec/v2.0.0.html). the on-disk container format is frozen at v1; breaking changes bump `URNA_FORMAT_VERSION` (binary) or `URNA_SCHEMA_VERSION` (manifest fields).
 
 ## [Unreleased]
+
+### fixed
+
+- the installed binary can ask a wemm, clip or jina corpus: the release payload carries the registry query embedder (`forge/embed_query_model.py`, the registry, its adapters, the two model backends and `model_fingerprint.py`) next to the potion route. it does not carry torch or sentence-transformers; a registry model now fails with the exact `pip install` line for the setup venv, exit 4, where before the failure was `embedder script not found`. `tests/test_embedder_payload.py` stages the payload and runs both embedders from outside the checkout; `release_check.sh` runs it as the ninth suite.
 
 ### changed
 
