@@ -2,7 +2,7 @@
 project: urna
 audience: users and integrators
 status: active
-last-updated: 2026-09-26
+last-updated: 2026-09-29
 domain: usage
 ---
 
@@ -313,7 +313,7 @@ no HuggingFace cache hits, no network. the fingerprint is recomputed locally and
 files built with `model_hash = sha256:0...0` (the legacy placeholder) fail the strict gate by design. two options:
 
 - rebuild with a real fingerprint (recommended).
-- pass `--skip-model-hash-check` to proceed at your own risk. the search is still cosine-valid if you genuinely use the same embedding model, but there is no guarantee.
+- pass `--skip-model-hash-check` to proceed at your own risk. the search is still cosine-valid if you genuinely use the same embedding model, but there is no guarantee. the flag covers the placeholder only: a corpus with a real fingerprint that disagrees with the embedder fails whatever flags are passed.
 
 ## 8. benchmark
 

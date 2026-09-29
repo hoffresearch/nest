@@ -162,6 +162,13 @@ def main() -> None:
         assert "dim mismatch" in stderr, f"expected 'dim mismatch' in stderr, got:\n{stderr}"
         print("case 5 (dim mismatch): OK")
 
+        # Case 6: a real fingerprint that disagrees is never skipped: the flag
+        # covers the placeholder only (case 4), and the error says so.
+        rc, stdout, stderr = run_search_text(c_mismatch, embedder, other_hash, skip_check=True)
+        assert rc != 0, f"mismatch + skip must still fail, got rc=0\nstdout={stdout}"
+        assert "model_hash mismatch" in stderr and "legacy placeholder only" in stderr, stderr
+        print("case 6 (mismatch + skip still fails): OK")
+
     print("all model_hash gate tests passed")
 
 
