@@ -34,7 +34,7 @@ urna cite examples/quickstart/out/quickstart.urna 'urna://<content_hash>/<chunk_
 urna validate examples/quickstart/out/quickstart.urna
 ```
 
-`build` runs the forge in `python/`, so it needs the repo checkout (the installed payload carries the query embedder only); the other four verbs work with the installed binary alone. the python version of the same loop, with the embedder in plain sight, is `python examples/quickstart/quickstart.py`. to build your own corpus, swap `docs.jsonl` for your rows (jsonl, csv, sqlite, an image dir) in the spec: §13 has the full contract.
+`build` runs the forge in `python/`, so it needs the repo checkout (the installed payload carries the two query embedders only: the potion script and the registry script for wemm, clip and jina corpora, whose model deps you add to the setup venv when you need them, section 12); the other four verbs work with the installed binary alone. the python version of the same loop, with the embedder in plain sight, is `python examples/quickstart/quickstart.py`. to build your own corpus, swap `docs.jsonl` for your rows (jsonl, csv, sqlite, an image dir) in the spec: §13 has the full contract.
 
 ## 1. build a `.urna` from chunks
 
@@ -355,7 +355,7 @@ urna cite my_corpus.urna 'urna://sha256:1aa9.../sha256:8f314...'
 ./scripts/release_check.sh
 ```
 
-runs the full pipeline: cargo test, clippy, fmt, all 3 python test suites, ruff, `measure_presets.py`, `compare_measure.py` against the committed baseline. exits non-zero on any failure.
+runs the full pipeline: the 639-line guard, cargo fmt, clippy, the rust suite in release, the python extension rebuilt with `pyo3/extension-module`, the nine python suites (e2e, builder, search_text_model_hash, image_corpus, forge_spec, quality_gate, cli_space, query_embedder_routing, embedder_payload), ruff when importable, `measure_presets.py` and `compare_measure.py` against the committed baseline. exits non-zero on any failure. what it does not run: the flagship e2e tests that need the forge deps (`cli_e2e.rs` skips without them), `test_offline_guard.py`, `test_blob_bridge.py`, `test_space_bridge.py`, and the checks ci adds on top (cargo-deny, cargo-semver-checks, the windows job, the fuzz smoke).
 
 ## 11. install health check (`urna doctor`)
 
@@ -383,6 +383,8 @@ embedding models are DATA, not per-project code: `python/forge/model_registry.py
 | `jina-v5-omni-nano` / `-small` | sentence-transformers | 768 / 1024 | 32–768 / 32–1024 | text, image, video |
 | `wemm-2b` | sentence-transformers | 2048 | 128–2048 | text, image, video |
 | `wemm-4b` / `wemm-9b` | sentence-transformers | 2560 / 4096 | idem | registered; `--allow-heavy` required |
+
+on an installed binary the potion route works out of the box; the other presets need their deps in the setup venv (`URNA_PYTHON=~/.local/share/urna/venv/bin/python -m pip install torch sentence-transformers`, or `open_clip_torch pillow` for the clip family) and a local model snapshot; `urna ask` on such a corpus names the missing package and exits 4 until then.
 
 three rules the registry enforces, loudly:
 

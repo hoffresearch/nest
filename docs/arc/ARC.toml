@@ -2262,6 +2262,12 @@ purpose = "release-binary space surface: search-space happy + typed errors, stat
 links = ["crates/urna-cli/src/cmd/search_space.rs"]
 
 [[inventory.data_docs_python_scripts_tests]]
+path = "tests/test_embedder_payload.py"
+kind = "python-test"
+purpose = "the staged payload run from outside the checkout: the file list, the potion and registry routes agreeing on the potion model_hash, a remote-code preset refused without the opt-in (exit 4), an unknown manifest model (exit 4), and a half tree refused by the staging script"
+links = ["scripts/stage_embedder_payload.py", "python/forge/embed_query_model.py"]
+
+[[inventory.data_docs_python_scripts_tests]]
 path = "tests/test_query_embedder_routing.py"
 kind = "python-test"
 purpose = "routing by manifest model observable via the fake preset; --mrl-dim passed for truncated default spaces; slice_renorm equals the engine truncation"
@@ -2786,8 +2792,8 @@ links = [
 [[inventory.distribution]]
 path = "scripts/stage_embedder_payload.py"
 kind = "python-source"
-purpose = "stage + tar the offline embedder payload (forge modules + potion table) for release artifacts and installers"
-links = ["crates/urna-cli/src/cmd/util.rs"]
+purpose = "stage + tar the offline embedder payload for release artifacts and installers: the potion route (embed_query_potion.py + the table) and the registry route (embed_query_model.py, model_registry, model_adapters, embed_st + worker, embed_image, and python/model_fingerprint.py at the tree root); the registry's model deps are not bundled, embed_query_model.py names them"
+links = ["crates/urna-cli/src/cmd/embed_gate.rs", "tests/test_embedder_payload.py"]
 
 [[inventory.distribution]]
 path = "scripts/fetch_potion.sh"
