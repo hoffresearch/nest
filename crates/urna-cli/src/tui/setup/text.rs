@@ -91,7 +91,8 @@ pub fn run(opts: &Opts) -> i32 {
     }
     if code == 0 {
         println!("{} {}", t.bold("urna setup:"), t.fg("ready", tone::HIGH));
-        println!("  try: urna tui   ·   urna build --spec corpus.toml   ·   https://urna.dev");
+        println!("  try: urna tui   ·   urna ask corpus.urna \"...\"   ·   https://urna.dev");
+        println!("  to build a corpus: urna build --spec corpus.toml, from a checkout of the repo");
     } else {
         println!("{} {}", t.bold("urna setup:"), t.fg("failed", tone::LOW));
     }
