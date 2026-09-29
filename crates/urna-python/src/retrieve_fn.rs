@@ -6,8 +6,10 @@
 //!
 //! the query is a pre-embedded vector (the python convenience
 //! `forge/retrieve.py` does the offline potion embed first, keeping
-//! sentence-transformers off the path). routing mirrors the manifest
-//! capability: hnsw/hybrid/graph as the file advertises, else exact.
+//! sentence-transformers off the path). routing is by what the file
+//! carries (`MmapUrnaFile::search_routed`): hybrid when a bm25 section is
+//! present and the caller passed `query_text`, hnsw when an hnsw section
+//! is present, else exact.
 //!
 //! TIER-1 ONLY: `text` is the stored canonical text, the same bytes `cite`
 //! returns; this never claims an original-byte reopen. typed errors map to
@@ -53,17 +55,18 @@ pub struct RetrieveHitPy {
     pub rerank_source: String,
 }
 
-/// Route by manifest capability, run search, then attach tier-1 canonical
-/// text to each hit. the score on every returned hit IS the exact rerank
-/// value `search_*` produced. shared by the `UrnaFile.retrieve` method.
+/// Route by what the file carries, run search, then attach tier-1
+/// canonical text to each hit. the score on every returned hit IS the exact
+/// rerank value `search_*` produced. shared by the `UrnaFile.retrieve`
+/// method.
 pub fn retrieve(
     rt: &MmapUrnaFile,
     query: &Bound<PyAny>,
     k: i32,
     candidates: Option<usize>,
-    hops: usize,
     ef: usize,
     expected_model_hash: Option<String>,
+    query_text: Option<&str>,
 ) -> PyResult<Vec<RetrieveHitPy>> {
     // honesty gate: when the caller passes the model_hash of the embedder it
     // used for `query`, reject a corpus built with a different model. A bare
@@ -87,13 +90,9 @@ pub fn retrieve(
         .map_err(|e| PyValueError::new_err(format!("invalid query vector: {e}")))?;
 
     let cand = candidates.unwrap_or(((k as usize) * 4).max(64));
-    let result: SearchResult = match rt.declared_index_type() {
-        "hnsw" => rt.search_ann(&qvec, k, ef.max(cand)),
-        "hybrid" => rt.search_hybrid(&qvec, "", k, cand),
-        "graph" => rt.search_graph(&qvec, k, hops, ef),
-        _ => rt.search(&qvec, k),
-    }
-    .map_err(|e| PyValueError::new_err(format!("{e}")))?;
+    let result: SearchResult = rt
+        .search_routed(&qvec, query_text, k, ef.max(cand))
+        .map_err(|e| PyValueError::new_err(format!("{e}")))?;
 
     // tier-1 canonical text, decoded once, mapped by chunk_id (file order).
     let texts = rt
