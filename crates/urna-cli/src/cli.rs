@@ -63,9 +63,10 @@ pub enum Commands {
         k: i32,
     },
     /// [engine] Search by raw text - embeds the query with the model declared in
-    /// the manifest, then runs the appropriate vector path. Honors the
-    /// declared `index_type` (exact / hnsw / hybrid). One of the two
-    /// engine verbs that run python (the other is `doctor`). Validates the
+    /// the manifest, then routes by what the file carries: hybrid when it
+    /// has a bm25 section, hnsw when it has an hnsw section, else exact.
+    /// One of the two engine verbs that run python (the other is
+    /// `doctor`). Validates the
     /// embedder's model_hash against the manifest before running search;
     /// a mismatch fails with a typed error rather than returning
     /// silently-bad results.
