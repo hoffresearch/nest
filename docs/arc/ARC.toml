@@ -2866,7 +2866,7 @@ links = [".github/workflows/tag-verify.yml"]
 [[inventory.distribution]]
 path = ".github/workflows/install-test.yml"
 kind = "ci-workflow"
-purpose = "post-release gate: installs from the real release urls on 5 runner oses, then urna validate + urna doctor; pip-installs the wheel on 4"
+purpose = "release gate, run inside the release once it is announced: `cli` installs the one-liner on 5 runner oses (validate + doctor), `channels` installs the same binary through homebrew, npm, bun, pnpm, yarn and binstall (11 legs, each ending in setup --yes + doctor + validate; the bun legs pass because the runners ship node, which the npm launcher needs), `wheel` pip-installs the wheel on 4 and runs the uvx entry point"
 links = [
     "scripts/install.sh",
     "scripts/install.ps1",
