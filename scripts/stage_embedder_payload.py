@@ -1,17 +1,32 @@
 """stage the offline embedder payload for release archives and installers.
 
-the `urna` binary embeds queries OFFLINE by shelling out to the potion
-embedder script (`forge/embed_query_potion.py`) with its vendored table.
-a released binary has no repo around it, so the release archives and the
+the `urna` binary embeds queries OFFLINE by shelling out to a query
+embedder script: `forge/embed_query_potion.py` with its vendored table for
+potion corpora, `forge/embed_query_model.py` (the model registry) for
+corpora whose default model is a registry model (wemm, clip, jina). a
+released binary has no repo around it, so the release archives and the
 one-liner installer carry this payload and lay it down where the cli looks
 (`<exe>/../share/urna/forge/` or `$XDG_DATA_HOME/urna/forge/`; see
-crates/urna-cli/src/cmd/util.rs `default_potion_embedder_path`).
+crates/urna-cli/src/cmd/embed_gate.rs `installed_script_in`).
+
+the registry path ships its scripts only, not its model dependencies: the
+setup venv has numpy and tokenizers, and `embed_query_model.py` names the
+exact `pip install` line for what a registry model still needs (torch,
+sentence-transformers, open_clip), exit 4, instead of the old "embedder
+script not found".
 
 usage:  python scripts/stage_embedder_payload.py <dest> [--tar <out.tar.gz>]
-writes: <dest>/urna/forge/__init__.py
+writes: <dest>/urna/model_fingerprint.py          (imported by the registry)
+        <dest>/urna/forge/__init__.py
         <dest>/urna/forge/embed_default.py
         <dest>/urna/forge/embed_potion.py
         <dest>/urna/forge/embed_query_potion.py
+        <dest>/urna/forge/embed_query_model.py      (the registry embedder)
+        <dest>/urna/forge/model_registry.py
+        <dest>/urna/forge/model_adapters.py
+        <dest>/urna/forge/embed_st.py
+        <dest>/urna/forge/embed_st_worker.py
+        <dest>/urna/forge/embed_image.py
         <dest>/urna/forge/models/potion-base-8M/...
 
 with --tar, also packs the staged `urna/` tree as a single gzipped tarball
@@ -35,6 +50,21 @@ MODULES = [
     "embed_default.py",
     "embed_potion.py",
     "embed_query_potion.py",
+    # the registry query path (`ask`/`retrieve` on a wemm, clip or jina
+    # corpus): the embedder, the registry, its adapters and the two model
+    # backends the adapters import lazily.
+    "embed_query_model.py",
+    "model_registry.py",
+    "model_adapters.py",
+    "embed_st.py",
+    "embed_st_worker.py",
+    "embed_image.py",
+]
+
+# `python/` modules the registry imports as top-level names (the scripts put
+# their grandparent dir, `<dest>/urna/`, on sys.path).
+TOP_LEVEL_MODULES = [
+    "model_fingerprint.py",
 ]
 
 
@@ -61,6 +91,11 @@ def main() -> None:
         if not src.is_file():
             fail(f"missing source: {src}")
         shutil.copyfile(src, dest / name)
+    for name in TOP_LEVEL_MODULES:
+        src = ROOT / "python" / name
+        if not src.is_file():
+            fail(f"missing source: {src}")
+        shutil.copyfile(src, dest.parent / name)
     model_src = FORGE / "models" / "potion-base-8M"
     if not model_src.is_dir():
         fail(f"missing model dir: {model_src}")
