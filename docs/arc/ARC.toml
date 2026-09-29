@@ -2121,7 +2121,7 @@ links = [
 [[inventory.data_docs_python_scripts_tests]]
 path = "python/forge/spec_rules.py"
 kind = "python-source"
-purpose = "validation rules over a parsed CorpusSpec: every violation a SpecError naming the key, the emitted-space enumeration, the gate/cluster model resolution, crf=auto only on the av1 backend, the utility-floor ranges and the text-tower requirement"
+purpose = "validation rules over a parsed CorpusSpec: every violation a SpecError naming the key, the four source kinds (pdf_dir is refused with the pdf tool named), the emitted-space enumeration, the gate/cluster model resolution, crf=auto only on the av1 backend, the utility-floor ranges and the text-tower requirement"
 links = [
     "python/forge/build_spec.py",
     "python/forge/model_registry.py",
@@ -2154,7 +2154,7 @@ links = [
 [[inventory.data_docs_python_scripts_tests]]
 path = "python/forge/forge_media_stage.py"
 kind = "python-source"
-purpose = "the media stage: encode the unique frames once (crf=auto gate, similarity/cluster order, sharding) with resumable state under <out>/.forge-state/media.json keyed by input_hash + media spec and verified per file"
+purpose = "the media stage: encode the unique frames once (crf=auto gate with one utility query per frame, gate_labels: the row label or its canonical text; similarity/cluster order; sharding) with resumable state under <out>/.forge-state/media.json keyed by input_hash + media spec and verified per file"
 links = [
     "python/forge/forge_pipeline.py",
     "python/forge/image_backends.py",
