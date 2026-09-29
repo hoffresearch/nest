@@ -10,7 +10,7 @@ domain: usage
 
 `urna` is a single-file binary container for distributing semantic knowledge bases. one file: chunks, canonical text, byte-spans, embeddings, search contract, hashes. copy it, share it, search it.
 
-this guide covers the commands you'll actually use: the agent verbs `ask`, `retrieve` and `build` (the front door; they shell out to the offline python embedder or the forge), and the engine subcommands beneath them (validate, stats, inspect, media, search/search-ann/search-graph/search-space/search-text, benchmark, cite, doctor), which take a file and a vector and never run python. `urna --help` lists them in the same two groups. getting the binary onto a machine (every install channel, verification, offline notes, the maintainer checklist) is the reference section at the end of this document; the short form is `curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/scripts/install.sh | sh` (or brew, npm, cargo) followed by `urna setup`, the interactive installer that completes every channel (section 16).
+this guide covers the commands you'll actually use: the agent verbs `ask`, `retrieve` and `build` (the front door; they shell out to the offline python embedder or the forge), and the engine subcommands beneath them (validate, stats, inspect, media, search/search-ann/search-graph/search-space/search-text, benchmark, cite, doctor), which take a file and a vector; two of them run python (`search-text`, for its sentence-transformers embedder, and `doctor`, which probes the python env), the other ten never do. `urna --help` lists them in the same two groups. getting the binary onto a machine (every install channel, verification, offline notes, the maintainer checklist) is the reference section at the end of this document; the short form is `curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/scripts/install.sh | sh` (or brew, npm, cargo) followed by `urna setup`, the interactive installer that completes every channel (section 16).
 
 ## quickstart
 
@@ -590,7 +590,7 @@ urna setup
 
 `URNA_RELEASE_BASE`, `URNA_BIN_DIR`, and `URNA_DATA_DIR` override the install paths; see the environment variables reference above.
 
-the linux binaries are static musl, so they run on any distro and inside `scratch` containers. `urna doctor` needs a python 3.12+ interpreter with `numpy` and `tokenizers` for the offline embed probe (`URNA_PYTHON` selects the interpreter); everything else in the cli runs without python.
+the linux binaries are static musl, so they run on any distro and inside `scratch` containers. `urna doctor` needs a python 3.12+ interpreter with `numpy` and `tokenizers` for the offline embed probe (`URNA_PYTHON` selects the interpreter); so do `ask`, `retrieve`, `search-text` and `build`, which spawn the embedder or the forge. the other engine verbs run without python, which is what the docker image serves.
 
 </details>
 
