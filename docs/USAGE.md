@@ -2,7 +2,7 @@
 project: urna
 audience: users and integrators
 status: active
-last-updated: 2026-09-26
+last-updated: 2026-09-29
 domain: usage
 ---
 
@@ -230,7 +230,7 @@ urna retrieve my_corpus.urna "can I use this offline" -k 5 --format jsonl
 
 each hit is `{chunk_id, score, score_type=cosine, source_uri, offset_start, offset_end, citation_id, text, file_hash, content_hash, rerank_source}`. the `score` is the exact rerank value (never a candidate-generator proxy), `text` is the tier-1 stored canonical text, and `citation_id` round-trips through `urna cite`. `--format json` emits a single pretty array instead of one object per line.
 
-the embedder picks its interpreter in a fixed order: `URNA_PYTHON` if set, else the repo's `.venv/bin/python` (which carries the forge deps: numpy + tokenizers + the vendored potion table) discovered by walking up from the cwd, else `python3` on PATH. so the repo `.venv` is used automatically; set `URNA_PYTHON` only to force a specific interpreter. the selected interpreter is printed to stderr; and since discovery executes the nearest ancestor `.venv/bin/python`, set `URNA_PYTHON` explicitly if you run `urna` from inside an untrusted directory tree. point `--model-path` at a copied potion table dir for a fully sealed offline run.
+the embedder picks its interpreter in a fixed order (the same ladder section 11 states for `doctor`): `URNA_PYTHON` if set, else the venv `urna setup` built (`<data root>/urna/venv`), else the nearest `.venv/bin/python` walking up from the cwd (the repo's carries the forge deps: numpy + tokenizers + the vendored potion table), else `python3` on PATH. so the setup venv, or the repo `.venv` in a checkout, is used automatically; set `URNA_PYTHON` only to force a specific interpreter. the selected interpreter is printed to stderr; and since discovery executes the nearest ancestor `.venv/bin/python`, set `URNA_PYTHON` explicitly if you run `urna` from inside an untrusted directory tree. point `--model-path` at a copied potion table dir for a fully sealed offline run.
 
 the python convenience is `python python/forge/retrieve.py`: it builds a `.urna` from the cc0 demo corpus with the potion embedder, asks a question, and prints the cited answer with a `urna://` citation, all offline and deterministic (the one-gif demo).
 
@@ -720,7 +720,7 @@ commits on `main` are ssh-signed and the branch ruleset requires verified signat
 <summary>offline and air-gapped notes</summary>
 
 - after install nothing opens a socket: `ask`, `retrieve`, `doctor`, and the python `urna.embed_potion` all resolve the vendored potion table locally. sentence-transformers presets from the model registry are the exception and download only with `URNA_ALLOW_DOWNLOAD=1` (section 12).
-- the cli finds the embedder in this order: the repo layout (`python/forge/embed_query_potion.py`), then `${XDG_DATA_HOME:-~/.local/share}/urna/forge/`, then `<exe>/../share/urna/forge/`. `urna doctor` prints which one it picked and validates the table is real bytes, not an lfs pointer.
+- the cli finds the embedder scripts in the order section 11 states: the repo layout (`python/forge/`), then `<root>/urna/forge/` for each data root (`URNA_DATA_DIR`, `XDG_DATA_HOME`, `~/.local/share`, `%LOCALAPPDATA%`, `<exe>/../share`). `urna doctor` prints which one it picked and validates the table is real bytes, not an lfs pointer.
 - air-gapped install: fetch the four files the one-liner downloads on a connected machine, copy them over, and run the installer with `URNA_RELEASE_BASE=file:///path/to/dir`. for the wheel, `pip download urna[embed]` on the connected side and `pip install --no-index --find-links` on the other.
 - `urna doctor` exit codes are typed so provisioning scripts branch on them: `0` ok, `2` python missing, `3` numpy/tokenizers missing, `4` embedder script missing, `5` table missing or lfs pointer, `6` embed run failed. a scalar simd fallback warns but exits `0`.
 
