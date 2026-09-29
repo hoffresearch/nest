@@ -59,6 +59,8 @@ tests/test_forge_spec.py
 tests/test_quality_gate.py
 tests/test_cli_space.py
 tests/test_query_embedder_routing.py
+tests/test_embedder_payload.py
+scripts/stage_embedder_payload.py
 "
 # shellcheck disable=SC2086
 "$PY" -m ruff check $TARGETS
