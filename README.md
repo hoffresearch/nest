@@ -139,7 +139,7 @@ urna.build(
 
 ## CLI
 
-The engine verbs take a file and a vector and never run python. The agent verbs (`ask`, `retrieve`, `build`) take text and use the offline embedder; `ask` and `retrieve` search by what the file carries: bm25 plus vectors when the file has a bm25 index, hnsw when it has one, exact otherwise. `setup` and `tui` are the terminal ui. `urna --help` lists all three groups.
+The engine verbs take a file and a vector; two of them run python (`search-text` for its embedder, `doctor` to probe the environment), the other ten never do. The agent verbs (`ask`, `retrieve`, `build`) take text and use the offline embedder; `ask` and `retrieve` search by what the file carries: bm25 plus vectors when the file has a bm25 index, hnsw when it has one, exact otherwise. `setup` and `tui` are the terminal ui. `urna --help` lists all three groups.
 
 <details>
 <summary>Agent verbs</summary>
