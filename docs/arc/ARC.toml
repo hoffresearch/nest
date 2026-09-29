@@ -2114,7 +2114,7 @@ links = [
 [[inventory.data_docs_python_scripts_tests]]
 path = "python/forge/spec_rules.py"
 kind = "python-source"
-purpose = "validation rules over a parsed CorpusSpec: every violation a SpecError naming the key, the emitted-space enumeration, the gate/cluster model resolution, crf=auto only on the av1 backend, the utility-floor ranges and the text-tower requirement"
+purpose = "validation rules over a parsed CorpusSpec: every violation a SpecError naming the key, the four source kinds (pdf_dir is refused with the pdf tool named), the emitted-space enumeration, the gate/cluster model resolution, crf=auto only on the av1 backend, the utility-floor ranges and the text-tower requirement"
 links = [
     "python/forge/build_spec.py",
     "python/forge/model_registry.py",
