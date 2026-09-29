@@ -96,8 +96,11 @@ pub fn draw(buf: &mut Buffer, body: Rect, ui: &mut Ui) {
     let next: &[(&str, &str)] = if ok {
         &[
             ("urna tui", "open the explorer"),
-            ("urna build --spec corpus.toml", "build a base"),
-            ("urna ask corpus.urna \"...\"", "ask it"),
+            ("urna ask corpus.urna \"...\"", "ask a corpus"),
+            (
+                "urna build --spec corpus.toml",
+                "build one, from a checkout of the repo",
+            ),
         ]
     } else {
         &[
