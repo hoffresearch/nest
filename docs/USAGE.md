@@ -2,7 +2,7 @@
 project: urna
 audience: users and integrators
 status: active
-last-updated: 2026-09-26
+last-updated: 2026-09-29
 domain: usage
 ---
 
@@ -71,9 +71,9 @@ the embedder is any callable that takes the chunk specs and returns one l2-norma
 
 image corpora live in the forge tooling layer because a vision tower needs torch, which the sovereign runtime does not take. the `.urna` they emit is an ordinary `.urna`, served by the same rust runtime from mmap.
 
-the media travels inside the file. the encoded stream is stored as content-addressed blobs (section 0x14), each chunk carries the exact byte span it was embedded from (overlay 0x16), and the image vectors sit in their own named space (registry 0x15, slab in the 0x20-0x2F band) behind the `supports_multimodal` capability, gated by their own `model_hash` in isolation. these sections are excluded from `content_hash`, so adding media never moves an existing citation.
+two tools build them. the declarative build (`urna build --spec`, section 13, with a `[media]` table) is the one that puts the media inside the file: the encoded frames as content-addressed blobs (section 0x14, the bytes themselves with `embed_media = true`, section 0x17), the byte span each chunk was embedded from (overlay 0x16), and each model's image vectors in their own named space (table 0x15, slab in the 0x20 to 0x2F band) behind the `supports_multimodal` capability, gated by their own `model_hash`. those sections are excluded from `content_hash`, so adding media never moves an existing citation.
 
-`python/tools/urna_build_image_corpus.py` letterboxes every image onto one canvas, encodes the sequence, embeds the DECODED frames, and writes one chunk per image or pdf page. embedding the decoded frames rather than the source pixels is deliberate: the index has to describe what a reader can actually get back.
+the older standalone tool, `python/tools/urna_build_image_corpus.py`, is the sweep and measurement path: it letterboxes every image onto one canvas, encodes the sequence, embeds the DECODED frames with one open_clip model, and writes one chunk per image or pdf page whose vectors are the file's default space. its output is a directory, `corpus.urna` next to `corpus.media/` (the encoded stream, referenced by `media://` uris in the chunks) and `corpus.manifest.json`; it writes no blob sections and no named spaces. embedding the decoded frames rather than the source pixels is deliberate in both tools: the index has to describe what a reader can actually get back.
 
 ```sh
 .venv/bin/python python/tools/urna_build_image_corpus.py \
@@ -83,7 +83,7 @@ the media travels inside the file. the encoded stream is stored as content-addre
     --labels labels.csv
 ```
 
-a corpus is one file. `corpora/my-derm.urna` carries the index, the media blobs, the span overlay, and the space registry; copying it moves the corpus intact. provenance (ordinals, origins, labels, media digests) rides inside as well.
+`corpora/my-derm.urna` carries the index and the citable text; `corpora/my-derm.media/` carries the encoded frames and `corpora/my-derm.manifest.json` the provenance (ordinals, origins, labels, media digests). move the three together. for one self-contained file, build the same images with a spec (`[source] kind = "image_dir"`, `[media]`, `embed_media = true`).
 
 `--width` is a ceiling, not a target: the canvas is clamped to the dataset's median source width, so a corpus is never upscaled. lower it to trade quality for size; raising it above the source does nothing but make the encoder pay for interpolated pixels.
 
@@ -105,7 +105,7 @@ search with a query image or a clinical description, and optionally decode the m
     --letterbox-query --save-frames hits/
 ```
 
-`--query-text "..."` searches with a clinical description instead of an image, and `--letterbox-query` normalizes the query onto the corpus canvas before embedding. queries route through `search_space`, so the image space's own `model_hash` is checked against the manifest, in isolation from the default text space, before anything is scored. `--skip-model-check` bypasses that gate explicitly.
+`--query-text "..."` searches with a clinical description instead of an image, and `--letterbox-query` normalizes the query onto the corpus canvas before embedding. queries go through `UrnaFile.retrieve` with the open_clip embedder's `model_hash`, so a corpus built with another model is refused before anything is scored; `--skip-model-check` bypasses that gate explicitly. a spec-built multimodal corpus is queried per space instead (`urna search-space`, `UrnaFile.search_space`, section 5).
 
 ### measuring an image corpus
 
@@ -125,12 +125,12 @@ neither means much alone. pass `--baseline` with the uncompressed control index 
 
 measured in phase 6 (full matrix and intervals in `docs/CHANGELOG`): on ph2 (n=200) av1-intra crf35 compresses the media 86x for a mean label `precision@10` delta of -3.4 to -4.7 points whose interval crosses zero, but the melanoma class alone drops 16.9 points with a significant interval ([-25, -10]); on ham10000 (2000-sample) the media shrinks 151x for a mean delta of -1.5 [-3.5, +0.6], again with a significant melanoma cost (-10.7). the text-to-image ruler is harsher and honest: 44/60 correct top-10 clinical queries on the control falls to 22/60 at crf35, and the loss does not recover with rate. per-class floors matter more than the mean: report the interval and the worst class, not just the point.
 
-`python/tools/urna_image_sweep.py` runs the variant matrix for you (av1-intra crf ladder, avif444, control, `dtype:` rungs, `av1-order`), records `urna_bytes` and the control's `media_bytes` per variant, and writes one consolidated comparison json:
+`python/tools/urna_image_sweep.py` runs the variant matrix for you (`av1-intra` and `av1-inter` crf ladders, `avif` qualities, `dtype:` rungs, `av1-order`; kinds separated by `;`, values by `,`; the png control is always built), records `urna_bytes` and the control's `media_bytes` per variant, and writes one consolidated comparison json:
 
 ```sh
 .venv/bin/python python/tools/urna_image_sweep.py \
     --input-dir /path/to/images --dataset my-derm \
-    --variants av1-intra-crf35,av1-intra-crf40,control,dtype:int8 \
+    --variants "av1-intra:35,40;dtype:int8" \
     --labels labels.csv --out-dir sweep/ --out sweep/summary.json
 ```
 
