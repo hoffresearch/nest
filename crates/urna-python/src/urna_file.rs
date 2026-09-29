@@ -90,12 +90,18 @@ impl UrnaFile {
     }
 
     /// Agent-native flagship: a pre-embedded query in, cited spans out.
-    /// each hit's `score` IS the exact-cosine rerank value; routes by
-    /// manifest capability (hnsw/hybrid/graph/exact). every hit carries the
-    /// tier-1 stored canonical `text`, the verifying hashes, the stable
-    /// citation_id, and the rerank-source precision marker. embed the query
-    /// OFFLINE first (see python/forge/retrieve.py for the potion path).
-    #[pyo3(signature = (query, k, candidates=None, hops=1, ef=100, expected_model_hash=None))]
+    /// each hit's `score` IS the exact-cosine rerank value; routes by what
+    /// the file carries: hybrid when it has a bm25 section and `query_text`
+    /// is given, hnsw when it has an hnsw section, exact otherwise (the
+    /// graph is `search_graph`'s path; `hops` is kept for compatibility and
+    /// unused). every hit carries the tier-1 stored canonical `text`, the
+    /// verifying hashes, the stable citation_id, and the rerank-source
+    /// precision marker. embed the query OFFLINE first (see
+    /// python/forge/retrieve.py for the potion path) and pass the same text
+    /// as `query_text` so the lexical leg of a hybrid file runs.
+    #[pyo3(signature = (query, k, candidates=None, hops=1, ef=100, expected_model_hash=None, query_text=None))]
+    // the python keyword surface is the api; every argument is a documented kwarg.
+    #[allow(clippy::too_many_arguments)]
     fn retrieve(
         &self,
         query: &Bound<PyAny>,
@@ -104,15 +110,17 @@ impl UrnaFile {
         hops: usize,
         ef: usize,
         expected_model_hash: Option<String>,
+        query_text: Option<String>,
     ) -> PyResult<Vec<crate::retrieve_fn::RetrieveHitPy>> {
+        let _ = hops;
         crate::retrieve_fn::retrieve(
             &self.rt,
             query,
             k,
             candidates,
-            hops,
             ef,
             expected_model_hash,
+            query_text.as_deref(),
         )
     }
 
