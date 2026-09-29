@@ -62,6 +62,7 @@ def _build(path: Path, with_blobs: bool) -> None:
         "demo-chunker/1",
         "sha256:" + "0" * 64,
         [_chunk(i) for i in range(3)],
+        allow_placeholder_model_hash=True,
         reproducible=True,
         **kwargs,
     )
@@ -124,6 +125,7 @@ class TestBlobBridge(unittest.TestCase):
                 "demo-chunker/1",
                 "sha256:" + "0" * 64,
                 [_chunk(0)],
+                allow_placeholder_model_hash=True,
                 chunk_blob_spans=[
                     {"blob_ref_index": 0, "byte_start": 0, "byte_end": 1},
                     {"blob_ref_index": 0, "byte_start": 1, "byte_end": 2},
