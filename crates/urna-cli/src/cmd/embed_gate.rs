@@ -197,9 +197,10 @@ pub fn validate_gate(
     Ok(())
 }
 
-/// Embed `query` offline, gate it against the manifest, route by declared
-/// capability, search. Shared by `ask` and `retrieve`; `search-text` uses
-/// the pieces directly (it keeps `--skip-model-hash-check`).
+/// Embed `query` offline, gate it against the manifest, route by what the
+/// file carries (`MmapUrnaFile::search_routed`), search. Shared by `ask`
+/// and `retrieve`; `search-text` uses the pieces directly (it keeps
+/// `--skip-model-hash-check`).
 pub fn embed_and_search(
     runtime: &MmapUrnaFile,
     query: &str,
@@ -237,14 +238,11 @@ pub fn embed_and_search(
     let payload = spawn_embedder(&embedder, model_path.as_ref(), &extra, &model, query)?;
     validate_gate(&payload, &model, declared_dim, &declared_model_hash, false)?;
 
+    // route by capability (bm25 -> hybrid, hnsw -> ann, else exact), not by
+    // the declared `index_type`: a `hybrid` preset file declares "hnsw" and
+    // carries its bm25 section as a capability.
     let cand = candidates.unwrap_or(((k as usize) * 4).max(64));
-    let result = match runtime.declared_index_type() {
-        "hnsw" => runtime.search_ann(&payload.vector, k, cand)?,
-        "hybrid" => runtime.search_hybrid(&payload.vector, query, k, cand)?,
-        "graph" => runtime.search_graph(&payload.vector, k, 1, cand)?,
-        _ => runtime.search(&payload.vector, k)?,
-    };
-    Ok(result)
+    Ok(runtime.search_routed(&payload.vector, Some(query), k, cand)?)
 }
 
 fn manifest_str(info: &serde_json::Value, key: &str) -> Result<String> {
