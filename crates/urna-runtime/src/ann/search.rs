@@ -40,7 +40,8 @@ impl HnswIndex {
 
     /// Search for the `ef` closest candidates to `q`. Returns ids only -
     /// the runtime reranks with the exact dot product to produce the
-    /// final cosine score.
+    /// final cosine score. the beam is `max(ef, self.ef_search)`: `ef`
+    /// widens the search above the file's floor and never narrows it.
     pub fn search(&self, q: &[f32], ef: usize) -> Vec<usize> {
         if self.n == 0 {
             return Vec::new();
