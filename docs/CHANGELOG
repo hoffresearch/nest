@@ -2,7 +2,7 @@
 project: urna
 audience: users and contributors
 status: active
-last-updated: 2026-09-27
+last-updated: 2026-09-29
 domain: release-history
 ---
 
@@ -13,6 +13,10 @@ all notable changes to `urna` are documented here.
 format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). versioning follows [semver](https://semver.org/spec/v2.0.0.html). the on-disk container format is frozen at v1; breaking changes bump `URNA_FORMAT_VERSION` (binary) or `URNA_SCHEMA_VERSION` (manifest fields).
 
 ## [Unreleased]
+
+### fixed
+
+- `--skip-model-hash-check` did what its name says and skipped the model_hash comparison entirely, while its help and the gate's own docstring said it was for the legacy placeholder only. the code follows the contract now: the flag accepts a placeholder corpus (no fingerprint to compare), a real fingerprint that disagrees with the embedder is never skipped, and the error names the flag's scope (case 6 of `test_search_text_model_hash.py`).
 
 ### changed
 

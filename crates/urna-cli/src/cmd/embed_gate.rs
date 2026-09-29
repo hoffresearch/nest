@@ -172,10 +172,12 @@ pub fn validate_gate(
             payload.vector.len()
         );
     }
-    if skip_model_hash_check {
-        return Ok(());
-    }
     if declared_model_hash == PLACEHOLDER_MODEL_HASH {
+        // the one case the flag covers: a legacy corpus with no fingerprint
+        // to compare against. the caller accepts the risk explicitly.
+        if skip_model_hash_check {
+            return Ok(());
+        }
         anyhow::bail!(
             "manifest carries the legacy placeholder model_hash ({}). Rebuild \
              this corpus with a real fingerprint, or pass --skip-model-hash-check \
@@ -184,11 +186,14 @@ pub fn validate_gate(
         );
     }
     if payload.model_hash != declared_model_hash {
+        // a real fingerprint that disagrees is never skippable: the hits
+        // would be cosine-valid and wrong.
         anyhow::bail!(
             "model_hash mismatch: corpus was built with {}, embedder reports {}\n\
              fingerprint reported by embedder: {}\n\
              hint: --model-path PATH to point at the exact snapshot, or rebuild \
-             the corpus with the model you intend to use.",
+             the corpus with the model you intend to use. --skip-model-hash-check \
+             covers the legacy placeholder only, not a mismatch.",
             declared_model_hash,
             payload.model_hash,
             payload.fingerprint
