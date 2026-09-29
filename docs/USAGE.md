@@ -34,7 +34,7 @@ urna cite examples/quickstart/out/quickstart.urna 'urna://<content_hash>/<chunk_
 urna validate examples/quickstart/out/quickstart.urna
 ```
 
-`build` runs the forge in `python/`, so it needs the repo checkout (the installed payload carries the query embedder only); the other four verbs work with the installed binary alone. the python version of the same loop, with the embedder in plain sight, is `python examples/quickstart/quickstart.py`. to build your own corpus, swap `docs.jsonl` for your rows (jsonl, csv, sqlite, an image dir) in the spec: §13 has the full contract.
+`build` runs the forge in `python/`, so it needs the repo checkout (the installed payload carries the two query embedders only: the potion script and the registry script for wemm, clip and jina corpora, whose model deps you add to the setup venv when you need them, section 12); the other four verbs work with the installed binary alone. the python version of the same loop, with the embedder in plain sight, is `python examples/quickstart/quickstart.py`. to build your own corpus, swap `docs.jsonl` for your rows (jsonl, csv, sqlite, an image dir) in the spec: §13 has the full contract.
 
 ## 1. build a `.urna` from chunks
 
@@ -177,7 +177,7 @@ urna search my_corpus.urna "[0.1, 0.2, ...]" -k 10
 
 ### search by text
 
-embed the query with the same model the corpus was built with (the manifest declares it), then route to the declared `index_type` (exact, hnsw, hybrid). the runtime cross-checks the embedder's `model_hash` against the manifest before running search and refuses on mismatch. see §7.
+embed the query with the same model the corpus was built with (the manifest declares it), then route by what the file carries: bm25 plus vectors (the hybrid path) when the file has a bm25 section, hnsw when it has an hnsw section, exact otherwise. the manifest's `index_type` names the vector index only, so a `hybrid` preset file (it declares `hnsw` and carries bm25 as the `supports_bm25` capability) takes the hybrid path. the runtime cross-checks the embedder's `model_hash` against the manifest before running search and refuses on mismatch. see §7.
 
 ```sh
 urna search-text my_corpus.urna "vacina contra covid funciona" -k 5
@@ -212,7 +212,7 @@ urna benchmark my_corpus.urna -q 100 -k 10 --space "wemm-2b@256"
 
 ### the flagship: ask and retrieve
 
-`ask` and `retrieve` are the agent-native front door: text query in, cited answer out, no flags needed. they embed the query OFFLINE and route the embedder BY THE MANIFEST MODEL: a potion corpus keeps the potion static table (`python/forge/embed_query_potion.py`, the unchanged fast path), and a corpus whose default text space is any registry model (wemm, jina, clip; see §12) goes through `python/forge/embed_query_model.py`, which encodes the query with that model's query route and, for an mrl-truncated default space, slices + renormalizes to the manifest dim (`--mrl-dim`, passed automatically). both paths validate the embedder's `model_hash` against the manifest exactly like `search-text`, and route by manifest capability (exact if only embeddings, hnsw/hybrid/graph as the file advertises). every printed score IS the exact-cosine rerank value.
+`ask` and `retrieve` are the agent-native front door: text query in, cited answer out, no flags needed. they embed the query OFFLINE and route the embedder BY THE MANIFEST MODEL: a potion corpus keeps the potion static table (`python/forge/embed_query_potion.py`, the unchanged fast path), and a corpus whose default text space is any registry model (wemm, jina, clip; see §12) goes through `python/forge/embed_query_model.py`, which encodes the query with that model's query route and, for an mrl-truncated default space, slices + renormalizes to the manifest dim (`--mrl-dim`, passed automatically). both paths validate the embedder's `model_hash` against the manifest exactly like `search-text`, and route by what the file carries: the hybrid path (bm25 candidates plus the vector shortlist, fused, then the exact rerank) when the file has a bm25 section, hnsw when it has an hnsw section, exact otherwise. the graph is never routed to automatically; `search-graph` is its verb. every printed score IS the exact-cosine rerank value, so on the hybrid path the bm25 leg widens the candidate set and the cosine orders it: a lexical match reaches the answer when its cosine earns a place in the top-k.
 
 `ask` prints one low-cognitive-load cited answer:
 
@@ -251,7 +251,7 @@ numbers measured on the project's PT-BR fake-news corpus (n=30,725, dim=384), 10
 
 the `exact`/`compressed`/`tiny`/`nano`/`hybrid` rows are direct `preset=` values; `micro` is the published name for the matryoshka size lever (the documented honest point `mrl256-int8`), built with `urna.build(text_encoding="zstd", dtype="int8", mrl_dim=256, with_hnsw=True)` and emitted by `measure_presets.py --variants ...,micro,...`.
 
-pick `nano` for the smallest distributable file with recall above the nano floor: int4 block-64 embeddings (per-64-dim-group f16 absmax scales + packed 4-bit codes) take the embeddings section from int8's 11.92 MB down to 6.27 MB (~1.9x over int8, ~7.5x over float32). `nano`/`micro` require the effective `embedding_dim` divisible by 64. every sub-int8 preset (`micro`/`nano` and the whole mrl curve) is STORED-PRECISION: the 0x09 `embeddings_fp` rerank source is not wired, so the net-of-fp ratio equals the stored ratio and `score`/`recall@10` are real cosine AT THE STORED PRECISION (int4/int8), disclosed via `dtype` (and `mrl_dim`/`full_dim` for `micro`) in `urna stats` and on every result, never a bare-slab ratio. `micro` trades recall for size on this non-mrl MiniLM baseline (0.810 recall@10 at 0.223 ratio, see the curve below); pick it only when raw size beats the last ~10 recall points or once a real mrl-trained model lands. pick `tiny` when you want a smaller file than `compressed` with recall still above 0.99, `compressed` when you need lossless cosine + 3x compression, `hybrid` when queries include rare terms, proper nouns, or siglas that pure embeddings underweight, and `exact` when storage isn't the bottleneck and you want the recall=1.0 ground truth.
+pick `nano` for the smallest distributable file with recall above the nano floor: int4 block-64 embeddings (per-64-dim-group f16 absmax scales + packed 4-bit codes) take the embeddings section from int8's 11.92 MB down to 6.27 MB (~1.9x over int8, ~7.5x over float32). `nano`/`micro` require the effective `embedding_dim` divisible by 64. every sub-int8 preset (`micro`/`nano` and the whole mrl curve) is STORED-PRECISION: the 0x09 `embeddings_fp` rerank source is not wired, so the net-of-fp ratio equals the stored ratio and `score`/`recall@10` are real cosine AT THE STORED PRECISION (int4/int8), disclosed via `dtype` (and `mrl_dim`/`full_dim` for `micro`) in `urna stats` and on every result, never a bare-slab ratio. `micro` trades recall for size on this non-mrl MiniLM baseline (0.810 recall@10 at 0.223 ratio, see the curve below); pick it only when raw size beats the last ~10 recall points or once a real mrl-trained model lands. pick `tiny` when you want a smaller file than `compressed` with recall still above 0.99, `compressed` when you need lossless cosine + 3x compression, `hybrid` when queries include rare terms, proper nouns, or siglas that pure embeddings underweight (the bm25 leg puts the chunks carrying those words into the candidate set that the exact cosine then orders; it widens the shortlist, it does not re-score, so the match wins the top-k only when its cosine earns it), and `exact` when storage isn't the bottleneck and you want the recall=1.0 ground truth. a `hybrid` file declares `index_type = "hnsw"` and `supports_bm25 = true` in its manifest; `ask`, `retrieve` and `search-text` see the capability and take the hybrid path.
 
 ### matryoshka prefix truncation (`mrl_dim`)
 
@@ -355,7 +355,7 @@ urna cite my_corpus.urna 'urna://sha256:1aa9.../sha256:8f314...'
 ./scripts/release_check.sh
 ```
 
-runs the full pipeline: cargo test, clippy, fmt, all 3 python test suites, ruff, `measure_presets.py`, `compare_measure.py` against the committed baseline. exits non-zero on any failure.
+runs the full pipeline: the 639-line guard, cargo fmt, clippy, the rust suite in release, the python extension rebuilt with `pyo3/extension-module`, the nine python suites (e2e, builder, search_text_model_hash, image_corpus, forge_spec, quality_gate, cli_space, query_embedder_routing, embedder_payload), ruff when importable, `measure_presets.py` and `compare_measure.py` against the committed baseline. exits non-zero on any failure. what it does not run: the flagship e2e tests that need the forge deps (`cli_e2e.rs` skips without them), `test_offline_guard.py`, `test_blob_bridge.py`, `test_space_bridge.py`, and the checks ci adds on top (cargo-deny, cargo-semver-checks, the windows job, the fuzz smoke).
 
 ## 11. install health check (`urna doctor`)
 
@@ -383,6 +383,8 @@ embedding models are DATA, not per-project code: `python/forge/model_registry.py
 | `jina-v5-omni-nano` / `-small` | sentence-transformers | 768 / 1024 | 32–768 / 32–1024 | text, image, video |
 | `wemm-2b` | sentence-transformers | 2048 | 128–2048 | text, image, video |
 | `wemm-4b` / `wemm-9b` | sentence-transformers | 2560 / 4096 | idem | registered; `--allow-heavy` required |
+
+on an installed binary the potion route works out of the box; the other presets need their deps in the setup venv (`URNA_PYTHON=~/.local/share/urna/venv/bin/python -m pip install torch sentence-transformers`, or `open_clip_torch pillow` for the clip family) and a local model snapshot; `urna ask` on such a corpus names the missing package and exits 4 until then.
 
 three rules the registry enforces, loudly:
 
