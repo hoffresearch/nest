@@ -45,7 +45,15 @@ pub fn run(
             None => String::new(),
         }
     );
-    let payload = spawn_embedder(&embedder, model_path.as_ref(), &[], &model, &query)?;
+    // a corpus whose default space was truncated at build time (full_dim
+    // recorded) is queried at the manifest dim: the embedder slices and
+    // renormalizes, exactly like the ask/retrieve path does.
+    let mut extra: Vec<String> = Vec::new();
+    if info["manifest"]["full_dim"].as_u64().is_some() {
+        extra.push("--mrl-dim".into());
+        extra.push(declared_dim.to_string());
+    }
+    let payload = spawn_embedder(&embedder, model_path.as_ref(), &extra, &model, &query)?;
     validate_gate(
         &payload,
         &model,
