@@ -86,7 +86,7 @@ urna validate examples/quickstart/out/quickstart.urna
 | Property | How |
 |----------|-----|
 | Self-contained | The file is the whole database. Copy it like a sqlite file. |
-| Verifiable | Sha-256 per section, per file and over the decoded content. `urna cite` resolves any citation. |
+| Verifiable | Sha-256 over the whole file and over the decoded content, plus a checksum on the header and on every section. `urna cite` resolves any citation. |
 | Reproducible | Same chunks and same model give a byte-identical file on any machine. |
 | Offline | The runtime never opens a socket. A query from the wrong model fails at the `model_hash` check. |
 
