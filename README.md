@@ -109,7 +109,7 @@ print(hits[0].citation_id, hits[0].score, hits[0].text)
 
 ```python
 db.search(qvec, 5)                                     # exact
-db.search_ann(qvec, 5, 100)                            # hnsw, then exact rerank
+db.search_ann(qvec, 5, 400)                            # hnsw beam (floor: the build's ef_construction), then exact rerank
 db.search_hybrid(qvec, "vacina contra covid", 5, 100)  # bm25 + vectors, exact rerank
 db.search_graph(qvec, 5, hops=2, ef=100)               # chunk graph from the seeds
 db.search_space("clip-vit-b32", ivec, 5)               # one named multimodal space
@@ -168,7 +168,7 @@ urna search my_corpus.urna "[0.1, 0.2, ...]" -k 10
 ```
 
 ```sh
-urna search-ann my_corpus.urna "[0.1, 0.2, ...]" -k 10 --ef 200
+urna search-ann my_corpus.urna "[0.1, 0.2, ...]" -k 10 --ef 800   # the beam floor is the build's ef_construction (400)
 ```
 
 ```sh
