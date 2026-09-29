@@ -186,6 +186,9 @@ class BuildConfig:
     hnsw_m: int = 16
     hnsw_ef_construction: int = 400
     hnsw_seed: int = 42
+    # the zero model_hash placeholder is refused at write time (the cli gate
+    # refuses such a corpus at every query); test fixtures opt back in.
+    allow_placeholder_model_hash: bool = False
 
 
 class Pipeline:
@@ -304,6 +307,7 @@ class Pipeline:
             hnsw_m=self.cfg.hnsw_m,
             hnsw_ef_construction=self.cfg.hnsw_ef_construction,
             hnsw_seed=self.cfg.hnsw_seed,
+            allow_placeholder_model_hash=self.cfg.allow_placeholder_model_hash,
         )
 
         # final integrity check via the in-process reader (PyO3 path).
