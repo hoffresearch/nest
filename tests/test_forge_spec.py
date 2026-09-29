@@ -175,6 +175,13 @@ def test_validation_errors(base: Path) -> None:
     _expect_spec_error(MINIMAL.format(models=heavy, extra=""), "allow-heavy", base)
     remote = '[[models]]\npreset="wemm-2b"\ntext="default"\n'
     _expect_spec_error(MINIMAL.format(models=remote, extra=""), "allow_remote_code", base)
+    # pdf_dir used to pass validation and fail at row loading, every time;
+    # now validate names the tool that renders pages and the kinds it takes.
+    fake = '[[models]]\npreset="fake-test"\ntext="default"\n'
+    pdf = MINIMAL.format(models=fake, extra="").replace('kind = "jsonl"', 'kind = "pdf_dir"')
+    assert pdf != MINIMAL.format(models=fake, extra=""), "the fixture must declare kind"
+    _expect_spec_error(pdf, "urna_build_image_corpus.py --pdf", base)
+    _expect_spec_error(pdf, "image_dir", base)
     print("test_validation_errors: OK")
 
 
