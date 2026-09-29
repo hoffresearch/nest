@@ -43,7 +43,7 @@ secrets live in the github repository secrets (`CARGO_REGISTRY_TOKEN`, `NPM_TOKE
 - `cargo semver-checks -p urna-format --baseline-rev origin/main`: the rust api of the frozen format against the pull request's base; ci fails a pull request that breaks it (in 0.x a minor bump is the major bump)
 - `cargo bench -p urna-runtime --no-run`: the criterion benches (simd, rerank, hnsw_build) have to compile; ci checks that, the numbers are not a gate
 - `sh scripts/ruff_check.sh`: ruff over the one python file list shared with ci (`URNA_PYTHON=.venv/bin/python` picks the interpreter)
-- `./scripts/release_check.sh`: the full pipeline (the rust suite in release, the extension rebuilt, eight python suites, ruff when importable) plus the regression gates against `data/measure/baseline.json`; exits non-zero on any failure. it is the definition of pull-request ready
+- `./scripts/release_check.sh`: the full pipeline (the rust suite in release, the extension rebuilt, nine python suites, ruff when importable) plus the regression gates against `data/measure/baseline.json`; exits non-zero on any failure. it is the definition of pull-request ready
 - `forge-core/` is a separate cargo workspace outside `crates/` (the ingestion layer, the frozen `.fci` schema). `--workspace` and `release_check.sh` never reach it; run `cargo build`, `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --all --check` with `--manifest-path forge-core/Cargo.toml`
 - `fuzz/` is the third cargo workspace (cargo-fuzz, nightly toolchain): `sh scripts/fuzz_soak.sh [seconds]` runs every target with the corpus kept under `fuzz/corpus/`; `fuzz/README.md` has the targets and how a finding becomes a test
 
@@ -91,9 +91,10 @@ python tests/test_forge_spec.py
 python tests/test_quality_gate.py
 python tests/test_cli_space.py
 python tests/test_query_embedder_routing.py
+python tests/test_embedder_payload.py
 ```
 
-`release_check.sh` runs eight of them; `test_offline_guard.py`, `test_blob_bridge.py` and `test_space_bridge.py` run by hand.
+`release_check.sh` runs nine of them; `test_offline_guard.py`, `test_blob_bridge.py` and `test_space_bridge.py` run by hand.
 
 `test_image_corpus.py` covers the forge image pillar (encode and decode, gop probe, sharding, ordering) with a stub embedder and skips cleanly without ffmpeg's av1 and avif encoders. building a real image corpus (`python/forge/embed_image.py`) needs `open_clip` and torch, outside the default forge dependency group.
 
@@ -135,7 +136,7 @@ three cargo workspaces, one policy each: the root `Cargo.toml` (`crates/*`, the 
 the cli has three groups, which `urna --help` tags and orders:
 
 - engine verbs, file and vector in, never run python: `inspect`, `validate`, `stats`, `media`, `search`, `search-ann`, `search-graph`, `search-space`, `search-text`, `benchmark`, `cite`, `doctor`.
-- agent verbs over the same engine, `cmd/agent/`: `build` (a declarative corpus build, launching `python/tools/urna_forge.py`), `ask` (text in, cited answer out, `--disclose answer|explain`), `retrieve` (json or jsonl of cited spans; `score` is the exact rerank value). they embed offline and route the query embedder by the manifest model: potion corpora keep the potion script, registry models go through `python/forge/embed_query_model.py`. the build contract is `docs/USAGE.md` sections 12 to 14.
+- agent verbs over the same engine, `cmd/agent/`: `build` (a declarative corpus build, launching `python/tools/urna_forge.py`), `ask` (text in, cited answer out, `--disclose answer|explain`), `retrieve` (json or jsonl of cited spans; `score` is the exact rerank value). they embed offline and route the query embedder by the manifest model: potion corpora keep the potion script, registry models go through `python/forge/embed_query_model.py`. the search path is routed by what the file carries (`MmapUrnaFile::search_routed`, shared with `search-text`): hybrid when a bm25 section is present, hnsw when an hnsw section is present, exact otherwise; the manifest `index_type` names the vector index only, so a `hybrid` preset file (`index_type = "hnsw"`, `supports_bm25 = true`) takes the hybrid route. the graph is reached only through `search-graph`. the build contract is `docs/USAGE.md` sections 12 to 14.
 - the terminal ui, `src/tui`:
   - `urna setup` is the installer every channel ends in: scan the machine, show the plan, install, verify. the payload comes through a system `curl` child with the sha256 checked while it streams; `--yes` for scripts. exit codes: 10 download, 11 checksum, 12 unpack, 13 python env, 14 blocked, above doctor's 2 to 6.
   - `urna tui [file]` is the explorer: home, corpus, ask, health, a file picker, a hand-off to setup. a bare `urna` on a terminal opens it; in a pipe it prints help and exits 2.
@@ -215,7 +216,7 @@ run `.contracts/.agents/.skills/AFTERWORK.md`: it names which file owns what and
   - a potion corpus uses `python/forge/embed_query_potion.py` (numpy + tokenizers, no torch, no socket).
   - a corpus whose default text space is a registry model (wemm, clip, jina) goes through `python/forge/embed_query_model.py`, which loads it locally; network only with `URNA_ALLOW_DOWNLOAD=1`.
   - a corpus built with a sentence-transformers model outside the registry (the pt-br demo corpus, MiniLM) is not askable. `search-text` is its path, through `python/embed_query.py`, network on first use.
-  - the embedder runs under `python3` unless `URNA_PYTHON` points at a venv with the forge deps; otherwise the embed step fails with `ModuleNotFoundError`.
+  - the embedder runs under `python3` unless `URNA_PYTHON` points at a venv with the forge deps; otherwise the embed step fails with `ModuleNotFoundError`. the release payload carries both query embedders; a registry model still needs its own deps (torch, sentence-transformers or open_clip) in that venv, which `embed_query_model.py` names, exit 4.
   - the flagship e2e tests (`cli_e2e.rs`, `python/forge/test_retrieve.py`) need those deps and skip without them; `release_check.sh` does not run them.
 - the pt-br fingerprint: the model fingerprint reads the local sentence-transformers cache. populate it once, `python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')"`, or `urna_build_corpus.py` and the fingerprint test fail.
 - squash merge replaces the branch history: the pull request lands on `main` as one commit with a new hash, so a branch that keeps living after its merge conflicts on every file the squash touched. delete merged branches; never rebase old work onto a merged branch.
