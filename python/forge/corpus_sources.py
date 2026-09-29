@@ -1,4 +1,4 @@
-"""Row loaders for declarative builds: sqlite/csv/jsonl/image_dir/pdf_dir.
+"""Row loaders for declarative builds: sqlite/csv/jsonl/image_dir.
 
 Every loader returns the same shape: an ordered list of Row with the item
 input_hash (RFC-0 N2) computed at load time - sha256 over canonical text,
@@ -204,8 +204,6 @@ def _load_image_dir(spec: CorpusSpec) -> list[Row]:
 
     src = spec.source
     labels = image_items.load_labels(Path(src.labels)) if src.labels else None
-    if spec.source.kind == "pdf_dir":
-        raise SpecError("source.kind=pdf_dir: build via forge_pipeline (pages are temporary)")
     items = image_items.collect_images(Path(src.input_dir), labels)
     rows = []
     for item in items:
@@ -233,7 +231,7 @@ def load_rows(spec: CorpusSpec, sample: int | None = None, seed: int = 42) -> li
         rows = _load_sqlite(spec)
     elif kind in ("csv", "jsonl"):
         rows = _load_csv_jsonl(spec)
-    elif kind in ("image_dir", "pdf_dir"):
+    elif kind == "image_dir":
         rows = _load_image_dir(spec)
     else:
         raise SpecError(f"source.kind: unknown '{kind}'")

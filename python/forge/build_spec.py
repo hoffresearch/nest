@@ -54,8 +54,8 @@ class SourceSpec:
     joins: list[SourceJoin] = field(default_factory=list)
     text: SourceText = field(default_factory=SourceText)
     image: SourceImage = field(default_factory=SourceImage)
-    input_dir: str = ""  # image_dir | pdf_dir
-    labels: str = ""  # image_dir | pdf_dir label file
+    input_dir: str = ""  # image_dir
+    labels: str = ""  # image_dir label file
     path: str = ""  # csv | jsonl
 
 
