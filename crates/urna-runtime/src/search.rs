@@ -112,9 +112,10 @@ impl MmapUrnaFile {
         })
     }
 
-    /// ANN search. Pulls `ef_search` candidates from HNSW, reranks with
-    /// the exact dot product, returns top-k. Falls back to `search()` if
-    /// no ANN section is present.
+    /// ANN search. Pulls `max(ef_search, k, ann_ef_floor)` candidates from
+    /// HNSW (the file's `ef_construction` is the floor a caller cannot go
+    /// under), reranks with the exact dot product, returns top-k. Falls
+    /// back to `search()` if no ANN section is present.
     pub fn search_ann(
         &self,
         query: &[f32],

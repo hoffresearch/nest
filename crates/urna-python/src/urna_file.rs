@@ -33,8 +33,10 @@ impl UrnaFile {
         Ok(res.hits.into_iter().map(SearchHitPy::from).collect())
     }
 
-    /// HNSW ANN search with exact rerank. Falls back to `search()` if
-    /// the file has no HNSW section.
+    /// HNSW ANN search with exact rerank. the beam is max(ef, k, the
+    /// file's ef_construction), so an `ef` below the build's floor (400
+    /// for python builds) changes nothing. Falls back to `search()` if the
+    /// file has no HNSW section.
     fn search_ann(&self, query: &Bound<PyAny>, k: i32, ef: usize) -> PyResult<Vec<SearchHitPy>> {
         let qvec: Vec<f32> = query
             .extract()
