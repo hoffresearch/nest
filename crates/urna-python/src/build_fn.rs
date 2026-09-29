@@ -11,6 +11,10 @@ use crate::build_inputs::{
     build_graph_payload, parse_chunks, resolve_preset, truncate_renormalize,
 };
 
+/// the legacy zero fingerprint; the same constant the cli gate refuses.
+const PLACEHOLDER_MODEL_HASH: &str =
+    "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+
 /// Build a .urna file from already-embedded chunks.
 ///
 /// `chunks` is a list of dicts with keys:
@@ -68,6 +72,12 @@ use crate::build_inputs::{
 ///     (default "float32"), `vectors` (one row per chunk). queries route
 ///     through `UrnaFile.search_space`, never the text path.
 ///   - `hnsw_m`, `hnsw_ef_construction`, `hnsw_seed`: HNSW knobs
+///   - `allow_placeholder_model_hash`: bool (default off). `model_hash` must
+///     be the embedder's fingerprint; the zero placeholder
+///     (`sha256:000...0`) is refused here, at write time, because the cli
+///     gate refuses such a corpus at every query. the flag keeps the legacy
+///     placeholder for test fixtures and synthetic benchmarks that never
+///     answer a text query.
 #[pyfunction]
 #[pyo3(signature = (
     output_path,
@@ -100,6 +110,7 @@ use crate::build_inputs::{
     hnsw_m=16,
     hnsw_ef_construction=400,
     hnsw_seed=42,
+    allow_placeholder_model_hash=false,
 ))]
 #[allow(clippy::too_many_arguments)]
 pub fn build(
@@ -133,8 +144,20 @@ pub fn build(
     hnsw_m: usize,
     hnsw_ef_construction: usize,
     hnsw_seed: u64,
+    allow_placeholder_model_hash: bool,
 ) -> PyResult<String> {
     use urna_format::writer::{EmbeddingDType, UrnaFileBuilder};
+
+    // the format accepts any well-formed hash (the frozen golden fixture
+    // carries the placeholder); the python writer is where a real corpus is
+    // born, so the placeholder stops here unless the caller asks for it.
+    if model_hash == PLACEHOLDER_MODEL_HASH && !allow_placeholder_model_hash {
+        return Err(PyValueError::new_err(
+            "model_hash is the zero placeholder (sha256:000...0): pass the embedder's \
+             fingerprint (emb.model_hash()); the cli gate refuses a placeholder corpus at \
+             every query. allow_placeholder_model_hash=True keeps it for a test fixture.",
+        ));
+    }
 
     let n_chunks = chunks.len() as u64;
     let full_dim = embedding_dim;
