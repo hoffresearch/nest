@@ -159,3 +159,16 @@ pub(crate) fn open_blob_sections(
     }
     Ok(blob_refs)
 }
+
+/// The per-chunk source spans as a query reports them: the decoded 0x03
+/// spans with the 0x16 overlay applied, exactly what `MmapUrnaFile::open`
+/// does. `urna cite` resolves through this so a media corpus cites the blob
+/// uri and its byte range, the span search hits and `retrieve` print, and
+/// not the row ordinal the forge writes into 0x03. without the overlay (or
+/// the `blobs_present` capability) the spans are left as decoded.
+pub fn apply_blob_span_overlay(
+    view: &UrnaView,
+    spans: &mut [OriginalSpan],
+) -> Result<(), RuntimeError> {
+    open_blob_sections(view, spans).map(|_| ())
+}

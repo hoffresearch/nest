@@ -615,6 +615,46 @@ def test_corrupt_cache_recomputed(base: Path) -> None:
     print("test_corrupt_cache_recomputed: OK")
 
 
+def test_rebuild_only_keeps_the_lock(base: Path) -> None:
+    """--rebuild-only verifies a build and never rewrites its lock: a match
+    leaves the file byte-identical, a divergence leaves it byte-identical
+    too and writes the rebuild's lock next to it, and --strict-env still
+    turns the divergence into an error before anything is written."""
+    d = base / "relock"
+    d.mkdir()
+    spec_p = _fixture(d, with_media=False, mode="single", salt=" relock")
+    lock_p = Path(build(load_spec(spec_p))["build_lock"])
+    rebuilt_p = lock_p.with_name("faketest.build.lock.rebuild.json")
+    original = lock_p.read_bytes()
+
+    result = build(load_spec(spec_p), rebuild_only=True)
+    assert lock_p.read_bytes() == original, "a matching rebuild keeps the lock as is"
+    assert "rebuild_lock" not in result and not rebuilt_p.exists()
+
+    before = os.environ.get("URNA_ST_DEVICE")
+    os.environ["URNA_ST_DEVICE"] = "relock-test"  # the lock records the device
+    try:
+        try:
+            build(load_spec(spec_p), rebuild_only=True, strict_env=True)
+        except Exception as e:
+            assert "build.lock divergence" in str(e), e
+        else:
+            raise AssertionError("--strict-env must refuse a divergent rebuild")
+        assert not rebuilt_p.exists(), "a refused rebuild writes no lock"
+
+        result = build(load_spec(spec_p), rebuild_only=True)
+    finally:
+        if before is None:
+            os.environ.pop("URNA_ST_DEVICE", None)
+        else:
+            os.environ["URNA_ST_DEVICE"] = before
+    assert lock_p.read_bytes() == original, "a divergent rebuild must not overwrite the lock"
+    assert result["rebuild_lock"] == str(rebuilt_p)
+    assert json.loads(rebuilt_p.read_text())["device"] == "relock-test"
+    assert json.loads(original)["device"] != "relock-test"
+    print("test_rebuild_only_keeps_the_lock: OK")
+
+
 def test_cache_shared_across_specs(base: Path) -> None:
     """content-addressed entries under one root: same rows in two output
     dirs read one potion table; a media knob change adds a clip-side entry
@@ -792,6 +832,7 @@ def main() -> None:
         test_embed_media(base)
         test_triad_invalidation(base)
         test_corrupt_cache_recomputed(base)
+        test_rebuild_only_keeps_the_lock(base)
         test_cache_shared_across_specs(base)
         test_probe_conflict(base)
         test_cache_root_errors(base)
