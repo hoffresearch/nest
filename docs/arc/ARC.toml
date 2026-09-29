@@ -412,7 +412,7 @@ links = ["Cargo.toml"]
 [[inventory.root]]
 path = "Cargo.toml"
 kind = "workspace-manifest"
-purpose = "workspace members, edition, resolver, rust-version 1.85 (msrv, inherited by all crates), and shared dependencies"
+purpose = "workspace members, edition, resolver, rust-version 1.85 (the msrv of urna-format, urna-runtime and urna-python; crates/urna-cli pins its own 1.88), and shared dependencies"
 links = [
     "crates/urna-format/Cargo.toml",
     "crates/urna-runtime/Cargo.toml",
