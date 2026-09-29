@@ -2,7 +2,7 @@
 project: urna
 audience: users and contributors
 status: active
-last-updated: 2026-09-27
+last-updated: 2026-09-29
 domain: release-history
 ---
 
@@ -13,6 +13,10 @@ all notable changes to `urna` are documented here.
 format follows [keep a changelog](https://keepachangelog.com/en/1.1.0/). versioning follows [semver](https://semver.org/spec/v2.0.0.html). the on-disk container format is frozen at v1; breaking changes bump `URNA_FORMAT_VERSION` (binary) or `URNA_SCHEMA_VERSION` (manifest fields).
 
 ## [Unreleased]
+
+### fixed
+
+- `scripts/release_check.sh` failed its own `cargo test` step whenever `URNA_PYTHON` was exported, which is how its header says to run it: two `urna setup` plan tests read the variable from the process env and planned around a pinned interpreter the fixture never declared. the scan now carries the pin (`Scan::pinned_python`), `plan` is a pure function of the scan again, and a third test covers the pinned case (blocked with the variable named while the deps are missing, nothing to do once they are there).
 
 ### changed
 

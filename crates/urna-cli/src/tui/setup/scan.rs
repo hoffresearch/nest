@@ -62,6 +62,10 @@ pub struct Scan {
     pub embedder: Option<PathBuf>,
     /// interpreter + `--version` of the one the embedder would run under.
     pub python: Option<(String, String)>,
+    /// `URNA_PYTHON` when set: it wins over any venv setup builds, so the
+    /// plan has to say so. read here, once, so `plan` stays a pure function
+    /// of the scan (its tests run under whatever env the gate exports).
+    pub pinned_python: Option<String>,
     pub deps: bool,
     /// a python able to create a venv (`python3 -m venv`), when present.
     pub base_python: Option<String>,
@@ -134,6 +138,7 @@ impl Scan {
             home: paths::urna_home(),
             embedder,
             python,
+            pinned_python: std::env::var("URNA_PYTHON").ok().filter(|s| !s.is_empty()),
             deps,
             base_python: base_python(),
             uv: which("uv"),
