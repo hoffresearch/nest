@@ -261,6 +261,31 @@ impl MmapUrnaFile {
         })
     }
 
+    /// Route by what the file carries, the one order `ask`, `retrieve` and
+    /// `search-text` share: hybrid when a BM25 section is present and the
+    /// caller has the query text, hnsw when an HNSW section is present,
+    /// exact otherwise. the manifest's `index_type` names the vector index
+    /// only; the lexical index is the `supports_bm25` capability, so a file
+    /// built with the `hybrid` preset (`index_type = "hnsw"`, a BM25
+    /// section) takes the hybrid route here. the graph is never routed to
+    /// automatically; `search_graph` is its entry point. `candidates` is the
+    /// hnsw beam, or the per-path shortlist size on the hybrid route.
+    pub fn search_routed(
+        &self,
+        query: &[f32],
+        query_text: Option<&str>,
+        k: i32,
+        candidates: usize,
+    ) -> Result<SearchResult, RuntimeError> {
+        match query_text {
+            Some(text) if self.bm25_index.is_some() && !text.trim().is_empty() => {
+                self.search_hybrid(query, text, k, candidates)
+            }
+            _ if self.ann_index.is_some() => self.search_ann(query, k, candidates),
+            _ => self.search(query, k),
+        }
+    }
+
     pub(crate) fn materialize_hits(
         &self,
         scored: &[(usize, f32)],
