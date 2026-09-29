@@ -83,9 +83,11 @@ def build_corpus(out_path: Path, model_hash: str, dim: int = 4, mrl_dim: int | N
         embedding_dim=dim,
         chunker_version="test/v1",
         model_hash=model_hash,
+        mrl_dim=mrl_dim,
         chunks=chunks,
         reproducible=True,
-        mrl_dim=mrl_dim,
+        # case 3 builds the legacy placeholder corpus on purpose
+        allow_placeholder_model_hash=True,
     )
 
 

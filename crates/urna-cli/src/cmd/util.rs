@@ -12,6 +12,20 @@ pub fn print_result(result: &urna_runtime::SearchResult) {
     println!("k_requested:  {}", result.k_requested);
     println!("k_returned:   {}", result.k_returned);
     println!("query_time:   {:.3} ms", result.query_time_ms);
+    // the candidate counts the exact rerank saw, per path. on the hnsw
+    // route `ann` is the beam that ran (max of --ef, k and the file's
+    // ef_construction floor), so an --ef below the floor shows here.
+    let e = &result.explain;
+    println!(
+        "candidates:   route={} exact={} ann={} bm25={} graph={} fusion={} rerank_source={}",
+        e.route,
+        e.exact_candidates,
+        e.ann_candidates,
+        e.bm25_candidates,
+        e.graph_candidates,
+        e.fusion_mode,
+        e.rerank_source.as_str()
+    );
     println!("hits:");
     for (i, hit) in result.hits.iter().enumerate() {
         println!(
