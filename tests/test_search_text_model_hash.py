@@ -39,6 +39,12 @@ import json, os, sys
 mh = os.environ.get("FAKE_MODEL_HASH", "sha256:" + "ff" * 32)
 dim = int(os.environ.get("FAKE_DIM", "4"))
 model_name = sys.argv[-2] if len(sys.argv) >= 2 else ""
+# the cli passes --mrl-dim N for a truncated corpus; honor it like the real
+# embedders do (slice, renormalize, report N), and record that it arrived.
+if "--mrl-dim" in sys.argv:
+    dim = int(sys.argv[sys.argv.index("--mrl-dim") + 1])
+    with open(os.environ["FAKE_ARGV_LOG"], "w") as fh:
+        fh.write(" ".join(sys.argv[1:]))
 # Always produce a normalized unit vector.
 vec = [1.0] + [0.0] * (dim - 1)
 print(json.dumps({
@@ -51,7 +57,7 @@ print(json.dumps({
 """
 
 
-def build_corpus(out_path: Path, model_hash: str, dim: int = 4) -> None:
+def build_corpus(out_path: Path, model_hash: str, dim: int = 4, mrl_dim: int | None = None) -> None:
     """Build a 2-chunk corpus with the requested model_hash."""
     chunks = [
         dict(
@@ -77,6 +83,7 @@ def build_corpus(out_path: Path, model_hash: str, dim: int = 4) -> None:
         embedding_dim=dim,
         chunker_version="test/v1",
         model_hash=model_hash,
+        mrl_dim=mrl_dim,
         chunks=chunks,
         reproducible=True,
         # case 3 builds the legacy placeholder corpus on purpose
@@ -108,6 +115,7 @@ def run_search_text(
     env = dict(os.environ)
     env["FAKE_MODEL_HASH"] = fake_model_hash
     env["FAKE_DIM"] = "4"
+    env["FAKE_ARGV_LOG"] = str(corpus.with_suffix(".argv"))
     proc = subprocess.run(cmd, capture_output=True, env=env, text=True)
     return proc.returncode, proc.stdout, proc.stderr
 
@@ -163,6 +171,19 @@ def main() -> None:
         assert rc != 0, "dim mismatch should fail, got rc=0"
         assert "dim mismatch" in stderr, f"expected 'dim mismatch' in stderr, got:\n{stderr}"
         print("case 5 (dim mismatch): OK")
+
+        # Case 6: an mrl-truncated corpus (dim 4 built at mrl_dim 2, full_dim
+        # recorded) is queried at the manifest dim: the cli passes --mrl-dim 2
+        # and the embedder's sliced vector passes the dim layer of the gate.
+        c_mrl = td / "mrl.urna"
+        build_corpus(c_mrl, real_hash, dim=4, mrl_dim=2)
+        assert urna.open(str(c_mrl)).embedding_dim == 2
+        rc, stdout, stderr = run_search_text(c_mrl, embedder, real_hash)
+        assert rc == 0, f"mrl corpus should search, got rc={rc}\nstderr={stderr}"
+        assert "chunk_id=sha256:" in stdout, stdout
+        argv = c_mrl.with_suffix(".argv").read_text()
+        assert "--mrl-dim 2" in argv, f"the cli must pass the manifest dim, argv was: {argv}"
+        print("case 6 (mrl corpus gets --mrl-dim): OK")
 
     print("all model_hash gate tests passed")
 
