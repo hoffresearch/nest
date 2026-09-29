@@ -79,6 +79,8 @@ def build_corpus(out_path: Path, model_hash: str, dim: int = 4) -> None:
         model_hash=model_hash,
         chunks=chunks,
         reproducible=True,
+        # case 3 builds the legacy placeholder corpus on purpose
+        allow_placeholder_model_hash=True,
     )
 
 

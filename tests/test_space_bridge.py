@@ -57,6 +57,7 @@ def _build(path: Path, with_spaces: bool) -> None:
         "demo-chunker/1",
         "sha256:" + "0" * 64,
         [_chunk(i) for i in range(3)],
+        allow_placeholder_model_hash=True,
         reproducible=True,
         **kwargs,
     )
@@ -120,6 +121,7 @@ class TestSpaceBridge(unittest.TestCase):
                 "demo-chunker/1",
                 "sha256:" + "0" * 64,
                 [_chunk(i) for i in range(3)],
+                allow_placeholder_model_hash=True,
                 spaces=[space],
             )
 
@@ -134,6 +136,7 @@ class TestSpaceBridge(unittest.TestCase):
             "demo-chunker/1",
             "sha256:" + "0" * 64,
             [_chunk(i) for i in range(3)],
+            allow_placeholder_model_hash=True,
             spaces=[space],
         )
         f = _urna.UrnaFile.open(str(path))
