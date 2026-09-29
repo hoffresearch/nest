@@ -255,10 +255,11 @@ Measured on a 30,725-chunk pt-br corpus. Recall here is rank stability under qua
 | Profile | Media | File | Vs the jpeg source |
 |---------|-------|-----:|-------------------:|
 | `archive` | JPEG XL, byte-reversible | 3.61 GB | 1.10x |
-| `stills` | AV1 all-intra crf35 | 1.37 GB | 2.89x |
+| `stills` | AVIF, one image per file (q48) | 1.20 GB | 3.32x |
+| `stills-av1` | AV1 all-intra crf35 | 1.37 GB | 2.89x |
 | `retrieval` | AV1 all-intra crf50 | 533 MB | 7.46x |
 
-Text-to-image hit@1 over every card: siglip2 0.750, wemm-2b 0.744, jina 0.336, clip 0.098. Code and data: [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark).
+The profile names are the forge's (`[media] profile = "..."`, usage section 14). Text-to-image hit@1 over every card: siglip2 0.750, wemm-2b 0.744, jina 0.336, clip 0.098. The benchmark code and the card data are not published yet; the measurements are recorded in `python/forge/media_profiles.py` and `docs/CHANGELOG`.
 
 </details>
 
