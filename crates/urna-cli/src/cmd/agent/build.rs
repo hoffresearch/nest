@@ -29,8 +29,12 @@ pub fn run(
 ) -> Result<()> {
     let tool = forge_tool_path();
     if !tool.exists() {
+        // no release artifact carries the forge: the build runs from a
+        // checkout of the repo (the installed payload has the query
+        // embedder only).
         anyhow::bail!(
-            "urna_forge.py not found ({}); run from the repo or install the forge payload",
+            "urna_forge.py not found ({}); `urna build` runs from a checkout of the repo: \
+             git clone https://github.com/hoffresearch/urna && cd urna && urna build --spec ...",
             tool.display()
         );
     }
