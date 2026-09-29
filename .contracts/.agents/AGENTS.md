@@ -224,7 +224,8 @@ run `.contracts/.agents/.skills/AFTERWORK.md`: it names which file owns what and
 - case-only renames on macos: the filesystem ignores case and git runs with `core.ignorecase=true`, so renaming `usage.md` to `USAGE.md` on disk does not register. use `git mv -f old New`.
 - repo-wide replaces go through `git grep -l`, never `grep -r`: gitignored third-party clones live under `tools/` and `TMP/`, and a recursive grep edits them too. run package managers (npm, bun, pnpm) from a temporary directory, not from the repo root, or they leave a `package.json` behind.
 - macos kills an overwritten binary: copying a fresh `target/*/urna` over an existing one makes every later run exit 137 (the code signature no longer matches). `rm -f` the target before `cp`.
-- `release_check.sh` hides clippy's output: when it stops at clippy, run `cargo clippy --workspace --all-targets -- -D warnings` to see the lint.
+- `release_check.sh` hides clippy's output: when it stops at clippy, run `cargo clippy --workspace --all-targets -- -D warnings` to see the lint. it also hides the names of failing tests (`passed=N failed=M` only): rerun `cargo test --release --workspace` by hand to see them.
+- a unit test never reads the process environment through the code it tests: `URNA_PYTHON`, `URNA_DATA_DIR` and friends leak in from the shell that runs the gate (`URNA_PYTHON=.venv/bin/python ./scripts/release_check.sh` is the documented way). the probe (`Scan::probe`, `resolve_interpreter`) reads the env once and hands a value down; the pure function under test takes that value.
 - verifying a signed tag or commit locally: `git -c gpg.ssh.allowedSignersFile=.github/allowed_signers verify-tag vX.Y.Z`. plain `git tag -v` fails without the setting, and `%G?` prints `N` even for a signed commit.
 
 # known gaps

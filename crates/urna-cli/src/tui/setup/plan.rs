@@ -93,7 +93,7 @@ pub fn plan(scan: &Scan, opts: &Opts) -> Vec<Item> {
     };
     let python = {
         let tool = Tool::pick(scan.uv.as_deref(), scan.base_python.as_deref());
-        let pinned = std::env::var("URNA_PYTHON").ok().filter(|s| !s.is_empty());
+        let pinned = scan.pinned_python.clone();
         let detail = match (&scan.python, scan.deps, &tool) {
             (_, false, _) if pinned.is_some() => format!(
                 "URNA_PYTHON={} lacks numpy + tokenizers and wins over any env setup builds; unset it or install the deps there",
@@ -148,6 +148,7 @@ mod tests {
             home: Some(PathBuf::from("/h/.local/share/urna")),
             embedder: None,
             python: Some(("python3".into(), "Python 3.12.4".into())),
+            pinned_python: None,
             deps: false,
             base_python: Some("python3".into()),
             uv: None,
@@ -180,6 +181,26 @@ mod tests {
             },
         );
         assert!(forced[0].runs());
+    }
+
+    #[test]
+    fn a_pinned_interpreter_without_deps_blocks_the_python_step() {
+        // URNA_PYTHON wins over any venv setup would build, so a pinned
+        // interpreter lacking the deps is a block with the variable named,
+        // and one that has them needs no python step at all. the scan
+        // carries the pin; the plan never reads the process env, so this
+        // holds whatever the gate exports.
+        let mut s = bare();
+        s.pinned_python = Some("/opt/py/bin/python".into());
+        let p = plan(&s, &Opts::default());
+        assert!(p[1].blocked.as_deref().unwrap().contains("URNA_PYTHON"));
+        assert!(p[1].detail.contains("/opt/py/bin/python"));
+        assert_eq!(blocked_code(&p), 14);
+        s.deps = true;
+        let p = plan(&s, &Opts::default());
+        assert!(p[1].blocked.is_none());
+        assert!(!p[1].runs());
+        assert_eq!(blocked_code(&p), 0);
     }
 
     #[test]
