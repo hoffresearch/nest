@@ -54,7 +54,7 @@ cfg = BuildConfig(
     embedding_model=emb.embedding_model,
     embedding_dim=emb.embedding_dim,
     chunker_version="my-chunker/v1",
-    model_hash=emb.model_hash(),  # a zero placeholder is rejected at write time
+    model_hash=emb.model_hash(),  # the zero placeholder is refused here, at write time
     preset="exact",  # see §6 for preset choices
     reproducible=True,
 )
@@ -187,10 +187,10 @@ for tuning the candidate set: `--candidates N` (default `4*k`, min 64).
 
 ### force the ANN path
 
-useful for debugging or measuring `ef_search` curves. falls back to exact if the file has no HNSW section.
+useful for debugging or measuring `ef_search` curves above the file's floor. the beam that runs is `max(--ef, k, ef_construction)`, where `ef_construction` is the build's (400 for `urna.build` and the forge), so an `--ef` below 400 changes nothing on those files; the `candidates:` line of the output prints the beam that ran. falls back to exact if the file has no HNSW section.
 
 ```sh
-urna search-ann my_corpus.urna "[0.1, 0.2, ...]" -k 10 --ef 200
+urna search-ann my_corpus.urna "[0.1, 0.2, ...]" -k 10 --ef 800
 ```
 
 ### graph search (chunk-to-chunk)
@@ -310,7 +310,7 @@ no HuggingFace cache hits, no network. the fingerprint is recomputed locally and
 
 ### pre-phase-3 corpora
 
-files built with `model_hash = sha256:0...0` (the legacy placeholder) fail the strict gate by design. two options:
+files built with `model_hash = sha256:0...0` (the legacy placeholder) fail the strict gate by design; `urna.build` no longer writes one unless asked (`allow_placeholder_model_hash=True`, for fixtures). for a file you already have, two options:
 
 - rebuild with a real fingerprint (recommended).
 - pass `--skip-model-hash-check` to proceed at your own risk. the search is still cosine-valid if you genuinely use the same embedding model, but there is no guarantee.
@@ -330,12 +330,12 @@ Exact (100 queries, dim=384, dtype=int8, simd=neon) [hot]:
   p50: 1.28 ms  p95: 1.68 ms
 Exact ... [madvise-cold]:
   p50: 1.95 ms  p95: 2.40 ms
-ANN ef=100 (100 queries) [hot]:
+ANN ef=100 (beam 400, 100 queries) [hot]:
   p50: 0.44 ms  p95: 0.62 ms
   recall@10 (ANN vs exact): 0.9920
 ```
 
-recall@10 here is ANN-vs-exact rank-stability (the ANN index against the exact-cosine top-k on the same queries), NOT real-query retrieval quality, and the printed value mirrors the published tiny ladder number; see the RULER CAVEAT in section 6.
+`beam` is the candidate width that ran, `max(--ann, k, the file's ef_construction)`: on a file built with the default `ef_construction = 400`, `--ann 100` searches 400 candidates, so the latency and recall curves only move above that floor. recall@10 here is ANN-vs-exact rank-stability (the ANN index against the exact-cosine top-k on the same queries), NOT real-query retrieval quality, and the printed value mirrors the published tiny ladder number; see the RULER CAVEAT in section 6.
 
 ## 9. citations
 
@@ -468,7 +468,7 @@ the media section is where the compression research became knobs. all decisions 
 - `order = "cluster"`: greedy cosine clustering (deterministic tie-breaks) makes near-duplicates adjacent so per-segment inter coding has something to predict; measured before recommended; on a 1-per-card corpus the honest expectation is ~0, and on the same-artwork reprint corpus it is -29% (2026-08-31, g=16 + scd=0 vs all-intra).
 - `gop = "auto"` with sharding probes PER SEGMENT: each `shard_size` chunk runs its own intra-vs-inter probe encode and ships its own keyint (recorded per segment in the manifest, `gop.per_segment = true`). a single global probe averages regimes away; with `order = "cluster"` the near-duplicate runs concentrate in a few segments, which decide inter (bounded gop, keyint=16, scene-change detection off), while unique segments keep O(1) all-intra access. forced `gop = "intra" | "inter"` still applies to every segment alike.
 - `profile`: dataset-type presets resolved BEFORE explicit keys (an explicit key always wins, so no other use case is closed off). `"near-dup"` = cluster ordering + per-segment gop + still tune (visually similar corpora: card reprints, video frames, scans); `"stills"` = `backend = "avif"` + `crf = 48` + `speed = 8`, one libaom avif per image (unique images: O(1) per-image access with no video decode; measured 2026-09-12 on 38627 cards, experiment 11 of brennercruvinel/mtg-urna-benchmark: 1195973116 B against 1374431484 B for the all-intra av1 stream, 13% less at matched ssimulacra2 mean 61.96 on the 2048 sample; the cost is a 4 to 10x slower clip embed at build time because frames are decoded one avif at a time); `"stills-av1"` = the previous stills recipe, all-intra + still tune on the av1 stream (one file per shard, ffmpeg decode, and the profile to pair with `crf = "auto"`); `"archive"` = jxl-transcode (byte-reversible, for corpora where loss is not acceptable); `"retrieval"` = all-intra + still tune + `speed = 6` + fixed `crf = 50`, for a corpus that only serves search and never shows its pixels (measured 2026-09-03 on 38627 cards: 532671548 B self-contained, 7.46x vs the jpeg source, no measurable txt@1 loss on 100 queries; the default drift floor at p10 0.942 would have vetoed it, which is why the profile pins crf instead of running the gate); `"retrieval-auto"` = the same recipe with `crf = "auto"` gated by task utility alone: visual and drift floors disabled (`-1e9` / `-1.0`), `utility_floor_hit1 = 0.0`, `utility_tol = 0.02`, ladder `[40, 45, 50, 55, 60]`, so the largest crf whose hit@1 stays within 0.02 of the lossless source wins (the gate model needs a text tower: clip, siglip2, wemm, jina). the resolved knobs and the profile name both land in the manifest.
-- `backend = "jxl"` / `"jxl-transcode"`: the ONLY truly lossless modes. `jxl` is lossless of the source pixels; `jxl-transcode` repacks jpegs reversibly (about 10% smaller: 1.10x on the 38627-card corpus, round-trip verified by reconstructing the jpeg and comparing sha256). non-transcodable inputs follow `on_unsupported_jpeg = error | copy-source | lossless-jxl`, per-file decisions recorded. preservation contract: decoded pixels (jxl) / original jpeg bytes (verified transcode); exif/icc/xmp only with `keep_metadata`; timestamps and filenames live in the manifest. needs `cjxl`/`djxl` (`brew install jpeg-xl`, which also ships `ssimulacra2` for the gate).
+- `backend = "jxl"` / `"jxl-transcode"`: the ONLY truly lossless modes. `jxl` is lossless of the source pixels; `jxl-transcode` repacks jpegs reversibly (~20% smaller, round-trip verified by reconstructing the jpeg and comparing sha256). non-transcodable inputs follow `on_unsupported_jpeg = error | copy-source | lossless-jxl`, per-file decisions recorded. preservation contract: decoded pixels (jxl) / original jpeg bytes (verified transcode); exif/icc/xmp only with `keep_metadata`; timestamps and filenames live in the manifest. needs `cjxl`/`djxl` (`brew install jpeg-xl`, which also ships `ssimulacra2` for the gate).
 
 measure everything with `python/tools/urna_image_sweep.py` (variants now include `av1-tune`, `jxl`, `jxl-transcode`) and compare models with the three-tier `python/tools/urna_model_bench.py`: T1 pipeline stability (identity self-retrieval, inflated by construction and labeled as such), T2 codec cost (embedding drift), T3 task utility (label-template text→image as declared weak ground truth, plus `--queries-file` with real operator queries: hit@k, mrr, negative leakage). the tiers answer different questions and are never aggregated into one number.
 
