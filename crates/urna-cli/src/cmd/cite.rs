@@ -44,10 +44,13 @@ pub fn run(file: PathBuf, citation: String) -> Result<()> {
         &view.decoded_section(urna_format::layout::SECTION_CHUNKS_CANONICAL)?,
         n,
     )?;
-    let spans = urna_format::sections::decode_chunks_original_spans(
+    let mut spans = urna_format::sections::decode_chunks_original_spans(
         &view.decoded_section(urna_format::layout::SECTION_CHUNKS_ORIGINAL_SPANS)?,
         n,
     )?;
+    // a media corpus stores row ordinals in 0x03 and the real blob span in
+    // the 0x16 overlay: cite prints the same span retrieve and search do.
+    urna_runtime::apply_blob_span_overlay(&view, &mut spans)?;
 
     let span = &spans[idx];
     println!("citation_id:  {}", citation);

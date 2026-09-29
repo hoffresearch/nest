@@ -674,6 +674,7 @@ kind = "directory"
 purpose = "cli integration tests"
 links = [
     "crates/urna-cli/tests/cli_e2e.rs",
+    "crates/urna-cli/tests/media_cite_validate.rs",
     "crates/urna-cli/tests/setup_e2e.rs",
 ]
 
@@ -1088,6 +1089,12 @@ path = "crates/urna-cli/tests/setup_e2e.rs"
 kind = "rust-test"
 purpose = "urna setup end to end against a file:// release built in the test: the payload installs, a tampered checksum exits 11 and installs nothing, a missing release exits 10, --uninstall keeps the binary; a bare urna in a pipe prints help and exits 2; doctor in a pipe prints no escapes and names setup"
 links = ["crates/urna-cli/src/tui/setup/mod.rs"]
+
+[[inventory.urna_cli]]
+path = "crates/urna-cli/tests/media_cite_validate.rs"
+kind = "rust-test"
+purpose = "cite and validate on a real media corpus (blob_refs + inlined blob_data + span overlay): cite prints the overlay span retrieve reports and keeps the stored span of a BLOB_REF_NONE chunk; validate reports the inlined blobs on a good file and prints no OK when a blob fails its content_hash"
+links = ["crates/urna-cli/src/cmd/cite.rs", "crates/urna-cli/src/cmd/validate.rs", "crates/urna-runtime/src/blobs.rs"]
 
 [[inventory.urna_cli]]
 path = "crates/urna-cli/tests/cli_e2e.rs"
