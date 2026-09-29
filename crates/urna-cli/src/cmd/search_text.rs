@@ -1,8 +1,8 @@
 //! `urna search-text <file> "query" -k K` - embed the query via
 //! `python/embed_query.py`, validate model_hash against the manifest
-//! (the shared three-layer gate in `embed_gate`), route to the declared
-//! `index_type`. Keeps `--skip-model-hash-check` for legacy placeholder
-//! corpora.
+//! (the shared three-layer gate in `embed_gate`), route by capability
+//! (bm25 -> hybrid, hnsw -> ann, else exact). Keeps
+//! `--skip-model-hash-check` for legacy placeholder corpora.
 
 use anyhow::Result;
 use std::path::PathBuf;
@@ -63,11 +63,7 @@ pub fn run(
     )?;
 
     let cand = candidates.unwrap_or(((k as usize) * 4).max(64));
-    let result = match runtime.declared_index_type() {
-        "hnsw" => runtime.search_ann(&payload.vector, k, cand)?,
-        "hybrid" => runtime.search_hybrid(&payload.vector, &query, k, cand)?,
-        _ => runtime.search(&payload.vector, k)?,
-    };
+    let result = runtime.search_routed(&payload.vector, Some(&query), k, cand)?;
     print_result(&result);
     Ok(())
 }
