@@ -928,7 +928,7 @@ links = ["crates/urna-cli/src/main.rs"]
 [[inventory.urna_cli]]
 path = "crates/urna-cli/src/cmd/embed_gate.rs"
 kind = "rust-source"
-purpose = "the ONE copy of the query-embedder spawn protocol and the three-layer model gate (name/dim/model_hash); routes ask/retrieve by manifest model (potion script for potion corpora, embed_query_model.py for registry models, --mrl-dim for truncated default spaces) and by capability through MmapUrnaFile::search_routed"
+purpose = "the ONE copy of the query-embedder spawn protocol and the three-layer model gate (name/dim/model_hash); routes ask/retrieve by manifest model (potion script for potion corpora, embed_query_model.py for registry models, --mrl-dim for truncated default spaces) and by capability through MmapUrnaFile::search_routed; installed_script_in is the script ladder every python child shares (repo layout, then each data root)"
 links = [
     "crates/urna-cli/src/cmd/search_text.rs",
     "python/forge/embed_query_model.py",
