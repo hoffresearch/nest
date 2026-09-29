@@ -313,7 +313,7 @@ no HuggingFace cache hits, no network. the fingerprint is recomputed locally and
 files built with `model_hash = sha256:0...0` (the legacy placeholder) fail the strict gate by design; `urna.build` no longer writes one unless asked (`allow_placeholder_model_hash=True`, for fixtures). for a file you already have, two options:
 
 - rebuild with a real fingerprint (recommended).
-- pass `--skip-model-hash-check` to proceed at your own risk. the search is still cosine-valid if you genuinely use the same embedding model, but there is no guarantee.
+- pass `--skip-model-hash-check` to proceed at your own risk. the search is still cosine-valid if you genuinely use the same embedding model, but there is no guarantee. the flag covers the placeholder only: a corpus with a real fingerprint that disagrees with the embedder fails whatever flags are passed.
 
 `search-text` on a corpus built with `mrl_dim` (section 6) passes `--mrl-dim <embedding_dim>` to the embedder when the manifest records `full_dim`, so the query is sliced and renormalized to the file's dim the way `ask` and `retrieve` already did; `python/embed_query.py` takes the same flag by hand.
 

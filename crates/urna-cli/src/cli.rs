@@ -86,12 +86,12 @@ pub enum Commands {
         /// cache (requires network on first use).
         #[arg(long)]
         model_path: Option<PathBuf>,
-        /// Skip model_hash validation. ONLY use when intentionally
-        /// running search-text against a corpus whose `model_hash`
-        /// is the legacy zero-placeholder (pre-Phase-3 builds). In
-        /// that case the search is still cosine-valid IF the user
-        /// genuinely uses the same embedding model - but there is
-        /// no guarantee. Prefer rebuilding the corpus.
+        /// Accept a corpus whose `model_hash` is the legacy
+        /// zero-placeholder (pre-Phase-3 builds), which has no
+        /// fingerprint to compare against. The search is then
+        /// cosine-valid only IF you genuinely use the same embedding
+        /// model; nothing checks it. A real fingerprint that disagrees
+        /// with the embedder is never skipped. Prefer rebuilding.
         #[arg(long)]
         skip_model_hash_check: bool,
     },

@@ -163,6 +163,13 @@ def main() -> None:
         assert rc == 0, f"placeholder + skip should succeed, got rc={rc}\nstderr={stderr}"
         print("case 4 (placeholder + skip): OK")
 
+        # Case 4b: a real fingerprint that disagrees is never skipped: the flag
+        # covers the placeholder only (case 4 above), and the error says so.
+        rc, stdout, stderr = run_search_text(c_mismatch, embedder, other_hash, skip_check=True)
+        assert rc != 0, f"mismatch + skip must still fail, got rc=0\nstdout={stdout}"
+        assert "model_hash mismatch" in stderr and "legacy placeholder only" in stderr, stderr
+        print("case 4b (mismatch + skip still fails): OK")
+
         # Case 5: dim mismatch - embedder reports different dim.
         # Build a corpus with dim=8 (different from the embedder's 4).
         c_dim = td / "dim_mismatch.urna"
