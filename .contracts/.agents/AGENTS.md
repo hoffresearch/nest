@@ -134,7 +134,7 @@ three cargo workspaces, one policy each: the root `Cargo.toml` (`crates/*`, the 
 
 the cli has three groups, which `urna --help` tags and orders:
 
-- engine verbs, file and vector in, never run python: `inspect`, `validate`, `stats`, `media`, `search`, `search-ann`, `search-graph`, `search-space`, `search-text`, `benchmark`, `cite`, `doctor`.
+- engine verbs, file and vector in: `inspect`, `validate`, `stats`, `media`, `search`, `search-ann`, `search-graph`, `search-space`, `search-text`, `benchmark`, `cite`, `doctor`. two of them run python: `search-text` (the sentence-transformers embedder, `python/embed_query.py`) and `doctor` (it probes the python env and runs one potion embed); the other ten never do.
 - agent verbs over the same engine, `cmd/agent/`: `build` (a declarative corpus build, launching `python/tools/urna_forge.py`), `ask` (text in, cited answer out, `--disclose answer|explain`), `retrieve` (json or jsonl of cited spans; `score` is the exact rerank value). they embed offline and route the query embedder by the manifest model: potion corpora keep the potion script, registry models go through `python/forge/embed_query_model.py`. the build contract is `docs/USAGE.md` sections 12 to 14.
 - the terminal ui, `src/tui`:
   - `urna setup` is the installer every channel ends in: scan the machine, show the plan, install, verify. the payload comes through a system `curl` child with the sha256 checked while it streams; `--yes` for scripts. exit codes: 10 download, 11 checksum, 12 unpack, 13 python env, 14 blocked, above doctor's 2 to 6.

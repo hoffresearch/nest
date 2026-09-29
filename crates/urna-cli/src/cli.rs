@@ -7,8 +7,10 @@ use std::path::PathBuf;
 use crate::cmd;
 
 /// Two products share one binary and one engine. The ENGINE verbs take a
-/// `.urna` file and (where relevant) a query VECTOR; they never run python.
-/// The AGENT verbs (`ask`, `retrieve`, `build`) take TEXT or a build spec,
+/// `.urna` file and (where relevant) a query VECTOR; none of them needs
+/// python except `search-text` (the sentence-transformers embedder) and
+/// `doctor` (it probes the python env). The AGENT verbs (`ask`,
+/// `retrieve`, `build`) take TEXT or a build spec,
 /// shell out to the offline python embedder / forge, and speak in cited
 /// answers. `--help` lists the engine first, the agent verbs last, and
 /// tags each group in its summary line; the implementations mirror the
@@ -19,7 +21,7 @@ use crate::cmd;
 #[command(
     about = "urna: single-file, memory-mapped, hash-verified vector database with stable citations",
     long_about = None,
-    after_help = "start here (the five verbs that cover the loop):\n  build     creates the base       rows + embedding model in, one .urna out     urna build --spec corpus.toml\n  ask       queries it             text in, one cited answer out                urna ask corpus.urna \"question\"\n  retrieve  results for a program  json/jsonl of cited spans, exact score       urna retrieve corpus.urna \"question\" --format jsonl\n  cite      resolves the source    a urna:// citation back to its stored text   urna cite corpus.urna 'urna://...'\n  validate  proves the file        every checksum, every hash, the contract     urna validate corpus.urna\n\nverb groups:\n  engine  inspect, validate, stats, media, search, search-ann, search-graph,\n          search-space, search-text, benchmark, cite, doctor  (file + vector in, hits out; no python)\n  agent   ask, retrieve, build  (text or spec in, cited answers out; shells out to the offline python embedder / forge)\n  setup   setup, tui  (the installer every channel ends in, and the terminal explorer)\n\nfirst run: urna setup (a bare `urna` on a terminal opens the explorer)\na corpus to try: examples/quickstart/ in the repo (urna build --spec examples/quickstart/corpus.toml)"
+    after_help = "start here (the five verbs that cover the loop):\n  build     creates the base       rows + embedding model in, one .urna out     urna build --spec corpus.toml\n  ask       queries it             text in, one cited answer out                urna ask corpus.urna \"question\"\n  retrieve  results for a program  json/jsonl of cited spans, exact score       urna retrieve corpus.urna \"question\" --format jsonl\n  cite      resolves the source    a urna:// citation back to its stored text   urna cite corpus.urna 'urna://...'\n  validate  proves the file        every checksum, every hash, the contract     urna validate corpus.urna\n\nverb groups:\n  engine  inspect, validate, stats, media, search, search-ann, search-graph,\n          search-space, search-text, benchmark, cite, doctor  (file + vector in, hits out; python only in search-text and doctor)\n  agent   ask, retrieve, build  (text or spec in, cited answers out; shells out to the offline python embedder / forge)\n  setup   setup, tui  (the installer every channel ends in, and the terminal explorer)\n\nfirst run: urna setup (a bare `urna` on a terminal opens the explorer)\na corpus to try: examples/quickstart/ in the repo (urna build --spec examples/quickstart/corpus.toml)"
 )]
 pub struct Cli {
     /// none on a terminal opens `urna tui`; none in a pipe prints this help.
@@ -62,7 +64,8 @@ pub enum Commands {
     },
     /// [engine] Search by raw text - embeds the query with the model declared in
     /// the manifest, then runs the appropriate vector path. Honors the
-    /// declared `index_type` (exact / hnsw / hybrid). Validates the
+    /// declared `index_type` (exact / hnsw / hybrid). One of the two
+    /// engine verbs that run python (the other is `doctor`). Validates the
     /// embedder's model_hash against the manifest before running search;
     /// a mismatch fails with a typed error rather than returning
     /// silently-bad results.
