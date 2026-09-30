@@ -2,10 +2,11 @@
 
 > a vector database in one file, with citations that stay valid. a `.urna` file holds the chunks, the embeddings, the source spans, the indices and the search contract; a rust runtime maps it into memory, checks its hashes and answers offline with exact cosine scores and a `urna://content_hash/chunk_id` citation for every hit. python builds the file, rust serves it.
 
-install with `brew tap hoffresearch/urna && brew install urna`, `cargo install urna`, `npm install -g @urna/cli` or `pip install "urna[embed]"`, then run `urna setup` once. mit license, hoff research. source: https://github.com/hoffresearch/urna
+install with `brew tap hoffresearch/urna && brew install urna`, `cargo install urna`, `npm install -g @urna/cli` or `pip install "urna[embed]"`, then run `urna setup` once. mit license, hoff research. site: https://urna.dev. docs: https://docs.urna.dev. source: https://github.com/hoffresearch/urna
 
 ## docs
 
+- [docs.urna.dev](https://docs.urna.dev): the documentation site, with install, quickstart, concepts, guides and the full cli, build spec, python and file format reference; its [llms.txt](https://docs.urna.dev/llms.txt) indexes every page
 - [readme](https://github.com/hoffresearch/urna/blob/main/README.md): what it is, install, the two terminal screens, quickstart, the python and cli surfaces, benchmarks
 - [usage](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md): every verb, `urna setup` and `urna tui`, presets, offline mode, citations, the model registry, declarative builds, the compression levers, every install channel and the maintainer checklist
 - [architecture](https://github.com/hoffresearch/urna/blob/main/docs/arc/ARC.toml): the single architecture reference, in toml: narrative, contracts, the file inventory and the mermaid map of the build and query flows

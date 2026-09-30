@@ -6,6 +6,8 @@ A vector database in one file, with citations that stay valid.
 
 A `.urna` file holds the chunks, the embeddings, the source spans, the indices and the search contract. The rust runtime maps it into memory, checks its hashes, and answers with exact cosine scores and a `urna://content_hash/chunk_id` citation for every hit. It works offline and rebuilds byte for byte. Python builds the file, rust serves it.
 
+Documentation: [docs.urna.dev](https://docs.urna.dev), with install, a quickstart, the concepts, the guides and the full CLI, build spec, Python and file format reference. Project site: [urna.dev](https://urna.dev).
+
 ## Install
 
 ```sh
@@ -265,6 +267,7 @@ The profile names are the forge's (`[media] profile = "..."`, usage section 14).
 
 ## Reference
 
+- [docs.urna.dev](https://docs.urna.dev): the documentation site, with guides, concepts and the full reference
 - [docs/USAGE.md](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md): every verb, presets, models, builds, install channels
 - [docs/BENCH.md](https://github.com/hoffresearch/urna/blob/main/docs/BENCH.md): how the numbers were measured
 - [docs/SECURITY.md](https://github.com/hoffresearch/urna/blob/main/docs/SECURITY.md): reporting, hardening, data governance

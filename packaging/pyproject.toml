@@ -33,6 +33,8 @@ dynamic = ["version"]
 embed = ["numpy>=1.26", "tokenizers>=0.20"]
 
 [project.urls]
+Homepage = "https://urna.dev"
+Documentation = "https://docs.urna.dev"
 Repository = "https://github.com/hoffresearch/urna"
 Issues = "https://github.com/hoffresearch/urna/issues"
 
