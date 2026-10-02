@@ -136,3 +136,85 @@ fn a_checkout_in_the_cwd_wins_over_the_data_root() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The files of a complete payload (mirrors `cmd::payload::REQUIRED`, which
+/// this binary-crate test cannot import; the payload test pins that list to
+/// what the stage script ships).
+const REQUIRED: [&str; 20] = [
+    "VERSION",
+    "model_fingerprint.py",
+    "embed_query.py",
+    "forge/__init__.py",
+    "forge/embed_default.py",
+    "forge/embed_image.py",
+    "forge/embed_potion.py",
+    "forge/embed_query_model.py",
+    "forge/embed_query_potion.py",
+    "forge/embed_st.py",
+    "forge/embed_st_worker.py",
+    "forge/model_adapters.py",
+    "forge/model_registry.py",
+    "forge/models/potion-base-8M/README.md",
+    "forge/models/potion-base-8M/config.json",
+    "forge/models/potion-base-8M/model.safetensors",
+    "forge/models/potion-base-8M/modules.json",
+    "forge/models/potion-base-8M/special_tokens_map.json",
+    "forge/models/potion-base-8M/tokenizer.json",
+    "forge/models/potion-base-8M/tokenizer_config.json",
+];
+
+/// A complete payload under `home`, built from the checkout's own files
+/// (the table hard-linked, not copied), minus `drop`.
+fn lay_down_payload(home: &Path, drop: &str) {
+    for rel in REQUIRED.iter().filter(|r| **r != drop) {
+        let dst = home.join(rel);
+        std::fs::create_dir_all(dst.parent().unwrap()).unwrap();
+        if *rel == "VERSION" {
+            std::fs::write(&dst, format!("{}\n", env!("CARGO_PKG_VERSION"))).unwrap();
+            continue;
+        }
+        let src = repo().join("python").join(rel);
+        if std::fs::hard_link(&src, &dst).is_err() {
+            std::fs::copy(&src, &dst).unwrap();
+        }
+    }
+}
+
+#[test]
+fn a_payload_missing_a_module_names_the_files_and_setup_not_pip() {
+    let Some(python) = ["python3", "python"].into_iter().find(|p| {
+        Command::new(p)
+            .arg("--version")
+            .output()
+            .is_ok_and(|o| o.status.success())
+    }) else {
+        eprintln!("skip: no python on PATH to run the embedder");
+        return;
+    };
+    let dir = scratch("broken_payload");
+    let bin = detached_binary(&dir);
+    let home = dir.join("data").join("urna");
+    lay_down_payload(&home, "forge/model_registry.py");
+    let fixture = repo().join("crates/urna-format/tests/fixtures/golden_v1_minimal.urna");
+    let out = Command::new(&bin)
+        .args(["ask", fixture.to_str().unwrap(), "q"])
+        .current_dir(&dir)
+        .env("URNA_DATA_DIR", dir.join("data"))
+        .env("XDG_DATA_HOME", dir.join("xdg"))
+        .env("HOME", dir.join("home"))
+        .env_remove("LOCALAPPDATA")
+        .env("URNA_PYTHON", python)
+        .output()
+        .unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success());
+    assert!(
+        err.contains("payload") && err.contains("is incomplete"),
+        "{err}"
+    );
+    assert!(err.contains("forge/model_registry.py"), "{err}");
+    assert!(err.contains(&home.display().to_string()), "{err}");
+    assert!(err.contains("urna setup"), "{err}");
+    assert!(!err.contains("pip install"), "{err}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

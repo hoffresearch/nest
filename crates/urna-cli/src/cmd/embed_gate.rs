@@ -136,6 +136,19 @@ pub fn spawn_embedder(
         .output()
         .map_err(|e| anyhow::anyhow!("failed to spawn embedder: {} ({})", e, embedder.display()))?;
     if !out.status.success() {
+        // a script inside an installed payload that lacks files fails for
+        // that reason, whatever python printed (a missing module, a missing
+        // tokenizer): name the files and the repair.
+        if let Some(home) = super::payload::home_of(embedder) {
+            let missing = super::payload::missing(&home);
+            if !missing.is_empty() {
+                return Err(EmbedFailure::PayloadIncomplete {
+                    home: Some(home),
+                    missing: missing.into_iter().map(String::from).collect(),
+                }
+                .into());
+            }
+        }
         let stderr = String::from_utf8_lossy(&out.stderr);
         let status = out.status.to_string();
         return Err(EmbedFailure::from_embedder(&status, &stderr, model, &interpreter).into());
