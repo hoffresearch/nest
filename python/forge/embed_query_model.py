@@ -63,23 +63,30 @@ def _not_cached(err: BaseException) -> bool:
     return False
 
 
-def _st_fallback(model: str) -> int:
-    # a sentence-transformers model outside the registry (the pt-br MiniLM
-    # corpus): the search-text embedder takes the same argv, stays offline
-    # and reports the model_hash the cli gates on.
+def _st_query(args: argparse.Namespace) -> int:
+    """Embed through `python/embed_query.py`, the search-text embedder: the
+    path of a `st_text` preset (minilm-multilingual) and of any other
+    sentence-transformers model no preset names. same encode, same
+    fingerprint, offline unless URNA_ALLOW_DOWNLOAD=1, so the model_hash is
+    the one the corpus was built with."""
     import embed_query
 
+    argv = [args.model, args.query]
+    if args.model_path:
+        argv[:0] = ["--model-path", args.model_path]
+    if args.mrl_dim:
+        argv[:0] = ["--mrl-dim", str(args.mrl_dim)]
     try:
-        return embed_query.main()
+        return embed_query.main(argv)
     except OSError as e:
         if not _not_cached(e):
             raise
         print(
-            f"error: model '{model}' is not in the local cache and the embedder runs "
-            "offline; URNA_ALLOW_DOWNLOAD=1 fetches it once",
+            f"error: model '{args.model}' is not in the local cache and the embedder "
+            "runs offline; URNA_ALLOW_DOWNLOAD=1 fetches it once",
             file=sys.stderr,
         )
-        print(f"{FETCH} {model}", file=sys.stderr)
+        print(f"{FETCH} {args.model}", file=sys.stderr)
         return 3
 
 
@@ -106,7 +113,7 @@ def main() -> int:
     else:
         preset = mr.preset_for_embedding_model(args.model)
         if preset is None and _has_sentence_transformers():
-            return _st_fallback(args.model)
+            return _st_query(args)
         if preset is None:
             valid = ", ".join(sorted(p.embedding_model for p in mr.PRESETS.values()))
             print(
@@ -142,6 +149,8 @@ def main() -> int:
         )
         print(f"{NEEDS} {' '.join(missing)}", file=sys.stderr)
         return 4
+    if preset.kind == "st_text":
+        return _st_query(args)
     try:
         emb = mr.create_embedder(
             preset.name,
