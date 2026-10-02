@@ -93,7 +93,7 @@ fn release_at(
     let mut entries: Vec<(String, Vec<u8>)> = REQUIRED
         .iter()
         .filter(|f| Some(**f) != drop)
-        .map(|f| (format!("urna/{f}"), format!("{f}@{version}").into_bytes()))
+        .map(|f| (format!("urna/{f}"), body(f, version)))
         .collect();
     entries.push(("urna/VERSION".into(), format!("{version}\n").into_bytes()));
     for (name, body) in &entries {
@@ -109,6 +109,15 @@ fn release_at(
     let line = format!("{} *{PAYLOAD}\n", sha.unwrap_or(&digest));
     std::fs::write(rel.join(format!("{PAYLOAD}.sha256")), line).unwrap();
     rel
+}
+
+/// A stub file's body; the catalog is the real one, since setup reads it.
+fn body(f: &str, version: &str) -> Vec<u8> {
+    if f == "forge/catalog.json" {
+        let real = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../python/forge/catalog.json");
+        return std::fs::read(real).unwrap();
+    }
+    format!("{f}@{version}").into_bytes()
 }
 
 /// Runs the binary with the data dir and the release pointed into `dir`,
@@ -327,4 +336,105 @@ fn doctor_through_a_pipe_has_no_escapes_and_names_setup() {
     assert_eq!(out.status.code(), Some(2), "{s}");
     assert!(!s.contains('\x1b'));
     assert!(s.contains("urna setup"), "{s}");
+}
+
+/// `--model` names catalog models; setup refuses, with the reason and before
+/// anything is downloaded, a model the catalog leaves out, repo code that was
+/// not separately allowed, and packages for an env other than its own.
+#[test]
+fn setup_refuses_models_the_catalog_or_the_consent_does_not_cover() {
+    if !has_curl() {
+        eprintln!("skip: no curl on PATH");
+        return;
+    }
+    let d = scratch("models");
+    let rel = release(&d, None);
+    // every other data root (and the checkout) out of reach: setup must
+    // install into its own data dir's venv and nowhere else.
+    let urna = |d: &Path, rel: &Path, args: &[&str]| {
+        isolated(d, rel, args)
+            .env_remove("URNA_PYTHON")
+            .output()
+            .unwrap()
+    };
+    // no payload yet: the catalog arrives with it, the name is checked then.
+    let out = urna(
+        &d,
+        &rel,
+        &["setup", "--yes", "--no-python", "--model", "wemm-4b"],
+    );
+    let s = text(&out);
+    assert_eq!(out.status.code(), Some(14), "{s}");
+    assert!(s.contains("ok embedder payload"), "{s}");
+    assert!(
+        s.contains("wemm-4b is not offered: flagged too heavy"),
+        "{s}"
+    );
+    // installed: the plan itself names it and skips the step.
+    let out = urna(
+        &d,
+        &rel,
+        &["setup", "--yes", "--no-python", "--model", "wemm-4b"],
+    );
+    let s = text(&out);
+    assert_eq!(out.status.code(), Some(14), "{s}");
+    assert!(s.contains("skip models: wemm-4b is not offered"), "{s}");
+
+    // a catalog with a model that runs repo code.
+    let coded = r#"{"schema": 1, "excluded": [], "models": [{"name": "coded",
+        "embedding_model": "org/coded", "repo": "org/coded", "revision": "cccccccc",
+        "bytes": 1000000, "model_hash": "sha256:c", "packages": [], "remote_code": true}]}"#;
+    std::fs::write(d.join("data/urna/forge/catalog.json"), coded).unwrap();
+    let out = urna(
+        &d,
+        &rel,
+        &["setup", "--yes", "--no-python", "--model", "coded"],
+    );
+    let s = text(&out);
+    assert_eq!(out.status.code(), Some(14), "{s}");
+    assert!(s.contains("--allow-remote-code coded"), "{s}");
+    // allowed, but there is no managed venv to put anything in.
+    let args = [
+        "setup",
+        "--yes",
+        "--no-python",
+        "--model",
+        "coded",
+        "--allow-remote-code",
+        "coded",
+    ];
+    let out = urna(&d, &rel, &args);
+    let s = text(&out);
+    assert_eq!(out.status.code(), Some(14), "{s}");
+    assert!(s.contains("managed venv is not built yet"), "{s}");
+    // a pinned interpreter elsewhere: packages never go there.
+    let out = isolated(&d, &rel, &args)
+        .env("URNA_PYTHON", "/elsewhere/python3")
+        .output()
+        .unwrap();
+    let s = text(&out);
+    assert!(s.contains("URNA_PYTHON pins /elsewhere/python3"), "{s}");
+    assert!(!d.join("data/urna/venv").exists(), "{s}");
+}
+
+/// The binary run from a copy outside the checkout, with HOME and every
+/// data root inside `dir`.
+fn isolated(dir: &Path, rel: &Path, args: &[&str]) -> Command {
+    let bin = dir.join("bin");
+    let src = PathBuf::from(env!("CARGO_BIN_EXE_urna"));
+    let exe = bin.join(src.file_name().unwrap());
+    if !exe.is_file() {
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::copy(&src, &exe).unwrap();
+    }
+    let mut c = Command::new(exe);
+    c.args(args)
+        .current_dir(dir)
+        .env("URNA_DATA_DIR", dir.join("data"))
+        .env("XDG_DATA_HOME", dir.join("xdg"))
+        .env("HOME", dir.join("home"))
+        .env_remove("LOCALAPPDATA")
+        .env("URNA_RELEASE_BASE", file_url(rel))
+        .env("NO_COLOR", "1");
+    c
 }
