@@ -38,6 +38,7 @@ POTION = "minishlab/potion-base-8M/v1"
 EXPECTED_FILES = {
     "urna/model_fingerprint.py",
     "urna/embed_query.py",
+    "urna/VERSION",
     "urna/forge/__init__.py",
     "urna/forge/embed_default.py",
     "urna/forge/embed_potion.py",
@@ -74,10 +75,16 @@ def test_stage_and_query(base: Path) -> None:
         [sys.executable, str(STAGE), str(dest)], capture_output=True, text=True, check=False
     )
     assert r.returncode == 0, r.stderr
-    staged = {str(p.relative_to(dest)) for p in dest.rglob("*.py")}
+    staged = {str(p.relative_to(dest)) for p in dest.rglob("*") if p.is_file()}
     missing = EXPECTED_FILES - staged
     assert not missing, f"payload is missing {sorted(missing)}"
     assert (dest / "urna" / "forge" / "models" / "potion-base-8M").is_dir()
+    # the stamp `urna setup` compares against the release it wants.
+    import tomllib
+
+    with (REPO / "Cargo.toml").open("rb") as f:
+        version = tomllib.load(f)["workspace"]["package"]["version"]
+    assert (dest / "urna" / "VERSION").read_text() == version + "\n"
 
     outside = base / "elsewhere"
     outside.mkdir()

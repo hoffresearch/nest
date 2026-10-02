@@ -62,6 +62,16 @@ pub fn blocked_code(items: &[Item]) -> i32 {
     }
 }
 
+/// The release the payload comes from: `--version` when given, else this
+/// binary's own (a leading `v` is accepted either way).
+pub fn wanted_version(scan: &Scan, opts: &Opts) -> String {
+    opts.version
+        .as_deref()
+        .unwrap_or(scan.version)
+        .trim_start_matches('v')
+        .to_string()
+}
+
 pub fn plan(scan: &Scan, opts: &Opts) -> Vec<Item> {
     let home = scan
         .home
@@ -76,16 +86,26 @@ pub fn plan(scan: &Scan, opts: &Opts) -> Vec<Item> {
         } else {
             None
         };
-        let detail = match &scan.embedder {
-            Some(p) => format!("present at {}; tick to reinstall", tilde(p)),
-            None => format!(
-                "download ~30 MB from the v{} release, verify sha256, unpack to {home}/forge",
-                scan.version
+        let want = wanted_version(scan, opts);
+        // a payload from another release (or from before the stamp) is
+        // replaced, so upgrading the binary upgrades the scripts it runs.
+        let stale = scan
+            .payload
+            .as_ref()
+            .filter(|p| p.version.as_deref() != Some(want.as_str()));
+        let detail = match (&scan.embedder, stale) {
+            (_, Some(p)) => format!(
+                "installed payload is {}, v{want} is wanted: download it, verify sha256, replace {home}/forge (the venv stays)",
+                p.label()
+            ),
+            (Some(p), None) => format!("present at {}; tick to reinstall", tilde(p)),
+            (None, None) => format!(
+                "download ~30 MB from the v{want} release, verify sha256, unpack to {home}/forge"
             ),
         };
         Item {
             task: Task::Payload,
-            on: (scan.embedder.is_none() || opts.force) && !opts.no_payload,
+            on: (scan.embedder.is_none() || stale.is_some() || opts.force) && !opts.no_payload,
             locked: false,
             blocked,
             detail,
@@ -136,7 +156,7 @@ pub fn plan(scan: &Scan, opts: &Opts) -> Vec<Item> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::setup::scan::Channel;
+    use crate::tui::setup::scan::{Channel, Payload};
     use std::path::PathBuf;
 
     fn bare() -> Scan {
@@ -147,6 +167,7 @@ mod tests {
             channel: Channel::Homebrew,
             home: Some(PathBuf::from("/h/.local/share/urna")),
             embedder: None,
+            payload: None,
             python: Some(("python3".into(), "Python 3.12.4".into())),
             pinned_python: None,
             deps: false,
@@ -170,6 +191,9 @@ mod tests {
         s.embedder = Some(PathBuf::from(
             "/h/.local/share/urna/forge/embed_query_potion.py",
         ));
+        s.payload = Some(Payload {
+            version: Some("0.5.0".into()),
+        });
         s.deps = true;
         let p = plan(&s, &Opts::default());
         assert_eq!(p.iter().filter(|i| i.runs()).count(), 1);
@@ -181,6 +205,55 @@ mod tests {
             },
         );
         assert!(forced[0].runs());
+    }
+
+    fn installed(version: Option<&str>) -> Scan {
+        let mut s = bare();
+        s.embedder = Some(PathBuf::from(
+            "/h/.local/share/urna/forge/embed_query_potion.py",
+        ));
+        s.payload = Some(Payload {
+            version: version.map(String::from),
+        });
+        s.deps = true;
+        s
+    }
+
+    #[test]
+    fn an_upgraded_binary_replaces_the_payload_of_another_release() {
+        // the binary is 0.5.0 (bare); a 0.4.9 payload and an unstamped one
+        // (0.5.1's, from before the stamp) are both replaced, the venv step
+        // stays off.
+        for have in [Some("0.4.9"), None] {
+            let p = plan(&installed(have), &Opts::default());
+            assert!(p[0].runs(), "{have:?}");
+            assert!(p[0].detail.contains("v0.5.0 is wanted"), "{}", p[0].detail);
+            assert!(!p[1].runs());
+        }
+        let unstamped = plan(&installed(None), &Opts::default());
+        assert!(unstamped[0].detail.contains("unstamped"));
+    }
+
+    #[test]
+    fn version_picks_the_payload_release_and_matching_skips_it() {
+        let pinned = Opts {
+            version: Some("v0.4.9".into()),
+            ..Opts::default()
+        };
+        assert_eq!(wanted_version(&bare(), &pinned), "0.4.9");
+        assert!(!plan(&installed(Some("0.4.9")), &pinned)[0].runs());
+        assert!(plan(&installed(Some("0.5.0")), &pinned)[0].runs());
+        let fresh = plan(&bare(), &pinned);
+        assert!(
+            fresh[0].detail.contains("v0.4.9 release"),
+            "{}",
+            fresh[0].detail
+        );
+        let skip = Opts {
+            no_payload: true,
+            ..Opts::default()
+        };
+        assert!(!plan(&installed(Some("0.4.9")), &skip)[0].runs());
     }
 
     #[test]
