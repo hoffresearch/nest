@@ -43,17 +43,29 @@ fn scratch(tag: &str) -> PathBuf {
 /// This binary's version, the payload version `setup` asks for by default.
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// The files a complete payload holds (mirrors `unpack::REQUIRED`, which
-/// this binary-crate test cannot import; a drift fails the install below).
-const REQUIRED: [&str; 8] = [
+/// The files a complete payload holds besides the stamp (mirrors
+/// `unpack::REQUIRED`, which this binary-crate test cannot import; a drift
+/// fails the install below).
+const REQUIRED: [&str; 19] = [
     "model_fingerprint.py",
     "embed_query.py",
     "forge/__init__.py",
-    "forge/embed_query_potion.py",
+    "forge/embed_default.py",
+    "forge/embed_image.py",
+    "forge/embed_potion.py",
     "forge/embed_query_model.py",
-    "forge/model_registry.py",
+    "forge/embed_query_potion.py",
+    "forge/embed_st.py",
+    "forge/embed_st_worker.py",
     "forge/model_adapters.py",
+    "forge/model_registry.py",
+    "forge/models/potion-base-8M/README.md",
+    "forge/models/potion-base-8M/config.json",
     "forge/models/potion-base-8M/model.safetensors",
+    "forge/models/potion-base-8M/modules.json",
+    "forge/models/potion-base-8M/special_tokens_map.json",
+    "forge/models/potion-base-8M/tokenizer.json",
+    "forge/models/potion-base-8M/tokenizer_config.json",
 ];
 
 /// A release dir with a complete payload stamped with this binary's
@@ -188,12 +200,23 @@ fn setup_repairs_a_payload_missing_a_required_file() {
     let d = scratch("repair");
     let rel = release(&d, None);
     urna(&d, &rel, &["setup", "--yes", "--no-python"]);
-    std::fs::remove_file(d.join("data/urna/embed_query.py")).unwrap();
-    // same release, no --force: the missing file alone makes setup reinstall.
-    let s = text(&urna(&d, &rel, &["setup", "--yes", "--no-python"]));
-    assert!(s.contains("missing embed_query.py"), "{s}");
-    assert!(s.contains("ok embedder payload"), "{s}");
-    assert!(d.join("data/urna/embed_query.py").is_file());
+    // each of these breaks a query when gone: search-text's embedder, the
+    // module the potion route imports, the potion table's tokenizer.
+    for gone in [
+        "embed_query.py",
+        "forge/embed_potion.py",
+        "forge/models/potion-base-8M/tokenizer.json",
+    ] {
+        std::fs::remove_file(d.join("data/urna").join(gone)).unwrap();
+        // same release, no --force: the missing file alone makes setup reinstall.
+        let s = text(&urna(&d, &rel, &["setup", "--yes", "--no-python"]));
+        assert!(s.contains(&format!("missing {gone}")), "{gone}: {s}");
+        assert!(s.contains("ok embedder payload"), "{gone}: {s}");
+        assert!(
+            d.join("data/urna").join(gone).is_file(),
+            "{gone} not repaired"
+        );
+    }
 }
 
 #[test]
