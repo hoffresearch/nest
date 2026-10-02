@@ -52,6 +52,7 @@ EXPECTED_FILES = {
     "urna/forge/embed_st.py",
     "urna/forge/embed_st_worker.py",
     "urna/forge/embed_image.py",
+    "urna/forge/install_model.py",
 }
 
 
