@@ -65,7 +65,7 @@ for source_uri, text in documents:  # your (uri, text) pairs
 pipe.emit()
 ```
 
-the embedder is any callable that takes the chunk specs and returns one l2-normalized vector per spec; `potion_embedder()` is one, and a sentence-transformers wrapper is a few lines (`m.encode([s.canonical_text for s in specs], normalize_embeddings=True).tolist()`). for real-world examples: `python/convert_legacy.py` (SQLite to `.urna`), `python/tools/urna_build_corpus.py` (7 PT-BR datasets to a unified `.urna`), and `examples/quickstart/quickstart.py` (the shortest complete build, on `urna.build` directly).
+the embedder is any callable that takes the chunk specs and returns one l2-normalized vector per spec; `potion_embedder()` is one, and a sentence-transformers wrapper is a few lines (`m.encode([s.canonical_text for s in specs], normalize_embeddings=True).tolist()`). for real-world examples: `python/convert_legacy.py` (SQLite to `.urna`), the [fakenews-ptbr-urna-benchmark](https://github.com/brennercruvinel/fakenews-ptbr-urna-benchmark) (seven pt-br datasets to `.urna` files with three example embedders, on the published wheel), and `examples/quickstart/quickstart.py` (the shortest complete build, on `urna.build` directly).
 
 ### image and pdf corpora
 
