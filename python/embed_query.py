@@ -22,7 +22,10 @@ manifest before running the search. A mismatch fails with a typed
 error rather than silently returning cosine-valid garbage.
 
 Vectors are L2-normalized so the runtime's cosine assumption holds.
-Errors go to stderr with a non-zero exit code.
+Errors go to stderr with a non-zero exit code. Two of them carry one stable
+line the CLI reads to name the fix: `urna-needs: sentence-transformers`
+(exit 4) when the package does not import, `urna-fetch: <model>` (exit 3)
+when the model is not in the local cache and downloads are off.
 """
 
 from __future__ import annotations
@@ -130,6 +133,20 @@ def _resolve_local_path(model, fallback: str) -> str:
     return fallback
 
 
+NEEDS = "urna-needs:"
+FETCH = "urna-fetch:"
+
+
+def _not_cached(err: BaseException) -> bool:
+    """True when the hub refused an offline lookup somewhere in the chain."""
+    seen: BaseException | None = err
+    while seen is not None:
+        if type(seen).__name__ == "LocalEntryNotFoundError":
+            return True
+        seen = seen.__cause__ or seen.__context__
+    return False
+
+
 def _embed_dim(model_name_or_path: str) -> int:
     from sentence_transformers import SentenceTransformer
 
@@ -178,7 +195,28 @@ def main(argv: list[str] | None = None) -> int:
         print("error: query required", file=sys.stderr)
         return 2
 
-    vec, dim, local_path = _embed(model_arg, args.query)
+    try:
+        vec, dim, local_path = _embed(model_arg, args.query)
+    except ModuleNotFoundError as e:
+        if e.name != "sentence_transformers":
+            raise
+        print(
+            f"error: '{args.model}' is a sentence-transformers model and this python "
+            f'cannot import it. install with: pip install "sentence-transformers"',
+            file=sys.stderr,
+        )
+        print(f"{NEEDS} sentence-transformers", file=sys.stderr)
+        return 4
+    except OSError as e:
+        if not _not_cached(e):
+            raise
+        print(
+            f"error: model '{args.model}' is not in the local cache and the embedder "
+            "runs offline; URNA_ALLOW_DOWNLOAD=1 fetches it once",
+            file=sys.stderr,
+        )
+        print(f"{FETCH} {args.model}", file=sys.stderr)
+        return 3
     if args.mrl_dim:
         if not 0 < args.mrl_dim <= dim:
             print(f"error: --mrl-dim must be in 1..={dim}, got {args.mrl_dim}", file=sys.stderr)

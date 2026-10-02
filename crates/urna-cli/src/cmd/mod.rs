@@ -11,6 +11,7 @@ pub mod agent;
 pub mod benchmark;
 pub mod cite;
 pub mod doctor;
+pub mod embed_failure;
 pub mod embed_gate;
 pub mod health;
 pub mod inspect;

@@ -32,7 +32,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 NEEDS = "urna-needs:"
-FETCH = "urna-fetch:"
 
 
 def _has_sentence_transformers() -> bool:
@@ -53,16 +52,6 @@ def _missing_specs(requires: tuple[tuple[str, str], ...]) -> list[str]:
     return specs
 
 
-def _not_cached(err: BaseException) -> bool:
-    """True when the hub refused an offline lookup somewhere in the chain."""
-    seen: BaseException | None = err
-    while seen is not None:
-        if type(seen).__name__ == "LocalEntryNotFoundError":
-            return True
-        seen = seen.__cause__ or seen.__context__
-    return False
-
-
 def _st_query(args: argparse.Namespace) -> int:
     """Embed through `python/embed_query.py`, the search-text embedder: the
     path of a `st_text` preset (minilm-multilingual) and of any other
@@ -76,18 +65,9 @@ def _st_query(args: argparse.Namespace) -> int:
         argv[:0] = ["--model-path", args.model_path]
     if args.mrl_dim:
         argv[:0] = ["--mrl-dim", str(args.mrl_dim)]
-    try:
-        return embed_query.main(argv)
-    except OSError as e:
-        if not _not_cached(e):
-            raise
-        print(
-            f"error: model '{args.model}' is not in the local cache and the embedder "
-            "runs offline; URNA_ALLOW_DOWNLOAD=1 fetches it once",
-            file=sys.stderr,
-        )
-        print(f"{FETCH} {args.model}", file=sys.stderr)
-        return 3
+    # embed_query reports a missing package and a model outside the cache
+    # itself, with the same urna-needs / urna-fetch lines.
+    return embed_query.main(argv)
 
 
 def main() -> int:
