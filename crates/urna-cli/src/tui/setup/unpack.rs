@@ -13,6 +13,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use flate2::read::GzDecoder;
 
+/// The files a payload lays down beside `forge/` (`stage_embedder_payload.py`
+/// writes them); `--uninstall` removes exactly these.
+pub const TOP_LEVEL: [&str; 3] = ["model_fingerprint.py", "embed_query.py", "VERSION"];
+
 /// Unpacks `tar_gz` into `root` (the parent of `urna/`), calling
 /// `on_entry(n)` after each entry; returns the installed forge dir.
 pub fn install(tar_gz: &Path, root: &Path, mut on_entry: impl FnMut(usize)) -> Result<PathBuf> {
