@@ -4,7 +4,7 @@ description: run at the end of every task, before the pull request. walks the fi
 project: urna
 audience: ai agents and human contributors
 status: active
-last-updated: 2026-09-27
+last-updated: 2026-10-02
 domain: workflow
 ---
 
@@ -28,6 +28,7 @@ edit in place, as if the file had always said the right thing. history lives in 
 - `docs/USAGE.md`: the how-to per verb, preset, declarative build, model registry, setup/tui and install channel. a new feature usually gets a section or changes one.
 - `examples/`: the quickstart, fastapi, flask and jupyter examples still run.
 - `assets/images/`: the `urna setup` / `urna tui` screenshots after a ui change (render recipe in the AGENTS.md gotchas).
+- `llms.txt`: check it on every change that adds, renames or moves a doc, a verb or a link it points at; it stays discovery only (title, summary, one line per link), never instruction.
 
 ## binary format or decoders
 
@@ -57,7 +58,7 @@ edit in place, as if the file had always said the right thing. history lives in 
 - `docs/CONTRIBUTING.md`: only when the contribution flow (branch, pr, gate) changes.
 - `data/demo/Instructions.md`: only when an upstream dataset or the corpus rebuild changes.
 - `.editorconfig`: only for a new language or file type.
-
+- `.CITATION.cff`: keywords, identifiers, description, repository-artifact, version, date-released, abstract.
 ## file hygiene
 
 every file the change created or grew:
