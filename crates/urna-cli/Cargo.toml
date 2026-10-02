@@ -9,6 +9,8 @@ rust-version = "1.88"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+# the binary has no rust api worth a docs.rs page; its docs are the site
+documentation = "https://docs.urna.dev"
 readme.workspace = true
 keywords.workspace = true
 categories = ["command-line-utilities", "database-implementations"]
