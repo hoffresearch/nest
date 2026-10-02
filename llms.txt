@@ -25,5 +25,6 @@ install with `brew tap hoffresearch/urna && brew install urna`, `cargo install u
 ## optional
 
 - [demo datasets](https://github.com/hoffresearch/urna/blob/main/data/demo/Instructions.md): the upstream pt-br sources and how the demo corpus is rebuilt
-- [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark): 38,627 magic card scans in single-file `.urna` containers, five image models; private for now
+- [fakenews-ptbr-urna-benchmark](https://github.com/brennercruvinel/fakenews-ptbr-urna-benchmark): 23,335 pt-br fake-news documents from seven public datasets, 2,601 queries with relevance judgments, three embedders and three presets in `.urna` files, rebuildable from pinned sources; files on [hugging face](https://huggingface.co/datasets/brennercruvinel/fakenews-ptbr-urna-benchmark)
+- [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark): 38,627 magic card scans in single-file `.urna` containers, the media profiles and the image models compared; files on [hugging face](https://huggingface.co/datasets/brennercruvinel/mtg-urna-benchmark)
 - [urna.dev](https://urna.dev): the site
