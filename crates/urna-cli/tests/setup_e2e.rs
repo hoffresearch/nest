@@ -40,18 +40,35 @@ fn scratch(tag: &str) -> PathBuf {
     d
 }
 
-/// A release dir with a payload holding `urna/forge/embed_query_potion.py`;
-/// `sha` overrides the published digest (a tampered release).
+/// This binary's version, the payload version `setup` asks for by default.
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// A release dir with a payload laid out like the real one: the top-level
+/// modules beside `forge/` and `urna/forge/embed_query_potion.py`; `sha`
+/// overrides the published digest (a tampered release).
 fn release(dir: &Path, sha: Option<&str>) -> PathBuf {
-    let rel = dir.join("release");
+    release_at(dir, "release", sha, Some(VERSION))
+}
+
+/// Same, under `dir/<name>`, stamped `VERSION = version` (None: a payload
+/// from before the stamp, like 0.5.1's).
+fn release_at(dir: &Path, name: &str, sha: Option<&str>, version: Option<&str>) -> PathBuf {
+    let rel = dir.join(name);
     std::fs::create_dir_all(&rel).unwrap();
     let tgz = rel.join(PAYLOAD);
     let gz = GzEncoder::new(std::fs::File::create(&tgz).unwrap(), Compression::fast());
     let mut b = tar::Builder::new(gz);
-    for (name, body) in [
-        ("urna/forge/embed_query_potion.py", &b"print('probe')\n"[..]),
-        ("urna/forge/__init__.py", &b""[..]),
-    ] {
+    let stamp = version.map(|v| format!("{v}\n")).unwrap_or_default();
+    let mut entries: Vec<(&str, &[u8])> = vec![
+        ("urna/model_fingerprint.py", b"# fingerprint\n"),
+        ("urna/embed_query.py", b"# st embedder\n"),
+        ("urna/forge/embed_query_potion.py", b"print('probe')\n"),
+        ("urna/forge/__init__.py", b""),
+    ];
+    if version.is_some() {
+        entries.push(("urna/VERSION", stamp.as_bytes()));
+    }
+    for (name, body) in entries {
         let mut h = tar::Header::new_gnu();
         h.set_size(body.len() as u64);
         h.set_mode(0o644);
@@ -90,10 +107,16 @@ fn setup_yes_installs_the_payload_from_the_release() {
     }
     let d = scratch("ok");
     let rel = release(&d, None);
+    // a venv from an earlier setup: the payload step must leave it alone.
+    std::fs::create_dir_all(d.join("data/urna/venv/bin")).unwrap();
+    std::fs::write(d.join("data/urna/venv/bin/marker"), b"keep").unwrap();
     let out = urna(&d, &rel, &["setup", "--yes", "--force", "--no-python"]);
     let s = text(&out);
     assert!(s.contains("ok embedder payload"), "{s}");
     assert!(d.join("data/urna/forge/embed_query_potion.py").is_file());
+    assert!(d.join("data/urna/model_fingerprint.py").is_file(), "{s}");
+    assert!(d.join("data/urna/embed_query.py").is_file(), "{s}");
+    assert!(d.join("data/urna/venv/bin/marker").is_file(), "{s}");
     // the stub payload has no potion table, so verify fails with a doctor
     // code (2..=6), never a setup code: the steps themselves succeeded.
     let code = out.status.code().unwrap();
@@ -137,9 +160,13 @@ fn uninstall_removes_the_payload_and_keeps_the_binary() {
     let rel = release(&d, None);
     urna(&d, &rel, &["setup", "--yes", "--force", "--no-python"]);
     assert!(d.join("data/urna/forge").is_dir());
+    assert!(d.join("data/urna/embed_query.py").is_file());
     let out = urna(&d, &rel, &["setup", "--uninstall"]);
     assert_eq!(out.status.code(), Some(0));
     assert!(!d.join("data/urna/forge").exists());
+    for f in ["model_fingerprint.py", "embed_query.py", "VERSION"] {
+        assert!(!d.join("data/urna").join(f).exists(), "{f} left behind");
+    }
     assert!(Path::new(env!("CARGO_BIN_EXE_urna")).is_file());
 }
 
