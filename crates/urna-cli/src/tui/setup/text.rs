@@ -38,10 +38,7 @@ pub fn run(opts: &Opts) -> i32 {
             why
         );
     }
-    let version = opts
-        .version
-        .clone()
-        .unwrap_or_else(|| scan.version.to_string());
+    let version = plan::wanted_version(&scan, opts);
     let rx = job::spawn(scan, tasks, version);
     let mut code = plan::blocked_code(&items);
     let mut last_pct = u64::MAX;
