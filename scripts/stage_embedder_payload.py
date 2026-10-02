@@ -31,6 +31,7 @@ writes: <dest>/urna/model_fingerprint.py          (imported by the registry)
         <dest>/urna/forge/embed_st_worker.py
         <dest>/urna/forge/embed_image.py
         <dest>/urna/forge/catalog.json              (the installable models, from the registry)
+        <dest>/urna/forge/install_model.py          (fetches one into the hf cache, verified)
         <dest>/urna/forge/models/potion-base-8M/...
 
 with --tar, also packs the staged `urna/` tree as a single gzipped tarball
@@ -66,6 +67,8 @@ MODULES = [
     # the models setup and the explorer offer to install (generated from the
     # registry by model_catalog.py; a stale copy fails the stage).
     "catalog.json",
+    # the fetch half of the model install setup and the explorer share.
+    "install_model.py",
 ]
 
 # `python/` modules the registry imports as top-level names (the scripts put
