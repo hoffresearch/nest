@@ -125,6 +125,43 @@ fn setup_yes_installs_the_payload_from_the_release() {
 }
 
 #[test]
+fn an_upgraded_binary_replaces_an_older_payload_and_keeps_the_venv() {
+    if !has_curl() {
+        return;
+    }
+    let d = scratch("upgrade");
+    // the state a 0.5.1 install leaves: a payload without a stamp and a venv.
+    let old = release_at(&d, "old", None, None);
+    urna(&d, &old, &["setup", "--yes", "--force", "--no-python"]);
+    assert!(!d.join("data/urna/VERSION").exists());
+    std::fs::create_dir_all(d.join("data/urna/venv/bin")).unwrap();
+    std::fs::write(d.join("data/urna/venv/bin/marker"), b"keep").unwrap();
+
+    // no --force: the plan sees the unstamped payload and replaces it.
+    let new = release(&d, None);
+    let out = urna(&d, &new, &["setup", "--yes", "--no-python"]);
+    let s = text(&out);
+    assert!(s.contains("ok embedder payload"), "{s}");
+    let stamp = std::fs::read_to_string(d.join("data/urna/VERSION")).unwrap();
+    assert_eq!(stamp.trim(), VERSION);
+    assert!(d.join("data/urna/embed_query.py").is_file());
+    assert!(d.join("data/urna/venv/bin/marker").is_file());
+
+    // the payload matches the binary now: nothing to replace.
+    let again = text(&urna(&d, &new, &["setup", "--yes", "--no-python"]));
+    assert!(!again.contains("ok embedder payload"), "{again}");
+
+    // --version names another release: replaced again, venv still there.
+    let pinned = text(&urna(
+        &d,
+        &new,
+        &["setup", "--yes", "--no-python", "--version", "v9.9.9"],
+    ));
+    assert!(pinned.contains("ok embedder payload"), "{pinned}");
+    assert!(d.join("data/urna/venv/bin/marker").is_file());
+}
+
+#[test]
 fn a_tampered_checksum_exits_11_and_installs_nothing() {
     if !has_curl() {
         return;

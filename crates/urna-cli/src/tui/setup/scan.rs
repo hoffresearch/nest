@@ -50,6 +50,35 @@ impl Channel {
     }
 }
 
+/// The payload setup manages (`<home>/forge`) and the release it came
+/// from, read from `<home>/VERSION`; `version` is `None` for a payload laid
+/// down before the stamp existed (0.5.1 and older).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Payload {
+    pub version: Option<String>,
+}
+
+impl Payload {
+    pub fn read(home: &Path) -> Option<Payload> {
+        if !home.join("forge").join("embed_query_potion.py").is_file() {
+            return None;
+        }
+        let version = std::fs::read_to_string(home.join("VERSION"))
+            .ok()
+            .map(|v| v.trim().trim_start_matches('v').to_string())
+            .filter(|v| !v.is_empty());
+        Some(Payload { version })
+    }
+
+    /// `v0.5.2`, or what an unstamped payload is.
+    pub fn label(&self) -> String {
+        match &self.version {
+            Some(v) => format!("v{v}"),
+            None => "unstamped (0.5.1 or older)".into(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Scan {
     pub version: &'static str,
@@ -60,6 +89,8 @@ pub struct Scan {
     pub home: Option<PathBuf>,
     /// the embedder script, when one resolves.
     pub embedder: Option<PathBuf>,
+    /// the payload in `home`, when setup laid one down there.
+    pub payload: Option<Payload>,
     /// interpreter + `--version` of the one the embedder would run under.
     pub python: Option<(String, String)>,
     /// `URNA_PYTHON` when set: it wins over any venv setup builds, so the
@@ -135,6 +166,7 @@ impl Scan {
             target: format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS),
             channel: Channel::of(&exe),
             exe,
+            payload: paths::urna_home().and_then(|h| Payload::read(&h)),
             home: paths::urna_home(),
             embedder,
             python,
@@ -167,9 +199,19 @@ impl Scan {
             Some(h) => ("data dir", tilde(h), Badge::Ok),
             None => ("data dir", "no HOME, set URNA_DATA_DIR".into(), Badge::Fail),
         });
-        v.push(match &self.embedder {
-            Some(p) => ("embedder", tilde(p), Badge::Ok),
-            None => (
+        v.push(match (&self.embedder, &self.payload) {
+            (Some(p), Some(pl)) if pl.version.as_deref() != Some(self.version) => (
+                "embedder",
+                format!("{} · {}, setup replaces it", tilde(p), pl.label()),
+                Badge::Warn,
+            ),
+            (Some(p), Some(pl)) => (
+                "embedder",
+                format!("{} · {}", tilde(p), pl.label()),
+                Badge::Ok,
+            ),
+            (Some(p), None) => ("embedder", tilde(p), Badge::Ok),
+            (None, _) => (
                 "embedder",
                 "missing, setup downloads it".into(),
                 Badge::Warn,

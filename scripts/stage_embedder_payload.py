@@ -18,6 +18,8 @@ script not found".
 usage:  python scripts/stage_embedder_payload.py <dest> [--tar <out.tar.gz>]
 writes: <dest>/urna/model_fingerprint.py          (imported by the registry)
         <dest>/urna/embed_query.py                (st models outside the registry)
+        <dest>/urna/VERSION                       (the workspace version: setup
+                                                   replaces a payload of another release)
         <dest>/urna/forge/__init__.py
         <dest>/urna/forge/embed_default.py
         <dest>/urna/forge/embed_potion.py
@@ -72,6 +74,15 @@ TOP_LEVEL_MODULES = [
 ]
 
 
+def workspace_version() -> str:
+    """The version every crate and the wheel ship under; at release time it is
+    the tag's, so the stamp names the release the payload came from."""
+    import tomllib
+
+    with (ROOT / "Cargo.toml").open("rb") as f:
+        return tomllib.load(f)["workspace"]["package"]["version"]
+
+
 def fail(msg: str) -> None:
     print(f"stage_embedder_payload: error: {msg}", file=sys.stderr)
     raise SystemExit(1)
@@ -100,6 +111,7 @@ def main() -> None:
         if not src.is_file():
             fail(f"missing source: {src}")
         shutil.copyfile(src, dest.parent / name)
+    (dest.parent / "VERSION").write_text(workspace_version() + "\n")
     model_src = FORGE / "models" / "potion-base-8M"
     if not model_src.is_dir():
         fail(f"missing model dir: {model_src}")

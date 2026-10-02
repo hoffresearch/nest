@@ -222,11 +222,7 @@ impl Ui {
                 result: None,
             })
             .collect();
-        let version = self
-            .opts
-            .version
-            .clone()
-            .unwrap_or_else(|| scan.version.to_string());
+        let version = plan::wanted_version(&scan, &self.opts);
         self.job = Some(job::spawn(scan, tasks, version));
         self.go(Step::Run);
     }
