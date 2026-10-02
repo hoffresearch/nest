@@ -4,27 +4,27 @@ description: run at the end of every task, before the pull request. walks the fi
 project: urna
 audience: ai agents and human contributors
 status: active
-last-updated: 2026-09-27
+last-updated: 2026-10-02
 domain: workflow
 ---
 
 # afterwork
 
-a change is done when the tree describes it. walk the list below against the diff, open every file a block names, and fix what the change made wrong or incomplete. skip a block the diff does not touch.
+a change is done when the tree describes it. walk the list below against the diff, open every file a block names, and fix what the change made wrong or incomplete. every item applies only when the diff touches what it names: a docs-only change skips the builds and the gate, a change outside the format skips the format block.
 
 edit in place, as if the file had always said the right thing. history lives in three places only: `docs/CHANGELOG`, the commit message and the pull request body. no "renamed x to y" or "updated for the new flow" notes anywhere else, and no edits to files the change does not affect.
 
-## every change
+## code and behavior
 
-- `docs/CHANGELOG`: an `[Unreleased]` entry with the why and the measured numbers. this is also where a decision and its reasoning are recorded (the project's decision log). test counts in it match what runs.
+- `docs/CHANGELOG`: an `[Unreleased]` entry for anything a user, an operator or a contributor would notice, with the why and the measured numbers. this is also where a decision and its reasoning are recorded (the project's decision log). test counts in it match what runs.
 - `docs/arc/ARC.toml`: the one architecture reference. update it when a module, boundary, flow, public contract, storage or runtime behavior changes; a new tracked file gets an `inventory` entry. bump `last-updated`, append a dated note to `summary`.
 - `.contracts/.agents/AGENTS.md`: the one instruction source (the root `CLAUDE.md` is a symlink to it; never edit the link or add a parallel file). update it when a command, gotcha, known gap, test count or layout changes.
-- tests next to the code (`crates/*/tests/`, `tests/*.py`, `python/forge/test_*.py`): happy path, error path, one edge case, against real artifacts, no mocks.
-- `scripts/release_check.sh`: run it, do not edit it to pass. it rebuilds `python/_urna.so` after rust changes.
+- tests next to the code it changes (`crates/*/tests/`, `tests/*.py`, `python/forge/test_*.py`): happy path, error path, one edge case, against real artifacts, no mocks.
+- `scripts/release_check.sh`: run it for any code change, do not edit it to pass; it rebuilds `python/_urna.so` after rust changes. a docs-only change does not need it, and the pull request says it was not run.
 
 ## user-visible behavior
 
-- `README.md`: cli surface, python api, presets, benchmarks, install.
+- `README.md`: cli surface, python api, presets, benchmarks, install. `llms.txt`: its links and one-line summaries.
 - `docs/USAGE.md`: the how-to per verb, preset, declarative build, model registry, setup/tui and install channel. a new feature usually gets a section or changes one.
 - `examples/`: the quickstart, fastapi, flask and jupyter examples still run.
 - `assets/images/`: the `urna setup` / `urna tui` screenshots after a ui change (render recipe in the AGENTS.md gotchas).
@@ -80,8 +80,8 @@ no per-session notes files; the lesson lives where the next person will look.
 ## before the pull request
 
 - the file hygiene block above is done: no file over its limit, nothing dead or misplaced left.
-- `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, ruff: clean.
-- `forge-core` tested on its own manifest (`--workspace` does not reach it).
+- for a code change: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, ruff: clean.
+- `forge-core`, when the change touches it: tested on its own manifest (`--workspace` does not reach it).
 - no temporary script, stray file (a package manager run from the repo root leaves a `package.json`), dead code or orphan import left; `git status` is clean apart from the change.
 - no hardcoded machine paths; comments short and current.
 - docs lowercase, no emoji, no em dash.
