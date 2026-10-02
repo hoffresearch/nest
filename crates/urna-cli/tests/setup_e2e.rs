@@ -103,6 +103,7 @@ fn text(o: &Output) -> String {
 #[test]
 fn setup_yes_installs_the_payload_from_the_release() {
     if !has_curl() {
+        eprintln!("skip: no curl on PATH");
         return;
     }
     let d = scratch("ok");
@@ -127,6 +128,7 @@ fn setup_yes_installs_the_payload_from_the_release() {
 #[test]
 fn an_upgraded_binary_replaces_an_older_payload_and_keeps_the_venv() {
     if !has_curl() {
+        eprintln!("skip: no curl on PATH");
         return;
     }
     let d = scratch("upgrade");
@@ -164,6 +166,7 @@ fn an_upgraded_binary_replaces_an_older_payload_and_keeps_the_venv() {
 #[test]
 fn a_tampered_checksum_exits_11_and_installs_nothing() {
     if !has_curl() {
+        eprintln!("skip: no curl on PATH");
         return;
     }
     let d = scratch("sha");
@@ -177,6 +180,7 @@ fn a_tampered_checksum_exits_11_and_installs_nothing() {
 #[test]
 fn a_missing_release_exits_10() {
     if !has_curl() {
+        eprintln!("skip: no curl on PATH");
         return;
     }
     let d = scratch("gone");
@@ -191,6 +195,7 @@ fn a_missing_release_exits_10() {
 #[test]
 fn uninstall_removes_the_payload_and_keeps_the_binary() {
     if !has_curl() {
+        eprintln!("skip: no curl on PATH");
         return;
     }
     let d = scratch("rm");
