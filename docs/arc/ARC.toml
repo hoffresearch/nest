@@ -684,7 +684,7 @@ purpose = "cli integration tests"
 links = [
     "crates/urna-cli/tests/cli_e2e.rs",
     "crates/urna-cli/tests/media_cite_validate.rs",
-    "crates/urna-cli/tests/search_text_embedder.rs",
+    "crates/urna-cli/tests/embedder_resolution.rs",
     "crates/urna-cli/tests/setup_e2e.rs",
 ]
 
@@ -1101,9 +1101,9 @@ purpose = "urna setup end to end against a file:// release built in the test: th
 links = ["crates/urna-cli/src/tui/setup/mod.rs"]
 
 [[inventory.urna_cli]]
-path = "crates/urna-cli/tests/search_text_embedder.rs"
+path = "crates/urna-cli/tests/embedder_resolution.rs"
 kind = "rust-test"
-purpose = "search-text resolves python/embed_query.py from the data roots with a binary copied out of the checkout: the data-root script is found, a missing payload names the missing script, a checkout in the cwd wins over the data root"
+purpose = "ask, retrieve and search-text resolve their python embedders from the data roots with a binary copied out of the checkout and a cwd outside it: the data-root scripts are found, a missing payload names the missing script, a checkout in the cwd wins over the data root"
 links = ["crates/urna-cli/src/cmd/embed_gate.rs"]
 
 [[inventory.urna_cli]]
