@@ -2,7 +2,7 @@
 project: urna
 audience: ai coding agents and human contributors
 status: active
-last-updated: 2026-09-27
+last-updated: 2026-10-02
 domain: repo-ops
 ---
 
@@ -225,7 +225,7 @@ run `.contracts/.agents/.skills/AFTERWORK.md`: it names which file owns what and
 - `cargo clean` costs 30 to 60 s of rebuild; incremental compilation handles most edits.
 - case-only renames on macos: the filesystem ignores case and git runs with `core.ignorecase=true`, so renaming `usage.md` to `USAGE.md` on disk does not register. use `git mv -f old New`.
 - repo-wide replaces go through `git grep -l`, never `grep -r`: gitignored third-party clones live under `tools/` and `TMP/`, and a recursive grep edits them too. run package managers (npm, bun, pnpm) from a temporary directory, not from the repo root, or they leave a `package.json` behind.
-- a dev-built binary always finds its own checkout (`embed_gate::exe_repo_root`), so a test of what an installed binary resolves from the data roots copies the binary out of `target/` first (`crates/urna-cli/tests/embedder_resolution.rs`).
+- a dev-built binary always finds its own checkout (`embed_gate::exe_repo_root`), so a test of what an installed binary resolves from the data roots copies the binary out of `target/` first and points `HOME`, `XDG_DATA_HOME` and `URNA_DATA_DIR` into its scratch dir: `paths::data_roots` includes `~/.local/share`, so otherwise it finds the machine's real payload and venv (`crates/urna-cli/tests/embedder_resolution.rs`).
 - macos kills an overwritten binary: copying a fresh `target/*/urna` over an existing one makes every later run exit 137 (the code signature no longer matches). `rm -f` the target before `cp`.
 - `release_check.sh` hides clippy's output: when it stops at clippy, run `cargo clippy --workspace --all-targets -- -D warnings` to see the lint. it also hides the names of failing tests (`passed=N failed=M` only): rerun `cargo test --release --workspace` by hand to see them.
 - a unit test never reads the process environment through the code it tests: `URNA_PYTHON`, `URNA_DATA_DIR` and friends leak in from the shell that runs the gate (`URNA_PYTHON=.venv/bin/python ./scripts/release_check.sh` is the documented way). the probe (`Scan::probe`, `resolve_interpreter`) reads the env once and hands a value down; the pure function under test takes that value.
@@ -235,7 +235,7 @@ run `.contracts/.agents/.skills/AFTERWORK.md`: it names which file owns what and
 
 documented limitations, not bugs to fix in passing. flag them in any work that touches these areas.
 
-- `search-text` boots a python process per call (300 to 500 ms: fork, import sentence-transformers, embed, exit). the latency tables measure the search path after the vector is ready, not end to end; python-driven workloads (`UrnaFile.search` in a loop) avoid it.
+- `search-text` boots a python process per call: fork, import sentence-transformers and torch, load the model, embed, exit. about 4 s warm and 7 s cold on an m-series mac (sentence-transformers 6.1, torch 2.14, the MiniLM); `ask` and `retrieve` on a sentence-transformers corpus pay the same. the latency tables measure the search path after the vector is ready, not end to end; python-driven workloads (`UrnaFile.search` in a loop) avoid it.
 - the bm25 tokenizer is word-segmented only (`crates/urna-runtime/src/bm25/tokenize.rs`, non-alphanumeric unicode boundaries): right for latin, cyrillic, greek, devanagari; wrong for cjk, thai, lao, where an unspaced run of characters is one token, so only an identical run matches and recall drops. disable bm25 there (`with_bm25=False`) until a language-aware tokenizer ships.
 - package channels ship the bare binary; `urna setup` is a step, not a hook. homebrew, npm, cargo install and binstall lay down the binary alone, `urna doctor` fails until setup runs (the first failing check names the code: 2 with no interpreter, 3 with one that lacks numpy and tokenizers, 4 with the deps there and no embedder payload), and no channel runs it for the user (npm hides postinstall output, dist has no formula hook). setup needs `curl` on path and uv or a python3 with `venv`.
 - comfy-tabs and comfy-toaster are not dependencies on purpose: both are source-available under SA-PS:DA (commercial use needs a license), incompatible with an mit product. the tab pills are drawn in `app/chrome.rs`; the toasts adapt the mit/unlicense `ratatui-toaster`.
