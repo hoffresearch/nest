@@ -352,10 +352,7 @@ fn setup_refuses_models_the_catalog_or_the_consent_does_not_cover() {
     // every other data root (and the checkout) out of reach: setup must
     // install into its own data dir's venv and nowhere else.
     let urna = |d: &Path, rel: &Path, args: &[&str]| {
-        isolated(d, rel, args)
-            .env_remove("URNA_PYTHON")
-            .output()
-            .unwrap()
+        output(isolated(d, rel, args).env_remove("URNA_PYTHON"))
     };
     // no payload yet: the catalog arrives with it, the name is checked then.
     let out = urna(
@@ -408,10 +405,7 @@ fn setup_refuses_models_the_catalog_or_the_consent_does_not_cover() {
     assert_eq!(out.status.code(), Some(14), "{s}");
     assert!(s.contains("managed venv is not built yet"), "{s}");
     // a pinned interpreter elsewhere: packages never go there.
-    let out = isolated(&d, &rel, &args)
-        .env("URNA_PYTHON", "/elsewhere/python3")
-        .output()
-        .unwrap();
+    let out = output(isolated(&d, &rel, &args).env("URNA_PYTHON", "/elsewhere/python3"));
     let s = text(&out);
     assert!(s.contains("URNA_PYTHON pins /elsewhere/python3"), "{s}");
     assert!(!d.join("data/urna/venv").exists(), "{s}");
@@ -437,4 +431,20 @@ fn isolated(dir: &Path, rel: &Path, args: &[&str]) -> Command {
         .env("URNA_RELEASE_BASE", file_url(rel))
         .env("NO_COLOR", "1");
     c
+}
+
+/// `cmd.output()`, retried while the binary is busy. the tests copy the
+/// binary and run the copy while other tests fork in parallel: on linux a
+/// child forked during the copy holds the write descriptor until its own
+/// exec, and running the copy then fails with ETXTBSY (os error 26).
+fn output(cmd: &mut Command) -> std::process::Output {
+    for _ in 0..100 {
+        match cmd.output() {
+            Err(e) if e.raw_os_error() == Some(26) => {
+                std::thread::sleep(std::time::Duration::from_millis(20))
+            }
+            res => return res.unwrap(),
+        }
+    }
+    cmd.output().unwrap()
 }
