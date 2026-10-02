@@ -92,7 +92,10 @@ pub fn draw(buf: &mut Buffer, body: Rect, ui: &mut Ui) {
                 "source",
                 format!("github release v{}", version.trim_start_matches('v')),
             ),
-            ("network", "curl, only while downloading".into()),
+            (
+                "network",
+                "curl for the payload, the hub client for picked models".into(),
+            ),
             ("binary", "left to its package manager".into()),
         ];
         for (i, (k, v)) in rows.iter().enumerate() {

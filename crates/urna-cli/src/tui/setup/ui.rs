@@ -369,6 +369,12 @@ impl Ui {
                 KeyCode::Down | KeyCode::Char('j') => {
                     self.cursor = (self.cursor + 1).min(self.plan.len().saturating_sub(1))
                 }
+                // the models step is ticked by choosing models, in the picker.
+                KeyCode::Char(' ') | KeyCode::Char('x')
+                    if self.plan.get(self.cursor).map(|i| i.task) == Some(Task::Models) =>
+                {
+                    self.open_picker(Step::Plan)
+                }
                 KeyCode::Char(' ') | KeyCode::Char('x') => {
                     if let Some(i) = self.plan.get_mut(self.cursor)
                         && !i.locked
