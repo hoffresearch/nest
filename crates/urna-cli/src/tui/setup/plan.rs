@@ -93,19 +93,24 @@ pub fn plan(scan: &Scan, opts: &Opts) -> Vec<Item> {
             .payload
             .as_ref()
             .filter(|p| p.version.as_deref() != Some(want.as_str()));
-        let detail = match (&scan.embedder, stale) {
-            (_, Some(p)) => format!(
+        // setup manages the payload in its own data dir: one found in
+        // another data root (or a checkout) does not count as installed.
+        let missing = scan.payload.is_none();
+        let fresh = format!(
+            "download ~30 MB from the v{want} release, verify sha256, unpack to {home}/forge"
+        );
+        let detail = match (&scan.embedder, stale, missing) {
+            (_, Some(p), _) => format!(
                 "installed payload is {}, v{want} is wanted: download it, verify sha256, replace {home}/forge (the venv stays)",
                 p.label()
             ),
-            (Some(p), None) => format!("present at {}; tick to reinstall", tilde(p)),
-            (None, None) => format!(
-                "download ~30 MB from the v{want} release, verify sha256, unpack to {home}/forge"
-            ),
+            (Some(p), None, true) => format!("{fresh}; {} resolves until then", tilde(p)),
+            (Some(p), None, false) => format!("present at {}; tick to reinstall", tilde(p)),
+            (None, None, _) => fresh,
         };
         Item {
             task: Task::Payload,
-            on: (scan.embedder.is_none() || stale.is_some() || opts.force) && !opts.no_payload,
+            on: (missing || stale.is_some() || opts.force) && !opts.no_payload,
             locked: false,
             blocked,
             detail,
@@ -232,6 +237,25 @@ mod tests {
         }
         let unstamped = plan(&installed(None), &Opts::default());
         assert!(unstamped[0].detail.contains("unstamped"));
+    }
+
+    #[test]
+    fn a_payload_in_another_data_root_does_not_count_as_installed() {
+        // URNA_DATA_DIR points setup at an empty dir while an older install
+        // sits in ~/.local/share: setup installs into its own dir.
+        let mut s = bare();
+        s.embedder = Some(PathBuf::from(
+            "/h/.local/share/urna/forge/embed_query_potion.py",
+        ));
+        s.home = Some(PathBuf::from("/tmp/data/urna"));
+        s.deps = true;
+        let p = plan(&s, &Opts::default());
+        assert!(p[0].runs(), "{}", p[0].detail);
+        assert!(
+            p[0].detail.contains("resolves until then"),
+            "{}",
+            p[0].detail
+        );
     }
 
     #[test]
