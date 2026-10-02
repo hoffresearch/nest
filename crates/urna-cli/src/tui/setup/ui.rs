@@ -322,8 +322,25 @@ impl Ui {
         }
         let ready = self.plan.iter().any(|i| i.task == Task::Models && i.runs());
         if self.pick_from == Step::Done && code == KeyCode::Enter && ready {
+            // the run after a fresh install: the managed venv when models
+            // need one it lacks, the models, then verify again.
+            if let Some(scan) = self.scan.as_mut() {
+                scan.venv = scan
+                    .home
+                    .as_ref()
+                    .is_some_and(|h| crate::cmd::paths::venv_python(&h.join("venv")).is_file());
+            }
+            let tasks: Vec<Task> = match &self.scan {
+                Some(scan) => plan::plan(scan, &self.opts)
+                    .into_iter()
+                    .filter(|i| matches!(i.task, Task::Python | Task::Models) && i.runs())
+                    .map(|i| i.task)
+                    .chain([Task::Verify])
+                    .collect(),
+                None => return,
+            };
             self.code = 0;
-            self.run(vec![Task::Models, Task::Verify]);
+            self.run(tasks);
         } else {
             let back = self.pick_from;
             self.go(back);

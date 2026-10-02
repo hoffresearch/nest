@@ -134,7 +134,14 @@ pub fn plan(scan: &Scan, opts: &Opts) -> Vec<Item> {
     let python = {
         let tool = Tool::pick(scan.uv.as_deref(), scan.base_python.as_deref());
         let pinned = scan.pinned_python.clone();
+        // chosen models need the venv setup manages (their packages go
+        // nowhere else), even when another python already has the base deps.
+        let for_models = !opts.models.is_empty() && !scan.venv && pinned.is_none();
         let detail = match (&scan.python, scan.deps, &tool) {
+            (_, true, Some(t)) if for_models => format!(
+                "venv at {home}/venv with numpy + tokenizers, via {}: the chosen models' packages go only there",
+                t.name()
+            ),
             (_, false, _) if pinned.is_some() => format!(
                 "URNA_PYTHON={} lacks numpy + tokenizers and wins over any env setup builds; unset it or install the deps there",
                 pinned.clone().unwrap_or_default()
@@ -151,7 +158,7 @@ pub fn plan(scan: &Scan, opts: &Opts) -> Vec<Item> {
         };
         Item {
             task: Task::Python,
-            on: !scan.deps && !opts.no_python,
+            on: (!scan.deps || for_models) && !opts.no_python,
             locked: false,
             blocked: if tool.is_none() {
                 Some("no uv and no python3 on PATH".to_string())
@@ -264,6 +271,7 @@ mod tests {
             python: Some(("python3".into(), "Python 3.12.4".into())),
             pinned_python: None,
             deps: false,
+            venv: false,
             base_python: Some("python3".into()),
             uv: None,
             curl: Some(PathBuf::from("/usr/bin/curl")),
@@ -498,5 +506,19 @@ mod tests {
             "{}",
             item.detail
         );
+    }
+
+    #[test]
+    fn chosen_models_build_the_managed_venv_even_when_python_has_the_deps() {
+        let (mut s, o) = with_models(&["a"], &[]);
+        s.deps = true;
+        s.uv = Some(PathBuf::from("/u/uv"));
+        let p = plan(&s, &o);
+        assert!(p[1].runs() && p[1].detail.contains("models' packages go only there"));
+        s.venv = true;
+        assert!(!plan(&s, &o)[1].runs(), "an existing managed venv is kept");
+        let (mut s, _) = with_models(&[], &[]);
+        s.deps = true;
+        assert!(!plan(&s, &Opts::default())[1].runs(), "no models: no venv");
     }
 }
