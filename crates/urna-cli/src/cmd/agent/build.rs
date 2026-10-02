@@ -12,7 +12,7 @@ use std::process::Command as ProcCommand;
 /// Resolve python/tools/urna_forge.py through the one shared script
 /// ladder (repo layout, installed data dir, `<exe>/../share`).
 fn forge_tool_path() -> PathBuf {
-    super::super::embed_gate::installed_script_in("tools", "urna_forge.py")
+    super::super::embed_gate::installed_script_in(&["tools", "urna_forge.py"])
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -52,6 +52,13 @@ pub fn uninstall() -> anyhow::Result<i32> {
             println!("removed {}", p.display());
         }
     }
+    for name in unpack::TOP_LEVEL {
+        let p = home.join(name);
+        if p.is_file() {
+            std::fs::remove_file(&p)?;
+            println!("removed {}", p.display());
+        }
+    }
     println!(
         "urna setup: uninstalled the payload and the env; the binary stays with its package manager"
     );

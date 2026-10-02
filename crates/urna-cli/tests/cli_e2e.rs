@@ -161,20 +161,36 @@ fn cli_cite_resolves_citation() {
 // flagship verbs: ask + retrieve. these embed the query OFFLINE with the
 // default potion static table, so they need a python carrying numpy +
 // tokenizers + the vendored potion table (git-lfs). when that toolchain is
-// absent (a minimal CI runner), the helpers below return None and the test
-// skips with a printed note rather than failing - the pure-rust suite above
-// is unconditional. set URNA_PYTHON to point at the venv that has the deps.
+// absent (a minimal CI runner, a clone without `git lfs pull`), the probe
+// below returns None and the test skips with a printed note - the pure-rust
+// suite above is unconditional. once the toolchain is there, a failing demo
+// build is a failing test, never a skip. set URNA_PYTHON to point at the
+// venv that has the deps.
 // ---------------------------------------------------------------------------
+
+/// the vendored potion table is real bytes, not the git-lfs pointer a clone
+/// without `git lfs pull` carries.
+fn potion_table_present(root: &std::path::Path) -> bool {
+    let table = root.join("python/forge/models/potion-base-8M/model.safetensors");
+    std::fs::read(&table).is_ok_and(|b| !b.starts_with(b"version https://git-lfs"))
+}
 
 /// resolve a python interpreter that can import forge.embed_potion (numpy +
 /// tokenizers + the vendored table). prefers $URNA_PYTHON, then .venv at the
-/// repo root, then `python3`. returns None when none can build the demo.
+/// repo root, then `python3`. returns None, with the reason printed, when
+/// the toolchain to build the demo is absent.
 fn forge_python() -> Option<(String, PathBuf)> {
     // repo root: this test file is crates/urna-cli/tests/, go up three.
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())
         .map(PathBuf::from)?;
+    if !potion_table_present(&root) {
+        eprintln!(
+            "the potion table is an lfs pointer: run `git lfs pull` or scripts/fetch_potion.sh"
+        );
+        return None;
+    }
     let mut candidates: Vec<String> = Vec::new();
     if let Ok(p) = std::env::var("URNA_PYTHON") {
         candidates.push(p);
@@ -195,8 +211,9 @@ fn forge_python() -> Option<(String, PathBuf)> {
 }
 
 /// build the cc0 demo corpus into `path` via forge.retrieve.build_demo with
-/// the offline potion embedder. returns false (skip) when forge deps absent.
-fn build_demo_corpus(py: &str, root: &std::path::Path, path: &std::path::Path) -> bool {
+/// the offline potion embedder. the toolchain was probed already, so a
+/// failure here is a real one and fails the test.
+fn build_demo_corpus(py: &str, root: &std::path::Path, path: &std::path::Path) {
     let code = format!(
         "import sys; sys.path.insert(0, 'python'); \
          from forge.retrieve import build_demo; build_demo({:?})",
@@ -207,14 +224,16 @@ fn build_demo_corpus(py: &str, root: &std::path::Path, path: &std::path::Path) -
         .current_dir(root)
         .output()
         .expect("spawn python build_demo");
-    if !out.status.success() {
-        eprintln!(
-            "build_demo failed (skipping): {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        return false;
-    }
-    path.exists()
+    assert!(
+        out.status.success(),
+        "build_demo failed with the toolchain present: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        path.exists(),
+        "build_demo succeeded but wrote no {}",
+        path.display()
+    );
 }
 
 #[test]
@@ -225,10 +244,7 @@ fn cli_ask_answer_is_cited_text_only_and_explain_adds_honesty_line() {
     };
     let path = tmp_path("cli_ask_demo.urna");
     let _ = std::fs::remove_file(&path);
-    if !build_demo_corpus(&py, &root, &path) {
-        eprintln!("skip cli_ask: demo corpus build skipped");
-        return;
-    }
+    build_demo_corpus(&py, &root, &path);
 
     let bin = env!("CARGO_BIN_EXE_urna");
     let query = "can I use this offline with no network";
@@ -297,10 +313,7 @@ fn cli_retrieve_answer_pack_score_equals_search_and_cite_round_trips() {
     };
     let path = tmp_path("cli_retrieve_demo.urna");
     let _ = std::fs::remove_file(&path);
-    if !build_demo_corpus(&py, &root, &path) {
-        eprintln!("skip cli_retrieve: demo corpus build skipped");
-        return;
-    }
+    build_demo_corpus(&py, &root, &path);
 
     let bin = env!("CARGO_BIN_EXE_urna");
     let query = "how do citations prove a source";
