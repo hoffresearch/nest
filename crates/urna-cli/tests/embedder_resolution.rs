@@ -40,16 +40,16 @@ fn detached_binary(dir: &Path) -> PathBuf {
 /// right after the embedder is resolved and names it. returns stderr.
 fn run(bin: &Path, dir: &Path, cwd: &Path, verb: &str) -> String {
     let fixture = repo().join("crates/urna-format/tests/fixtures/golden_v1_minimal.urna");
-    let out = Command::new(bin)
-        .args([verb, fixture.to_str().unwrap(), "q"])
-        .current_dir(cwd)
-        .env("URNA_DATA_DIR", dir.join("data"))
-        .env("XDG_DATA_HOME", dir.join("xdg"))
-        .env("HOME", dir.join("home"))
-        .env_remove("LOCALAPPDATA")
-        .env("URNA_PYTHON", dir.join("no-such-python"))
-        .output()
-        .unwrap();
+    let out = output(
+        Command::new(bin)
+            .args([verb, fixture.to_str().unwrap(), "q"])
+            .current_dir(cwd)
+            .env("URNA_DATA_DIR", dir.join("data"))
+            .env("XDG_DATA_HOME", dir.join("xdg"))
+            .env("HOME", dir.join("home"))
+            .env_remove("LOCALAPPDATA")
+            .env("URNA_PYTHON", dir.join("no-such-python")),
+    );
     assert!(!out.status.success());
     String::from_utf8_lossy(&out.stderr).into_owned()
 }
@@ -62,6 +62,22 @@ fn lay_down(urna_home: &Path) {
     for rel in ["embed_query.py", "forge/embed_query_model.py"] {
         std::fs::copy(repo().join("python").join(rel), urna_home.join(rel)).unwrap();
     }
+}
+
+/// `cmd.output()`, retried while the binary is busy. the tests copy the
+/// binary and run the copy while other tests fork in parallel: on linux a
+/// child forked during the copy holds the write descriptor until its own
+/// exec, and running the copy then fails with ETXTBSY (os error 26).
+fn output(cmd: &mut Command) -> std::process::Output {
+    for _ in 0..100 {
+        match cmd.output() {
+            Err(e) if e.raw_os_error() == Some(26) => {
+                std::thread::sleep(std::time::Duration::from_millis(20))
+            }
+            res => return res.unwrap(),
+        }
+    }
+    cmd.output().unwrap()
 }
 
 fn tail(parts: &[&str]) -> String {
@@ -198,16 +214,16 @@ fn a_payload_missing_a_module_names_the_files_and_setup_not_pip() {
     let home = dir.join("data").join("urna");
     lay_down_payload(&home, "forge/model_registry.py");
     let fixture = repo().join("crates/urna-format/tests/fixtures/golden_v1_minimal.urna");
-    let out = Command::new(&bin)
-        .args(["ask", fixture.to_str().unwrap(), "q"])
-        .current_dir(&dir)
-        .env("URNA_DATA_DIR", dir.join("data"))
-        .env("XDG_DATA_HOME", dir.join("xdg"))
-        .env("HOME", dir.join("home"))
-        .env_remove("LOCALAPPDATA")
-        .env("URNA_PYTHON", python)
-        .output()
-        .unwrap();
+    let out = output(
+        Command::new(&bin)
+            .args(["ask", fixture.to_str().unwrap(), "q"])
+            .current_dir(&dir)
+            .env("URNA_DATA_DIR", dir.join("data"))
+            .env("XDG_DATA_HOME", dir.join("xdg"))
+            .env("HOME", dir.join("home"))
+            .env_remove("LOCALAPPDATA")
+            .env("URNA_PYTHON", python),
+    );
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(!out.status.success());
     assert!(
