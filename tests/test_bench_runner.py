@@ -11,11 +11,13 @@ directory, validates, and renames over the old file only at the end:
 - error path: a build that fails (an unknown preset) leaves the existing
   corpus byte-for-byte and no temporary;
 - edge: a temporary a killed run left behind is removed by the next build,
-  and a first build with no corpus yet creates it.
+  one of a run still building is kept, and a first build with no corpus
+  yet creates it.
 
 Run: .venv/bin/python tests/test_bench_runner.py
 """
 
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -82,16 +84,43 @@ def test_a_failed_build_keeps_the_old_corpus(d: Path) -> None:
     print("error path (failed build: old corpus byte-for-byte, no temporary): OK")
 
 
+def _dead_pid() -> int:
+    """The pid of a process that has already exited."""
+    p = subprocess.Popen([sys.executable, "-c", "pass"])
+    p.wait()
+    return p.pid
+
+
 def test_stale_temporaries_go_and_a_first_build_creates(d: Path) -> None:
     out = d / "corpus_tiny.urna"
-    stale = d / ".corpus_tiny.999999.tmp.urna"
+    stale = d / f".corpus_tiny.{_dead_pid()}.tmp.urna"
     stale.write_bytes(b"half a build from a killed run")
     assert not out.exists()
     build_variant(_chunks(), META, "exact", out)
     assert out.exists() and urna.open(str(out)).validate() is True
     assert not stale.exists()
     assert _temps(d) == [], _temps(d)
-    print("edge (stale temporary removed, first build creates the corpus): OK")
+    print("edge (dead run's temporary removed, first build creates the corpus): OK")
+
+
+def test_a_running_build_keeps_its_temporary(d: Path) -> None:
+    # another measure_presets still building the same preset: its temporary
+    # is in use and must survive this build. the stand-in process blocks on
+    # its stdin until the test closes it.
+    other = subprocess.Popen(
+        [sys.executable, "-c", "import sys; sys.stdin.read()"], stdin=subprocess.PIPE
+    )
+    try:
+        out = d / "corpus_tiny.urna"
+        busy = d / f".corpus_tiny.{other.pid}.tmp.urna"
+        busy.write_bytes(b"another run, mid-build")
+        build_variant(_chunks(), META, "exact", out)
+        assert busy.read_bytes() == b"another run, mid-build"
+        assert urna.open(str(out)).validate() is True
+    finally:
+        other.stdin.close()
+        other.wait()
+    print("edge (a running build's temporary kept): OK")
 
 
 def main() -> None:
@@ -99,6 +128,7 @@ def main() -> None:
         test_replaces_a_corpus_with_a_valid_one,
         test_a_failed_build_keeps_the_old_corpus,
         test_stale_temporaries_go_and_a_first_build_creates,
+        test_a_running_build_keeps_its_temporary,
     ):
         with tempfile.TemporaryDirectory(prefix="urna-bench-") as tmp:
             test(Path(tmp))

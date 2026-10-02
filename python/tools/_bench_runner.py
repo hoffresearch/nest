@@ -115,6 +115,32 @@ def _tmp_path(out_path: Path) -> Path:
     return out_path.with_name(f".{out_path.stem}.{os.getpid()}.tmp.urna")
 
 
+def _alive(pid: int) -> bool:
+    """Whether `pid` names a running process. signal 0 probes without
+    touching it on posix; on windows os.kill terminates instead, so there
+    every other pid counts as alive and its temporary is left alone."""
+    if pid == os.getpid():
+        return False
+    if os.name == "nt":
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True  # it exists but belongs to someone else
+    return True
+
+
+def _clear_dead_temporaries(out_path: Path) -> None:
+    """Remove the temporaries of builds of `out_path` whose process is gone
+    (a run that was killed); a temporary of a run still building is kept."""
+    for tmp in out_path.parent.glob(f".{out_path.stem}.*.tmp.urna"):
+        pid = tmp.name[len(out_path.stem) + 2 : -len(".tmp.urna")]
+        if pid.isdigit() and not _alive(int(pid)):
+            tmp.unlink(missing_ok=True)
+
+
 def build_variant(chunks, meta, preset: str, out_path: Path):
     """Build `out_path` with the given preset or mrl ladder point; return
     seconds elapsed.
@@ -123,7 +149,8 @@ def build_variant(chunks, meta, preset: str, out_path: Path):
     and validated, and only then renamed over `out_path`. a build that
     fails, or a run interrupted halfway, never deletes or truncates the
     corpus already there; temporaries a killed run left behind are removed
-    on the next build of the same preset.
+    on the next build of the same preset, and the temporary of a run that
+    is still building is left alone.
 
     Imports `urna` lazily because `_bench_runner` is meant to be cheap
     to import (unlike the PyO3 extension load, which pulls a 1.6 MB .so).
@@ -135,8 +162,7 @@ def build_variant(chunks, meta, preset: str, out_path: Path):
 
     _label, variant_kwargs = parse_variant(preset)
 
-    for stale in out_path.parent.glob(f".{out_path.stem}.*.tmp.urna"):
-        stale.unlink(missing_ok=True)
+    _clear_dead_temporaries(out_path)
     tmp = _tmp_path(out_path)
     t0 = time.time()
     try:

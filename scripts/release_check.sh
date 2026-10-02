@@ -148,7 +148,7 @@ ok "embedder payload (2 cases)"
 # an interrupted gate never leaves data/measure without its corpora.
 step "python tests/test_bench_runner.py"
 "$PY" tests/test_bench_runner.py
-ok "bench runner (3 cases)"
+ok "bench runner (4 cases)"
 
 # ---- ruff (best-effort) ----
 # the file list lives in scripts/ruff_check.sh so ci.yml and this gate stay
