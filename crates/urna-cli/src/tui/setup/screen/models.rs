@@ -48,8 +48,11 @@ pub fn draw(buf: &mut Buffer, body: Rect, ui: &mut Ui) {
         let what = what
             .split_once(": ")
             .map_or(what.as_str(), |(_, rest)| rest);
-        hud::put(buf, inner.x + 6, y + 1, what, pal::faint(), w);
-        y += 2;
+        y += 1;
+        for line in hud::wrap(what, w as usize).iter().take(2) {
+            hud::put(buf, inner.x + 6, y, line, pal::faint(), w);
+            y += 1;
+        }
         if e.remote_code {
             let allowed = ui.opts.allow_remote_code.contains(&e.name);
             let (note, st) = if allowed {
