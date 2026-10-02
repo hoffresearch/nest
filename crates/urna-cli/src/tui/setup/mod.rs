@@ -1,7 +1,8 @@
 //! `urna setup`: the installer every channel ends in. brew, npm, crates.io
 //! and the tarballs all ship the bare binary; this lays down what the
 //! binary cannot carry (the offline embedder payload and a python with
-//! numpy + tokenizers) and proves the result with the doctor checks.
+//! numpy + tokenizers), installs the catalog models the user chooses, and
+//! proves the result with the doctor checks.
 //!
 //! with a terminal on both ends it runs inline (the screen stays in the
 //! scrollback when it ends): splash, scan, plan, install, verify. with
@@ -30,7 +31,7 @@ use crate::tui::term;
 pub use plan::Opts;
 
 /// Runs setup and returns the process exit code: 0 ready, 2..=6 a doctor
-/// failure after the steps ran, 10..=14 a step failure (`job::codes`).
+/// failure after the steps ran, 10..=15 a step failure (`job::codes`).
 pub fn run(opts: Opts) -> anyhow::Result<i32> {
     let tty = !opts.yes && std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
     if tty {
