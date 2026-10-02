@@ -12,11 +12,12 @@ use std::path::{Path, PathBuf};
 /// refuses a payload missing one, and the scan reports an installed payload
 /// missing one so setup repairs it. `tests/test_embedder_payload.py` checks
 /// that this list and the staged payload are the same set of files.
-pub const REQUIRED: [&str; 20] = [
+pub const REQUIRED: [&str; 21] = [
     "VERSION",
     "model_fingerprint.py",
     "embed_query.py",
     "forge/__init__.py",
+    "forge/catalog.json",
     "forge/embed_default.py",
     "forge/embed_image.py",
     "forge/embed_potion.py",

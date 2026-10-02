@@ -46,10 +46,11 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The files a complete payload holds besides the stamp (mirrors
 /// `unpack::REQUIRED`, which this binary-crate test cannot import; a drift
 /// fails the install below).
-const REQUIRED: [&str; 19] = [
+const REQUIRED: [&str; 20] = [
     "model_fingerprint.py",
     "embed_query.py",
     "forge/__init__.py",
+    "forge/catalog.json",
     "forge/embed_default.py",
     "forge/embed_image.py",
     "forge/embed_potion.py",

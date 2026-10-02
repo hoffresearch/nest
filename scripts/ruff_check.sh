@@ -52,6 +52,7 @@ python/forge/quality_gate.py
 python/forge/quality_utility.py
 python/forge/media_profiles.py
 python/forge/embed_query_model.py
+python/forge/model_catalog.py
 python/tools/urna_forge.py
 python/tools/urna_model_bench.py
 python/tools/_model_bench_report.py
@@ -62,6 +63,7 @@ tests/test_cli_space.py
 tests/test_query_embedder_routing.py
 tests/test_embedder_payload.py
 tests/test_bench_runner.py
+tests/test_model_catalog.py
 scripts/stage_embedder_payload.py
 "
 # shellcheck disable=SC2086
