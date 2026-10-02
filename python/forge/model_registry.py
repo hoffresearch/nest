@@ -44,7 +44,7 @@ class MrlSpec:
 @dataclass(frozen=True)
 class ModelPreset:
     name: str
-    kind: str  # "potion" | "open_clip" | "st_multimodal" | "fake"
+    kind: str  # "potion" | "open_clip" | "st_multimodal" | "st_text" | "fake"
     embedding_model: str  # manifest name; unique across presets (reverse lookup)
     model_id: str = ""
     pretrained: str | None = None
@@ -181,6 +181,18 @@ PRESETS: dict[str, ModelPreset] = {
             text_query_mode="query",
             image_doc_format="bare",
             encode_kwargs=(("task", "retrieval"),),
+        ),
+        # the multilingual MiniLM the pt-br corpora were built with, before
+        # the registry existed. kind st_text loads it through python/
+        # embed_query.py's own functions, so a corpus built then keeps its
+        # model_hash. no transformers pin: the st pin above is wemm's.
+        ModelPreset(
+            name="minilm-multilingual",
+            kind="st_text",
+            embedding_model="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            model_id="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            default_dim=384,
+            requires=(("sentence_transformers", 'pip install "sentence-transformers"'),),
         ),
         _wemm(
             "wemm-2b",
@@ -319,6 +331,8 @@ def create_embedder(
             batch_size=batch_size or 32,
         )
         return _adapters._OpenClipAdapter(preset, inner)
+    if preset.kind == "st_text":
+        return _adapters._STTextAdapter(preset, model_path=model_path)
     if preset.kind == "st_multimodal":
         model_dir = resolve_model_dir(preset, model_path)
         if model_dir is not None and preset.remote_code_hashes:

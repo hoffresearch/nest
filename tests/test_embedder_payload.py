@@ -3,7 +3,9 @@
 `scripts/stage_embedder_payload.py` is what the release archives and
 `urna setup` lay down; an installed binary resolves both query embedders
 inside that tree (`urna/forge/embed_query_potion.py` for potion corpora,
-`urna/forge/embed_query_model.py` for registry models). this suite stages
+`urna/forge/embed_query_model.py` for registry models, `urna/embed_query.py`
+for search-text and for sentence-transformers models outside the
+registry). this suite stages
 the payload into a temp dir, then runs the staged scripts from a cwd
 outside the checkout, with only the staged tree on their path:
 
@@ -12,15 +14,19 @@ outside the checkout, with only the staged tree on their path:
 - the registry route: a potion manifest name resolves through the
   registry and embeds; a remote-code preset without the opt-in is refused
   with the URNA_ALLOW_REMOTE_CODE hint (exit 4) before any dependency is
-  looked at; an unknown manifest model is exit 4 naming the known models;
+  looked at; an unknown manifest model is exit 4 naming the known models
+  when sentence-transformers is absent, and is handed to embed_query.py
+  when it is present;
 - error path: a payload staged from a tree missing a module fails the
   staging itself, so a release never ships half the route.
 
 Run: .venv/bin/python tests/test_embedder_payload.py
 """
 
+import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -32,6 +38,8 @@ POTION = "minishlab/potion-base-8M/v1"
 
 EXPECTED_FILES = {
     "urna/model_fingerprint.py",
+    "urna/embed_query.py",
+    "urna/VERSION",
     "urna/forge/__init__.py",
     "urna/forge/embed_default.py",
     "urna/forge/embed_potion.py",
@@ -68,10 +76,27 @@ def test_stage_and_query(base: Path) -> None:
         [sys.executable, str(STAGE), str(dest)], capture_output=True, text=True, check=False
     )
     assert r.returncode == 0, r.stderr
-    staged = {str(p.relative_to(dest)) for p in dest.rglob("*.py")}
+    staged = {str(p.relative_to(dest)) for p in dest.rglob("*") if p.is_file()}
     missing = EXPECTED_FILES - staged
     assert not missing, f"payload is missing {sorted(missing)}"
+    # what `urna setup` requires (cmd/payload.rs REQUIRED) is exactly what the stage
+    # script ships: a shipped file it does not require could go missing
+    # unnoticed, a required file it does not ship would fail every install.
+    src = (REPO / "crates/urna-cli/src/cmd/payload.rs").read_text()
+    block = src[src.index("pub const REQUIRED") : src.index("];", src.index("pub const REQUIRED"))]
+    required = {"urna/" + r for r in re.findall(r'"([^"]+)"', block)}
+    assert len(required) >= 8, required
+    assert required == staged, (
+        f"required but not shipped: {sorted(required - staged)}; "
+        f"shipped but not required: {sorted(staged - required)}"
+    )
     assert (dest / "urna" / "forge" / "models" / "potion-base-8M").is_dir()
+    # the stamp `urna setup` compares against the release it wants.
+    import tomllib
+
+    with (REPO / "Cargo.toml").open("rb") as f:
+        version = tomllib.load(f)["workspace"]["package"]["version"]
+    assert (dest / "urna" / "VERSION").read_text() == version + "\n"
 
     outside = base / "elsewhere"
     outside.mkdir()
@@ -111,10 +136,23 @@ def test_stage_and_query(base: Path) -> None:
     if wemm_ok.returncode == 4:
         assert "install with:" in wemm_ok.stderr, wemm_ok.stderr
 
+    # a model no preset names: without sentence-transformers, exit 4 naming
+    # the known models and the pip line; with it, the staged embed_query.py
+    # takes over and fails offline on a model that is not cached.
     unknown = _run(forge / "embed_query_model.py", "acme/not-a-model", "hello", cwd=outside)
-    assert unknown.returncode == 4, (unknown.returncode, unknown.stderr)
-    assert "no registry preset embeds" in unknown.stderr, unknown.stderr
-    print("stage + potion + registry routes: OK")
+    if importlib.util.find_spec("sentence_transformers") is None:
+        assert unknown.returncode == 4, (unknown.returncode, unknown.stderr)
+        assert "no registry preset embeds" in unknown.stderr, unknown.stderr
+        assert "sentence-transformers" in unknown.stderr, unknown.stderr
+    else:
+        assert unknown.returncode != 0, unknown.stdout
+        assert "no registry preset embeds" not in unknown.stderr, unknown.stderr
+
+    # the search-text embedder sits beside forge/ and imports
+    # model_fingerprint from the same staged root.
+    st = _run(dest / "urna" / "embed_query.py", "--help", cwd=outside)
+    assert st.returncode == 0 and "--mrl-dim" in st.stdout, st.stderr
+    print("stage + potion + registry + sentence-transformers routes: OK")
 
 
 def test_stage_refuses_incomplete_tree(base: Path) -> None:

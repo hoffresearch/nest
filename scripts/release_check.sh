@@ -135,7 +135,7 @@ ok "cli space verbs (8 cases)"
 
 step "python tests/test_query_embedder_routing.py"
 "$PY" tests/test_query_embedder_routing.py
-ok "query embedder routing (4 cases)"
+ok "query embedder routing (10 cases; 7 to 10 need sentence-transformers, URNA_ST_PYTHON)"
 
 # the release payload, staged and run from outside the checkout: both query
 # embedders answer, the registry route names its missing deps, a half tree
@@ -143,6 +143,12 @@ ok "query embedder routing (4 cases)"
 step "python tests/test_embedder_payload.py"
 "$PY" tests/test_embedder_payload.py
 ok "embedder payload (2 cases)"
+
+# the benchmark rebuild builds beside the corpus and renames at the end, so
+# an interrupted gate never leaves data/measure without its corpora.
+step "python tests/test_bench_runner.py"
+"$PY" tests/test_bench_runner.py
+ok "bench runner (4 cases)"
 
 # ---- ruff (best-effort) ----
 # the file list lives in scripts/ruff_check.sh so ci.yml and this gate stay

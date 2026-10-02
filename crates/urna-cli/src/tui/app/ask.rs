@@ -10,6 +10,7 @@ use std::time::Instant;
 
 use ratatui_cheese::input::InputState;
 
+use crate::cmd::embed_failure::EmbedFailure;
 use crate::cmd::{agent, embed_gate};
 
 pub struct Answer {
@@ -116,19 +117,21 @@ fn run_query(file: &PathBuf, query: &str) -> Result<Vec<Answer>, String> {
             })
             .collect())
     })()
-    .map_err(|e| explain(&format!("{e:#}")))
+    .map_err(|e| explain(&e))
 }
 
-/// The engine's error, turned toward what fixes it from this screen.
-pub fn explain(err: &str) -> String {
-    let fix = "esc, then s runs setup";
-    if err.contains("embedder script not found") {
-        format!("the offline embedder is not installed here ({fix})")
-    } else if err.contains("No module named") || err.contains("failed to spawn embedder") {
-        format!("the python env cannot run the embedder: numpy + tokenizers missing ({fix})")
-    } else {
-        err.lines().next().unwrap_or(err).to_string()
+/// The engine's error, turned toward what fixes it from this screen: a
+/// typed embed failure says its own cause; an interpreter that cannot even
+/// start points at setup; anything else is its first line.
+pub fn explain(err: &anyhow::Error) -> String {
+    if let Some(f) = err.downcast_ref::<EmbedFailure>() {
+        return f.short();
     }
+    let all = format!("{err:#}");
+    if all.contains("failed to spawn embedder") {
+        return "no python interpreter can run the embedder (esc, then s runs setup)".into();
+    }
+    all.lines().next().unwrap_or(&all).to_string()
 }
 
 #[cfg(test)]
@@ -167,18 +170,40 @@ mod tests {
     }
 
     #[test]
-    fn explain_points_at_setup_for_install_errors() {
+    fn explain_names_each_cause_and_its_fix() {
+        let typed = |f: EmbedFailure| explain(&anyhow::Error::new(f));
+        let script = typed(EmbedFailure::ScriptMissing {
+            script: "/d/urna/forge/embed_query_model.py".into(),
+        });
         assert!(
-            explain("embedder script not found: x (override with --embedder)").contains("setup")
+            script.contains("not installed") && script.contains("setup"),
+            "{script}"
         );
+        let deps = typed(EmbedFailure::from_embedder(
+            "exit status: 4",
+            "urna-needs: sentence-transformers",
+            "m",
+            "/v/bin/python",
+        ));
+        assert!(deps.contains("sentence-transformers"), "{deps}");
+        let weights = typed(EmbedFailure::WeightsMissing {
+            model: "org/m".into(),
+        });
         assert!(
-            explain("embedder failed: ModuleNotFoundError: No module named 'numpy'")
-                .contains("numpy")
+            weights.contains("org/m") && weights.contains("URNA_ALLOW_DOWNLOAD"),
+            "{weights}"
         );
-        assert_eq!(
-            explain("model_hash mismatch: a\nb"),
-            "model_hash mismatch: a"
-        );
+        let hash = typed(EmbedFailure::HashMismatch {
+            corpus: "a".into(),
+            embedder: "b".into(),
+            fingerprint: "{}".into(),
+        });
+        assert!(hash.starts_with("model_hash mismatch"), "{hash}");
+        let spawn = explain(&anyhow::anyhow!(
+            "failed to spawn embedder: no such file (x)"
+        ));
+        assert!(spawn.contains("setup"), "{spawn}");
+        assert_eq!(explain(&anyhow::anyhow!("first\nsecond")), "first");
     }
 
     #[test]
