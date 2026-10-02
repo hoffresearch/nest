@@ -17,6 +17,7 @@ script not found".
 
 usage:  python scripts/stage_embedder_payload.py <dest> [--tar <out.tar.gz>]
 writes: <dest>/urna/model_fingerprint.py          (imported by the registry)
+        <dest>/urna/embed_query.py                (st models outside the registry)
         <dest>/urna/forge/__init__.py
         <dest>/urna/forge/embed_default.py
         <dest>/urna/forge/embed_potion.py
@@ -65,6 +66,9 @@ MODULES = [
 # their grandparent dir, `<dest>/urna/`, on sys.path).
 TOP_LEVEL_MODULES = [
     "model_fingerprint.py",
+    # the sentence-transformers query embedder: `search-text`'s default and
+    # the fallback of `embed_query_model.py` for a model no preset names.
+    "embed_query.py",
 ]
 
 

@@ -10,7 +10,7 @@
 //! records a truncated default space (`full_dim` present).
 
 use anyhow::Result;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command as ProcCommand;
 
 use urna_runtime::{MmapUrnaFile, SearchResult};
@@ -31,11 +31,11 @@ pub struct EmbedderOutput {
 pub const PLACEHOLDER_MODEL_HASH: &str =
     "sha256:0000000000000000000000000000000000000000000000000000000000000000";
 
-/// Walk up from the current dir to find python/embed_query.py (the legacy
-/// sentence-transformers path that `search-text` keeps as its default).
+/// Find the sentence-transformers embedder (`python/embed_query.py`, the
+/// path `search-text` keeps as its default): repo layout, then the data
+/// roots, where the payload lays it down beside `forge/`.
 pub fn default_embedder_path() -> PathBuf {
-    repo_script(&["python", "embed_query.py"])
-        .unwrap_or_else(|| PathBuf::from("python/embed_query.py"))
+    installed_script_in(&["embed_query.py"])
 }
 
 /// Find the OFFLINE potion embedder (`python/forge/embed_query_potion.py`):
@@ -51,8 +51,7 @@ pub fn default_registry_embedder_path() -> PathBuf {
     installed_script("embed_query_model.py")
 }
 
-fn repo_script(rel: &[&str]) -> Option<PathBuf> {
-    let rel: PathBuf = rel.iter().collect();
+fn repo_script(rel: &Path) -> Option<PathBuf> {
     let mut bases: Vec<PathBuf> = Vec::new();
     if let Ok(cwd) = std::env::current_dir() {
         bases.push(cwd.clone());
@@ -65,7 +64,7 @@ fn repo_script(rel: &[&str]) -> Option<PathBuf> {
         bases.push(repo);
     }
     for base in bases {
-        let c = base.join(&rel);
+        let c = base.join(rel);
         if c.exists() {
             return Some(c);
         }
@@ -85,23 +84,25 @@ pub(crate) fn exe_repo_root() -> Option<PathBuf> {
 }
 
 fn installed_script(name: &str) -> PathBuf {
-    installed_script_in("forge", name)
+    installed_script_in(&["forge", name])
 }
 
-/// One resolution ladder for every shipped python script: repo layout
-/// (`python/<subdir>/<name>` walking up from cwd, then beside the exe),
-/// then every data root in `paths::data_roots` (issue #75 layouts).
-pub(crate) fn installed_script_in(subdir: &str, name: &str) -> PathBuf {
-    if let Some(p) = repo_script(&["python", subdir, name]) {
+/// One resolution ladder for every shipped python script, `rel` being its
+/// path under `python/`: repo layout (`python/<rel>` walking up from cwd,
+/// then beside the exe), then `<root>/urna/<rel>` for every data root in
+/// `paths::data_roots` (issue #75 layouts).
+pub(crate) fn installed_script_in(rel: &[&str]) -> PathBuf {
+    let rel: PathBuf = rel.iter().collect();
+    if let Some(p) = repo_script(&Path::new("python").join(&rel)) {
         return p;
     }
     for base in super::paths::data_roots() {
-        let c = base.join("urna").join(subdir).join(name);
+        let c = base.join("urna").join(&rel);
         if c.exists() {
             return c;
         }
     }
-    PathBuf::from("python").join(subdir).join(name)
+    Path::new("python").join(rel)
 }
 
 /// Spawn the embedder script and parse its one-line JSON payload.

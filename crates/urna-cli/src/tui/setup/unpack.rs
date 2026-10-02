@@ -1,8 +1,11 @@
 //! Lays a verified payload tarball down under the data root. The archive is
 //! unpacked into a staging dir first (entries that would escape it, `..`
 //! or absolute paths, abort the install), checked for the embedder script,
-//! and only then swapped in for `<root>/urna/forge`. a failure at any point
-//! leaves the previous payload, and the managed venv next to it, untouched.
+//! and only then laid down: the files at the payload's top level
+//! (`model_fingerprint.py`, `embed_query.py`, `VERSION`) replace their old
+//! copies in `<root>/urna/`, then `forge/` is swapped in whole. the managed
+//! venv next to them is never touched; a payload that carries one, or any
+//! other directory beside `forge/`, is refused before anything moves.
 
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -43,13 +46,44 @@ fn unpack_into(tar_gz: &Path, staging: &Path, on_entry: &mut impl FnMut(usize)) 
     Ok(())
 }
 
+/// The files at the top of the staged `urna/`, after checking that nothing
+/// else but `forge/` sits there.
+fn top_level_files(new_home: &Path) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    for entry in std::fs::read_dir(new_home).context("read the staged payload")? {
+        let entry = entry?;
+        let name = entry.file_name();
+        if name == "forge" {
+            continue;
+        }
+        if !entry.file_type()?.is_file() {
+            bail!(
+                "payload carries urna/{}, which is not a file; refusing to install it",
+                name.to_string_lossy()
+            );
+        }
+        files.push(entry.path());
+    }
+    Ok(files)
+}
+
 fn swap(staging: &Path, root: &Path) -> Result<PathBuf> {
-    let new_forge = staging.join("urna").join("forge");
+    let new_home = staging.join("urna");
+    let new_forge = new_home.join("forge");
     if !new_forge.join("embed_query_potion.py").is_file() {
         bail!("payload has no urna/forge/embed_query_potion.py");
     }
+    let files = top_level_files(&new_home)?;
     let home = root.join("urna");
     std::fs::create_dir_all(&home)?;
+    for f in files {
+        let dst = home.join(f.file_name().unwrap_or_default());
+        // windows refuses a rename onto an existing file.
+        if dst.is_file() {
+            std::fs::remove_file(&dst).with_context(|| format!("remove old {}", dst.display()))?;
+        }
+        std::fs::rename(&f, &dst).with_context(|| format!("move payload to {}", dst.display()))?;
+    }
     let forge = home.join("forge");
     if forge.exists() {
         std::fs::remove_dir_all(&forge)
@@ -108,6 +142,56 @@ mod tests {
         assert!(forge.join("embed_query_potion.py").is_file());
         assert!(root.join("urna/venv").is_dir());
         assert_eq!(seen, 2);
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn installs_the_top_level_modules_and_replaces_old_copies() {
+        let d = tmp("top");
+        let root = d.join("root");
+        std::fs::create_dir_all(root.join("urna/venv/bin")).unwrap();
+        std::fs::write(root.join("urna/venv/bin/python"), b"venv").unwrap();
+        std::fs::write(root.join("urna/model_fingerprint.py"), b"old").unwrap();
+        let tgz = tarball(
+            &d,
+            &[
+                ("urna/model_fingerprint.py", b"new fingerprint"),
+                ("urna/embed_query.py", b"new st embedder"),
+                ("urna/VERSION", b"0.5.2"),
+                ("urna/forge/embed_query_potion.py", b"print(1)"),
+            ],
+        );
+        install(&tgz, &root, |_| {}).unwrap();
+        let read = |p: &str| std::fs::read(root.join(p)).unwrap();
+        assert_eq!(read("urna/model_fingerprint.py"), b"new fingerprint");
+        assert_eq!(read("urna/embed_query.py"), b"new st embedder");
+        assert_eq!(read("urna/VERSION"), b"0.5.2");
+        assert_eq!(read("urna/venv/bin/python"), b"venv");
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn refuses_a_payload_that_carries_a_venv_and_moves_nothing() {
+        let d = tmp("venv");
+        let root = d.join("root");
+        std::fs::create_dir_all(root.join("urna/forge")).unwrap();
+        std::fs::write(root.join("urna/forge/keep"), b"old").unwrap();
+        std::fs::write(root.join("urna/model_fingerprint.py"), b"old").unwrap();
+        let tgz = tarball(
+            &d,
+            &[
+                ("urna/model_fingerprint.py", b"new"),
+                ("urna/venv/bin/python", b"hostile"),
+                ("urna/forge/embed_query_potion.py", b"print(1)"),
+            ],
+        );
+        let err = install(&tgz, &root, |_| {}).unwrap_err();
+        assert!(err.to_string().contains("urna/venv"), "{err}");
+        assert!(root.join("urna/forge/keep").is_file());
+        assert_eq!(
+            std::fs::read(root.join("urna/model_fingerprint.py")).unwrap(),
+            b"old"
+        );
         std::fs::remove_dir_all(&d).unwrap();
     }
 
