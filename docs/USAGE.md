@@ -212,7 +212,7 @@ urna benchmark my_corpus.urna -q 100 -k 10 --space "wemm-2b@256"
 
 ### the flagship: ask and retrieve
 
-`ask` and `retrieve` are the agent-native front door: text query in, cited answer out, no flags needed. they embed the query OFFLINE and route the embedder BY THE MANIFEST MODEL: a potion corpus keeps the potion static table (`python/forge/embed_query_potion.py`, the unchanged fast path), and a corpus whose default text space is any registry model (wemm, jina, clip; see §12) goes through `python/forge/embed_query_model.py`, which encodes the query with that model's query route and, for an mrl-truncated default space, slices + renormalizes to the manifest dim (`--mrl-dim`, passed automatically). a corpus built with a sentence-transformers model outside the registry (the pt-br MiniLM demo corpus) takes the same script, which hands the query to `python/embed_query.py`, the `search-text` embedder; it needs `sentence-transformers` in the python urna runs and the model in the local hf cache (`URNA_ALLOW_DOWNLOAD=1` fetches it once). both paths validate the embedder's `model_hash` against the manifest exactly like `search-text`, and route by what the file carries: the hybrid path (bm25 candidates plus the vector shortlist, fused, then the exact rerank) when the file has a bm25 section, hnsw when it has an hnsw section, exact otherwise. the graph is never routed to automatically; `search-graph` is its verb. every printed score IS the exact-cosine rerank value, so on the hybrid path the bm25 leg widens the candidate set and the cosine orders it: a lexical match reaches the answer when its cosine earns a place in the top-k.
+`ask` and `retrieve` are the agent-native front door: text query in, cited answer out, no flags needed. they embed the query OFFLINE and route the embedder BY THE MANIFEST MODEL: a potion corpus keeps the potion static table (`python/forge/embed_query_potion.py`, the unchanged fast path), and a corpus whose default text space is any registry model (wemm, jina, clip; see §12) goes through `python/forge/embed_query_model.py`, which encodes the query with that model's query route and, for an mrl-truncated default space, slices + renormalizes to the manifest dim (`--mrl-dim`, passed automatically). the pt-br MiniLM demo corpus resolves to the `minilm-multilingual` preset, and any other sentence-transformers model no preset names takes the same path: the query is embedded by `python/embed_query.py`, the `search-text` embedder, with the `model_hash` the corpus was built with. it needs `sentence-transformers` in the python urna runs and the model in the local hf cache (`URNA_ALLOW_DOWNLOAD=1` fetches it once); a missing one is named with its fix. both paths validate the embedder's `model_hash` against the manifest exactly like `search-text`, and route by what the file carries: the hybrid path (bm25 candidates plus the vector shortlist, fused, then the exact rerank) when the file has a bm25 section, hnsw when it has an hnsw section, exact otherwise. the graph is never routed to automatically; `search-graph` is its verb. every printed score IS the exact-cosine rerank value, so on the hybrid path the bm25 leg widens the candidate set and the cosine orders it: a lexical match reaches the answer when its cosine earns a place in the top-k.
 
 `ask` prints one low-cognitive-load cited answer:
 
@@ -357,7 +357,7 @@ urna cite my_corpus.urna 'urna://sha256:1aa9.../sha256:8f314...'
 ./scripts/release_check.sh
 ```
 
-runs the full pipeline: the 639-line guard, cargo fmt, clippy, the rust suite in release, the python extension rebuilt with `pyo3/extension-module`, the nine python suites (e2e, builder, search_text_model_hash, image_corpus, forge_spec, quality_gate, cli_space, query_embedder_routing, embedder_payload), ruff when importable, `measure_presets.py` and `compare_measure.py` against the committed baseline. exits non-zero on any failure. what it does not run: the flagship e2e tests that need the forge deps (`cli_e2e.rs` skips without them), `test_offline_guard.py`, `test_blob_bridge.py`, `test_space_bridge.py`, and the checks ci adds on top (cargo-deny, cargo-semver-checks, the windows job, the fuzz smoke).
+runs the full pipeline: the 639-line guard, cargo fmt, clippy, the rust suite in release, the python extension rebuilt with `pyo3/extension-module`, the ten python suites (e2e, builder, search_text_model_hash, image_corpus, forge_spec, quality_gate, cli_space, query_embedder_routing, embedder_payload, bench_runner), ruff when importable, `measure_presets.py` and `compare_measure.py` against the committed baseline. exits non-zero on any failure. what it does not run: the flagship e2e tests that need the forge deps (`cli_e2e.rs` skips without them), `test_offline_guard.py`, `test_blob_bridge.py`, `test_space_bridge.py`, and the checks ci adds on top (cargo-deny, cargo-semver-checks, the windows job, the fuzz smoke).
 
 ## 11. install health check (`urna doctor`)
 
@@ -383,12 +383,13 @@ embedding models are DATA, not per-project code: `python/forge/model_registry.py
 | `clip-vit-b32` | open_clip ViT-B-32/openai | 512 | none | text, image |
 | `siglip2` | open_clip ViT-B-16-SigLIP2/webli | 768 | none | text, image |
 | `jina-v5-omni-nano` / `-small` | sentence-transformers | 768 / 1024 | 32, 64, 128, 256, 512, 768 (small adds 1024) | text, image, video |
+| `minilm-multilingual` | sentence-transformers text, in-process (`python/embed_query.py`'s path) | 384 | none | text |
 | `wemm-2b` | sentence-transformers | 2048 | 128, 256, 512, 1024, 2048 | text, image, video |
 | `wemm-4b` / `wemm-9b` | sentence-transformers | 2560 / 4096 | 128, 256, 512, 1024, native | registered; `--allow-heavy` required |
 
 the mrl column is the validated ladder (`dims=` accepts exactly those values, not a range).
 
-on an installed binary the potion route works out of the box; the other presets need their deps in the setup venv (`URNA_PYTHON=~/.local/share/urna/venv/bin/python -m pip install torch sentence-transformers`, or `open_clip_torch pillow` for the clip family) and a local model snapshot; `urna ask` on such a corpus names the missing package and exits 4 until then.
+on an installed binary the potion route works out of the box; the other presets need their deps in the setup venv and a local model snapshot. `urna ask` on such a corpus says which: the missing packages with the exact install line for the interpreter it ran (`uv pip install --python <venv python> sentence-transformers`), or the model missing from the local cache, fetched once by running the same query with `URNA_ALLOW_DOWNLOAD=1`. `minilm-multilingual` is the model of the pt-br demo corpus: it embeds through the same functions `search-text` uses, so a corpus built with it before the preset existed keeps its `model_hash`.
 
 three rules the registry enforces, loudly:
 
@@ -502,15 +503,16 @@ urna setup
 on a terminal it runs inline, in four steps with the screen left in the scrollback when it ends:
 
 1. scan: how urna got here (homebrew, npm, cargo, install script, dev build), the data dir, whether the payload and a python with numpy + tokenizers are present, and which tools the steps can use (`curl`, `uv`, a `python3` with `venv`). read-only.
-2. plan: one checkbox per step. a satisfied step starts unticked (ticking it reinstalls); a step this machine cannot run is shown blocked with the reason.
-3. install: the payload (`urna-embedder-payload.tar.gz` from the release that matches the binary's version, its sha256 checked while it streams, unpacked into a staging dir and swapped in only when complete) and the python env (`<data root>/urna/venv`, built with `uv` when it is on `PATH`, else `python3 -m venv` + pip), with the tools' output live in a log.
+2. plan: one checkbox per step. a satisfied step starts unticked (ticking it reinstalls); a step this machine cannot run is shown blocked with the reason. the payload counts as satisfied only when setup's own data dir holds one from the release it wants (this binary's, or `--version`), read from `<data root>/urna/VERSION`: a payload from another release, or from before the stamp (0.5.1 and older), is replaced, so upgrading the binary and running `urna setup` upgrades the scripts it runs. the venv next to it is never touched.
+3. install: the payload (`urna-embedder-payload.tar.gz` from the release that matches the binary's version, its sha256 checked while it streams, unpacked into a staging dir and laid down only when complete: `forge/` plus `embed_query.py`, `model_fingerprint.py` and `VERSION` beside it) and the python env (`<data root>/urna/venv`, built with `uv` when it is on `PATH`, else `python3 -m venv` + pip), with the tools' output live in a log.
 4. verify: the doctor checks (section 11), then what to run next, or on failure each step's error and how to retry.
 
 ```sh
 urna setup --yes                     # the default plan, no questions, plain lines (ci, scripts)
-urna setup --version v0.5.0 --force  # reinstall the payload from a given release
+urna setup --version v0.5.0          # the payload of a given release (replaces one from another)
+urna setup --force                   # reinstall the payload even when it matches
 urna setup --no-python               # payload only; bring your own interpreter via URNA_PYTHON
-urna setup --uninstall               # remove the payload and the env (never the binary)
+urna setup --uninstall               # remove the payload and the env (never the binary, never the hf cache)
 ```
 
 without a terminal on both ends (a pipe, ci, a postinstall hook) setup behaves as `--yes`. exit codes extend doctor's: `0` ready, `2`..`6` a doctor check failed after the steps ran, `10` download failed, `11` the payload does not match the release checksum (nothing is installed), `12` unpack failed, `13` the python env failed, `14` a step the machine needs is blocked here (no `curl`, no `uv` and no `python3`, no data dir, or `URNA_PYTHON` pins an interpreter without the deps).
