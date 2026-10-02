@@ -140,11 +140,12 @@ fn a_checkout_in_the_cwd_wins_over_the_data_root() {
 /// The files of a complete payload (mirrors `cmd::payload::REQUIRED`, which
 /// this binary-crate test cannot import; the payload test pins that list to
 /// what the stage script ships).
-const REQUIRED: [&str; 20] = [
+const REQUIRED: [&str; 21] = [
     "VERSION",
     "model_fingerprint.py",
     "embed_query.py",
     "forge/__init__.py",
+    "forge/catalog.json",
     "forge/embed_default.py",
     "forge/embed_image.py",
     "forge/embed_potion.py",
