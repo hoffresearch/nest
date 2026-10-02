@@ -79,13 +79,17 @@ def test_stage_and_query(base: Path) -> None:
     staged = {str(p.relative_to(dest)) for p in dest.rglob("*") if p.is_file()}
     missing = EXPECTED_FILES - staged
     assert not missing, f"payload is missing {sorted(missing)}"
-    # what `urna setup` refuses to install without (unpack::REQUIRED) is
-    # exactly what the stage script ships, or every install would fail.
+    # what `urna setup` requires (unpack::REQUIRED) is exactly what the stage
+    # script ships: a shipped file it does not require could go missing
+    # unnoticed, a required file it does not ship would fail every install.
     src = (REPO / "crates/urna-cli/src/tui/setup/unpack.rs").read_text()
     block = src[src.index("pub const REQUIRED") : src.index("];", src.index("pub const REQUIRED"))]
     required = {"urna/" + r for r in re.findall(r'"([^"]+)"', block)}
     assert len(required) >= 8, required
-    assert required <= staged, f"setup requires what the payload lacks: {sorted(required - staged)}"
+    assert required == staged, (
+        f"required but not shipped: {sorted(required - staged)}; "
+        f"shipped but not required: {sorted(staged - required)}"
+    )
     assert (dest / "urna" / "forge" / "models" / "potion-base-8M").is_dir()
     # the stamp `urna setup` compares against the release it wants.
     import tomllib

@@ -19,21 +19,35 @@ use flate2::read::GzDecoder;
 /// writes them); `--uninstall` removes exactly these.
 pub const TOP_LEVEL: [&str; 3] = ["model_fingerprint.py", "embed_query.py", "VERSION"];
 
-/// What a complete payload holds, relative to `urna/`: the three query
-/// embedders, what they import from the payload, the potion table and the
-/// stamp. setup refuses a payload missing one, and the scan reports an
-/// installed payload missing one so setup repairs it.
-/// `tests/test_embedder_payload.py` checks the staged payload against it.
-pub const REQUIRED: [&str; 9] = [
+/// What a complete payload holds, relative to `urna/`: every file
+/// `stage_embedder_payload.py` ships, since each query path imports or reads
+/// one of them (the potion route reads the table's config, tokenizer and
+/// weights; the registry route imports the adapters, the st and image
+/// backends and model_fingerprint; search-text runs embed_query.py). setup
+/// refuses a payload missing one, and the scan reports an installed payload
+/// missing one so setup repairs it. `tests/test_embedder_payload.py` checks
+/// that this list and the staged payload are the same set of files.
+pub const REQUIRED: [&str; 20] = [
     "VERSION",
     "model_fingerprint.py",
     "embed_query.py",
     "forge/__init__.py",
-    "forge/embed_query_potion.py",
+    "forge/embed_default.py",
+    "forge/embed_image.py",
+    "forge/embed_potion.py",
     "forge/embed_query_model.py",
-    "forge/model_registry.py",
+    "forge/embed_query_potion.py",
+    "forge/embed_st.py",
+    "forge/embed_st_worker.py",
     "forge/model_adapters.py",
+    "forge/model_registry.py",
+    "forge/models/potion-base-8M/README.md",
+    "forge/models/potion-base-8M/config.json",
     "forge/models/potion-base-8M/model.safetensors",
+    "forge/models/potion-base-8M/modules.json",
+    "forge/models/potion-base-8M/special_tokens_map.json",
+    "forge/models/potion-base-8M/tokenizer.json",
+    "forge/models/potion-base-8M/tokenizer_config.json",
 ];
 
 /// The required files missing under `home` (`<root>/urna`).
@@ -53,10 +67,33 @@ pub fn install(tar_gz: &Path, root: &Path, mut on_entry: impl FnMut(usize)) -> R
         std::fs::remove_dir_all(&staging)?;
     }
     std::fs::create_dir_all(&staging)?;
-    let result =
-        unpack_into(tar_gz, &staging, &mut on_entry).and_then(|_| swap(&staging, root, None));
-    let _ = std::fs::remove_dir_all(&staging);
+    let result = unpack_into(tar_gz, &staging, &mut on_entry)
+        .and_then(|_| swap(&staging, root, Fault::default()));
+    finish(&staging);
     result
+}
+
+/// Removes the staging dir, unless it still holds the previous payload: a
+/// restore that failed and could not move the copy out leaves it there,
+/// and the error names that path.
+fn finish(staging: &Path) {
+    let holds_previous = std::fs::read_dir(staging.join("previous"))
+        .map(|mut d| d.next().is_some())
+        .unwrap_or(false);
+    if !holds_previous {
+        let _ = std::fs::remove_dir_all(staging);
+    }
+}
+
+/// Where an install is made to fail, for the tests: `place` stops before
+/// laying that entry down, `restore` makes putting that entry back fail,
+/// `keep` makes moving the previous copy out of staging fail. setup passes
+/// the default, which never fails.
+#[derive(Clone, Copy, Default)]
+struct Fault<'a> {
+    place: Option<&'a str>,
+    restore: Option<&'a str>,
+    keep: bool,
 }
 
 fn unpack_into(tar_gz: &Path, staging: &Path, on_entry: &mut impl FnMut(usize)) -> Result<()> {
@@ -118,10 +155,8 @@ fn remove(p: &Path) {
 }
 
 /// Lays the staged payload down over `<root>/urna`, restoring the previous
-/// one on any failure. `fail_before` names an entry to fail on instead of
-/// placing it: the tests use it to stop an upgrade halfway; setup passes
-/// `None`.
-fn swap(staging: &Path, root: &Path, fail_before: Option<&str>) -> Result<PathBuf> {
+/// one on any failure; see `Fault` for the failures the tests inject.
+fn swap(staging: &Path, root: &Path, fault: Fault) -> Result<PathBuf> {
     let new_home = staging.join("urna");
     let gone: Vec<&str> = missing(&new_home);
     if !gone.is_empty() {
@@ -144,35 +179,103 @@ fn swap(staging: &Path, root: &Path, fail_before: Option<&str>) -> Result<PathBu
     std::fs::create_dir_all(&previous)?;
     let mut aside: Vec<String> = Vec::new();
     let mut placed: Vec<String> = Vec::new();
-    let step = (|| -> Result<()> {
-        for n in &names {
-            if home.join(n).exists() {
-                std::fs::rename(home.join(n), previous.join(n))
-                    .with_context(|| format!("move the previous {n} aside"))?;
-                aside.push(n.clone());
-            }
-        }
-        for n in &names {
-            if fail_before == Some(n.as_str()) {
-                bail!("stopped before {n}");
-            }
-            put(&new_home.join(n), &home.join(n))?;
-            placed.push(n.clone());
-        }
-        Ok(())
-    })();
-    if let Err(e) = step {
-        for n in placed.iter().rev() {
-            remove(&home.join(n));
-        }
-        for n in aside.iter().rev() {
-            let _ = std::fs::rename(previous.join(n), home.join(n));
-        }
+    let laid = lay_down(
+        &names,
+        &new_home,
+        &home,
+        &previous,
+        fault,
+        &mut aside,
+        &mut placed,
+    );
+    let Err(e) = laid else {
+        // the previous payload is replaced; it goes with the staging dir.
+        let _ = std::fs::remove_dir_all(&previous);
+        return Ok(home.join("forge"));
+    };
+    let lost = restore(&home, &previous, &aside, &placed, fault);
+    if lost.is_empty() {
         return Err(
             e.context("installing the payload failed; the previous payload is back in place")
         );
     }
-    Ok(home.join("forge"))
+    let kept = keep_previous(&previous, root, fault);
+    bail!(
+        "installing the payload failed ({e:#}), and putting back the previous {} failed too; \
+         the previous files are kept at {}: move them into {} by hand, or run urna setup again",
+        lost.join(", "),
+        kept.display(),
+        home.display()
+    )
+}
+
+/// Moves the previous payload's entries aside, then the new ones in, in
+/// `names` order; records both so a failure can be undone.
+#[allow(clippy::too_many_arguments, reason = "the undo log is two out-params")]
+fn lay_down(
+    names: &[String],
+    new_home: &Path,
+    home: &Path,
+    previous: &Path,
+    fault: Fault,
+    aside: &mut Vec<String>,
+    placed: &mut Vec<String>,
+) -> Result<()> {
+    for n in names {
+        if home.join(n).exists() {
+            std::fs::rename(home.join(n), previous.join(n))
+                .with_context(|| format!("move the previous {n} aside"))?;
+            aside.push(n.clone());
+        }
+    }
+    for n in names {
+        if fault.place == Some(n.as_str()) {
+            bail!("stopped before {n}");
+        }
+        put(&new_home.join(n), &home.join(n))?;
+        placed.push(n.clone());
+    }
+    Ok(())
+}
+
+/// Removes what was placed and puts the previous entries back; returns the
+/// entries that could not be put back (still in `previous`).
+fn restore(
+    home: &Path,
+    previous: &Path,
+    aside: &[String],
+    placed: &[String],
+    fault: Fault,
+) -> Vec<String> {
+    for n in placed.iter().rev() {
+        remove(&home.join(n));
+    }
+    let mut lost = Vec::new();
+    for n in aside.iter().rev() {
+        let back = fault.restore != Some(n.as_str())
+            && std::fs::rename(previous.join(n), home.join(n)).is_ok();
+        if !back {
+            lost.push(n.clone());
+        }
+    }
+    lost
+}
+
+/// Moves what is left of the previous payload out of the staging dir, so
+/// cleaning the staging dir can never delete it; returns where it now is
+/// (the staging copy itself when even that move fails, and `finish` then
+/// keeps the staging dir).
+fn keep_previous(previous: &Path, root: &Path, fault: Fault) -> PathBuf {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let out = root.join(format!(".urna-previous-{}-{secs}", std::process::id()));
+    if !fault.keep && std::fs::rename(previous, &out).is_ok() {
+        out
+    } else {
+        previous.to_path_buf()
+    }
 }
 
 #[cfg(test)]
@@ -232,22 +335,49 @@ mod tests {
         tarball(dir, &refs)
     }
 
-    /// Unpacks `entries` into a staging dir under `root` and swaps it in,
-    /// stopping before `fail_before`; what `install` does, with the fault.
+    const STAGING: &str = ".urna-setup-test";
+
+    /// What `install` does with a fault injected: unpack `entries` into a
+    /// staging dir under `root`, swap it in, clean the staging dir up.
+    fn swap_faulty(
+        d: &Path,
+        root: &Path,
+        entries: &[(String, Vec<u8>)],
+        fault: Fault,
+    ) -> Result<PathBuf> {
+        let tgz = pack(d, entries);
+        let staging = root.join(STAGING);
+        let _ = std::fs::remove_dir_all(&staging);
+        std::fs::create_dir_all(&staging).unwrap();
+        unpack_into(&tgz, &staging, &mut |_| {}).unwrap();
+        let r = swap(&staging, root, fault);
+        finish(&staging);
+        r
+    }
+
     fn swap_staged(
         d: &Path,
         root: &Path,
         entries: &[(String, Vec<u8>)],
-        fail_before: Option<&str>,
+        place: Option<&str>,
     ) -> Result<PathBuf> {
-        let tgz = pack(d, entries);
-        let staging = root.join(".urna-setup-test");
-        let _ = std::fs::remove_dir_all(&staging);
-        std::fs::create_dir_all(&staging).unwrap();
-        unpack_into(&tgz, &staging, &mut |_| {}).unwrap();
-        let r = swap(&staging, root, fail_before);
-        let _ = std::fs::remove_dir_all(&staging);
-        r
+        let fault = Fault {
+            place,
+            ..Fault::default()
+        };
+        swap_faulty(d, root, entries, fault)
+    }
+
+    /// The `.urna-previous-*` dirs a failed restore left under `root`.
+    fn kept_copies(root: &Path) -> Vec<PathBuf> {
+        std::fs::read_dir(root)
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| {
+                p.file_name()
+                    .is_some_and(|n| n.to_string_lossy().starts_with(".urna-previous-"))
+            })
+            .collect()
     }
 
     fn read(root: &Path, rel: &str) -> String {
@@ -310,6 +440,68 @@ mod tests {
     }
 
     #[test]
+    fn a_failed_restore_keeps_the_previous_files_and_names_where() {
+        // the upgrade stops before the stamp, and putting the previous forge/
+        // back fails too: forge/ must survive outside the staging dir, the
+        // error must say so and where, the rest must be back in place.
+        let d = tmp("restore_fails");
+        let root = d.join("root");
+        swap_staged(&d, &root, &payload("0.5.1", &[]), None).unwrap();
+        let fault = Fault {
+            place: Some("VERSION"),
+            restore: Some("forge"),
+            keep: false,
+        };
+        let err = swap_faulty(&d, &root, &payload("0.5.2", &[]), fault).unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(!msg.contains("is back in place"), "{msg}");
+        let kept = kept_copies(&root);
+        assert_eq!(kept.len(), 1, "{kept:?}");
+        assert!(
+            msg.contains("previous forge failed") && msg.contains(&kept[0].display().to_string()),
+            "{msg}"
+        );
+        let potion = kept[0].join("forge/embed_query_potion.py");
+        assert_eq!(
+            std::fs::read_to_string(potion).unwrap(),
+            "forge/embed_query_potion.py@0.5.1"
+        );
+        assert_eq!(read(&root, "embed_query.py"), "embed_query.py@0.5.1");
+        assert_eq!(read(&root, "VERSION"), "0.5.1\n");
+        assert!(
+            !root.join("urna/forge").exists(),
+            "the new forge must not stay half-installed"
+        );
+        assert!(!root.join(STAGING).exists());
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn a_failed_restore_that_cannot_move_the_copy_keeps_the_staging_dir() {
+        let d = tmp("keep_staging");
+        let root = d.join("root");
+        swap_staged(&d, &root, &payload("0.5.1", &[]), None).unwrap();
+        let fault = Fault {
+            place: Some("VERSION"),
+            restore: Some("forge"),
+            keep: true,
+        };
+        let err = swap_faulty(&d, &root, &payload("0.5.2", &[]), fault).unwrap_err();
+        let previous = root.join(STAGING).join("previous");
+        assert!(
+            format!("{err:#}").contains(&previous.display().to_string()),
+            "{err:#}"
+        );
+        let potion = previous.join("forge/embed_query_potion.py");
+        assert_eq!(
+            std::fs::read_to_string(potion).unwrap(),
+            "forge/embed_query_potion.py@0.5.1"
+        );
+        assert!(kept_copies(&root).is_empty());
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
     fn a_failed_first_install_leaves_no_stamp_and_no_half_payload() {
         let d = tmp("first");
         let root = d.join("root");
@@ -339,12 +531,20 @@ mod tests {
 
     #[test]
     fn missing_names_what_an_installed_payload_lacks() {
-        let d = tmp("missing");
-        let root = d.join("root");
-        swap_staged(&d, &root, &payload("0.5.2", &[]), None).unwrap();
-        std::fs::remove_file(root.join("urna/embed_query.py")).unwrap();
-        assert_eq!(missing(&root.join("urna")), vec!["embed_query.py"]);
-        std::fs::remove_dir_all(&d).unwrap();
+        // the two the review removed by hand, each of which breaks a query:
+        // the module the potion route imports and the table's tokenizer.
+        for rel in [
+            "forge/embed_potion.py",
+            "forge/models/potion-base-8M/tokenizer.json",
+        ] {
+            let d = tmp(&format!("missing_{}", rel.len()));
+            let root = d.join("root");
+            swap_staged(&d, &root, &payload("0.5.2", &[]), None).unwrap();
+            assert!(missing(&root.join("urna")).is_empty());
+            std::fs::remove_file(root.join("urna").join(rel)).unwrap();
+            assert_eq!(missing(&root.join("urna")), vec![rel]);
+            std::fs::remove_dir_all(&d).unwrap();
+        }
     }
 
     #[test]
