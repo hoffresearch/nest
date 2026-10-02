@@ -1,0 +1,39 @@
+cff-version: "1.2.0"
+message: >-
+  If you use Urna in your work, please cite the version you used with the
+  metadata in this file.
+title: Urna
+type: software
+version: "0.5.1"
+date-released: "2026-09-26"
+authors:
+  - given-names: Brenner
+    family-names: Cruvinel
+    alias: Brenner Viana Cruvinel
+    orcid: https://orcid.org/0009-0002-3079-8829
+    affiliation: Hoff Research
+    website: https://brennercruvinel.dev
+abstract: >-
+  Urna is an offline-first vector database that stores text chunks, embeddings,
+  source spans, indices, and a search contract in a single .urna file. Python
+  tooling builds the file, and a Rust runtime searches it using memory mapping
+  and hash verification. Search results include cosine scores and
+  content-addressable citations that resolve to stored text and source spans.
+  Builds are reproducible for the same inputs and configuration.
+license: MIT
+url: https://urna.dev
+repository-code: https://github.com/hoffresearch/urna
+repository-artifact: https://crates.io/crates/urna/0.5.1
+identifiers:
+  - type: url
+    value: https://github.com/hoffresearch/urna/releases/tag/v0.5.1
+    description: Release of Urna version 0.5.1.
+keywords:
+  - vector database
+  - embeddings
+  - semantic search
+  - offline
+  - citations
+  - retrieval
+  - rust
+  - python
