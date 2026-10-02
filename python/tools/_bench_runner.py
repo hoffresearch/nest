@@ -7,6 +7,7 @@ queries - no `.urna` I/O, no result formatting. Internal to
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
@@ -108,9 +109,21 @@ def parse_variant(name: str):
     return name, dict(preset=name)
 
 
+def _tmp_path(out_path: Path) -> Path:
+    """The build target beside `out_path`: same directory (so the final
+    rename is atomic), hidden, and still `*.urna` (so git ignores it)."""
+    return out_path.with_name(f".{out_path.stem}.{os.getpid()}.tmp.urna")
+
+
 def build_variant(chunks, meta, preset: str, out_path: Path):
     """Build `out_path` with the given preset or mrl ladder point; return
     seconds elapsed.
+
+    The file is built under a temporary name in the same directory, opened
+    and validated, and only then renamed over `out_path`. a build that
+    fails, or a run interrupted halfway, never deletes or truncates the
+    corpus already there; temporaries a killed run left behind are removed
+    on the next build of the same preset.
 
     Imports `urna` lazily because `_bench_runner` is meant to be cheap
     to import (unlike the PyO3 extension load, which pulls a 1.6 MB .so).
@@ -122,17 +135,26 @@ def build_variant(chunks, meta, preset: str, out_path: Path):
 
     _label, variant_kwargs = parse_variant(preset)
 
-    if out_path.exists():
-        out_path.unlink()
+    for stale in out_path.parent.glob(f".{out_path.stem}.*.tmp.urna"):
+        stale.unlink(missing_ok=True)
+    tmp = _tmp_path(out_path)
     t0 = time.time()
-    urna.build(
-        output_path=str(out_path),
-        embedding_model=meta["embedding_model"],
-        embedding_dim=meta["embedding_dim"],
-        chunker_version=meta["chunker_version"],
-        model_hash=meta["model_hash"],
-        chunks=chunks,
-        reproducible=True,
-        **variant_kwargs,
-    )
-    return time.time() - t0
+    try:
+        urna.build(
+            output_path=str(tmp),
+            embedding_model=meta["embedding_model"],
+            embedding_dim=meta["embedding_dim"],
+            chunker_version=meta["chunker_version"],
+            model_hash=meta["model_hash"],
+            chunks=chunks,
+            reproducible=True,
+            **variant_kwargs,
+        )
+        elapsed = time.time() - t0
+        if urna.open(str(tmp)).validate() is not True:
+            raise RuntimeError(f"{tmp} did not validate; {out_path} left as it was")
+        os.replace(tmp, out_path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    return elapsed
