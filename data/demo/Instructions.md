@@ -85,6 +85,6 @@ none of the data in this directory is needed for the one-gif demo. `python pytho
 
 ## licenses
 
-the fake-news sources are redistributable under mit or apache-2.0; the benchmark's `docs/sources.md` lists each one, the basis for it and the attribution it asks for.
+each fake-news source carries a license, mit or apache-2.0: four declare it upstream, and for three it rests on the maintainer's verification, whose evidence the benchmark records in `sources/sources.toml`. its `docs/sources.md` lists each source, the basis for its license and the attribution it asks for.
 
 the image sources carry their own terms: PH2 is research-use only (ADDI project, Universidade do Porto), HAM10000 is CC BY-NC 4.0 (Tschandl et al., doi:10.7910/DVN/DBW86T, non-commercial with attribution), CMU-1.svs is freely redistributable openslide test data, and birdcraft-1907 is public domain. a `.urna` derived from ph2 or ham10000 is therefore non-commercial and attribution-carrying at best; do not ship one as a product artifact.
