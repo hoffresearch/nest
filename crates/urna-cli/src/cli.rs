@@ -271,8 +271,9 @@ pub enum Commands {
     Doctor,
     /// [setup] Interactive installer: the offline embedder payload and a
     /// python env (numpy + tokenizers), proven by the doctor checks. plain
-    /// output with --yes or without a terminal. exit: 0 ready, 2..=6 a doctor
-    /// check, 10 download, 11 checksum, 12 unpack, 13 python env, 14 blocked.
+    /// output with --yes or without a terminal; --model adds catalog models.
+    /// exit: 0 ready, 2..=6 a doctor check, 10 download, 11 checksum, 12
+    /// unpack, 13 python env, 14 blocked, 15 a model install.
     #[cfg(feature = "tui")]
     #[command(display_order = 30)]
     Setup {
@@ -291,8 +292,19 @@ pub enum Commands {
         /// Skip the python env step (bring your own via URNA_PYTHON).
         #[arg(long)]
         no_python: bool,
-        /// Remove the payload and the env setup created (never the binary).
-        #[arg(long, conflicts_with_all = ["force", "no_payload", "no_python", "version"])]
+        /// Install a model from the payload's catalog: its packages into the
+        /// managed venv, its pinned weights into the hugging face cache.
+        /// repeatable; `all` picks every offered model. naming one is the
+        /// consent to download it.
+        #[arg(long = "model", value_name = "NAME")]
+        models: Vec<String>,
+        /// Allow a chosen model's repo code to run (a separate consent from
+        /// the download). repeatable.
+        #[arg(long, value_name = "NAME")]
+        allow_remote_code: Vec<String>,
+        /// Remove the payload and the env setup created (never the binary;
+        /// the hugging face cache is shared and stays).
+        #[arg(long, conflicts_with_all = ["force", "no_payload", "no_python", "version", "models"])]
         uninstall: bool,
     },
     /// [setup] Terminal explorer: open a .urna, read its sections, ask it,
