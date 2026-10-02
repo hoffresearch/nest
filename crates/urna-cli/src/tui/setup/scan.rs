@@ -56,7 +56,7 @@ impl Channel {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Payload {
     pub version: Option<String>,
-    /// required files (`unpack::REQUIRED`) not on disk, the stamp aside.
+    /// required files (`cmd::payload::REQUIRED`) not on disk, the stamp aside.
     pub missing: Vec<String>,
 }
 
@@ -69,7 +69,7 @@ impl Payload {
             .ok()
             .map(|v| v.trim().trim_start_matches('v').to_string())
             .filter(|v| !v.is_empty());
-        let missing = super::unpack::missing(home)
+        let missing = crate::cmd::payload::missing(home)
             .into_iter()
             .filter(|rel| *rel != "VERSION")
             .map(String::from)

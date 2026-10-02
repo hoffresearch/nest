@@ -17,6 +17,7 @@ pub mod health;
 pub mod inspect;
 pub mod media;
 pub mod paths;
+pub mod payload;
 pub mod pyenv;
 pub mod search;
 pub mod search_ann;

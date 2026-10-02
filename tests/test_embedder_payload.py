@@ -79,10 +79,10 @@ def test_stage_and_query(base: Path) -> None:
     staged = {str(p.relative_to(dest)) for p in dest.rglob("*") if p.is_file()}
     missing = EXPECTED_FILES - staged
     assert not missing, f"payload is missing {sorted(missing)}"
-    # what `urna setup` requires (unpack::REQUIRED) is exactly what the stage
+    # what `urna setup` requires (cmd/payload.rs REQUIRED) is exactly what the stage
     # script ships: a shipped file it does not require could go missing
     # unnoticed, a required file it does not ship would fail every install.
-    src = (REPO / "crates/urna-cli/src/tui/setup/unpack.rs").read_text()
+    src = (REPO / "crates/urna-cli/src/cmd/payload.rs").read_text()
     block = src[src.index("pub const REQUIRED") : src.index("];", src.index("pub const REQUIRED"))]
     required = {"urna/" + r for r in re.findall(r'"([^"]+)"', block)}
     assert len(required) >= 8, required

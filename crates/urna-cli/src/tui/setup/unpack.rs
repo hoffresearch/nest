@@ -19,44 +19,7 @@ use flate2::read::GzDecoder;
 /// writes them); `--uninstall` removes exactly these.
 pub const TOP_LEVEL: [&str; 3] = ["model_fingerprint.py", "embed_query.py", "VERSION"];
 
-/// What a complete payload holds, relative to `urna/`: every file
-/// `stage_embedder_payload.py` ships, since each query path imports or reads
-/// one of them (the potion route reads the table's config, tokenizer and
-/// weights; the registry route imports the adapters, the st and image
-/// backends and model_fingerprint; search-text runs embed_query.py). setup
-/// refuses a payload missing one, and the scan reports an installed payload
-/// missing one so setup repairs it. `tests/test_embedder_payload.py` checks
-/// that this list and the staged payload are the same set of files.
-pub const REQUIRED: [&str; 20] = [
-    "VERSION",
-    "model_fingerprint.py",
-    "embed_query.py",
-    "forge/__init__.py",
-    "forge/embed_default.py",
-    "forge/embed_image.py",
-    "forge/embed_potion.py",
-    "forge/embed_query_model.py",
-    "forge/embed_query_potion.py",
-    "forge/embed_st.py",
-    "forge/embed_st_worker.py",
-    "forge/model_adapters.py",
-    "forge/model_registry.py",
-    "forge/models/potion-base-8M/README.md",
-    "forge/models/potion-base-8M/config.json",
-    "forge/models/potion-base-8M/model.safetensors",
-    "forge/models/potion-base-8M/modules.json",
-    "forge/models/potion-base-8M/special_tokens_map.json",
-    "forge/models/potion-base-8M/tokenizer.json",
-    "forge/models/potion-base-8M/tokenizer_config.json",
-];
-
-/// The required files missing under `home` (`<root>/urna`).
-pub fn missing(home: &Path) -> Vec<&'static str> {
-    REQUIRED
-        .into_iter()
-        .filter(|rel| !home.join(rel).is_file())
-        .collect()
-}
+use crate::cmd::payload::missing;
 
 /// Unpacks `tar_gz` into `root` (the parent of `urna/`), calling
 /// `on_entry(n)` after each entry; returns the installed forge dir.
@@ -281,6 +244,7 @@ fn keep_previous(previous: &Path, root: &Path, fault: Fault) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cmd::payload::REQUIRED;
     use flate2::Compression;
     use flate2::write::GzEncoder;
 

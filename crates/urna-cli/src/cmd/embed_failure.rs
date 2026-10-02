@@ -12,6 +12,13 @@ use std::path::PathBuf;
 pub enum EmbedFailure {
     /// the embedder script is not where the resolution ladder looked.
     ScriptMissing { script: PathBuf },
+    /// the installed payload lacks files the embedder needs (`home` when the
+    /// script lives in one; the file list, or the payload module python
+    /// could not import).
+    PayloadIncomplete {
+        home: Option<PathBuf>,
+        missing: Vec<String>,
+    },
     /// python packages the model needs do not import in `python`.
     DepsMissing {
         python: String,
@@ -55,7 +62,16 @@ impl EmbedFailure {
             };
         }
         // the potion embedder imports numpy and tokenizers at the top; a
-        // missing one surfaces as python's own ModuleNotFoundError.
+        // missing one surfaces as python's own ModuleNotFoundError. a module
+        // the payload itself provides is a broken payload, never a package.
+        if let Some(name) = lines.iter().find_map(|l| missing_module(l))
+            && super::payload::MODULES.contains(&name.as_str())
+        {
+            return Self::PayloadIncomplete {
+                home: None,
+                missing: vec![format!("python module {name}")],
+            };
+        }
         if let Some(name) = lines.iter().find_map(|l| missing_module(l)) {
             return Self::DepsMissing {
                 python: python.to_string(),
@@ -99,6 +115,10 @@ impl EmbedFailure {
             Self::ScriptMissing { .. } => {
                 "the embedder script is not installed here (esc, then s runs setup)".into()
             }
+            Self::PayloadIncomplete { missing, .. } => format!(
+                "the embedder payload is incomplete, missing {} (esc, then s repairs it)",
+                missing.join(", ")
+            ),
             Self::DepsMissing { packages, .. } => {
                 format!(
                     "the query model needs python packages: {}",
@@ -135,6 +155,18 @@ impl fmt::Display for EmbedFailure {
                  embedder payload; --embedder points at a script by hand",
                 script.display()
             ),
+            Self::PayloadIncomplete { home, missing } => {
+                let at = home
+                    .as_ref()
+                    .map(|h| format!(" at {}", h.display()))
+                    .unwrap_or_default();
+                write!(
+                    f,
+                    "the embedder payload{at} is incomplete, missing {}\n\
+                     hint: `urna setup` repairs it (it reinstalls the payload; the venv stays)",
+                    missing.join(", ")
+                )
+            }
             Self::DepsMissing { python, packages } => {
                 let pkgs = packages.join(" ");
                 write!(
@@ -211,6 +243,23 @@ mod tests {
                 packages: vec!["numpy".into()],
             }
         );
+    }
+
+    #[test]
+    fn a_payload_module_that_does_not_import_is_never_a_pip_package() {
+        for module in ["forge.embed_potion", "embed_query", "model_fingerprint"] {
+            let tb = format!("ModuleNotFoundError: No module named '{module}'\n");
+            let f = read(&tb);
+            assert!(
+                matches!(f, EmbedFailure::PayloadIncomplete { .. }),
+                "{module}: {f:?}"
+            );
+            assert!(!f.to_string().contains("pip install"), "{f}");
+            assert!(
+                f.to_string().contains("urna setup") && f.short().contains("repairs"),
+                "{f}"
+            );
+        }
     }
 
     #[test]
