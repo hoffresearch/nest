@@ -9,6 +9,7 @@
 //! the same worker (`job`).
 
 pub mod job;
+pub mod models;
 pub mod net;
 pub mod plan;
 pub mod scan;

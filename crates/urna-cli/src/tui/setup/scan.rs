@@ -110,6 +110,8 @@ pub struct Scan {
     pub uv: Option<PathBuf>,
     pub curl: Option<PathBuf>,
     pub simd: &'static str,
+    /// the model catalog and installer of the payload in `home`.
+    pub kit: Option<super::models::Kit>,
 }
 
 /// First match for `name` on PATH (with the PATHEXT suffixes on windows).
@@ -183,6 +185,7 @@ impl Scan {
             uv: which("uv"),
             curl: which("curl"),
             simd: urna_runtime::simd::detect_backend().name(),
+            kit: paths::urna_home().and_then(|h| super::models::Kit::at(&h.join("forge"))),
         }
     }
 

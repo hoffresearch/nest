@@ -6,8 +6,9 @@
 
 use std::sync::mpsc::{Receiver, Sender, channel};
 
+use super::models::{self, Consent, Kit, Progress};
 use super::net;
-use super::plan::Task;
+use super::plan::{Opts, Task};
 use super::scan::{Scan, tilde};
 use super::unpack;
 use super::venv::{self, Tool};
@@ -21,6 +22,7 @@ pub mod codes {
     pub const UNPACK: i32 = 12;
     pub const PYTHON: i32 = 13;
     pub const BLOCKED: i32 = 14;
+    pub const MODEL: i32 = 15;
 }
 
 pub type Failure = (i32, String);
@@ -36,15 +38,18 @@ pub enum Ev {
     End,
 }
 
-pub fn spawn(scan: Scan, tasks: Vec<Task>, version: String) -> Receiver<Ev> {
+/// Runs `tasks` in order; `opts` carries the release and the model choice.
+pub fn spawn(scan: Scan, tasks: Vec<Task>, opts: Opts) -> Receiver<Ev> {
     let (tx, rx) = channel();
     std::thread::spawn(move || {
         pyenv::set_quiet(true);
+        let version = super::plan::wanted_version(&scan, &opts);
         for task in tasks {
             let _ = tx.send(Ev::Start(task));
             let res = match task {
                 Task::Payload => payload(&scan, &version, &tx),
                 Task::Python => python(&scan, &tx),
+                Task::Models => install_models(&scan, &opts, &tx),
                 Task::Verify => verify(&tx),
             };
             let _ = tx.send(Ev::Done(task, res));
@@ -156,6 +161,55 @@ fn python(scan: &Scan, tx: &Sender<Ev>) -> Result<String, Failure> {
     })
     .map_err(fail(codes::PYTHON))?;
     Ok(format!("{} · {}", tilde(&py), last))
+}
+
+/// The chosen catalog models, one after the other through the install the
+/// explorer shares. the catalog is read now, from the payload the earlier
+/// step may just have laid down; choosing a model on the plan (or naming it
+/// with --model) is the consent to download it, its repo code needs
+/// --allow-remote-code. a failed model does not stop the next.
+fn install_models(scan: &Scan, opts: &Opts, tx: &Sender<Ev>) -> Result<String, Failure> {
+    let t = Task::Models;
+    let home = paths::urna_home().ok_or((codes::BLOCKED, "no data dir".into()))?;
+    let kit = Kit::at(&home.join("forge")).ok_or((
+        codes::MODEL,
+        "the installed payload carries no model catalog; install the payload first".into(),
+    ))?;
+    let entries = kit
+        .catalog
+        .select(&opts.models)
+        .map_err(|e| (codes::BLOCKED, e))?;
+    if let Some(why) = super::plan::needs_remote_code(&entries, &opts.allow_remote_code) {
+        return Err((codes::BLOCKED, why));
+    }
+    let py = models::this_managed_python().map_err(|e| (codes::BLOCKED, e.to_string()))?;
+    let (mut done, mut failed) = (Vec::new(), Vec::new());
+    for e in &entries {
+        let _ = tx.send(Ev::Note(t, format!("{}: planning", e.name)));
+        let consent = Consent {
+            download: true,
+            remote_code: opts.allow_remote_code.contains(&e.name),
+        };
+        let res = models::install(&kit, e, &py, scan.uv.as_deref(), consent, None, &mut |p| {
+            let _ = tx.send(match p {
+                Progress::Step(s) => Ev::Note(t, format!("{}: {s}", e.name)),
+                Progress::Bytes(n, total, _) => Ev::Bytes(t, n, Some(total)),
+                Progress::Log(l) => Ev::Log(l),
+            });
+        });
+        match res {
+            Ok(m) => {
+                let _ = tx.send(Ev::Log(format!("installed {m}")));
+                done.push(m);
+            }
+            Err(why) => failed.push(format!("{}: {why}", e.name)),
+        }
+    }
+    if failed.is_empty() {
+        Ok(done.join(" · "))
+    } else {
+        Err((codes::MODEL, failed.join("; ")))
+    }
 }
 
 fn verify(tx: &Sender<Ev>) -> Result<String, Failure> {
