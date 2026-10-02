@@ -182,7 +182,7 @@ fn install_models(scan: &Scan, opts: &Opts, tx: &Sender<Ev>) -> Result<String, F
     if let Some(why) = super::plan::needs_remote_code(&entries, &opts.allow_remote_code) {
         return Err((codes::BLOCKED, why));
     }
-    let py = models::this_managed_python().map_err(|e| (codes::BLOCKED, e.to_string()))?;
+    let py = models::setup_python().map_err(|e| (codes::BLOCKED, e.to_string()))?;
     let (mut done, mut failed) = (Vec::new(), Vec::new());
     for e in &entries {
         let _ = tx.send(Ev::Note(t, format!("{}: planning", e.name)));

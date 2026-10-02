@@ -189,14 +189,16 @@ pub fn managed_python(pinned: Option<&str>, venv_py: Option<&Path>) -> Result<Pa
     }
 }
 
-/// The managed interpreter for this process: `URNA_PYTHON` read once here.
-pub fn this_managed_python() -> Result<PathBuf, Refusal> {
-    let pinned = std::env::var("URNA_PYTHON").ok().filter(|s| !s.is_empty());
-    let venv = crate::cmd::paths::urna_home()
-        .map(|h| crate::cmd::paths::venv_python(&h.join("venv")))
-        .filter(|p| p.is_file())
-        .or_else(crate::cmd::paths::setup_python);
-    managed_python(pinned.as_deref(), venv.as_deref())
+fn pinned() -> Option<String> {
+    std::env::var("URNA_PYTHON").ok().filter(|s| !s.is_empty())
+}
+
+/// The venv this setup manages: the one in its own data dir, never another
+/// data root's (that belongs to another install). `URNA_PYTHON` read here.
+pub fn setup_python() -> Result<PathBuf, Refusal> {
+    let venv =
+        crate::cmd::paths::urna_home().map(|h| crate::cmd::paths::venv_python(&h.join("venv")));
+    managed_python(pinned().as_deref(), venv.as_deref())
 }
 
 fn script_cmd(py: &Path, kit: &Kit, action: &str, entry: &Entry, expect: Option<&str>) -> Command {
