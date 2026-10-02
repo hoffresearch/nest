@@ -62,21 +62,37 @@ def slice_renorm(vec: list[float], n: int) -> list[float]:
     return [x / norm for x in head] if norm > 0 else head
 
 
-def _embed(model_name_or_path: str, query: str) -> tuple[list[float], int, str]:
-    """Return (vector, dim, resolved_local_path) for `query`."""
+def load(model_name_or_path: str):
+    """Return (model, resolved_local_path): the SentenceTransformer and the
+    snapshot dir it was loaded from, which the fingerprint reads."""
     from sentence_transformers import SentenceTransformer  # local import: heavy
 
     model = SentenceTransformer(model_name_or_path)
-    vec = model.encode([query], normalize_embeddings=True, convert_to_numpy=True)[0]
-    dim = int(model.get_sentence_embedding_dimension())
-    # defensive re-normalize (some sentence-transformers versions skip it
-    # on certain backbones).
-    n = math.sqrt(sum(float(x) * float(x) for x in vec))
-    vec = [float(x) / n for x in vec] if n > 0 else [float(x) for x in vec]
+    return model, _resolve_local_path(model, model_name_or_path)
 
-    # locate the actual snapshot directory the model was loaded from.
-    local_path = _resolve_local_path(model, model_name_or_path)
-    return vec, dim, local_path
+
+def encode(model, texts: list[str]) -> list[list[float]]:
+    """L2-normalized vectors, the encode every MiniLM-era corpus was built
+    with; `forge.model_adapters._STTextAdapter` calls this same function."""
+    out = []
+    for vec in model.encode(texts, normalize_embeddings=True, convert_to_numpy=True):
+        # defensive re-normalize (some sentence-transformers versions skip it
+        # on certain backbones).
+        n = math.sqrt(sum(float(x) * float(x) for x in vec))
+        out.append([float(x) / n for x in vec] if n > 0 else [float(x) for x in vec])
+    return out
+
+
+def fingerprint(local_path: str, model_id: str):
+    """The model fingerprint over the snapshot, keyed by the manifest name."""
+    return compute_model_fingerprint(local_path, model_id=model_id)
+
+
+def _embed(model_name_or_path: str, query: str) -> tuple[list[float], int, str]:
+    """Return (vector, dim, resolved_local_path) for `query`."""
+    model, local_path = load(model_name_or_path)
+    dim = int(model.get_sentence_embedding_dimension())
+    return encode(model, [query])[0], dim, local_path
 
 
 def _resolve_local_path(model, fallback: str) -> str:
@@ -121,7 +137,7 @@ def _embed_dim(model_name_or_path: str) -> int:
     return int(model.get_sentence_embedding_dimension())
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument(
         "--embed-dim",
@@ -150,7 +166,7 @@ def main() -> int:
     )
     p.add_argument("model", help="HF id or local path; --model-path overrides")
     p.add_argument("query", nargs="?", default="")
-    args = p.parse_args()
+    args = p.parse_args(argv)
 
     model_arg = args.model_path or args.model
 
@@ -169,7 +185,7 @@ def main() -> int:
             return 2
         vec = slice_renorm(vec, args.mrl_dim)
         dim = args.mrl_dim
-    fp = compute_model_fingerprint(local_path, model_id=args.model)
+    fp = fingerprint(local_path, args.model)
     model_hash = fingerprint_to_model_hash(fp)
     payload = {
         "model_hash": model_hash,

@@ -147,23 +147,45 @@ def _model_embed(py: str, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run([py, str(MODEL_SCRIPT), *args], capture_output=True, text=True, cwd=REPO)
 
 
-def _st_fallback_cases(tmp: str) -> None:
-    """A model no preset names goes to embed_query.py, so a corpus built with a
-    sentence-transformers model outside the registry is askable. The st cases
-    need an interpreter with sentence-transformers and the model cached
-    (URNA_ST_PYTHON picks one); without them they skip."""
-    if not _has_st(sys.executable):
-        p = _model_embed(sys.executable, "acme/unknown-model", "q")
-        assert p.returncode == 4 and "sentence-transformers" in p.stderr, p.stderr
-        print("case 6 (no preset, no sentence-transformers: exit 4 naming it): OK")
+def _st_python() -> str | None:
+    """The interpreter for the sentence-transformers cases (URNA_ST_PYTHON,
+    else this one), or None when it cannot import sentence_transformers."""
     st_py = os.environ.get("URNA_ST_PYTHON", sys.executable)
-    if not _has_st(st_py):
-        print("cases 7-9 skipped: no interpreter with sentence-transformers (URNA_ST_PYTHON)")
+    return st_py if _has_st(st_py) else None
+
+
+def _offline_env() -> dict:
+    return {k: v for k, v in os.environ.items() if k != "URNA_ALLOW_DOWNLOAD"}
+
+
+def _st_fallback_cases(tmp: str) -> None:
+    """The MiniLM corpus and any other sentence-transformers model go through
+    python/embed_query.py, so they are askable with the model_hash they were
+    built with. The st cases skip on exactly two named conditions: no
+    interpreter with sentence-transformers, or the embedder reporting the
+    model outside the local cache (its `urna-fetch:` line). Any other failure
+    of the probe fails the suite."""
+    if not _has_st(sys.executable):
+        for model in ("acme/unknown-model", ST_MODEL):
+            p = _model_embed(sys.executable, model, "q")
+            assert p.returncode == 4, (model, p.returncode, p.stderr)
+            assert "urna-needs: sentence-transformers" in p.stderr, p.stderr
+        print("case 6 (no sentence-transformers: exit 4 naming the package): OK")
+    st_py = _st_python()
+    if st_py is None:
+        print("cases 7-10 skipped: no interpreter with sentence-transformers (URNA_ST_PYTHON)")
         return
-    probe = _model_embed(st_py, ST_MODEL, "probe")
-    if probe.returncode != 0:
-        print(f"cases 7-9 skipped: {ST_MODEL} is not in the local cache")
+    probe = subprocess.run(
+        [st_py, str(MODEL_SCRIPT), ST_MODEL, "probe"],
+        capture_output=True,
+        text=True,
+        cwd=REPO,
+        env=_offline_env(),
+    )
+    if probe.returncode == 3 and f"urna-fetch: {ST_MODEL}" in probe.stderr:
+        print(f"cases 7-10 skipped: {ST_MODEL} is not in the local cache")
         return
+    assert probe.returncode == 0, f"the MiniLM probe failed for a real reason: {probe.stderr}"
 
     texts = ["o consumidor tem direito à troca", "receita de bolo de cenoura", "pix sem tarifa"]
     payloads = [json.loads(_model_embed(st_py, ST_MODEL, t).stdout) for t in texts]
@@ -197,26 +219,75 @@ def _st_fallback_cases(tmp: str) -> None:
     )
     assert p.returncode == 0, p.stderr
     assert "o consumidor tem direito" in p.stdout, p.stdout
-    print("case 7 (st model outside the registry: ask routed, gate passes, right hit): OK")
+    print("case 7 (MiniLM corpus: ask routed, gate passes, right hit): OK")
 
-    env = {k: v for k, v in os.environ.items() if k != "URNA_ALLOW_DOWNLOAD"}
     p = subprocess.run(
         [st_py, str(MODEL_SCRIPT), "acme/not-a-cached-model", "q"],
         capture_output=True,
         text=True,
         cwd=REPO,
-        env=env,
+        env=_offline_env(),
     )
-    assert p.returncode != 0 and "no registry preset" not in p.stderr, p.stderr
-    assert "LocalEntryNotFoundError" in p.stderr, "the lookup must stay offline: " + p.stderr
-    print("case 8 (unknown model reaches embed_query.py and fails offline, no hub call): OK")
+    assert p.returncode == 3, (p.returncode, p.stderr)
+    assert "urna-fetch: acme/not-a-cached-model" in p.stderr, p.stderr
+    assert "not in the local cache" in p.stderr and "Traceback" not in p.stderr, p.stderr
+    print("case 8 (a model outside the cache: exit 3, urna-fetch, no hub call): OK")
 
     p = _model_embed(st_py, "--mrl-dim", "128", ST_MODEL, "q")
     assert p.returncode == 0, p.stderr
     out = json.loads(p.stdout)
     assert out["embedding_dim"] == 128 and len(out["vector"]) == 128
     assert out["model_hash"] == payloads[0]["model_hash"]
-    print("case 9 (--mrl-dim passes through the fallback, model_hash unchanged): OK")
+    print("case 9 (--mrl-dim passes through, model_hash unchanged): OK")
+
+    _minilm_preset_case(st_py, payloads[0]["model_hash"])
+
+
+def _minilm_preset_case(st_py: str, query_hash: str) -> None:
+    """The registry preset keeps the MiniLM's embedding path and fingerprint:
+    the build-side adapter, the registry query route (by name and by
+    --preset) and the search-text embedder agree on model_hash and vectors,
+    and so does the benchmark corpus built before the preset existed."""
+    preset = mr.preset_for_embedding_model(ST_MODEL)
+    assert preset is not None and preset.name == "minilm-multilingual", preset
+    script = (
+        "import json, sys; sys.path.insert(0, 'python');"
+        "from forge import model_registry as mr;"
+        "e = mr.create_embedder('minilm-multilingual');"
+        "v = e.embed_texts(['pix sem tarifa'])[0];"
+        "print(json.dumps({'h': e.model_hash, 'd': e.dim, 'v': [float(x) for x in v]}))"
+    )
+    a = subprocess.run(
+        [st_py, "-c", script], capture_output=True, text=True, cwd=REPO, env=_offline_env()
+    )
+    assert a.returncode == 0, a.stderr
+    adapter = json.loads(a.stdout)
+    routes = {
+        "registry": _model_embed(st_py, ST_MODEL, "pix sem tarifa"),
+        "--preset": _model_embed(
+            st_py, "--preset", "minilm-multilingual", ST_MODEL, "pix sem tarifa"
+        ),
+        "search-text": subprocess.run(
+            [st_py, str(REPO / "python" / "embed_query.py"), ST_MODEL, "pix sem tarifa"],
+            capture_output=True,
+            text=True,
+            cwd=REPO,
+            env=_offline_env(),
+        ),
+    }
+    for name, r in routes.items():
+        assert r.returncode == 0, (name, r.stderr)
+        out = json.loads(r.stdout)
+        assert out["model_hash"] == adapter["h"] == query_hash, name
+        assert out["embedding_dim"] == adapter["d"] == 384, name
+        cos = sum(x * y for x, y in zip(out["vector"], adapter["v"], strict=True))
+        assert cos > 0.99999, (name, cos)
+    built = REPO / "data" / "measure" / "corpus_hybrid.urna"
+    if built.exists():
+        assert urna.open(str(built)).inspect()["manifest"]["model_hash"] == adapter["h"]
+        print("case 10 (minilm-multilingual preset == embed_query.py == the benchmark corpus): OK")
+    else:
+        print("case 10 (minilm-multilingual preset == embed_query.py): OK; corpus_hybrid not built")
 
 
 if __name__ == "__main__":
