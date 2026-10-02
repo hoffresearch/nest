@@ -15,6 +15,7 @@ python/embed_query.py
 python/model_fingerprint.py
 python/builder.py
 python/tools/measure_presets.py
+python/tools/_bench_runner.py
 python/tools/compare_measure.py
 python/forge/embed_image.py
 python/forge/image_items.py
@@ -60,6 +61,7 @@ tests/test_quality_gate.py
 tests/test_cli_space.py
 tests/test_query_embedder_routing.py
 tests/test_embedder_payload.py
+tests/test_bench_runner.py
 scripts/stage_embedder_payload.py
 "
 # shellcheck disable=SC2086

@@ -10,10 +10,12 @@
 //! records a truncated default space (`full_dim` present).
 
 use anyhow::Result;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command as ProcCommand;
 
 use urna_runtime::{MmapUrnaFile, SearchResult};
+
+use super::embed_failure::EmbedFailure;
 
 /// Output schema shared by every query embedder script: the compact
 /// `model_hash` is the source of truth for the gate; `fingerprint` is
@@ -31,11 +33,11 @@ pub struct EmbedderOutput {
 pub const PLACEHOLDER_MODEL_HASH: &str =
     "sha256:0000000000000000000000000000000000000000000000000000000000000000";
 
-/// Walk up from the current dir to find python/embed_query.py (the legacy
-/// sentence-transformers path that `search-text` keeps as its default).
+/// Find the sentence-transformers embedder (`python/embed_query.py`, the
+/// path `search-text` keeps as its default): repo layout, then the data
+/// roots, where the payload lays it down beside `forge/`.
 pub fn default_embedder_path() -> PathBuf {
-    repo_script(&["python", "embed_query.py"])
-        .unwrap_or_else(|| PathBuf::from("python/embed_query.py"))
+    installed_script_in(&["embed_query.py"])
 }
 
 /// Find the OFFLINE potion embedder (`python/forge/embed_query_potion.py`):
@@ -51,8 +53,7 @@ pub fn default_registry_embedder_path() -> PathBuf {
     installed_script("embed_query_model.py")
 }
 
-fn repo_script(rel: &[&str]) -> Option<PathBuf> {
-    let rel: PathBuf = rel.iter().collect();
+fn repo_script(rel: &Path) -> Option<PathBuf> {
     let mut bases: Vec<PathBuf> = Vec::new();
     if let Ok(cwd) = std::env::current_dir() {
         bases.push(cwd.clone());
@@ -65,7 +66,7 @@ fn repo_script(rel: &[&str]) -> Option<PathBuf> {
         bases.push(repo);
     }
     for base in bases {
-        let c = base.join(&rel);
+        let c = base.join(rel);
         if c.exists() {
             return Some(c);
         }
@@ -85,23 +86,25 @@ pub(crate) fn exe_repo_root() -> Option<PathBuf> {
 }
 
 fn installed_script(name: &str) -> PathBuf {
-    installed_script_in("forge", name)
+    installed_script_in(&["forge", name])
 }
 
-/// One resolution ladder for every shipped python script: repo layout
-/// (`python/<subdir>/<name>` walking up from cwd, then beside the exe),
-/// then every data root in `paths::data_roots` (issue #75 layouts).
-pub(crate) fn installed_script_in(subdir: &str, name: &str) -> PathBuf {
-    if let Some(p) = repo_script(&["python", subdir, name]) {
+/// One resolution ladder for every shipped python script, `rel` being its
+/// path under `python/`: repo layout (`python/<rel>` walking up from cwd,
+/// then beside the exe), then `<root>/urna/<rel>` for every data root in
+/// `paths::data_roots` (issue #75 layouts).
+pub(crate) fn installed_script_in(rel: &[&str]) -> PathBuf {
+    let rel: PathBuf = rel.iter().collect();
+    if let Some(p) = repo_script(&Path::new("python").join(&rel)) {
         return p;
     }
     for base in super::paths::data_roots() {
-        let c = base.join("urna").join(subdir).join(name);
+        let c = base.join("urna").join(&rel);
         if c.exists() {
             return c;
         }
     }
-    PathBuf::from("python").join(subdir).join(name)
+    Path::new("python").join(rel)
 }
 
 /// Spawn the embedder script and parse its one-line JSON payload.
@@ -114,10 +117,10 @@ pub fn spawn_embedder(
     query: &str,
 ) -> Result<EmbedderOutput> {
     if !embedder.exists() {
-        anyhow::bail!(
-            "embedder script not found: {} (override with --embedder)",
-            embedder.display()
-        );
+        return Err(EmbedFailure::ScriptMissing {
+            script: embedder.clone(),
+        }
+        .into());
     }
     let interpreter = super::pyenv::resolve_interpreter();
     let mut cmd = ProcCommand::new(&interpreter);
@@ -133,11 +136,22 @@ pub fn spawn_embedder(
         .output()
         .map_err(|e| anyhow::anyhow!("failed to spawn embedder: {} ({})", e, embedder.display()))?;
     if !out.status.success() {
-        anyhow::bail!(
-            "embedder failed (status={}): {}",
-            out.status,
-            String::from_utf8_lossy(&out.stderr)
-        );
+        // a script inside an installed payload that lacks files fails for
+        // that reason, whatever python printed (a missing module, a missing
+        // tokenizer): name the files and the repair.
+        if let Some(home) = super::payload::home_of(embedder) {
+            let missing = super::payload::missing(&home);
+            if !missing.is_empty() {
+                return Err(EmbedFailure::PayloadIncomplete {
+                    home: Some(home),
+                    missing: missing.into_iter().map(String::from).collect(),
+                }
+                .into());
+            }
+        }
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let status = out.status.to_string();
+        return Err(EmbedFailure::from_embedder(&status, &stderr, model, &interpreter).into());
     }
     serde_json::from_slice(&out.stdout).map_err(|e| {
         anyhow::anyhow!(
@@ -157,20 +171,25 @@ pub fn validate_gate(
     declared_model_hash: &str,
     skip_model_hash_check: bool,
 ) -> Result<()> {
+    let incompatible = |detail: String| EmbedFailure::ModelIncompatible {
+        model: model.to_string(),
+        detail,
+    };
     if payload.embedding_model != model {
-        anyhow::bail!(
+        return Err(incompatible(format!(
             "model name mismatch: manifest={}, embedder reports={}",
-            model,
-            payload.embedding_model
-        );
+            model, payload.embedding_model
+        ))
+        .into());
     }
     if payload.embedding_dim != declared_dim || payload.vector.len() != declared_dim {
-        anyhow::bail!(
+        return Err(incompatible(format!(
             "dim mismatch: manifest={}, embedder dim={}, vector len={}",
             declared_dim,
             payload.embedding_dim,
             payload.vector.len()
-        );
+        ))
+        .into());
     }
     if declared_model_hash == PLACEHOLDER_MODEL_HASH {
         // the one case the flag covers: a legacy corpus with no fingerprint
@@ -188,16 +207,12 @@ pub fn validate_gate(
     if payload.model_hash != declared_model_hash {
         // a real fingerprint that disagrees is never skippable: the hits
         // would be cosine-valid and wrong.
-        anyhow::bail!(
-            "model_hash mismatch: corpus was built with {}, embedder reports {}\n\
-             fingerprint reported by embedder: {}\n\
-             hint: --model-path PATH to point at the exact snapshot, or rebuild \
-             the corpus with the model you intend to use. --skip-model-hash-check \
-             covers the legacy placeholder only, not a mismatch.",
-            declared_model_hash,
-            payload.model_hash,
-            payload.fingerprint
-        );
+        return Err(EmbedFailure::HashMismatch {
+            corpus: declared_model_hash.to_string(),
+            embedder: payload.model_hash.clone(),
+            fingerprint: payload.fingerprint.to_string(),
+        }
+        .into());
     }
     Ok(())
 }

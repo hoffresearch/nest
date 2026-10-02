@@ -40,18 +40,62 @@ fn scratch(tag: &str) -> PathBuf {
     d
 }
 
-/// A release dir with a payload holding `urna/forge/embed_query_potion.py`;
-/// `sha` overrides the published digest (a tampered release).
+/// This binary's version, the payload version `setup` asks for by default.
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The files a complete payload holds besides the stamp (mirrors
+/// `unpack::REQUIRED`, which this binary-crate test cannot import; a drift
+/// fails the install below).
+const REQUIRED: [&str; 19] = [
+    "model_fingerprint.py",
+    "embed_query.py",
+    "forge/__init__.py",
+    "forge/embed_default.py",
+    "forge/embed_image.py",
+    "forge/embed_potion.py",
+    "forge/embed_query_model.py",
+    "forge/embed_query_potion.py",
+    "forge/embed_st.py",
+    "forge/embed_st_worker.py",
+    "forge/model_adapters.py",
+    "forge/model_registry.py",
+    "forge/models/potion-base-8M/README.md",
+    "forge/models/potion-base-8M/config.json",
+    "forge/models/potion-base-8M/model.safetensors",
+    "forge/models/potion-base-8M/modules.json",
+    "forge/models/potion-base-8M/special_tokens_map.json",
+    "forge/models/potion-base-8M/tokenizer.json",
+    "forge/models/potion-base-8M/tokenizer_config.json",
+];
+
+/// A release dir with a complete payload stamped with this binary's
+/// version; `sha` overrides the published digest (a tampered release).
 fn release(dir: &Path, sha: Option<&str>) -> PathBuf {
-    let rel = dir.join("release");
+    release_at(dir, "release", sha, VERSION, None)
+}
+
+/// A release under `dir/<name>` whose payload is stamped `version`, every
+/// file's body naming that release; `drop` leaves one required file out.
+fn release_at(
+    dir: &Path,
+    name: &str,
+    sha: Option<&str>,
+    version: &str,
+    drop: Option<&str>,
+) -> PathBuf {
+    let rel = dir.join(name);
     std::fs::create_dir_all(&rel).unwrap();
     let tgz = rel.join(PAYLOAD);
     let gz = GzEncoder::new(std::fs::File::create(&tgz).unwrap(), Compression::fast());
     let mut b = tar::Builder::new(gz);
-    for (name, body) in [
-        ("urna/forge/embed_query_potion.py", &b"print('probe')\n"[..]),
-        ("urna/forge/__init__.py", &b""[..]),
-    ] {
+    let mut entries: Vec<(String, Vec<u8>)> = REQUIRED
+        .iter()
+        .filter(|f| Some(**f) != drop)
+        .map(|f| (format!("urna/{f}"), format!("{f}@{version}").into_bytes()))
+        .collect();
+    entries.push(("urna/VERSION".into(), format!("{version}\n").into_bytes()));
+    for (name, body) in &entries {
+        let (name, body) = (name.as_str(), body.as_slice());
         let mut h = tar::Header::new_gnu();
         h.set_size(body.len() as u64);
         h.set_mode(0o644);
@@ -86,14 +130,21 @@ fn text(o: &Output) -> String {
 #[test]
 fn setup_yes_installs_the_payload_from_the_release() {
     if !has_curl() {
+        eprintln!("skip: no curl on PATH");
         return;
     }
     let d = scratch("ok");
     let rel = release(&d, None);
+    // a venv from an earlier setup: the payload step must leave it alone.
+    std::fs::create_dir_all(d.join("data/urna/venv/bin")).unwrap();
+    std::fs::write(d.join("data/urna/venv/bin/marker"), b"keep").unwrap();
     let out = urna(&d, &rel, &["setup", "--yes", "--force", "--no-python"]);
     let s = text(&out);
     assert!(s.contains("ok embedder payload"), "{s}");
     assert!(d.join("data/urna/forge/embed_query_potion.py").is_file());
+    assert!(d.join("data/urna/model_fingerprint.py").is_file(), "{s}");
+    assert!(d.join("data/urna/embed_query.py").is_file(), "{s}");
+    assert!(d.join("data/urna/venv/bin/marker").is_file(), "{s}");
     // the stub payload has no potion table, so verify fails with a doctor
     // code (2..=6), never a setup code: the steps themselves succeeded.
     let code = out.status.code().unwrap();
@@ -102,8 +153,109 @@ fn setup_yes_installs_the_payload_from_the_release() {
 }
 
 #[test]
+fn an_upgraded_binary_replaces_an_older_payload_and_keeps_the_venv() {
+    if !has_curl() {
+        eprintln!("skip: no curl on PATH");
+        return;
+    }
+    let d = scratch("upgrade");
+    // the state a 0.5.1 install leaves: forge/ only (0.5.1's setup dropped the
+    // top-level files and its payload had no stamp), and a venv.
+    let forge = d.join("data/urna/forge");
+    std::fs::create_dir_all(&forge).unwrap();
+    std::fs::write(forge.join("embed_query_potion.py"), b"0.5.1").unwrap();
+    std::fs::create_dir_all(d.join("data/urna/venv/bin")).unwrap();
+    std::fs::write(d.join("data/urna/venv/bin/marker"), b"keep").unwrap();
+
+    // no --force: the plan sees the unstamped payload and replaces it.
+    let new = release(&d, None);
+    let out = urna(&d, &new, &["setup", "--yes", "--no-python"]);
+    let s = text(&out);
+    assert!(s.contains("ok embedder payload"), "{s}");
+    let stamp = std::fs::read_to_string(d.join("data/urna/VERSION")).unwrap();
+    assert_eq!(stamp.trim(), VERSION);
+    assert!(d.join("data/urna/embed_query.py").is_file());
+    assert!(d.join("data/urna/venv/bin/marker").is_file());
+
+    // the payload matches the binary now: nothing to replace.
+    let again = text(&urna(&d, &new, &["setup", "--yes", "--no-python"]));
+    assert!(!again.contains("ok embedder payload"), "{again}");
+
+    // --version names another release: replaced again, venv still there.
+    let pinned = text(&urna(
+        &d,
+        &new,
+        &["setup", "--yes", "--no-python", "--version", "v9.9.9"],
+    ));
+    assert!(pinned.contains("ok embedder payload"), "{pinned}");
+    assert!(d.join("data/urna/venv/bin/marker").is_file());
+}
+
+#[test]
+fn setup_repairs_a_payload_missing_a_required_file() {
+    if !has_curl() {
+        eprintln!("skip: no curl on PATH");
+        return;
+    }
+    let d = scratch("repair");
+    let rel = release(&d, None);
+    urna(&d, &rel, &["setup", "--yes", "--no-python"]);
+    // each of these breaks a query when gone: search-text's embedder, the
+    // module the potion route imports, the potion table's tokenizer.
+    for gone in [
+        "embed_query.py",
+        "forge/embed_potion.py",
+        "forge/models/potion-base-8M/tokenizer.json",
+    ] {
+        std::fs::remove_file(d.join("data/urna").join(gone)).unwrap();
+        // same release, no --force: the missing file alone makes setup reinstall.
+        let s = text(&urna(&d, &rel, &["setup", "--yes", "--no-python"]));
+        assert!(s.contains(&format!("missing {gone}")), "{gone}: {s}");
+        assert!(s.contains("ok embedder payload"), "{gone}: {s}");
+        assert!(
+            d.join("data/urna").join(gone).is_file(),
+            "{gone} not repaired"
+        );
+    }
+}
+
+#[test]
+fn an_incomplete_release_fails_and_keeps_the_installed_payload() {
+    if !has_curl() {
+        eprintln!("skip: no curl on PATH");
+        return;
+    }
+    let d = scratch("halfrel");
+    let old = release_at(&d, "old", None, "0.0.1", None);
+    urna(
+        &d,
+        &old,
+        &["setup", "--yes", "--no-python", "--version", "0.0.1"],
+    );
+    let half = release_at(
+        &d,
+        "half",
+        None,
+        VERSION,
+        Some("forge/embed_query_model.py"),
+    );
+    let out = urna(&d, &half, &["setup", "--yes", "--no-python"]);
+    assert_eq!(out.status.code(), Some(12), "{}", text(&out));
+    assert!(
+        text(&out).contains("forge/embed_query_model.py"),
+        "{}",
+        text(&out)
+    );
+    let stamp = std::fs::read_to_string(d.join("data/urna/VERSION")).unwrap();
+    assert_eq!(stamp.trim(), "0.0.1");
+    let model = std::fs::read(d.join("data/urna/forge/embed_query_model.py")).unwrap();
+    assert_eq!(model, b"forge/embed_query_model.py@0.0.1");
+}
+
+#[test]
 fn a_tampered_checksum_exits_11_and_installs_nothing() {
     if !has_curl() {
+        eprintln!("skip: no curl on PATH");
         return;
     }
     let d = scratch("sha");
@@ -117,6 +269,7 @@ fn a_tampered_checksum_exits_11_and_installs_nothing() {
 #[test]
 fn a_missing_release_exits_10() {
     if !has_curl() {
+        eprintln!("skip: no curl on PATH");
         return;
     }
     let d = scratch("gone");
@@ -131,15 +284,20 @@ fn a_missing_release_exits_10() {
 #[test]
 fn uninstall_removes_the_payload_and_keeps_the_binary() {
     if !has_curl() {
+        eprintln!("skip: no curl on PATH");
         return;
     }
     let d = scratch("rm");
     let rel = release(&d, None);
     urna(&d, &rel, &["setup", "--yes", "--force", "--no-python"]);
     assert!(d.join("data/urna/forge").is_dir());
+    assert!(d.join("data/urna/embed_query.py").is_file());
     let out = urna(&d, &rel, &["setup", "--uninstall"]);
     assert_eq!(out.status.code(), Some(0));
     assert!(!d.join("data/urna/forge").exists());
+    for f in ["model_fingerprint.py", "embed_query.py", "VERSION"] {
+        assert!(!d.join("data/urna").join(f).exists(), "{f} left behind");
+    }
     assert!(Path::new(env!("CARGO_BIN_EXE_urna")).is_file());
 }
 

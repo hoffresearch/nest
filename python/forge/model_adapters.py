@@ -47,6 +47,44 @@ class _PotionAdapter:
     embed_arrays = embed_paths
 
 
+class _STTextAdapter:
+    """A plain sentence-transformers text model, in-process, through the very
+    functions of `python/embed_query.py` (load, encode, fingerprint): the
+    vectors and the model_hash match the query path and every corpus built
+    with the model before the preset existed."""
+
+    def __init__(self, preset: ModelPreset, model_path: str | None = None):
+        import embed_query
+
+        self.preset = preset
+        self.embedding_model = preset.embedding_model
+        self.batch_size = 32
+        self._eq = embed_query
+        self._model, local = embed_query.load(model_path or preset.model_id)
+        self._fp = embed_query.fingerprint(local, preset.embedding_model)
+
+    @property
+    def dim(self) -> int:
+        return int(self._model.get_sentence_embedding_dimension())
+
+    @property
+    def model_hash(self) -> str:
+        from model_fingerprint import fingerprint_to_model_hash
+
+        return fingerprint_to_model_hash(self._fp)
+
+    def fingerprint(self) -> dict:
+        return self._fp.to_dict()
+
+    def embed_texts(self, texts, role: str = "document") -> np.ndarray:
+        return np.asarray(self._eq.encode(self._model, list(texts)), dtype=np.float32)
+
+    def embed_paths(self, paths) -> np.ndarray:
+        raise CapabilityError(f"preset '{self.preset.name}' is text-only")
+
+    embed_arrays = embed_paths
+
+
 class _OpenClipAdapter:
     def __init__(self, preset: ModelPreset, inner):
         self.preset, self._inner = preset, inner
