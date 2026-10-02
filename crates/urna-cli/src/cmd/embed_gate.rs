@@ -15,6 +15,8 @@ use std::process::Command as ProcCommand;
 
 use urna_runtime::{MmapUrnaFile, SearchResult};
 
+use super::embed_failure::EmbedFailure;
+
 /// Output schema shared by every query embedder script: the compact
 /// `model_hash` is the source of truth for the gate; `fingerprint` is
 /// diagnostic only.
@@ -115,10 +117,10 @@ pub fn spawn_embedder(
     query: &str,
 ) -> Result<EmbedderOutput> {
     if !embedder.exists() {
-        anyhow::bail!(
-            "embedder script not found: {} (override with --embedder)",
-            embedder.display()
-        );
+        return Err(EmbedFailure::ScriptMissing {
+            script: embedder.clone(),
+        }
+        .into());
     }
     let interpreter = super::pyenv::resolve_interpreter();
     let mut cmd = ProcCommand::new(&interpreter);
@@ -134,11 +136,9 @@ pub fn spawn_embedder(
         .output()
         .map_err(|e| anyhow::anyhow!("failed to spawn embedder: {} ({})", e, embedder.display()))?;
     if !out.status.success() {
-        anyhow::bail!(
-            "embedder failed (status={}): {}",
-            out.status,
-            String::from_utf8_lossy(&out.stderr)
-        );
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let status = out.status.to_string();
+        return Err(EmbedFailure::from_embedder(&status, &stderr, model, &interpreter).into());
     }
     serde_json::from_slice(&out.stdout).map_err(|e| {
         anyhow::anyhow!(
@@ -158,20 +158,25 @@ pub fn validate_gate(
     declared_model_hash: &str,
     skip_model_hash_check: bool,
 ) -> Result<()> {
+    let incompatible = |detail: String| EmbedFailure::ModelIncompatible {
+        model: model.to_string(),
+        detail,
+    };
     if payload.embedding_model != model {
-        anyhow::bail!(
+        return Err(incompatible(format!(
             "model name mismatch: manifest={}, embedder reports={}",
-            model,
-            payload.embedding_model
-        );
+            model, payload.embedding_model
+        ))
+        .into());
     }
     if payload.embedding_dim != declared_dim || payload.vector.len() != declared_dim {
-        anyhow::bail!(
+        return Err(incompatible(format!(
             "dim mismatch: manifest={}, embedder dim={}, vector len={}",
             declared_dim,
             payload.embedding_dim,
             payload.vector.len()
-        );
+        ))
+        .into());
     }
     if declared_model_hash == PLACEHOLDER_MODEL_HASH {
         // the one case the flag covers: a legacy corpus with no fingerprint
@@ -189,16 +194,12 @@ pub fn validate_gate(
     if payload.model_hash != declared_model_hash {
         // a real fingerprint that disagrees is never skippable: the hits
         // would be cosine-valid and wrong.
-        anyhow::bail!(
-            "model_hash mismatch: corpus was built with {}, embedder reports {}\n\
-             fingerprint reported by embedder: {}\n\
-             hint: --model-path PATH to point at the exact snapshot, or rebuild \
-             the corpus with the model you intend to use. --skip-model-hash-check \
-             covers the legacy placeholder only, not a mismatch.",
-            declared_model_hash,
-            payload.model_hash,
-            payload.fingerprint
-        );
+        return Err(EmbedFailure::HashMismatch {
+            corpus: declared_model_hash.to_string(),
+            embedder: payload.model_hash.clone(),
+            fingerprint: payload.fingerprint.to_string(),
+        }
+        .into());
     }
     Ok(())
 }
