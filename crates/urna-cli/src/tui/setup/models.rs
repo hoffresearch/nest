@@ -101,6 +101,13 @@ impl Kit {
         let catalog = Catalog::parse(&text).ok()?;
         script.is_file().then_some(Kit { script, catalog })
     }
+
+    /// The kit the query embedders resolve to (the checkout's, then each
+    /// data root's payload): the one the explorer offers from.
+    pub fn resolve() -> Option<Kit> {
+        let script = crate::cmd::embed_gate::installed_script_in(&["forge", "install_model.py"]);
+        Kit::at(script.parent()?)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -199,6 +206,15 @@ pub fn setup_python() -> Result<PathBuf, Refusal> {
     let venv =
         crate::cmd::paths::urna_home().map(|h| crate::cmd::paths::venv_python(&h.join("venv")));
     managed_python(pinned().as_deref(), venv.as_deref())
+}
+
+/// The venv queries run, when `urna setup` made it: the explorer installs
+/// there so the retried query finds what it installed.
+pub fn query_python() -> Result<PathBuf, Refusal> {
+    managed_python(
+        pinned().as_deref(),
+        crate::cmd::paths::setup_python().as_deref(),
+    )
 }
 
 fn script_cmd(py: &Path, kit: &Kit, action: &str, entry: &Entry, expect: Option<&str>) -> Command {
