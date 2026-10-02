@@ -26,6 +26,7 @@ Run: .venv/bin/python tests/test_embedder_payload.py
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -78,6 +79,13 @@ def test_stage_and_query(base: Path) -> None:
     staged = {str(p.relative_to(dest)) for p in dest.rglob("*") if p.is_file()}
     missing = EXPECTED_FILES - staged
     assert not missing, f"payload is missing {sorted(missing)}"
+    # what `urna setup` refuses to install without (unpack::REQUIRED) is
+    # exactly what the stage script ships, or every install would fail.
+    src = (REPO / "crates/urna-cli/src/tui/setup/unpack.rs").read_text()
+    block = src[src.index("pub const REQUIRED") : src.index("];", src.index("pub const REQUIRED"))]
+    required = {"urna/" + r for r in re.findall(r'"([^"]+)"', block)}
+    assert len(required) >= 8, required
+    assert required <= staged, f"setup requires what the payload lacks: {sorted(required - staged)}"
     assert (dest / "urna" / "forge" / "models" / "potion-base-8M").is_dir()
     # the stamp `urna setup` compares against the release it wants.
     import tomllib

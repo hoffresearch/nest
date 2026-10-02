@@ -88,7 +88,9 @@ pub fn plan(scan: &Scan, opts: &Opts) -> Vec<Item> {
         };
         let want = wanted_version(scan, opts);
         // a payload from another release (or from before the stamp) is
-        // replaced, so upgrading the binary upgrades the scripts it runs.
+        // replaced, so upgrading the binary upgrades the scripts it runs; one
+        // missing a required file is repaired the same way.
+        let broken = scan.payload.as_ref().filter(|p| !p.missing.is_empty());
         let stale = scan
             .payload
             .as_ref()
@@ -100,6 +102,10 @@ pub fn plan(scan: &Scan, opts: &Opts) -> Vec<Item> {
             "download ~30 MB from the v{want} release, verify sha256, unpack to {home}/forge"
         );
         let detail = match (&scan.embedder, stale, missing) {
+            _ if broken.is_some() => format!(
+                "installed payload is missing {}: download v{want}, verify sha256, replace {home}/forge (the venv stays)",
+                broken.map(|p| p.missing.join(" ")).unwrap_or_default()
+            ),
             (_, Some(p), _) => format!(
                 "installed payload is {}, v{want} is wanted: download it, verify sha256, replace {home}/forge (the venv stays)",
                 p.label()
@@ -110,7 +116,7 @@ pub fn plan(scan: &Scan, opts: &Opts) -> Vec<Item> {
         };
         Item {
             task: Task::Payload,
-            on: (missing || stale.is_some() || opts.force) && !opts.no_payload,
+            on: (missing || broken.is_some() || stale.is_some() || opts.force) && !opts.no_payload,
             locked: false,
             blocked,
             detail,
@@ -198,6 +204,7 @@ mod tests {
         ));
         s.payload = Some(Payload {
             version: Some("0.5.0".into()),
+            missing: Vec::new(),
         });
         s.deps = true;
         let p = plan(&s, &Opts::default());
@@ -219,6 +226,7 @@ mod tests {
         ));
         s.payload = Some(Payload {
             version: version.map(String::from),
+            missing: Vec::new(),
         });
         s.deps = true;
         s
@@ -237,6 +245,29 @@ mod tests {
         }
         let unstamped = plan(&installed(None), &Opts::default());
         assert!(unstamped[0].detail.contains("unstamped"));
+    }
+
+    #[test]
+    fn a_payload_missing_a_required_file_is_repaired() {
+        // stamped with the wanted release, but a file is gone: the payload
+        // step runs and names the file; the venv step stays off.
+        let mut s = installed(Some("0.5.0"));
+        if let Some(p) = s.payload.as_mut() {
+            p.missing = vec!["embed_query.py".into()];
+        }
+        let p = plan(&s, &Opts::default());
+        assert!(p[0].runs(), "{}", p[0].detail);
+        assert!(
+            p[0].detail.contains("missing embed_query.py"),
+            "{}",
+            p[0].detail
+        );
+        assert!(!p[1].runs());
+        let skip = Opts {
+            no_payload: true,
+            ..Opts::default()
+        };
+        assert!(!plan(&s, &skip)[0].runs());
     }
 
     #[test]
