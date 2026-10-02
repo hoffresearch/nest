@@ -281,10 +281,15 @@ pub fn render(buf: &mut Buffer, area: Rect, offer: &Offer, spinner: &str) {
     let inner = hud::panel(buf, r, &title, "", true);
     let foot = inner.bottom().saturating_sub(1);
     let room = foot.saturating_sub(inner.y) as usize;
-    // a long log keeps its tail.
+    // a long log keeps its tail; while an install runs, its first line (the
+    // step under way) stays on top of the tail.
+    let pinned = usize::from(matches!(offer.state, State::Running(..)) && room > 1);
     let skip = lines.len().saturating_sub(room);
+    let shown = lines[..pinned]
+        .iter()
+        .chain(lines.iter().skip(skip.max(pinned) + pinned.min(skip)));
     let w = inner.width.saturating_sub(2);
-    for (i, (s, st)) in lines.iter().skip(skip).enumerate() {
+    for (i, (s, st)) in shown.enumerate() {
         hud::put(buf, inner.x + 1, inner.y + i as u16, s, *st, w);
     }
     if let (State::Running(..), Some((n, total))) = (&offer.state, offer.bytes)
@@ -450,6 +455,22 @@ mod tests {
             s.contains("urna setup --model org/a") && s.contains("n closes"),
             "{s}"
         );
+    }
+
+    #[test]
+    fn a_running_install_keeps_its_step_above_the_log_tail() {
+        let (_tx, rx) = channel();
+        let mut o = offer(State::Running(ready(false, false), rx));
+        o.step = "fetch org/a at aaaa (480 MB)".into();
+        o.log = (0..60).map(|i| format!("log line {i}")).collect();
+        o.bytes = Some((240_000_000, 479_729_010));
+        let s = screen(&o);
+        assert!(s.contains("fetch org/a at aaaa (480 MB)"), "{s}");
+        assert!(
+            s.contains("log line 59") && !s.contains("log line 0 "),
+            "{s}"
+        );
+        assert!(s.contains("240 MB / 480 MB"), "{s}");
     }
 
     #[test]

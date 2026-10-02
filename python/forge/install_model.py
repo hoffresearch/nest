@@ -33,10 +33,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import sys
-import threading
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -126,23 +126,38 @@ def _progress(done: int, total: int, path: str) -> None:
     print(f"urna-progress: {done} {total} {path}", flush=True)
 
 
-def _watch(entry: dict, base: int, total: int, path: str, stop: threading.Event) -> None:
-    """Reports the partial blob's size while one file downloads. the hub
-    client writes it under the repo's blobs/ or, since huggingface_hub 1.x,
-    under the cache-wide blobs/<xx>/ store."""
-    repo_blobs, shared = repo_dir(entry) / "blobs", hub_dir() / "blobs"
-    last = -1
-    while not stop.wait(0.5):
-        parts = [*repo_blobs.glob("*.incomplete"), *shared.glob("*/*.incomplete")]
-        part = sum(p.stat().st_size for p in parts if p.is_file())
-        if part != last:
-            last = part
-            _progress(base + part, total, path)
+def _reporter(base: int, total: int, path: str):
+    """A progress class for hf_hub_download: the hub client feeds it the
+    bytes of one file over plain http and over xet alike (xet holds a file
+    in memory until it is whole, so a partial file on disk says nothing).
+    it draws no bar; it prints an urna-progress line every MB."""
+    from huggingface_hub.utils import tqdm as hub_tqdm
+
+    class Report(hub_tqdm):
+        def __init__(self, *args, **kwargs):
+            kwargs["file"] = io.StringIO()
+            super().__init__(*args, **kwargs)
+            self.n = 0
+            self._shown = -1
+
+        def update(self, n=1):
+            self.n += n or 0
+            at = base + int(self.n)
+            if at - self._shown >= 1 << 20:
+                self._shown = at
+                _progress(at, total, path)
+
+        def refresh(self, *args, **kwargs):
+            pass
+
+        def close(self):
+            pass
+
+    return Report
 
 
 def download(entry: dict) -> None:
-    # the progress lines above replace the client's bars and its warnings.
-    os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+    # the progress lines replace the client's bars; its warnings stay out.
     os.environ.setdefault("HF_HUB_VERBOSITY", "error")
     if importlib.util.find_spec("huggingface_hub") is None:
         raise Refused(4, "fetching a model needs huggingface_hub", "urna-needs: huggingface_hub")
@@ -155,23 +170,16 @@ def download(entry: dict) -> None:
         if f["path"] not in todo:
             continue
         _progress(done, total, f["path"])
-        stop = threading.Event()
-        watch = threading.Thread(
-            target=_watch, args=(entry, done, total, f["path"], stop), daemon=True
-        )
-        watch.start()
         try:
             hf_hub_download(
                 entry["repo"],
                 f["path"],
                 revision=entry["revision"],
                 cache_dir=str(hub_dir()),
+                tqdm_class=_reporter(done, total, f["path"]),
             )
         except Exception as e:
             raise Refused(8, f"downloading {f['path']} from {entry['repo']} failed: {e}") from e
-        finally:
-            stop.set()
-            watch.join()
         done += f["size"]
         _progress(done, total, f["path"])
 

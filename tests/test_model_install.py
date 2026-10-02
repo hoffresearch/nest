@@ -140,6 +140,15 @@ def test_fetch_lays_down_the_pinned_files(d: Path) -> None:
     ]
     done = [int(a) for a, _ in progress]
     assert done == sorted(done) and done[-1] == int(progress[-1][1]), progress
+    # the 17.5 MB weights report as they arrive, not only when whole (the
+    # hub serves them over xet, which writes no partial file to watch).
+    weights = {
+        a
+        for line in got.stdout.splitlines()
+        if line.endswith("model.safetensors")
+        for a in line.split()[1:2]
+    }
+    assert len(weights) >= 5, weights
     out = json.loads(got.stdout.splitlines()[-1])
     assert out["model_hash"] == TINY_HASH
     snap = _repo(hf) / "snapshots" / TINY_REV
