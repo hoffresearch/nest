@@ -2531,6 +2531,16 @@ links = [
 ]
 
 [[inventory.data_docs_python_scripts_tests]]
+path = "python/forge/test_open_clip_snapshot.py"
+kind = "python-test"
+purpose = "manual siglip2 self-test: embed_query_model.py offline against a cache holding only the pinned snapshot (no refs/main, no .no_exist), the model_hash of the mtg stills-5models build, and a missing tokenizer file reported as exit 3 with urna-fetch; skips without torch, open_clip, transformers or the snapshot, not run by release_check.sh"
+links = [
+    "python/forge/model_registry.py",
+    "python/forge/embed_image.py",
+    "python/forge/embed_query_model.py",
+]
+
+[[inventory.data_docs_python_scripts_tests]]
 path = "python/forge/recall_harness.py"
 kind = "python-tool"
 purpose = "Side-by-side per-query recall of potion vs the lexical floor on demo_corpus"

@@ -18,6 +18,7 @@ python/tools/measure_presets.py
 python/tools/_bench_runner.py
 python/tools/compare_measure.py
 python/forge/embed_image.py
+python/forge/test_open_clip_snapshot.py
 python/forge/image_items.py
 python/forge/image_media.py
 python/forge/image_encode.py
