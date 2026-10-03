@@ -91,6 +91,9 @@ fn key(app: &mut App, code: KeyCode, mods: KeyModifiers) {
         KeyCode::BackTab => return cycle(app, true),
         _ => {}
     }
+    if app.tab == Tab::Ask && app.ask.offer.is_some() {
+        return offer_key(app, code);
+    }
     if app.tab == Tab::Ask {
         return ask_key(app, code);
     }
@@ -112,6 +115,25 @@ fn key(app: &mut App, code: KeyCode, mods: KeyModifiers) {
         }
         KeyCode::Down | KeyCode::Char('j') => scroll(app, 1, true),
         KeyCode::Up | KeyCode::Char('k') => scroll(app, 1, false),
+        _ => {}
+    }
+}
+
+/// The install panel takes the keys while it is open: y installs (the
+/// download consent), r is the separate consent for repo code, n or esc
+/// declines. a running install is not cancelled from here.
+fn offer_key(app: &mut App, code: KeyCode) {
+    let Some(o) = app.ask.offer.as_mut() else {
+        return;
+    };
+    match code {
+        KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => o.accept(),
+        KeyCode::Char('r') | KeyCode::Char('R') => o.toggle_remote_code(),
+        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc if !o.running() => {
+            app.ask.offer = None;
+            app.toasts
+                .push("not installed; the query needs it", Kind::Warn);
+        }
         _ => {}
     }
 }

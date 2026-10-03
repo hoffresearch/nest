@@ -2,6 +2,7 @@
 //! that is already satisfied starts unticked (ticking it reinstalls); a
 //! step the machine cannot run is blocked with the reason, never hidden.
 
+use super::models::{self, Entry};
 use super::scan::{Scan, tilde};
 use super::venv::Tool;
 
@@ -9,6 +10,7 @@ use super::venv::Tool;
 pub enum Task {
     Payload,
     Python,
+    Models,
     Verify,
 }
 
@@ -17,6 +19,7 @@ impl Task {
         match self {
             Task::Payload => "embedder payload",
             Task::Python => "python env",
+            Task::Models => "models",
             Task::Verify => "verify",
         }
     }
@@ -32,6 +35,12 @@ pub struct Opts {
     pub force: bool,
     pub no_payload: bool,
     pub no_python: bool,
+    /// catalog models to install (`--model`, repeatable; `all` is every
+    /// offered one). naming one is the consent to download it.
+    pub models: Vec<String>,
+    /// models whose repo code may run (`--allow-remote-code`), a consent
+    /// separate from the download.
+    pub allow_remote_code: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -125,7 +134,14 @@ pub fn plan(scan: &Scan, opts: &Opts) -> Vec<Item> {
     let python = {
         let tool = Tool::pick(scan.uv.as_deref(), scan.base_python.as_deref());
         let pinned = scan.pinned_python.clone();
+        // chosen models need the venv setup manages (their packages go
+        // nowhere else), even when another python already has the base deps.
+        let for_models = !opts.models.is_empty() && !scan.venv && pinned.is_none();
         let detail = match (&scan.python, scan.deps, &tool) {
+            (_, true, Some(t)) if for_models => format!(
+                "venv at {home}/venv with numpy + tokenizers, via {}: the chosen models' packages go only there",
+                t.name()
+            ),
             (_, false, _) if pinned.is_some() => format!(
                 "URNA_PYTHON={} lacks numpy + tokenizers and wins over any env setup builds; unset it or install the deps there",
                 pinned.clone().unwrap_or_default()
@@ -142,7 +158,7 @@ pub fn plan(scan: &Scan, opts: &Opts) -> Vec<Item> {
         };
         Item {
             task: Task::Python,
-            on: !scan.deps && !opts.no_python,
+            on: (!scan.deps || for_models) && !opts.no_python,
             locked: false,
             blocked: if tool.is_none() {
                 Some("no uv and no python3 on PATH".to_string())
@@ -161,7 +177,96 @@ pub fn plan(scan: &Scan, opts: &Opts) -> Vec<Item> {
         blocked: None,
         detail: "urna doctor: interpreter, deps, table, one offline embed".into(),
     };
-    vec![payload, python, verify]
+    vec![payload, python, models_item(scan, opts), verify]
+}
+
+/// Re-derives the steps a model choice decides, after the picker changed
+/// it: the models step, and the python step (chosen models need the managed
+/// venv, even when another python has the base deps). the other steps keep
+/// the ticks the user gave them.
+pub fn reselect(items: &mut [Item], scan: &Scan, opts: &Opts) {
+    let fresh = plan(scan, opts);
+    for item in items
+        .iter_mut()
+        .filter(|i| matches!(i.task, Task::Python | Task::Models))
+    {
+        if let Some(f) = fresh.iter().find(|f| f.task == item.task) {
+            *item = f.clone();
+        }
+    }
+}
+
+/// The models step: what the chosen catalog models will install and fetch,
+/// or why they cannot. the catalog comes with the payload, so before one is
+/// installed the names are checked when the step runs.
+fn models_item(scan: &Scan, opts: &Opts) -> Item {
+    let offered = scan.kit.as_ref().map(|k| k.catalog.models.len());
+    let mut item = Item {
+        task: Task::Models,
+        on: !opts.models.is_empty(),
+        locked: false,
+        blocked: None,
+        detail: match offered {
+            Some(n) => format!("none chosen; {n} offered (m picks, or --model NAME|all)"),
+            None => "none chosen; the catalog comes with the payload (--model NAME|all)".into(),
+        },
+    };
+    if opts.models.is_empty() {
+        return item;
+    }
+    if let Some(p) = scan.pinned_python.as_deref() {
+        let ours = scan
+            .home
+            .as_ref()
+            .map(|h| crate::cmd::paths::venv_python(&h.join("venv")));
+        if ours.as_deref() != Some(std::path::Path::new(p)) {
+            item.blocked = Some(format!(
+                "URNA_PYTHON pins {p}: urna installs model packages only into its own venv"
+            ));
+            return item;
+        }
+    }
+    let Some(kit) = &scan.kit else {
+        item.detail = format!("after the payload: {}", opts.models.join(", "));
+        return item;
+    };
+    match kit.catalog.select(&opts.models) {
+        Ok(entries) => {
+            item.blocked = needs_remote_code(&entries, &opts.allow_remote_code);
+            item.detail = entries.iter().map(describe).collect::<Vec<_>>().join("; ");
+        }
+        Err(why) => item.blocked = Some(why),
+    }
+    item
+}
+
+/// The first chosen model whose repo code was not allowed, as a blocker.
+pub fn needs_remote_code(entries: &[Entry], allowed: &[String]) -> Option<String> {
+    entries
+        .iter()
+        .find(|e| e.remote_code && !allowed.contains(&e.name))
+        .map(|e| {
+            format!(
+                "{} runs code from its model repo: allow it separately (--allow-remote-code {0}, r in the picker)",
+                e.name
+            )
+        })
+}
+
+/// `name: packages + N MB from huggingface.co (repo@rev)`.
+pub fn describe(e: &Entry) -> String {
+    let pkgs = if e.packages.is_empty() {
+        String::new()
+    } else {
+        format!("{} + ", e.packages.join(" "))
+    };
+    format!(
+        "{}: {pkgs}{} from huggingface.co ({}@{})",
+        e.name,
+        models::mb(e.bytes),
+        e.repo,
+        &e.revision[..e.revision.len().min(8)]
+    )
 }
 
 #[cfg(test)]
@@ -182,17 +287,20 @@ mod tests {
             python: Some(("python3".into(), "Python 3.12.4".into())),
             pinned_python: None,
             deps: false,
+            venv: false,
             base_python: Some("python3".into()),
             uv: None,
             curl: Some(PathBuf::from("/usr/bin/curl")),
             simd: "neon",
+            kit: None,
         }
     }
 
     #[test]
     fn a_fresh_brew_install_plans_everything() {
         let p = plan(&bare(), &Opts::default());
-        assert!(p.iter().all(Item::runs));
+        assert!(p.iter().filter(|i| i.task != Task::Models).all(Item::runs));
+        assert!(!p[2].runs(), "models are opt-in");
         assert!(p[1].detail.contains("via pip"));
     }
 
@@ -341,6 +449,114 @@ mod tests {
         assert_eq!(blocked_code(&p), 14);
         assert_eq!(blocked_code(&plan(&bare(), &Opts::default())), 0);
         assert!(!p[1].runs());
-        assert!(p[2].runs());
+        assert!(p[3].runs() && p[3].task == Task::Verify);
+    }
+
+    fn with_models(models: &[&str], allow: &[&str]) -> (Scan, Opts) {
+        let mut s = bare();
+        s.kit = Some(models::Kit {
+            script: PathBuf::from("/h/.local/share/urna/forge/install_model.py"),
+            catalog: models::tests::sample(),
+        });
+        let o = Opts {
+            models: models.iter().map(|m| m.to_string()).collect(),
+            allow_remote_code: allow.iter().map(|m| m.to_string()).collect(),
+            ..Opts::default()
+        };
+        (s, o)
+    }
+
+    #[test]
+    fn models_are_opt_in_named_by_the_catalog_and_sized() {
+        let (s, o) = with_models(&[], &[]);
+        let item = &plan(&s, &o)[2];
+        assert!(
+            !item.runs() && item.detail.contains("2 offered"),
+            "{}",
+            item.detail
+        );
+        let (s, o) = with_models(&["org/a"], &[]);
+        let item = &plan(&s, &o)[2];
+        assert!(item.runs(), "{:?}", item.blocked);
+        assert!(
+            item.detail.contains("a: p + ") && item.detail.contains("huggingface.co (org/a@aaaa)")
+        );
+        let (s, o) = with_models(&["all"], &["b"]);
+        let item = &plan(&s, &o)[2];
+        assert!(item.runs() && item.detail.contains("b: ") && item.detail.contains("a: "));
+    }
+
+    #[test]
+    fn an_excluded_model_or_unallowed_repo_code_blocks_with_the_reason() {
+        let (s, o) = with_models(&["big"], &[]);
+        let item = &plan(&s, &o)[2];
+        let why = item.blocked.clone().unwrap();
+        assert!(
+            why.contains("not offered") && why.contains("too heavy"),
+            "{why}"
+        );
+        assert_eq!(
+            blocked_code(&plan(&s, &o)),
+            super::super::job::codes::BLOCKED
+        );
+        let (s, o) = with_models(&["b"], &[]);
+        let why = plan(&s, &o)[2].blocked.clone().unwrap();
+        assert!(why.contains("--allow-remote-code b"), "{why}");
+        let (s, o) = with_models(&["b"], &["a"]);
+        assert!(plan(&s, &o)[2].blocked.is_some(), "consent is per model");
+    }
+
+    #[test]
+    fn models_go_only_into_the_managed_venv_and_wait_for_the_payload() {
+        let (mut s, o) = with_models(&["a"], &[]);
+        s.pinned_python = Some("/usr/bin/python3".into());
+        let why = plan(&s, &o)[2].blocked.clone().unwrap();
+        assert!(why.contains("URNA_PYTHON pins /usr/bin/python3"), "{why}");
+        s.pinned_python = Some("/h/.local/share/urna/venv/bin/python".into());
+        assert!(plan(&s, &o)[2].blocked.is_none() || cfg!(windows));
+        let (mut s, o) = with_models(&["a"], &[]);
+        s.kit = None;
+        let item = &plan(&s, &o)[2];
+        assert!(
+            item.runs() && item.detail == "after the payload: a",
+            "{}",
+            item.detail
+        );
+    }
+
+    #[test]
+    fn chosen_models_build_the_managed_venv_even_when_python_has_the_deps() {
+        let (mut s, o) = with_models(&["a"], &[]);
+        s.deps = true;
+        s.uv = Some(PathBuf::from("/u/uv"));
+        let p = plan(&s, &o);
+        assert!(p[1].runs() && p[1].detail.contains("models' packages go only there"));
+        s.venv = true;
+        assert!(!plan(&s, &o)[1].runs(), "an existing managed venv is kept");
+        let (mut s, _) = with_models(&[], &[]);
+        s.deps = true;
+        assert!(!plan(&s, &Opts::default())[1].runs(), "no models: no venv");
+    }
+
+    #[test]
+    fn picking_a_model_in_the_picker_turns_the_managed_venv_on() {
+        // an external python with the base deps and no managed venv: the plan
+        // starts with the python step off; choosing a model must turn it on,
+        // and dropping the model turns it off again. the payload tick the
+        // user gave stays.
+        let (mut s, mut o) = with_models(&[], &[]);
+        s.deps = true;
+        s.uv = Some(PathBuf::from("/u/uv"));
+        let mut items = plan(&s, &o);
+        assert!(!items[1].runs() && !items[2].runs());
+        items[0].on = true;
+        o.models = vec!["a".into()];
+        reselect(&mut items, &s, &o);
+        assert!(items[1].runs(), "{}", items[1].detail);
+        assert!(items[1].detail.contains("models' packages go only there"));
+        assert!(items[2].runs() && items[0].on);
+        o.models.clear();
+        reselect(&mut items, &s, &o);
+        assert!(!items[1].runs() && !items[2].runs() && items[0].on);
     }
 }

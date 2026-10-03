@@ -18,7 +18,8 @@ outside the checkout, with only the staged tree on their path:
   when sentence-transformers is absent, and is handed to embed_query.py
   when it is present;
 - error path: a payload staged from a tree missing a module fails the
-  staging itself, so a release never ships half the route.
+  staging itself, so a release never ships half the route; so does a
+  `catalog.json` that is not what the registry generates.
 
 Run: .venv/bin/python tests/test_embedder_payload.py
 """
@@ -41,6 +42,7 @@ EXPECTED_FILES = {
     "urna/embed_query.py",
     "urna/VERSION",
     "urna/forge/__init__.py",
+    "urna/forge/catalog.json",
     "urna/forge/embed_default.py",
     "urna/forge/embed_potion.py",
     "urna/forge/embed_query_potion.py",
@@ -50,6 +52,7 @@ EXPECTED_FILES = {
     "urna/forge/embed_st.py",
     "urna/forge/embed_st_worker.py",
     "urna/forge/embed_image.py",
+    "urna/forge/install_model.py",
 }
 
 
@@ -168,9 +171,8 @@ def test_stage_refuses_incomplete_tree(base: Path) -> None:
         fake_root / "python" / "forge",
         ignore=shutil.ignore_patterns("__pycache__", "demo_corpus", "test_*.py"),
     )
-    shutil.copyfile(
-        REPO / "python" / "model_fingerprint.py", fake_root / "python" / "model_fingerprint.py"
-    )
+    for top in ("model_fingerprint.py", "embed_query.py"):
+        shutil.copyfile(REPO / "python" / top, fake_root / "python" / top)
     (fake_root / "python" / "forge" / "model_registry.py").unlink()
     r = subprocess.run(
         [sys.executable, str(fake_root / "scripts" / STAGE.name), str(base / "half")],
@@ -181,6 +183,23 @@ def test_stage_refuses_incomplete_tree(base: Path) -> None:
     assert r.returncode == 1, (r.returncode, r.stdout, r.stderr)
     assert "missing source" in r.stderr and "model_registry.py" in r.stderr, r.stderr
     print("incomplete tree refused: OK")
+
+    # the registry back, the catalog edited by hand: the payload must offer
+    # exactly what the registry generates, so staging refuses.
+    shutil.copyfile(
+        REPO / "python" / "forge" / "model_registry.py",
+        fake_root / "python" / "forge" / "model_registry.py",
+    )
+    (fake_root / "python" / "forge" / "catalog.json").write_text('{"models": []}\n')
+    r = subprocess.run(
+        [sys.executable, str(fake_root / "scripts" / STAGE.name), str(base / "stale")],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 1 and "catalog.json is stale" in r.stderr, (r.returncode, r.stderr)
+    assert not (base / "stale").exists()
+    print("stale catalog refused: OK")
 
 
 def main() -> None:

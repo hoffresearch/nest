@@ -10,6 +10,7 @@ use std::time::Instant;
 
 use ratatui_cheese::input::InputState;
 
+use super::offer::{Need, Offer};
 use crate::cmd::embed_failure::EmbedFailure;
 use crate::cmd::{agent, embed_gate};
 
@@ -20,7 +21,15 @@ pub struct Answer {
     pub text: String,
 }
 
-type Reply = Result<(Vec<Answer>, f64), String>;
+/// A failed query: the words for the toast, and the model to install when
+/// the failure is one the install panel can fix.
+#[derive(Clone, Debug)]
+pub struct Failure {
+    pub text: String,
+    pub need: Option<Need>,
+}
+
+type Reply = Result<(Vec<Answer>, f64), Failure>;
 
 pub struct Ask {
     pub input: InputState,
@@ -32,6 +41,8 @@ pub struct Ask {
     /// the last query's error, in words a person can act on.
     pub failed: Option<String>,
     pub(super) pending: Option<(Receiver<Reply>, Instant)>,
+    /// the install panel, open over the tab.
+    pub offer: Option<Offer>,
 }
 
 impl Default for Ask {
@@ -47,6 +58,7 @@ impl Default for Ask {
             took_ms: 0.0,
             failed: None,
             pending: None,
+            offer: None,
         }
     }
 }
@@ -73,13 +85,21 @@ impl Ask {
         self.pending = Some((rx, Instant::now()));
     }
 
-    /// Folds a finished query in; returns the error text when it failed.
-    pub fn poll(&mut self) -> Option<Result<usize, String>> {
+    /// Runs the last query again (after an install fixed what it lacked).
+    pub fn retry(&mut self, file: PathBuf) {
+        if let Some(q) = self.asked.clone() {
+            self.input.set_value(q);
+        }
+        self.submit(file);
+    }
+
+    /// Folds a finished query in; returns the failure when it failed.
+    pub fn poll(&mut self) -> Option<Result<usize, Failure>> {
         let (rx, _) = self.pending.as_ref()?;
         let reply = rx.try_recv().ok()?;
         self.pending = None;
         if let Err(e) = &reply {
-            self.failed = Some(e.clone());
+            self.failed = Some(e.text.clone());
             self.answers.clear();
         }
         Some(reply.map(|(answers, ms)| {
@@ -93,9 +113,12 @@ impl Ask {
     }
 }
 
-fn run_query(file: &PathBuf, query: &str) -> Result<Vec<Answer>, String> {
+fn run_query(file: &PathBuf, query: &str) -> Result<Vec<Answer>, Failure> {
+    let mut manifest = None;
     (|| -> anyhow::Result<Vec<Answer>> {
         let rt = urna_runtime::MmapUrnaFile::open(file)?;
+        let info: serde_json::Value = serde_json::from_str(&rt.inspect_json()?)?;
+        manifest = Some(info["manifest"].clone());
         let result = embed_gate::embed_and_search(&rt, query, 10, None, None, None)?;
         let texts = agent::retrieve::canonical_texts(file)?;
         let by_id: std::collections::HashMap<&str, &str> = texts
@@ -117,7 +140,24 @@ fn run_query(file: &PathBuf, query: &str) -> Result<Vec<Answer>, String> {
             })
             .collect())
     })()
-    .map_err(|e| explain(&e))
+    .map_err(|e| Failure {
+        text: explain(&e),
+        need: need(&e, manifest.as_ref()),
+    })
+}
+
+/// The corpus model to offer for install: only for the two failures an
+/// install fixes (packages missing, weights missing), named by the manifest.
+fn need(err: &anyhow::Error, manifest: Option<&serde_json::Value>) -> Option<Need> {
+    let fixable = matches!(
+        err.downcast_ref::<EmbedFailure>(),
+        Some(EmbedFailure::DepsMissing { .. } | EmbedFailure::WeightsMissing { .. })
+    );
+    let m = manifest.filter(|_| fixable)?;
+    Some(Need {
+        model: m["embedding_model"].as_str()?.to_string(),
+        corpus_hash: m["model_hash"].as_str()?.to_string(),
+    })
 }
 
 /// The engine's error, turned toward what fixes it from this screen: a
@@ -204,6 +244,33 @@ mod tests {
         ));
         assert!(spawn.contains("setup"), "{spawn}");
         assert_eq!(explain(&anyhow::anyhow!("first\nsecond")), "first");
+    }
+
+    #[test]
+    fn only_missing_packages_or_weights_open_the_install_panel() {
+        let manifest = serde_json::json!({"embedding_model": "org/m", "model_hash": "sha256:m"});
+        let deps = anyhow::Error::new(EmbedFailure::DepsMissing {
+            python: "/v/bin/python".into(),
+            packages: vec!["sentence-transformers".into()],
+        });
+        assert_eq!(
+            need(&deps, Some(&manifest)),
+            Some(Need {
+                model: "org/m".into(),
+                corpus_hash: "sha256:m".into()
+            })
+        );
+        let weights = anyhow::Error::new(EmbedFailure::WeightsMissing {
+            model: "org/m".into(),
+        });
+        assert!(need(&weights, Some(&manifest)).is_some());
+        let hash = anyhow::Error::new(EmbedFailure::HashMismatch {
+            corpus: "a".into(),
+            embedder: "b".into(),
+            fingerprint: "{}".into(),
+        });
+        assert_eq!(need(&hash, Some(&manifest)), None);
+        assert_eq!(need(&deps, None), None);
     }
 
     #[test]

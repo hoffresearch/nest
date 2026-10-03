@@ -12,6 +12,7 @@ mod health;
 mod hits;
 mod home;
 mod keys;
+mod offer;
 mod pick;
 
 use std::path::PathBuf;
@@ -165,8 +166,22 @@ impl App {
         }
         match self.ask.poll() {
             Some(Ok(0)) => self.toasts.push("no hits", Kind::Warn),
-            Some(Err(e)) => self.toasts.push(e, Kind::Err),
+            // a model the catalog offers opens the install panel instead of
+            // a toast that would sit on top of it.
+            Some(Err(e)) => match e.need.and_then(offer::Offer::new) {
+                Some(o) => self.ask.offer = Some(o),
+                None => self.toasts.push(e.text, Kind::Err),
+            },
             _ => {}
+        }
+        let installed = self.ask.offer.as_mut().and_then(offer::Offer::poll);
+        if let Some(offer::Outcome::Installed(msg)) = installed {
+            self.ask.offer = None;
+            self.toasts
+                .push(format!("installed {msg}; asking again"), Kind::Ok);
+            if let Some(c) = &self.corpus {
+                self.ask.retry(c.path.clone());
+            }
         }
         if self.health.poll() && self.tab == Tab::Health {
             let n = self

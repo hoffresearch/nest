@@ -65,7 +65,7 @@ for source_uri, text in documents:  # your (uri, text) pairs
 pipe.emit()
 ```
 
-the embedder is any callable that takes the chunk specs and returns one l2-normalized vector per spec; `potion_embedder()` is one, and a sentence-transformers wrapper is a few lines (`m.encode([s.canonical_text for s in specs], normalize_embeddings=True).tolist()`). for real-world examples: `python/convert_legacy.py` (SQLite to `.urna`), `python/tools/urna_build_corpus.py` (7 PT-BR datasets to a unified `.urna`), and `examples/quickstart/quickstart.py` (the shortest complete build, on `urna.build` directly).
+the embedder is any callable that takes the chunk specs and returns one l2-normalized vector per spec; `potion_embedder()` is one, and a sentence-transformers wrapper is a few lines (`m.encode([s.canonical_text for s in specs], normalize_embeddings=True).tolist()`). for real-world examples: `python/convert_legacy.py` (SQLite to `.urna`), the [fakenews-ptbr-urna-benchmark](https://github.com/brennercruvinel/fakenews-ptbr-urna-benchmark) (seven pt-br datasets to `.urna` files with three example embedders, on the published wheel), and `examples/quickstart/quickstart.py` (the shortest complete build, on `urna.build` directly).
 
 ### image and pdf corpora
 
@@ -357,7 +357,7 @@ urna cite my_corpus.urna 'urna://sha256:1aa9.../sha256:8f314...'
 ./scripts/release_check.sh
 ```
 
-runs the full pipeline: the 639-line guard, cargo fmt, clippy, the rust suite in release, the python extension rebuilt with `pyo3/extension-module`, the ten python suites (e2e, builder, search_text_model_hash, image_corpus, forge_spec, quality_gate, cli_space, query_embedder_routing, embedder_payload, bench_runner), ruff when importable, `measure_presets.py` and `compare_measure.py` against the committed baseline. exits non-zero on any failure. what it does not run: the flagship e2e tests that need the forge deps (`cli_e2e.rs` skips without them), `test_offline_guard.py`, `test_blob_bridge.py`, `test_space_bridge.py`, and the checks ci adds on top (cargo-deny, cargo-semver-checks, the windows job, the fuzz smoke).
+runs the full pipeline: the 639-line guard, cargo fmt, clippy, the rust suite in release, the python extension rebuilt with `pyo3/extension-module`, the twelve python suites (e2e, builder, search_text_model_hash, image_corpus, forge_spec, quality_gate, cli_space, query_embedder_routing, embedder_payload, bench_runner, model_catalog, model_install; the last fetches an 18 mb hub test model and skips that case when huggingface.co does not answer), ruff when importable, `measure_presets.py` and `compare_measure.py` against the committed baseline. exits non-zero on any failure. what it does not run: the flagship e2e tests that need the forge deps (`cli_e2e.rs` skips without them), `test_offline_guard.py`, `test_blob_bridge.py`, `test_space_bridge.py`, and the checks ci adds on top (cargo-deny, cargo-semver-checks, the windows job, the fuzz smoke).
 
 ## 11. install health check (`urna doctor`)
 
@@ -389,7 +389,7 @@ embedding models are DATA, not per-project code: `python/forge/model_registry.py
 
 the mrl column is the validated ladder (`dims=` accepts exactly those values, not a range).
 
-on an installed binary the potion route works out of the box; the other presets need their deps in the setup venv and a local model snapshot. `urna ask` on such a corpus says which: the missing packages with the exact install line for the interpreter it ran (`uv pip install --python <venv python> sentence-transformers`), or the model missing from the local cache, fetched once by running the same query with `URNA_ALLOW_DOWNLOAD=1`. `minilm-multilingual` is the model of the pt-br demo corpus: it embeds through the same functions `search-text` uses, so a corpus built with it before the preset existed keeps its `model_hash`.
+on an installed binary the potion route works out of the box; the other presets need their deps in the setup venv and a local model snapshot. a preset whose install was validated end to end (a pinned hub revision, the exact files fetched at it and the `model_hash` they fingerprint to) is in the model catalog the payload ships, and `urna setup --model <name>` or the explorer's install panel installs it (section 16). `python python/forge/model_catalog.py` prints the catalog: today `minilm-multilingual`, and every other preset with the reason it is left out (heavy, model-repo code not reviewed and pinned, no pinned hub revision). for a preset outside the catalog, `urna ask` says what is missing: the packages with the exact install line for the interpreter it ran (`uv pip install --python <venv python> sentence-transformers`), or the model missing from the local cache, fetched once by running the same query with `URNA_ALLOW_DOWNLOAD=1`. `minilm-multilingual` is the model of the pt-br demo corpus: it embeds through the same functions `search-text` uses, so a corpus built with it before the preset existed keeps its `model_hash`.
 
 three rules the registry enforces, loudly:
 
@@ -503,7 +503,7 @@ urna setup
 on a terminal it runs inline, in four steps with the screen left in the scrollback when it ends:
 
 1. scan: how urna got here (homebrew, npm, cargo, install script, dev build), the data dir, whether the payload and a python with numpy + tokenizers are present, and which tools the steps can use (`curl`, `uv`, a `python3` with `venv`). read-only.
-2. plan: one checkbox per step. a satisfied step starts unticked (ticking it reinstalls); a step this machine cannot run is shown blocked with the reason. the payload counts as satisfied only when setup's own data dir holds one from the release it wants (this binary's, or `--version`), read from `<data root>/urna/VERSION`: a payload from another release, or from before the stamp (0.5.1 and older), is replaced, so upgrading the binary and running `urna setup` upgrades the scripts it runs. a payload missing a required file is reinstalled the same way, whatever its stamp. the venv next to it is never touched.
+2. plan: one checkbox per step (payload, python env, models, verify). a satisfied step starts unticked (ticking it reinstalls); a step this machine cannot run is shown blocked with the reason. the payload counts as satisfied only when setup's own data dir holds one from the release it wants (this binary's, or `--version`), read from `<data root>/urna/VERSION`: a payload from another release, or from before the stamp (0.5.1 and older), is replaced, so upgrading the binary and running `urna setup` upgrades the scripts it runs. a payload missing a required file is reinstalled the same way, whatever its stamp. the venv next to it is never touched.
 3. install: the payload (`urna-embedder-payload.tar.gz` from the release that matches the binary's version, its sha256 checked while it streams, unpacked into a staging dir, refused if any required file is missing, then laid down as one step: `embed_query.py` and `model_fingerprint.py`, then `forge/`, then `VERSION` last; if anything fails the previous payload is put back as it was, and if putting it back fails too its files are kept at `<data root>/.urna-previous-<pid>-<time>` and the error names that path) and the python env (`<data root>/urna/venv`, built with `uv` when it is on `PATH`, else `python3 -m venv` + pip), with the tools' output live in a log.
 4. verify: the doctor checks (section 11), then what to run next, or on failure each step's error and how to retry.
 
@@ -512,14 +512,29 @@ urna setup --yes                     # the default plan, no questions, plain lin
 urna setup --version v0.5.0          # the payload of a given release (replaces one from another)
 urna setup --force                   # reinstall the payload even when it matches
 urna setup --no-python               # payload only; bring your own interpreter via URNA_PYTHON
+urna setup --model minilm-multilingual  # also install a catalog model (repeatable; `all` picks every offered one)
 urna setup --uninstall               # remove the payload and the env (never the binary, never the hf cache)
 ```
 
-without a terminal on both ends (a pipe, ci, a postinstall hook) setup behaves as `--yes`. exit codes extend doctor's: `0` ready, `2`..`6` a doctor check failed after the steps ran, `10` download failed, `11` the payload does not match the release checksum (nothing is installed), `12` unpack failed, `13` the python env failed, `14` a step the machine needs is blocked here (no `curl`, no `uv` and no `python3`, no data dir, or `URNA_PYTHON` pins an interpreter without the deps).
+without a terminal on both ends (a pipe, ci, a postinstall hook) setup behaves as `--yes`. exit codes extend doctor's: `0` ready, `2`..`6` a doctor check failed after the steps ran, `10` download failed, `11` the payload does not match the release checksum (nothing is installed), `12` unpack failed, `13` the python env failed, `14` a step the machine needs is blocked here (no `curl`, no `uv` and no `python3`, no data dir, `URNA_PYTHON` pins an interpreter without the deps, or a chosen model the catalog leaves out, whose repo code was not allowed, or whose packages would have to go into an env setup does not manage), `15` a model install failed.
+
+### models
+
+the payload carries `forge/catalog.json`, generated from the registry (section 12): the models setup can install, each with the hub repo and the pinned revision, the exact files fetched at it, their size, the pip packages its backend needs and the `model_hash` the files must fingerprint to. on the plan screen `m` (or space on the models step) opens a picker: a checkbox per offered model with what it adds and downloads, `a` for every one, and below them every preset the catalog leaves out with the reason. after a fresh install the catalog has only just arrived, so the last screen offers `m` too. with `--yes`, `--model <name>` chooses (a catalog name or the manifest model name; repeatable; `all` is every offered model).
+
+choosing a model is the consent to download it: the plan (or the flag) names the size and the source before anything moves. a model that runs code from its own repo needs a second, separate consent: `r` in the picker or `--allow-remote-code <name>`; without it the step stays blocked. the install, the same one the explorer's panel runs:
+
+1. the model's packages go into the venv setup manages and nowhere else (`uv pip install --python <data root>/urna/venv/bin/python`, or that env's pip). when models are chosen and that venv is missing, the python step builds it, even if another python already has numpy and tokenizers. an `URNA_PYTHON` pin elsewhere blocks the step: urna does not install into an interpreter it does not manage.
+2. `forge/install_model.py` fetches exactly the catalog's files at the pinned revision into the shared hugging face cache (`$HF_HOME/hub`, default `~/.cache/huggingface/hub`), the cache the query embedders read offline, reporting progress as it goes. it points the repo's `refs/main` at the pin when the cache has none; a `refs/main` that already names another revision belongs to whoever fetched it and is left alone, and the install fails naming both.
+3. the files are fingerprinted: anything but the catalog's `model_hash` fails the install (and, from the explorer, anything but the corpus's own).
+
+a failed model does not stop the next one. `--uninstall` leaves the hugging face cache alone: it is shared with every other tool that reads it.
 
 the binary links no network stack: setup downloads through the system `curl` (https only, no downgrade on redirect), the same tool `install.sh` uses, and `URNA_RELEASE_BASE` points it at a mirror or a `file://` directory for air-gapped machines.
 
 the explorer opens a `.urna` and shows it: the manifest and the verdict of the same checks `urna validate` runs, the section table with a size bar per section, an ask tab that embeds offline through the same routed embedder and `model_hash` gate as `urna ask` and shows each hit's stored text, citation and source, and the doctor checks.
+
+when a query fails because the corpus's model needs packages or weights this machine lacks, and the payload's catalog offers that model, the ask tab opens an install panel instead of an error: the packages it adds to the managed venv, the megabytes it fetches from huggingface.co at the pinned revision, and the `model_hash` it must come out as, checked against the corpus's. `y` installs (the download consent), `r` allows the model's repo code (the separate consent, when it runs any), `n` or `esc` declines; the install streams its steps, a progress bar and the log into the panel, a failure keeps the facts and offers a retry, and success runs the query again. when queries do not run the managed venv (an `URNA_PYTHON` pin, or no setup yet) the panel names the reason and the `urna setup --model` line instead of installing anything.
 
 ```sh
 urna tui corpus.urna
@@ -532,6 +547,7 @@ urna                                 # a bare urna on a terminal opens the explo
 | `o` (`ctrl+o` in ask) | everywhere | open a `.urna` (dirs and `.urna` files only) |
 | `1`..`9` | home | open a `.urna` found in the working dir or one level below |
 | `enter`, `↑↓`, `pgup/pgdn`, `esc` | ask | ask, pick a hit, scroll its text, clear the query |
+| `y`, `r`, `n` / `esc` | ask, install panel open | install (download consent), allow repo code (separate consent), decline |
 | `r` | health | re-run the checks |
 | `s` | everywhere but ask | hand the terminal to `urna setup`, then come back with the same corpus open |
 | `q` (`ctrl+q` in ask), `esc` on home | everywhere | quit |
@@ -559,7 +575,7 @@ every `URNA_*` variable read anywhere in the codebase (installers, cli, forge, d
 | `URNA_COLOR` | runtime | probed from the terminal | `truecolor`, `256` or `none`: color depth of `urna setup`, `urna tui` and the colored `doctor` output |
 | `NO_COLOR` | runtime | unset | any value turns every color off (no-color.org); modifiers stay |
 | `URNA_FORCE_SCALAR` | runtime | unset | forces the scalar simd kernel over avx2 / neon, for a/b benchmarking |
-| `URNA_ALLOW_DOWNLOAD` | runtime, build | unset (offline) | lets `search-text`, `embed_query.py`, `model_fingerprint.py`, and the corpus builder fetch a sentence-transformers model instead of failing offline |
+| `URNA_ALLOW_DOWNLOAD` | runtime, build | unset (offline) | lets `search-text`, `embed_query.py`, `model_fingerprint.py`, and the corpus builder fetch a sentence-transformers model instead of failing offline; `urna setup --model` and the explorer's install panel set it for their own fetch only, after the download was confirmed |
 | `URNA_ALLOW_REMOTE_CODE` | runtime, build | unset (empty) | comma-separated preset names allowed to load `trust_remote_code` model-repo code (`ask` / `retrieve` routing, `urna_model_bench.py`, `urna_ui_bridge.py`) |
 | `URNA_ALLOW_HEAVY` | runtime | unset | allows an executable / heavy embedder preset in `embed_query_model.py` |
 | `URNA_CACHE_DIR` | build | `${XDG_CACHE_HOME:-~/.cache}/urna` | forge's triad-addressed embed cache root (declarative builds, section 13) |
