@@ -98,7 +98,7 @@ class UrnaSystem:
         return [self.order[h.chunk_id] for h in hits]
 
     def validate(self) -> str:
-        return "yes (sha256: section prefix, file, content)" if self.db.validate() else "FAILED"
+        return "yes (sha256: header and section prefixes, footer digest)" if self.db.validate() else "FAILED"
 
     def content_hash(self) -> str:
         return self.db.content_hash

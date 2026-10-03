@@ -16,7 +16,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [0.5.2] - 2026-10-03
 
-Query any corpus an installed Urna can embed: a sentence-transformers corpus outside the registry (the pt-BR MiniLM and MPNet files), a registry model the catalog installs with `urna setup --model`, and siglip2 offline from its pinned hub snapshot. No format change and no break in the `urna-format` or `urna-runtime` API (`cargo semver-checks` against v0.5.1).
+Query any corpus an installed Urna can embed: a sentence-transformers corpus outside the registry (the pt-BR MiniLM and MPNet files), a registry model the catalog installs with `urna setup --model`, and siglip2 offline from its pinned hub snapshot. No format change. A patch release by the project's 0.x policy, where the minor is the compatibility boundary: nothing here crosses it (`cargo semver-checks` against v0.5.1 finds no API change in `urna-format` or `urna-runtime`, whose code did not change), so a dependent on `^0.5` takes it with `cargo update`, and the new CLI options and the model installer are additions.
 
 ### Added
 
