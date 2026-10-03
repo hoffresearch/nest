@@ -42,6 +42,7 @@ first. `urna doctor` validates exactly this layout post-install.
 
 from __future__ import annotations
 
+import re
 import shutil
 import sys
 import tarfile
@@ -81,13 +82,24 @@ TOP_LEVEL_MODULES = [
 ]
 
 
-def workspace_version() -> str:
+def workspace_version(manifest: Path | None = None) -> str:
     """The version every crate and the wheel ship under; at release time it is
-    the tag's, so the stamp names the release the payload came from."""
-    import tomllib
+    the tag's, so the stamp names the release the payload came from.
 
-    with (ROOT / "Cargo.toml").open("rb") as f:
-        return tomllib.load(f)["workspace"]["package"]["version"]
+    dist's global release job runs this with the runner's python3, which is
+    3.10 on ubuntu-22.04 and has no tomllib (3.11+), so without it the
+    `version` line of [workspace.package] is read directly."""
+    text = (manifest or ROOT / "Cargo.toml").read_text(encoding="utf-8")
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        section = re.search(r"^\[workspace\.package\]\s*$(.*?)(?=^\[|\Z)", text, re.M | re.S)
+        version = section and re.search(r'^version\s*=\s*"([^"]+)"\s*$', section.group(1), re.M)
+        if not version:
+            msg = "stage_embedder_payload: no version in [workspace.package] of Cargo.toml"
+            raise SystemExit(msg) from None
+        return version.group(1)
+    return tomllib.loads(text)["workspace"]["package"]["version"]
 
 
 def catalog_drift() -> str | None:
