@@ -4,6 +4,7 @@
 //! terminal's color depth.
 
 mod done;
+mod models;
 mod plan;
 mod run;
 mod scan;
@@ -49,6 +50,7 @@ pub fn draw(f: &mut Frame, ui: &mut Ui, dt: Duration) {
         Step::Splash => splash::draw(buf, body, ui),
         Step::Scan => scan::draw(buf, body, ui),
         Step::Plan => plan::draw(buf, body, ui),
+        Step::Models => models::draw(buf, body, ui),
         Step::Run => run::draw(buf, body, ui),
         Step::Done => done::draw(buf, body, ui),
     }
@@ -61,7 +63,7 @@ pub fn draw(f: &mut Frame, ui: &mut Ui, dt: Duration) {
             ui.fx.add_unique_effect("page", fx::page_in(body));
         }
         // the symbol's breathing belongs to the screens that draw it.
-        if matches!(ui.step, Step::Plan | Step::Run) {
+        if matches!(ui.step, Step::Plan | Step::Models | Step::Run) {
             ui.fx.cancel_unique_effect("shimmer");
         }
     }
@@ -108,6 +110,12 @@ fn header(buf: &mut Buffer, area: Rect, ui: &Ui) -> Option<Rect> {
 
 /// `■ scan ── ● plan ── ○ install ── ○ verify` from x; returns where it ends.
 fn stepper(buf: &mut Buffer, x: u16, y: u16, right: u16, step: Step) -> u16 {
+    // the picker is part of planning.
+    let step = if step == Step::Models {
+        Step::Plan
+    } else {
+        step
+    };
     let steps = [
         ("scan", Step::Scan),
         ("plan", Step::Plan),
@@ -149,15 +157,23 @@ fn footer(buf: &mut Buffer, area: Rect, step: Step) {
         Step::Plan => vec![
             b("↑↓", "move"),
             b("space", "toggle"),
+            b("m", "models"),
             b("enter", "install"),
             b("q", "quit"),
+        ],
+        Step::Models => vec![
+            b("↑↓", "move"),
+            b("space", "toggle"),
+            b("a", "all"),
+            b("r", "allow repo code"),
+            b("enter", "done"),
         ],
         Step::Run => vec![
             b("↑↓", "scroll log"),
             b("end", "follow"),
             b("ctrl+c", "abort"),
         ],
-        Step::Done => vec![b("enter", "finish")],
+        Step::Done => vec![b("enter", "finish"), b("m", "add models")],
     };
     let styles = HelpStyles {
         ellipsis: pal::faint(),
