@@ -14,13 +14,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-10-03
+
+The 0.5.2 release for every channel. The `v0.5.2` tag reached PyPI and nothing else: the release's global job stopped on the payload stamp (below), so the GitHub release, the archives, crates.io, npm and Homebrew never ran. 0.5.3 is 0.5.2 plus that fix; the wheel is built from the same sources. No format or API change.
+
 ### Fixed
 
-- The release's global job failed on the 0.5.2 tag before building anything: `scripts/stage_embedder_payload.py` imported `tomllib` (Python 3.11+) to stamp `VERSION`, and dist runs it with the runner's `python3`, 3.10 on ubuntu-22.04. The GitHub release, crates.io, npm and Homebrew jobs were skipped; only the PyPI wheels (their own workflow, which does not stage the payload) went out. The stamp now falls back to reading `version` from `[workspace.package]` directly; staged under Python 3.10 it writes the same `VERSION`, and `tests/test_embedder_payload.py` covers it with and without `tomllib`.
+- The release's global job failed on the 0.5.2 tag before building anything: `scripts/stage_embedder_payload.py` imported `tomllib` (Python 3.11+) to stamp `VERSION`, and dist runs it with the runner's `python3`, 3.10 on ubuntu-22.04. The GitHub release, crates.io, npm and Homebrew jobs were skipped; only the PyPI wheels (their own workflow, which does not stage the payload) went out. 0.5.3 ships the fix; the stamp now falls back to reading `version` from `[workspace.package]` directly; staged under Python 3.10 it writes the same `VERSION`, and `tests/test_embedder_payload.py` covers it with and without `tomllib`.
 
 ## [0.5.2] - 2026-10-03
 
-Query any corpus an installed Urna can embed: a sentence-transformers corpus outside the registry (the pt-BR MiniLM and MPNet files), a registry model the catalog installs with `urna setup --model`, and siglip2 offline from its pinned hub snapshot. No format change. A patch release by the project's 0.x policy, where the minor is the compatibility boundary: nothing here crosses it (`cargo semver-checks` against v0.5.1 finds no API change in `urna-format` or `urna-runtime`, whose code did not change), so a dependent on `^0.5` takes it with `cargo update`, and the new CLI options and the model installer are additions.
+Query any corpus an installed Urna can embed: a sentence-transformers corpus outside the registry (the pt-BR MiniLM and MPNet files), a registry model the catalog installs with `urna setup --model`, and siglip2 offline from its pinned hub snapshot. No format change. No API compatibility break, according to `cargo-semver-checks` against v0.5.1; `urna-runtime` gains public additions (`search_routed`, `ann_ef_floor`, `apply_blob_span_overlay`). A patch release by the project's 0.x policy, where the minor marks a compatibility break: a dependent on `^0.5` takes it with `cargo update`, and the new CLI options and the model installer are additions. Published on PyPI only; the other channels ship as 0.5.3.
 
 ### Added
 
