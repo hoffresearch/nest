@@ -6,24 +6,24 @@ last-updated: 2026-09-29
 domain: contributing
 ---
 
-# contributing
+# Contributing
 
-`urna` is maintained by [hoff research](https://hoffresearch.com). author: brenner cruvinel ([brenner@hoffresearch.com](mailto:brenner@hoffresearch.com)). all contributions are welcome.
+`urna` is maintained by [Hoff Research](https://hoffresearch.com). Author: Brenner Cruvinel ([brenner@hoffresearch.com](mailto:brenner@hoffresearch.com)). All contributions are welcome.
 
-## how to contribute
+## How to contribute
 
-1. fork the repo at https://github.com/hoffresearch/urna.
-2. branch from `main`: `git checkout -b feature/short-description origin/main`.
-3. keep each pr focused on one concern. small is better.
-4. add or update tests for the change. new behavior needs a new test. write real tests against real artifacts (built .urna files, golden fixtures, real corpora), no mocks; cover the happy path, the error path, and one edge case.
-5. if the change alters architecture, module boundaries, data flow, or doc locations, update `docs/arc/ARC.toml` in the same pr. keep it concise and pragmatic. do not add a separate human architecture doc; `ARC.toml` is the machine map, the human reference, and the mermaid diagram all in one file.
-6. run `./scripts/release_check.sh` locally before pushing: it is the gate (the rust suite in release, the extension rebuilt, the python suites, ruff, the regression gates against `data/measure/baseline.json`). `.github/workflows/ci.yml` covers the rust side on linux, macos and windows plus checks the local gate does not run (cargo-deny, cargo-semver-checks, the engine-only clippy, the benches compiled, a cargo-fuzz smoke); it runs ruff but not the python suites, so run them locally.
-7. commit with a clear message in plain english. no conventional commits prefix.
-8. open a pr against `main`. the maintainer squash merges it; `main` requires verified (ssh-signed) commits and linear history, so sign your commits (`git config commit.gpgsign true` with an ssh or gpg key registered on github).
+1. Fork the repo at https://github.com/hoffresearch/urna.
+2. Branch from `main`: `git checkout -b feature/short-description origin/main`.
+3. Keep each PR focused on one concern. Small is better.
+4. Add or update tests for the change. New behavior needs a new test. Write real tests against real artifacts (built .urna files, golden fixtures, real corpora), no mocks; cover the happy path, the error path, and one edge case.
+5. If the change alters architecture, module boundaries, data flow, or doc locations, update `docs/arc/ARC.toml` in the same PR. Keep it concise and pragmatic. Do not add a separate human architecture doc; `ARC.toml` is the machine map, the human reference, and the mermaid diagram all in one file.
+6. Run `./scripts/release_check.sh` locally before pushing: it is the gate (the Rust suite in release, the extension rebuilt, the Python suites, ruff, the regression gates against `data/measure/baseline.json`). `.github/workflows/ci.yml` covers the Rust side on Linux, macOS and Windows plus checks the local gate does not run (cargo-deny, cargo-semver-checks, the engine-only Clippy, the benches compiled, a cargo-fuzz smoke); it runs ruff but not the Python suites, so run them locally.
+7. Commit with a clear message in plain English. No conventional commits prefix.
+8. Open a PR against `main`. The maintainer squash merges it; `main` requires verified (SSH-signed) commits and linear history, so sign your commits (`git config commit.gpgsign true` with an SSH or GPG key registered on GitHub).
 
-## setup
+## Setup
 
-requires rust edition 2024 (`rustc >= 1.88`: the cli crate's floor, set by ratatui; the format, runtime and python crates alone build on 1.85) and python 3.12+.
+Requires Rust edition 2024 (`rustc >= 1.88`: the CLI crate's floor, set by Ratatui; the format, runtime and Python crates alone build on 1.85) and Python 3.12+.
 
 ```
 git clone https://github.com/hoffresearch/urna.git
@@ -41,63 +41,62 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install ruff numpy tokenizers pillow sentence-transformers pandas zstandard pyarrow
 ```
 
-`numpy` and `tokenizers` are the forge deps the potion embedder needs; `pillow` is for the image tests; `sentence-transformers` only for the pt-br corpus and `search-text`.
+`numpy` and `tokenizers` are the forge deps the potion embedder needs; `pillow` is for the image tests; `sentence-transformers` only for the pt-BR corpus and `search-text`.
 
-`data/corpus_next.v1.urna` is tracked via git lfs; it is the frozen baseline of the regression gate, and `data/demo/Instructions.md` gives its hashes. demo data under `data/demo/` is local-only and gitignored. without it, runtime unit tests still pass.
+`data/corpus_next.v1.urna` is tracked via Git LFS; it is the frozen baseline of the regression gate, and `data/demo/Instructions.md` gives its hashes. Demo data under `data/demo/` is local-only and gitignored. Without it, runtime unit tests still pass.
 
-## conventions and writing style
+## Conventions and writing style
 
-these conventions are not aesthetic preferences. they exist to keep the repo readable for humans, agents, and vector search at the same time. if you find yourself wanting to break one, open an issue first and explain why; do not silently deviate. the goal is gentle communal pressure to keep the codebase legible.
+These conventions are not aesthetic preferences. They exist to keep the repo readable for humans, agents, and vector search at the same time. If you find yourself wanting to break one, open an issue first and explain why; do not silently deviate. The goal is gentle communal pressure to keep the codebase legible.
 
-### naming
+### Naming
 
-- directories, docs and assets are **kebab-case english** (`data/`, `docs/`, `examples/`, `assets/images/`); rust workspace conventions (`crates/`, `target/`) and language defaults (`python/`, `scripts/`, `tests/`) stay as their stacks expect.
-- multi-word documentation and asset names use **kebab-case in english** (`code-of-conduct.md`-style filenames, dataset folders, etc.).
-- source files follow the conventions of their language (`snake_case.rs`, `snake_case.py`).
-- when proposing renames or moves, list exact `mv` commands first, execute the move, fix every touched import, and run the test suite after.
+- Directories, docs and assets are **kebab-case English** (`data/`, `docs/`, `examples/`, `assets/images/`); Rust workspace conventions (`crates/`, `target/`) and language defaults (`python/`, `scripts/`, `tests/`) stay as their stacks expect.
+- Multi-word documentation and asset names use **kebab-case in English** (`code-of-conduct.md`-style filenames, dataset folders, etc.).
+- Source files follow the conventions of their language (`snake_case.rs`, `snake_case.py`).
+- When proposing renames or moves, list exact `mv` commands first, execute the move, fix every touched import, and run the test suite after.
 
-### writing style
+### Writing style
 
-- write in **diataxis style**: separate tutorial, how-to, reference, and explanation. mixing them produces noise.
-- **all lowercase** in body text. acronyms used as words keep their canonical case (`CLI`, `BM25`, `HNSW`, `SIMD`, `MIT`).
-- **no emoji**, anywhere. **no em-dash** (`-`); use `,`, `;`, `.`, or a regular hyphen.
-- short paragraphs, direct voice, no marketing copy. commits explain the **why**; the diff already shows the what. no conventional-commits prefix.
-- every governance or architecture doc starts with a yaml frontmatter block (`project`, `audience`, `status`, `last-updated`, `domain`) so llm and vector tooling can resolve it semantically.
+- Write in **Diataxis style**: separate tutorial, how-to, reference, and explanation. Mixing them produces noise.
+- **No emoji**, anywhere. **No em-dash** (`-`); use `,`, `;`, `.`, or a regular hyphen.
+- Short paragraphs, direct voice, no marketing copy. Commits explain the **why**; the diff already shows the what. No conventional-commits prefix.
+- Every governance or architecture doc starts with a YAML frontmatter block (`project`, `audience`, `status`, `last-updated`, `domain`) so LLM and vector tooling can resolve it semantically.
 
-### agent instruction files
+### Agent instruction files
 
-- `.contracts/.agents/AGENTS.md` is the single instruction source for ai coding agents working in this repo: use/update/init only `.contracts/.agents/AGENTS.md` (the core global agent file).
-- do not create per-tool instruction files (GEMINI.md, CODEX.md, cursor rules). the root `CLAUDE.md` is a symlink to that file, not a second source; most agentic tooling already reads `.contracts/.agents/AGENTS.md` by default, point the rest at it on init.
+- `.contracts/.agents/AGENTS.md` is the single instruction source for AI coding agents working in this repo: use/update/init only `.contracts/.agents/AGENTS.md` (the core global agent file).
+- Do not create per-tool instruction files (GEMINI.md, CODEX.md, cursor rules). The root `CLAUDE.md` is a symlink to that file, not a second source; most agentic tooling already reads `.contracts/.agents/AGENTS.md` by default, point the rest at it on init.
 
-### file hygiene
+### File hygiene
 
-human working memory holds four plus or minus one chunks at once (cowan, 2001). neural networks behave better the same way. a file that does not fit the mental window forces internal context switching and raises bug rates. this is the same principle ui designers apply to information density.
+Human working memory holds four plus or minus one chunks at once (Cowan, 2001). Neural networks behave better the same way. A file that does not fit the mental window forces internal context switching and raises bug rates. This is the same principle UI designers apply to information density.
 
-- **hard limit: 639 lines per code file.** above it, split along single-responsibility lines in the same pr.
-- exempt: tests, data and generated files, lockfiles, json, yaml, toml and vendored files.
+- **Hard limit: 639 lines per code file.** Above it, split along single-responsibility lines in the same PR.
+- Exempt: tests, data and generated files, lockfiles, JSON, YAML, TOML and vendored files.
 
-## code style
+## Code style
 
-rust:
+Rust:
 
-- edition 2024. `cargo fmt --all` enforced, rules pinned in `rustfmt.toml`.
-- `cargo clippy --workspace --all-targets -- -D warnings` is a hard gate. suppress an individual lint with `#[allow(clippy::name)]` and a one-line justification, never globally.
-- every `unsafe` block needs a `// SAFETY:` comment naming the invariant the caller is relying on.
-- public items get a doc comment that explains the why, not the what. the name already says what.
-- file hygiene as above: 639 lines.
+- Edition 2024. `cargo fmt --all` enforced, rules pinned in `rustfmt.toml`.
+- `cargo clippy --workspace --all-targets -- -D warnings` is a hard gate. Suppress an individual lint with `#[allow(clippy::name)]` and a one-line justification, never globally.
+- Every `unsafe` block needs a `// SAFETY:` comment naming the invariant the caller is relying on.
+- Public items get a doc comment that explains the why, not the what. The name already says what.
+- File hygiene as above: 639 lines.
 
-python:
+Python:
 
-- target `py312`, line length 100. ruff config in `pyproject.toml`.
-- lints: `E F W I B UP SIM`. run `ruff check .` and `ruff format --check .`.
-- private helpers in `python/tools/` use the `_` prefix (e.g. `_baseline_decoder.py`).
-- file hygiene as above: 639 lines.
+- Target `py312`, line length 100. Ruff config in `pyproject.toml`.
+- Lints: `E F W I B UP SIM`. Run `ruff check .` and `ruff format --check .`.
+- Private helpers in `python/tools/` use the `_` prefix (e.g. `_baseline_decoder.py`).
+- File hygiene as above: 639 lines.
 
-format and runtime invariants:
+Format and runtime invariants:
 
-the format is frozen at v1. any byte-level change either fits inside v1 (unused section ids and encoding ids are reserved and additive; the ids already written are listed in the agents contract and named in `crates/urna-format/src/layout/mod.rs`) or bumps `URNA_FORMAT_VERSION` and ships as v2.
+The format is frozen at v1. Any byte-level change either fits inside v1 (unused section IDs and encoding IDs are reserved and additive; the IDs already written are listed in the agents contract and named in `crates/urna-format/src/layout/mod.rs`) or bumps `URNA_FORMAT_VERSION` and ships as v2.
 
-## tests
+## Tests
 
 ```
 cargo test --release --workspace
@@ -108,9 +107,9 @@ python tests/test_forge_spec.py               # the three that run by hand
 ./scripts/release_check.sh
 ```
 
-the python tests are plain scripts (`pytest tests/` does not work) and need the built `_urna.so`. `release_check.sh` is the source of truth for the python side; ci runs the rust gates plus deny, semver and the windows job on top of it, so a green local gate is necessary, not sufficient.
+The Python tests are plain scripts (`pytest tests/` does not work) and need the built `_urna.so`. `release_check.sh` is the source of truth for the Python side; CI runs the Rust gates plus deny, semver and the Windows job on top of it, so a green local gate is necessary, not sufficient.
 
-two lints are denied workspace-wide and will fail the build: `clippy::unwrap_used` (tests are exempt; parse paths read fields through `urna_format::bytes`) and `clippy::undocumented_unsafe_blocks` (every `unsafe` block states its invariant in a `// SAFETY:` comment). a change to any section decoder or search path should also run the mutation harness, and a new codec gets an arm in `fuzz/fuzz_targets/section_decoders.rs`:
+Two lints are denied workspace-wide and will fail the build: `clippy::unwrap_used` (tests are exempt; parse paths read fields through `urna_format::bytes`) and `clippy::undocumented_unsafe_blocks` (every `unsafe` block states its invariant in a `// SAFETY:` comment). A change to any section decoder or search path should also run the mutation harness, and a new codec gets an arm in `fuzz/fuzz_targets/section_decoders.rs`:
 
 ```
 cargo test -p urna-format --test mutation_fuzz -p urna-runtime --test mutation_fuzz
@@ -118,18 +117,18 @@ URNA_MUTATION_ITERS=25000 cargo test --release -p urna-format --test mutation_fu
 cargo +nightly fuzz run urna-view -- -max_total_time=600      # needs cargo-fuzz, see fuzz/README.md
 ```
 
-## reporting issues
+## Reporting issues
 
-- bugs and feature requests: [github issues](https://github.com/hoffresearch/urna/issues).
-- security vulns: do not open a public issue. use the private advisory form (<https://github.com/hoffresearch/urna/security/advisories/new>) or email [brenner@hoffresearch.com](mailto:brenner@hoffresearch.com). target ack within 72 hours.
-- questions about the format: open a discussion, or read `docs/arc/ARC.toml`.
+- Bugs and feature requests: [GitHub issues](https://github.com/hoffresearch/urna/issues).
+- Security vulns: do not open a public issue. Use the private advisory form (<https://github.com/hoffresearch/urna/security/advisories/new>) or email [brenner@hoffresearch.com](mailto:brenner@hoffresearch.com). Target ack within 72 hours.
+- Questions about the format: open a discussion, or read `docs/arc/ARC.toml`.
 
-bug reports should include the `.urna` `file_hash` and `content_hash` (from `urna stats <file>`), the runtime `simd_backend` (also in `urna stats`), the exact cli or python invocation, and the error output.
+Bug reports should include the `.urna` `file_hash` and `content_hash` (from `urna stats <file>`), the runtime `simd_backend` (also in `urna stats`), the exact CLI or Python invocation, and the error output.
 
-## code of conduct
+## Code of conduct
 
-this project follows [code_of_conduct.md](CODE_OF_CONDUCT.md). by participating you agree to it.
+This project follows [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). By participating you agree to it.
 
-## license
+## License
 
-contributions are licensed under the [mit license](LICENSE). copyright vests in hoff research as the maintainer. mit keeps your right to use, copy, modify, distribute, or sublicense your own copies of the resulting software intact.
+Contributions are licensed under the [MIT license](LICENSE). Copyright vests in Hoff Research as the maintainer. MIT keeps your right to use, copy, modify, distribute, or sublicense your own copies of the resulting software intact.
