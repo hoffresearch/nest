@@ -509,7 +509,7 @@ On a terminal it runs inline, in four steps with the screen left in the scrollba
 
 ```sh
 urna setup --yes                     # the default plan, no questions, plain lines (ci, scripts)
-urna setup --version v0.5.0          # the payload of a given release (replaces one from another)
+urna setup --version v0.5.2          # the payload of a given release (replaces one from another)
 urna setup --force                   # reinstall the payload even when it matches
 urna setup --no-python               # payload only; bring your own interpreter via URNA_PYTHON
 urna setup --model minilm-multilingual  # also install a catalog model (repeatable; `all` picks every offered one)
