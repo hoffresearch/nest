@@ -103,6 +103,12 @@ class ModelPreset:
     image_doc_format: str = "dict"
     encode_kwargs: tuple[tuple[str, object], ...] = ()  # ST encode() extras (recipe-hashed)
     install: InstallSpec | None = None  # validated install; None = not offered by setup
+    # the hub snapshot an open_clip preset loads from: repo, pinned commit, the
+    # checkpoint file and every file the load and the tokenizer read.
+    hf_repo: str = ""
+    revision: str = ""
+    weights_file: str = ""
+    snapshot_files: tuple[str, ...] = ()
 
 
 _ST_REQUIRES = (

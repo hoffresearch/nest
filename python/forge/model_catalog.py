@@ -39,6 +39,11 @@ def exclusion(preset: ModelPreset) -> str | None:
         return "runs model-repo code that has not been reviewed and pinned"
     if preset.install is not None:
         return None
+    if preset.kind == "open_clip" and preset.revision:
+        return (
+            "pinned hub snapshot, fetched on first use with URNA_ALLOW_DOWNLOAD=1; the "
+            "installer cannot verify an open_clip model_hash yet (it hashes the loaded tensors)"
+        )
     if preset.kind == "open_clip":
         return "open_clip fetches its own weights; no pinned hub revision yet"
     if preset.local_dir:

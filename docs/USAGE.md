@@ -2,7 +2,7 @@
 project: urna
 audience: users and integrators
 status: active
-last-updated: 2026-10-02
+last-updated: 2026-10-03
 domain: usage
 ---
 
@@ -397,7 +397,7 @@ Three rules the registry enforces, loudly:
 - **Remote code is an opt-in plus a pin.** Presets with `trust_remote_code` load only when the spec lists them in `output.allow_remote_code` AND every model-repo code file matches the pinned SHA256 allowlist. A hash identifies a version; the opt-in is the consent. Build in an isolated environment when the model dir is not fully trusted. The QUERY side has the same rule: a manifest is data, never an authorization, so `ask`/`retrieve`/`search-text` over a remote-code corpus (and `urna_model_bench.py`) refuse to load the model until the operator opts in with `URNA_ALLOW_REMOTE_CODE="<preset>[,<preset>]"` in the environment.
 - **Three hashes, never conflated.** `model_hash` identifies the model (weights + tokenizer + processor + remote code + pooling/normalize/dtype policy). The per-item `input_hash` identifies the content (canonical text ⊕ image bytes ⊕ label ⊕ chunker). The `embedding_recipe_hash` identifies the usage (prompts, query/document modes, preprocess version, `image_max_side`, device class, decoder fingerprint when embedding decoded media). The embed cache key is the triad, so a retranslated text or a re-exported image invalidates exactly what changed.
 
-Known limitation: the SigLIP2 TEXT tower resolves its HF tokenizer through transformers' AutoTokenizer, which probes optional files that 404 online; a fresh process in strict offline mode can fail that probe even with the snapshot cached. The image tower and every other preset are unaffected; for a sealed offline run either query SigLIP2 spaces by image, or use the wemm/Jina text towers.
+`siglip2` is pinned to one hub revision of `timm/ViT-B-16-SigLIP2` (the preset's `revision` and `snapshot_files`): the weights and the tokenizer load from `snapshots/<revision>` of the HF cache, never through `refs/main` and never by the hub name, so its text tower runs offline. By name it could not: transformers' AutoTokenizer looks up the repo's absent `config.json` without a commit hash and fails offline even with every file cached. Fetch the pinned files once with `hf download timm/ViT-B-16-SigLIP2 open_clip_model.safetensors open_clip_config.json tokenizer.json tokenizer_config.json special_tokens_map.json --revision eee10eff6dd8cabae2d7f379d4e8cfcd352030aa`, or run the first query with `URNA_ALLOW_DOWNLOAD=1`. A missing file is named, with that line, and `ask` reports it as weights missing. The weights go into open_clip's built-in architecture with the `webli` tag's preprocess, so the `model_hash` is the one a load by tag gives; the tokenizer is outside the fingerprint and comes from the same snapshot. `urna setup --model` does not offer SigLIP2 yet: its installer verifies a file fingerprint, and an open_clip `model_hash` hashes the loaded tensors. `clip-vit-b32` still loads by tag.
 
 Model dirs resolve explicit `model_path` > `URNA_MODEL_DIR_<PRESET>` env > the preset's `local_dir` > the HF cache; a hub download requires `URNA_ALLOW_DOWNLOAD=1` explicitly. Dtype defaults are measured, not assumed: bf16 on CUDA, fp16 on MPS (wemm-2b image embeds 0.5s vs 23s in fp32 on this class of machine), fp32 on CPU; override with `dtype=` in the spec or `URNA_ST_DTYPE`.
 
