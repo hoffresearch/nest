@@ -202,11 +202,49 @@ def test_stage_refuses_incomplete_tree(base: Path) -> None:
     print("stale catalog refused: OK")
 
 
+def test_version_stamp_reads_without_tomllib(base: Path) -> None:
+    """dist's global release job stages the payload with ubuntu-22.04's
+    python3 (3.10, no tomllib); the stamp must come out the same there. The
+    0.5.2 tag failed in that job on `import tomllib`."""
+    spec = importlib.util.spec_from_file_location("stage_payload", STAGE)
+    stage = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(stage)
+    with_tomllib = stage.workspace_version()
+    saved = sys.modules.get("tomllib")
+    sys.modules["tomllib"] = None  # makes `import tomllib` raise ModuleNotFoundError
+    try:
+        assert stage.workspace_version() == with_tomllib, "the fallback reads another version"
+        # edge: other `version =` lines before and after the section
+        manifest = base / "Cargo.toml"
+        manifest.write_text(
+            '[workspace.dependencies]\nserde = { version = "1" }\nversion = "9.9.9"\n\n'
+            '[workspace.package]\nedition = "2024"\nversion = "1.2.3"\n\n'
+            '[profile.dist]\nversion = "0.0.0"\n',
+            encoding="utf-8",
+        )
+        assert stage.workspace_version(manifest) == "1.2.3"
+        # error: no version in the section
+        manifest.write_text('[workspace.package]\nedition = "2024"\n', encoding="utf-8")
+        try:
+            stage.workspace_version(manifest)
+        except SystemExit as e:
+            assert "no version in [workspace.package]" in str(e), e
+        else:
+            raise AssertionError("a manifest without a version was accepted")
+    finally:
+        if saved is None:
+            sys.modules.pop("tomllib", None)
+        else:
+            sys.modules["tomllib"] = saved
+    print(f"ok: version stamp {with_tomllib} with and without tomllib")
+
+
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="urna-payload-") as tmp:
         base = Path(tmp)
         test_stage_and_query(base)
         test_stage_refuses_incomplete_tree(base)
+        test_version_stamp_reads_without_tomllib(base)
     print("all embedder payload tests passed")
 
 
