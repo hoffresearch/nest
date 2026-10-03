@@ -180,6 +180,22 @@ pub fn plan(scan: &Scan, opts: &Opts) -> Vec<Item> {
     vec![payload, python, models_item(scan, opts), verify]
 }
 
+/// Re-derives the steps a model choice decides, after the picker changed
+/// it: the models step, and the python step (chosen models need the managed
+/// venv, even when another python has the base deps). the other steps keep
+/// the ticks the user gave them.
+pub fn reselect(items: &mut [Item], scan: &Scan, opts: &Opts) {
+    let fresh = plan(scan, opts);
+    for item in items
+        .iter_mut()
+        .filter(|i| matches!(i.task, Task::Python | Task::Models))
+    {
+        if let Some(f) = fresh.iter().find(|f| f.task == item.task) {
+            *item = f.clone();
+        }
+    }
+}
+
 /// The models step: what the chosen catalog models will install and fetch,
 /// or why they cannot. the catalog comes with the payload, so before one is
 /// installed the names are checked when the step runs.
@@ -520,5 +536,27 @@ mod tests {
         let (mut s, _) = with_models(&[], &[]);
         s.deps = true;
         assert!(!plan(&s, &Opts::default())[1].runs(), "no models: no venv");
+    }
+
+    #[test]
+    fn picking_a_model_in_the_picker_turns_the_managed_venv_on() {
+        // an external python with the base deps and no managed venv: the plan
+        // starts with the python step off; choosing a model must turn it on,
+        // and dropping the model turns it off again. the payload tick the
+        // user gave stays.
+        let (mut s, mut o) = with_models(&[], &[]);
+        s.deps = true;
+        s.uv = Some(PathBuf::from("/u/uv"));
+        let mut items = plan(&s, &o);
+        assert!(!items[1].runs() && !items[2].runs());
+        items[0].on = true;
+        o.models = vec!["a".into()];
+        reselect(&mut items, &s, &o);
+        assert!(items[1].runs(), "{}", items[1].detail);
+        assert!(items[1].detail.contains("models' packages go only there"));
+        assert!(items[2].runs() && items[0].on);
+        o.models.clear();
+        reselect(&mut items, &s, &o);
+        assert!(!items[1].runs() && !items[2].runs() && items[0].on);
     }
 }
