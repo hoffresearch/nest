@@ -1,6 +1,6 @@
 [package]
 name = "urna-runtime"
-description = "mmap runtime of the urna vector database: simd exact search, hnsw, bm25, graph and hybrid search with mandatory exact rerank"
+description = "Memory-mapped runtime of the Urna vector database: SIMD exact search, HNSW, BM25, graph and hybrid search with a mandatory exact rerank"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

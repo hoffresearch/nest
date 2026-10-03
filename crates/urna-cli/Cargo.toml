@@ -1,6 +1,6 @@
 [package]
 name = "urna"
-description = "sovereign embedded vector database: single-file .urna container with content-addressable citations, offline-first"
+description = "Offline-first vector database in one file: a .urna container with content-addressable citations, and the urna CLI"
 version.workspace = true
 edition.workspace = true
 # ratatui 0.30 needs 1.88; the format and runtime crates keep the
@@ -35,6 +35,9 @@ pkg-fmt = "zip"
 # homebrew formula `urna` (`brew tap hoffresearch/urna && brew install urna`); the binary
 # is `urna` in both.
 [package.metadata.dist]
+# dist does not pick up the LICENSE link next to this manifest; the release
+# archives and the npm package get the text from its source.
+include = ["../../docs/LICENSE"]
 npm-package = "cli"
 formula = "urna"
 
