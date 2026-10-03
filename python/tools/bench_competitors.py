@@ -52,8 +52,12 @@ NOTES = (
             "- `rebuild byte-identical`: two builds from the same rows compared by SHA256 over the"
             " artefact (a directory is hashed file by file).",
             "- `integrity check`: whether the store can prove its own bytes. Urna's `validate()`"
-            " checks each section against the first 8 bytes of its SHA-256, the whole file against"
-            " its `file_hash` and the decoded content against its `content_hash`.",
+            " checks the header and each section against the first 8 bytes of their SHA-256, and"
+            " the body against the SHA-256 the footer stores, computed over everything before the"
+            " footer. It then reports two hashes it has nothing stored to compare with: the"
+            " `file_hash`, the SHA-256 of the whole file with the footer, which is the value to"
+            " check against a published checksum, and the `content_hash` of the decoded canonical"
+            " sections, which names the content.",
             "- The ann rows are built with m=16 and ef_construction=200 and asked for ef=100. Urna's"
             " `search_ann` never searches fewer than ef_construction candidates (the beam floor that"
             " keeps the recall measured at build), so its row ran a 200-wide beam against 100 for"

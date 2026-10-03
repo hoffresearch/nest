@@ -15,8 +15,8 @@ Measured 2026-09-10 on arm64 Darwin 25.6.0, Python 3.12.14, single thread, n=100
 
 | System | Path | Build (s) | Bytes on disk | Cold open + 1st query (ms) | p50 (ms) | p99 (ms) | recall@10 | Rebuild byte-identical | Integrity check |
 |---|---|---|---|---|---|---|---|---|---|
-| urna (exact) | exact | 2.14 | 165,290,134 | 292.3 | 7.803 | 8.315 | 1.0 | yes | yes (sha256: section prefix, file, content) |
-| urna (hybrid) | ann (hnsw) | 172.82 | 163,221,498 | 356.1 | 0.721 | 1.021 | 1.0 | yes | yes (sha256: section prefix, file, content) |
+| urna (exact) | exact | 2.14 | 165,290,134 | 292.3 | 7.803 | 8.315 | 1.0 | yes | yes (sha256: header and section prefixes, footer digest) |
+| urna (hybrid) | ann (hnsw) | 172.82 | 163,221,498 | 356.1 | 0.721 | 1.021 | 1.0 | yes | yes (sha256: header and section prefixes, footer digest) |
 | usearch | ann (hnsw) | 109.26 | 168,453,808 | 58.1 | 0.672 | 61.422 | 0.995 | yes | no |
 | hnswlib | ann (hnsw) | 83.07 | 168,449,236 | 181.5 | 0.324 | 0.525 | 1.0 | yes | no |
 | sqlite-vec | exact | 0.81 | 156,606,464 | 50.0 | 19.762 | 24.836 | 1.0 | yes | structural only (pragma integrity_check) |
@@ -29,7 +29,7 @@ How to read it:
 - `p50 / p99`: warm, single-threaded, one query at a time, from Python. Python call overhead is inside every number.
 - `recall@k` is against brute force over the same rows; exact paths are asserted at 1.0.
 - `rebuild byte-identical`: two builds from the same rows compared by SHA256 over the artefact (a directory is hashed file by file).
-- `integrity check`: whether the store can prove its own bytes. Urna's `validate()` checks each section against the first 8 bytes of its SHA-256, the whole file against its `file_hash` and the decoded content against its `content_hash`.
+- `integrity check`: whether the store can prove its own bytes. Urna's `validate()` checks the header and each section against the first 8 bytes of their SHA-256, and the body against the SHA-256 the footer stores, computed over everything before the footer. It then reports two hashes it has nothing stored to compare with: the `file_hash`, the SHA-256 of the whole file with the footer, which is the value to check against a published checksum, and the `content_hash` of the decoded canonical sections, which names the content.
 - The ann rows are built with m=16 and ef_construction=200 and asked for ef=100. Urna's `search_ann` never searches fewer than ef_construction candidates (the beam floor that keeps the recall measured at build), so its row ran a 200-wide beam against 100 for hnswlib and usearch.
 - The same rows written with raw text and with zstd text share one `content_hash`: `True`. Re-encoding never moves a `urna://content_hash/chunk_id` citation; the other stores have no equivalent notion.
 
