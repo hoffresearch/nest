@@ -249,6 +249,8 @@ Both urna rows return recall@10 = 1.000. Urna's cold open includes checking ever
 
 Measured on a 30,725-chunk pt-br corpus. Recall here is rank stability under quantization, not real-query quality. Details in [usage section 6](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
 
+Real-query quality is in [fakenews-ptbr-urna-benchmark](https://github.com/brennercruvinel/fakenews-ptbr-urna-benchmark): seven public pt-br fake-news datasets deduplicated into 23,335 documents, 2,601 queries with relevance judgments, three embedders and three presets each, rebuildable from pinned sources. On the `exact` preset, nDCG@10 is 0.528 for mpnet, 0.503 for the multilingual MiniLM and 0.326 for potion. The files are on [Hugging Face](https://huggingface.co/datasets/brennercruvinel/fakenews-ptbr-urna-benchmark).
+
 </details>
 
 <details>
@@ -261,7 +263,7 @@ Measured on a 30,725-chunk pt-br corpus. Recall here is rank stability under qua
 | `stills-av1` | AV1 all-intra crf35 | 1.37 GB | 2.89x |
 | `retrieval` | AV1 all-intra crf50 | 533 MB | 7.46x |
 
-The profile names are the forge's (`[media] profile = "..."`, usage section 14). Text-to-image hit@1 over every card: siglip2 0.750, wemm-2b 0.744, jina 0.336, clip 0.098. The benchmark code and the card data are not published yet; the measurements are recorded in `python/forge/media_profiles.py` and `docs/CHANGELOG`.
+The profile names are the forge's (`[media] profile = "..."`, usage section 14). Text-to-image hit@1 over every card: siglip2 0.750, wemm-2b 0.744, jina 0.336, clip 0.098. The benchmark is [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark), and the `.urna` files are on [Hugging Face](https://huggingface.co/datasets/brennercruvinel/mtg-urna-benchmark); the recipes the forge uses are recorded in `python/forge/media_profiles.py` and `docs/CHANGELOG`.
 
 </details>
 
@@ -270,6 +272,7 @@ The profile names are the forge's (`[media] profile = "..."`, usage section 14).
 - [docs.urna.dev](https://docs.urna.dev): the documentation site, with guides, concepts and the full reference
 - [docs/USAGE.md](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md): every verb, presets, models, builds, install channels
 - [docs/BENCH.md](https://github.com/hoffresearch/urna/blob/main/docs/BENCH.md): how the numbers were measured
+- [fakenews-ptbr-urna-benchmark](https://github.com/brennercruvinel/fakenews-ptbr-urna-benchmark) and [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark): the text and image benchmarks, with their files on Hugging Face
 - [docs/SECURITY.md](https://github.com/hoffresearch/urna/blob/main/docs/SECURITY.md): reporting, hardening, data governance
 - [docs/CHANGELOG](https://github.com/hoffresearch/urna/blob/main/docs/CHANGELOG): releases with measured numbers
 - [docs/arc/ARC.toml](https://github.com/hoffresearch/urna/blob/main/docs/arc/ARC.toml): the architecture map
