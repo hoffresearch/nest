@@ -1,4 +1,4 @@
-![Urna: offline-first vector database, Rust and Python](https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-hoff-research-db-iage-thumb-git.png)
+[![Urna: offline-first vector database, Rust and Python](https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-hoff-research-db-iage-thumb-git.png)](https://docs.urna.dev/)
 
 # Urna
 
