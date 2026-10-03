@@ -357,7 +357,7 @@ urna cite my_corpus.urna 'urna://sha256:1aa9.../sha256:8f314...'
 ./scripts/release_check.sh
 ```
 
-Runs the full pipeline: the 639-line guard, cargo fmt, Clippy, the Rust suite in release, the Python extension rebuilt with `pyo3/extension-module`, the twelve Python suites (e2e, builder, search_text_model_hash, image_corpus, forge_spec, quality_gate, cli_space, query_embedder_routing, embedder_payload, bench_runner, model_catalog, model_install; the last fetches an 18 MB hub test model and skips that case when huggingface.co does not answer), ruff when importable, `measure_presets.py` and `compare_measure.py` against the committed baseline. Exits non-zero on any failure. What it does not run: the flagship e2e tests that need the forge deps (`cli_e2e.rs` skips without them), `test_offline_guard.py`, `test_blob_bridge.py`, `test_space_bridge.py`, and the checks CI adds on top (cargo-deny, cargo-semver-checks, the Windows job, the fuzz smoke).
+Runs the full pipeline: the release build, the Python extension rebuilt with `pyo3/extension-module` (before the Rust suite, whose CLI end-to-end tests load it), the Rust suite in release, Clippy, cargo fmt, the 639-line guard, the twelve Python suites (e2e, builder, search_text_model_hash, image_corpus, forge_spec, quality_gate, cli_space, query_embedder_routing, embedder_payload, bench_runner, model_catalog, model_install; the last fetches an 18 MB hub test model and skips that case when huggingface.co does not answer), ruff when importable, `measure_presets.py` and `compare_measure.py` against the committed baseline. Exits non-zero on any failure. What it does not run: the flagship e2e tests that need the forge deps (`cli_e2e.rs` skips without them), `test_offline_guard.py`, `test_blob_bridge.py`, `test_space_bridge.py`, and the checks CI adds on top (cargo-deny, cargo-semver-checks, the Windows job, the fuzz smoke).
 
 ## 11. Install health check (`urna doctor`)
 
@@ -509,7 +509,7 @@ On a terminal it runs inline, in four steps with the screen left in the scrollba
 
 ```sh
 urna setup --yes                     # the default plan, no questions, plain lines (ci, scripts)
-urna setup --version v0.5.0          # the payload of a given release (replaces one from another)
+urna setup --version v0.5.2          # the payload of a given release (replaces one from another)
 urna setup --force                   # reinstall the payload even when it matches
 urna setup --no-python               # payload only; bring your own interpreter via URNA_PYTHON
 urna setup --model minilm-multilingual  # also install a catalog model (repeatable; `all` picks every offered one)
@@ -704,7 +704,7 @@ docker build --platform=linux/amd64 -f docker/Dockerfile -t urna .
 docker run --rm -v "$PWD/data:/data:ro" urna validate /data/corpus_next.v1.urna
 ```
 
-`docker/Dockerfile` builds the static musl binary in a throwaway toolchain stage and copies it into `scratch`: no shell, no package manager, no network at runtime. The corpus arrives as a mounted volume, so the same image serves air-gapped hosts. On Apple silicon build the aarch64 variant natively (`--build-arg TARGET=aarch64-unknown-linux-musl`); QEMU user emulation crashes rustc mid-build. The image has no Python, so `ask` / `retrieve` are not available inside it; the engine verbs (file + vector in) are.
+`docker/Dockerfile` builds the static musl binary in a throwaway toolchain stage and copies it into `scratch`: no shell, no package manager, no network at runtime. The corpus arrives as a mounted volume, so the same image serves air-gapped hosts. On Apple silicon build the aarch64 variant natively (`--build-arg TARGET=aarch64-unknown-linux-musl`); QEMU user emulation crashes rustc mid-build. The binary is the engine-only CLI, built with `--locked` (the dependency versions of `Cargo.lock`) and `--no-default-features` (no terminal UI, so no `setup` or `tui`), from a toolchain image pinned by tag and digest. The image has no Python, so `ask`, `retrieve`, `build`, `search-text` and `doctor`'s embed check do not run inside it; the other engine verbs (file + vector in) do.
 
 </details>
 

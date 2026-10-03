@@ -11,11 +11,12 @@ build-backend = "maturin"
 
 [project]
 name = "urna"
-description = "sovereign embedded vector database: single-file .urna container with content-addressable citations, offline-first"
+description = "Offline-first vector database in one file: a .urna container with content-addressable citations, read from Python"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
-authors = [{ name = "hoff research", email = "brenner@hoffresearch.com" }]
+license-files = ["LICENSE"]
+authors = [{ name = "Hoff Research", email = "brenner@hoffresearch.com" }]
 keywords = ["vector-database", "embeddings", "offline-first", "rag", "citations"]
 classifiers = [
     "Development Status :: 4 - Beta",

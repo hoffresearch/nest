@@ -1,6 +1,6 @@
 [package]
 name = "urna-format"
-description = "frozen v1 binary container of the urna vector database: layout, manifest, sections, encodings, hashes, reader and writer"
+description = "Frozen v1 binary container of the Urna vector database: layout, manifest, sections, encodings, hashes, reader and writer"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
