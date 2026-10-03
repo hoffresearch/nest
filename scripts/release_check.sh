@@ -2,8 +2,8 @@
 # release_check.sh - full release verification pipeline.
 #
 # Runs every CI gate end-to-end:
-#   1. cargo build/test/clippy/fmt (release profile), the 639-line guard
-#   2. rebuild PyO3 extension (.so)
+#   1. cargo build (release), then the PyO3 extension (.so) the tests load
+#   2. cargo test/clippy/fmt (release profile), the 639-line guard
 #   3. the python suites (the `step "python tests/..."` lines below), ruff
 #   4. measure_presets --json on the LFS-tracked corpus
 #   5. compare_measure regression gates vs data/measure/baseline.json
@@ -52,6 +52,29 @@ step "cargo build --release --workspace"
 cargo build --release --workspace
 ok "release build"
 
+# ---- rebuild PyO3 .so ----
+# before cargo test: the cli e2e tests (cli_e2e.rs) build their demo corpus
+# through python/urna.py, so a fresh checkout without python/_urna.so failed
+# there before reaching this step. the copy is what the tests load; a later
+# cargo build of urna-python without the feature does not touch it.
+step "rebuild python/_urna.so"
+# build the extension against the SAME interpreter that runs the tests, so a
+# .venv that differs from the default build python can never load a mismatched
+# _urna.so (that mismatch segfaults test_e2e). PYO3_PYTHON pins it to $PY.
+# pyo3/extension-module keeps libpython OUT of the dylib (extension modules
+# resolve symbols from the host process): without it the .so hard-links a
+# libpython path and segfaults under statically-embedded interpreters (uv's
+# python-build-standalone) by loading a second runtime. maturin builds the
+# published wheel the same way.
+PYO3_PYTHON="$PY" cargo build --release -p urna-python \
+  --features pyo3/extension-module >/dev/null
+case "$(uname)" in
+  Darwin) cp target/release/lib_urna.dylib python/_urna.so ;;
+  Linux)  cp target/release/lib_urna.so    python/_urna.so ;;
+  *) printf "unknown OS, copy lib_urna.* manually\n" >&2; exit 1 ;;
+esac
+ok "_urna.so built and copied"
+
 # ---- cargo test (release) ----
 step "cargo test --release --workspace"
 cargo test --release --workspace 2>&1 \
@@ -80,25 +103,6 @@ if [[ -n "$overlong" ]]; then
   exit 1
 fi
 ok "all source files ≤ 639 lines"
-
-# ---- rebuild PyO3 .so ----
-step "rebuild python/_urna.so"
-# build the extension against the SAME interpreter that runs the tests, so a
-# .venv that differs from the default build python can never load a mismatched
-# _urna.so (that mismatch segfaults test_e2e). PYO3_PYTHON pins it to $PY.
-# pyo3/extension-module keeps libpython OUT of the dylib (extension modules
-# resolve symbols from the host process): without it the .so hard-links a
-# libpython path and segfaults under statically-embedded interpreters (uv's
-# python-build-standalone) by loading a second runtime. maturin builds the
-# published wheel the same way.
-PYO3_PYTHON="$PY" cargo build --release -p urna-python \
-  --features pyo3/extension-module >/dev/null
-case "$(uname)" in
-  Darwin) cp target/release/lib_urna.dylib python/_urna.so ;;
-  Linux)  cp target/release/lib_urna.so    python/_urna.so ;;
-  *) printf "unknown OS, copy lib_urna.* manually\n" >&2; exit 1 ;;
-esac
-ok "_urna.so built and copied"
 
 # ---- python tests ----
 step "python tests/test_e2e.py"
