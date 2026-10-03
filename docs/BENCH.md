@@ -6,14 +6,14 @@ last-updated: 2026-09-10
 domain: benchmarks
 ---
 
-# benchmarks
+# Benchmarks
 
-measured 2026-09-10 on arm64 darwin 25.6.0, python 3.12.14, single thread, n=100,000 synthetic clustered l2-normalized rows x 384 dims (2000 centers), 200 queries, k=10, seed 7. reproduce: `.venv/bin/python python/tools/bench_competitors.py --n 100000 --dim 384 --queries 200`.
+Measured 2026-09-10 on arm64 Darwin 25.6.0, Python 3.12.14, single thread, n=100,000 synthetic clustered L2-normalized rows x 384 dims (2000 centers), 200 queries, k=10, seed 7. Reproduce: `.venv/bin/python python/tools/bench_competitors.py --n 100000 --dim 384 --queries 200`.
 
 > [!TIP]
-> verify these results on your own hardware with your own parameters: the command above regenerates the whole table, and `--n`, `--dim`, `--queries` set the corpus and the query count. every urna row is a real build, opened and validated before the first query.
+> Verify these results on your own hardware with your own parameters: the command above regenerates the whole table, and `--n`, `--dim`, `--queries` set the corpus and the query count. Every Urna row is a real build, opened and validated before the first query.
 
-| system | path | build (s) | bytes on disk | cold open + 1st query (ms) | p50 (ms) | p99 (ms) | recall@10 | rebuild byte-identical | integrity check |
+| System | Path | Build (s) | Bytes on disk | Cold open + 1st query (ms) | p50 (ms) | p99 (ms) | recall@10 | Rebuild byte-identical | Integrity check |
 |---|---|---|---|---|---|---|---|---|---|
 | urna (exact) | exact | 2.14 | 165,290,134 | 292.3 | 7.803 | 8.315 | 1.0 | yes | yes (sha256 per section + file + content) |
 | urna (hybrid) | ann (hnsw) | 172.82 | 163,221,498 | 356.1 | 0.721 | 1.021 | 1.0 | yes | yes (sha256 per section + file + content) |
@@ -22,22 +22,22 @@ measured 2026-09-10 on arm64 darwin 25.6.0, python 3.12.14, single thread, n=100
 | sqlite-vec | exact | 0.81 | 156,606,464 | 50.0 | 19.762 | 24.836 | 1.0 | yes | structural only (pragma integrity_check) |
 | lancedb | exact | 0.25 | 153,799,983 | 612.4 | 16.728 | 19.401 | 1.0 | no | no |
 
-how to read it:
+How to read it:
 
-- `cold open + 1st query`: wall time of a fresh interpreter that opens the store and answers one query, minus an interpreter doing nothing (3 runs, min). urna's number is dominated by `open` verifying every section checksum and the footer hash over the whole file before serving anything; the other stores trust their bytes.
-- `build (s)`: single-threaded everywhere (hnswlib and usearch are told threads=1); urna's hnsw build is the slow row.
-- `p50 / p99`: warm, single-threaded, one query at a time, from python. python call overhead is inside every number.
+- `cold open + 1st query`: wall time of a fresh interpreter that opens the store and answers one query, minus an interpreter doing nothing (3 runs, min). Urna's number is dominated by `open` verifying every section checksum and the footer hash over the whole file before serving anything; the other stores trust their bytes.
+- `build (s)`: single-threaded everywhere (hnswlib and usearch are told threads=1); Urna's HNSW build is the slow row.
+- `p50 / p99`: warm, single-threaded, one query at a time, from Python. Python call overhead is inside every number.
 - `recall@k` is against brute force over the same rows; exact paths are asserted at 1.0.
-- `rebuild byte-identical`: two builds from the same rows compared by sha256 over the artefact (a directory is hashed file by file).
-- `integrity check`: whether the store can prove its own bytes. urna verifies sha256 per section, per file and over the decoded content on `validate()`.
-- the same rows written with raw text and with zstd text share one `content_hash`: `True`. re-encoding never moves a `urna://content_hash/chunk_id` citation; the other stores have no equivalent notion.
+- `rebuild byte-identical`: two builds from the same rows compared by SHA256 over the artefact (a directory is hashed file by file).
+- `integrity check`: whether the store can prove its own bytes. Urna verifies SHA256 per section, per file and over the decoded content on `validate()`.
+- The same rows written with raw text and with zstd text share one `content_hash`: `True`. Re-encoding never moves a `urna://content_hash/chunk_id` citation; the other stores have no equivalent notion.
 
 
-## charts
+## Charts
 
-the same table, drawn. every number below is a cell of the table above.
+The same table, drawn. Every number below is a cell of the table above.
 
-warm p50 vs p99 per store, log scale, bottom-left is fastest and flattest
+Warm p50 vs p99 per store, log scale, bottom-left is fastest and flattest
 
 ```mermaid
 ---
@@ -79,7 +79,7 @@ quadrantChart
     "sqlite-vec": [0.92, 0.76] radius: 5, color: #8E44AD
 ```
 
-warm p50 per store, lower is better
+Warm p50 per store, lower is better
 
 ```mermaid
 ---
@@ -102,7 +102,7 @@ xychart-beta
   bar [0.324, 0.672, 0.721, 7.803, 16.728, 19.762]
 ```
 
-warm p99 per store, the tail the p50 hides
+Warm p99 per store, the tail the p50 hides
 
 ```mermaid
 ---
@@ -125,7 +125,7 @@ xychart-beta
   bar [0.525, 1.021, 8.315, 19.401, 24.836, 61.422]
 ```
 
-cold open + first query. urna verifies every section checksum and the footer hash before serving; the other stores trust their bytes
+Cold open + first query. Urna verifies every section checksum and the footer hash before serving; the other stores trust their bytes
 
 ```mermaid
 ---
@@ -148,7 +148,7 @@ xychart-beta
   bar [50.0, 58.1, 181.5, 292.3, 356.1, 612.4]
 ```
 
-single-threaded build time. urna's hnsw build is the slow row, 2.1x hnswlib
+Single-threaded build time. Urna's HNSW build is the slow row, 2.1x hnswlib
 
 ```mermaid
 ---
@@ -171,6 +171,6 @@ xychart-beta
   bar [0.25, 0.81, 2.14, 83.07, 109.26, 172.82]
 ```
 
-what urna does not do that some of these do: in-place updates or deletes, metadata filtering, concurrent writers, a query language. it is a build-once, ship-and-query file; the table says nothing about workloads that need those.
+What Urna does not do that some of these do: in-place updates or deletes, metadata filtering, concurrent writers, a query language. It is a build-once, ship-and-query file; the table says nothing about workloads that need those.
 
-versions: {"usearch": "2.26.2", "hnswlib": "0.8.0", "sqlite-vec": "0.1.9", "lancedb": "0.38.0", "numpy": "2.5.2"}
+Versions: {"usearch": "2.26.2", "hnswlib": "0.8.0", "sqlite-vec": "0.1.9", "lancedb": "0.38.0", "numpy": "2.5.2"}
