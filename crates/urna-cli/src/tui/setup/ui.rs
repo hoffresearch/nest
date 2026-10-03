@@ -313,12 +313,7 @@ impl Ui {
 
     fn close_picker(&mut self, code: KeyCode) {
         if let Some(scan) = &self.scan {
-            let fresh = plan::plan(scan, &self.opts);
-            for item in self.plan.iter_mut().filter(|i| i.task == Task::Models) {
-                if let Some(m) = fresh.iter().find(|i| i.task == Task::Models) {
-                    *item = m.clone();
-                }
-            }
+            plan::reselect(&mut self.plan, scan, &self.opts);
         }
         let ready = self.plan.iter().any(|i| i.task == Task::Models && i.runs());
         if self.pick_from == Step::Done && code == KeyCode::Enter && ready {
