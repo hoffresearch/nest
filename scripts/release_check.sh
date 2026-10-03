@@ -2,15 +2,16 @@
 # release_check.sh - full release verification pipeline.
 #
 # Runs every CI gate end-to-end:
-#   1. cargo build/test/clippy/fmt (release profile)
+#   1. cargo build/test/clippy/fmt (release profile), the 639-line guard
 #   2. rebuild PyO3 extension (.so)
-#   3. python tests: e2e, builder, search-text model_hash, image corpus
+#   3. the python suites (the `step "python tests/..."` lines below), ruff
 #   4. measure_presets --json on the LFS-tracked corpus
 #   5. compare_measure regression gates vs data/measure/baseline.json
 #
-# Exits non-zero on the first failure. Total runtime ≈ 2–3 min on a
-# warm cache (most of it is the measure_presets re-build of the four
-# presets).
+# Exits non-zero on the first failure. Total runtime is 45 to 60 min on an
+# m-series mac with a warm cargo cache: steps 1 to 3 take about 3 min, and
+# step 4 rebuilds every preset and mrl variant of the 30,725-chunk corpus
+# from scratch (twelve builds of 4 to 5 min each).
 #
 # Override knobs (env vars):
 #   URNA_BASELINE  - baseline JSON to compare against (default: data/measure/baseline.json)
@@ -142,7 +143,20 @@ ok "query embedder routing (10 cases; 7 to 10 need sentence-transformers, URNA_S
 # does not stage.
 step "python tests/test_embedder_payload.py"
 "$PY" tests/test_embedder_payload.py
-ok "embedder payload (2 cases)"
+ok "embedder payload (3 cases)"
+
+# the model catalog setup offers is the registry's validated presets, with a
+# reason for every preset it leaves out.
+step "python tests/test_model_catalog.py"
+"$PY" tests/test_model_catalog.py
+ok "model catalog (5 cases)"
+
+# the model fetch: confirmed downloads only, the pinned files only, kept
+# only when the fingerprint is the catalog's (an 18 MB hub model; the
+# download cases skip by name when huggingface.co does not answer).
+step "python tests/test_model_install.py"
+"$PY" tests/test_model_install.py
+ok "model install (4 cases)"
 
 # the benchmark rebuild builds beside the corpus and renames at the end, so
 # an interrupted gate never leaves data/measure without its corpora.

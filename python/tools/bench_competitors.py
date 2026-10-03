@@ -38,21 +38,21 @@ NOTES = (
     "\n".join(
         [
             "- `cold open + 1st query`: wall time of a fresh interpreter that opens the store and"
-            " answers one query, minus an interpreter doing nothing (3 runs, min). urna's number"
+            " answers one query, minus an interpreter doing nothing (3 runs, min). Urna's number"
             " is dominated by `open` verifying every section checksum and the footer hash over"
             " the whole file before serving anything; the other stores trust their bytes.",
             "- `build (s)`: single-threaded everywhere (hnswlib and usearch are told threads=1);"
-            " urna's hnsw build is the slow row.",
-            "- `p50 / p99`: warm, single-threaded, one query at a time, from python. python call"
+            " Urna's HNSW build is the slow row.",
+            "- `p50 / p99`: warm, single-threaded, one query at a time, from Python. Python call"
             " overhead is inside every number.",
             "- `recall@k` is against brute force over the same rows; exact paths are asserted"
             " at 1.0.",
-            "- `rebuild byte-identical`: two builds from the same rows compared by sha256 over the"
+            "- `rebuild byte-identical`: two builds from the same rows compared by SHA256 over the"
             " artefact (a directory is hashed file by file).",
-            "- `integrity check`: whether the store can prove its own bytes. urna verifies sha256"
+            "- `integrity check`: whether the store can prove its own bytes. Urna verifies SHA256"
             " per section, per file and over the decoded content on `validate()`.",
-            "- the same rows written with raw text and with zstd text share one `content_hash`:"
-            " {same_citation}. re-encoding never moves a `urna://content_hash/chunk_id` citation;"
+            "- The same rows written with raw text and with zstd text share one `content_hash`:"
+            " {same_citation}. Re-encoding never moves a `urna://content_hash/chunk_id` citation;"
             " the other stores have no equivalent notion.",
         ]
     )
@@ -132,16 +132,16 @@ def bench_one(sys_obj, rows, queries, truth, k, path, python):
 
 def markdown(rows: list[dict], meta: dict) -> str:
     cols = [
-        ("system", "system"),
-        ("path", "path"),
-        ("build_s", "build (s)"),
-        ("bytes", "bytes on disk"),
-        ("cold_open_ms", "cold open + 1st query (ms)"),
+        ("system", "System"),
+        ("path", "Path"),
+        ("build_s", "Build (s)"),
+        ("bytes", "Bytes on disk"),
+        ("cold_open_ms", "Cold open + 1st query (ms)"),
         ("p50_ms", "p50 (ms)"),
         ("p99_ms", "p99 (ms)"),
         ("recall_at_k", f"recall@{meta['k']}"),
-        ("byte_identical_rebuild", "rebuild byte-identical"),
-        ("integrity_check", "integrity check"),
+        ("byte_identical_rebuild", "Rebuild byte-identical"),
+        ("integrity_check", "Integrity check"),
     ]
     out = ["| " + " | ".join(h for _, h in cols) + " |", "|" + "---|" * len(cols)]
     for r in rows:
@@ -222,20 +222,20 @@ def main() -> None:
         same_citation = z.content_hash() == exact_rows[0]["content_hash"]
 
     header = (
-        f"measured {meta['date']} on {meta['machine']}, python {meta['python']}, single "
-        f"thread, n={args.n:,} synthetic clustered l2-normalized rows x {args.dim} dims "
+        f"Measured {meta['date']} on {meta['machine']}, Python {meta['python']}, single "
+        f"thread, n={args.n:,} synthetic clustered L2-normalized rows x {args.dim} dims "
         f"({max(8, args.n // 50)} centers), "
-        f"{args.queries} queries, k={args.k}, seed {args.seed}. reproduce: "
+        f"{args.queries} queries, k={args.k}, seed {args.seed}. Reproduce: "
         f"`.venv/bin/python python/tools/bench_competitors.py --n {args.n} --dim {args.dim} "
         f"--queries {args.queries}`."
     )
     notes = NOTES.format(same_citation=same_citation).strip("\n").splitlines()
     limits = (
-        "what urna does NOT do that some of these do: in-place updates or deletes, metadata "
-        "filtering, concurrent writers, a query language. it is a build-once, ship-and-query "
+        "What Urna does NOT do that some of these do: in-place updates or deletes, metadata "
+        "filtering, concurrent writers, a query language. It is a build-once, ship-and-query "
         "file; the table says nothing about workloads that need those."
     )
-    tail = f"versions: {json.dumps(versions)}" + (f"; skipped: {skipped}" if skipped else "")
+    tail = f"Versions: {json.dumps(versions)}" + (f"; skipped: {skipped}" if skipped else "")
     front = [
         "---",
         "project: urna",
@@ -247,13 +247,13 @@ def main() -> None:
         "",
     ]
     report = front + [
-        "# benchmarks",
+        "# Benchmarks",
         "",
         header,
         "",
         markdown(results, meta),
         "",
-        "how to read it:",
+        "How to read it:",
         "",
     ]
     report += notes + ["", limits, "", tail]

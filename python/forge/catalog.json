@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "models": [
+    {
+      "name": "minilm-multilingual",
+      "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "kind": "st_text",
+      "repo": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+      "files": [
+        {
+          "path": "1_Pooling/config.json",
+          "size": 190
+        },
+        {
+          "path": "README.md",
+          "size": 3888
+        },
+        {
+          "path": "config.json",
+          "size": 645
+        },
+        {
+          "path": "config_sentence_transformers.json",
+          "size": 122
+        },
+        {
+          "path": "model.safetensors",
+          "size": 470641600
+        },
+        {
+          "path": "modules.json",
+          "size": 229
+        },
+        {
+          "path": "sentence_bert_config.json",
+          "size": 53
+        },
+        {
+          "path": "special_tokens_map.json",
+          "size": 239
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 9081518
+        },
+        {
+          "path": "tokenizer_config.json",
+          "size": 526
+        }
+      ],
+      "bytes": 479729010,
+      "model_hash": "sha256:97a500de1ad2dc9ffb41fbe3dec27d4fd26ddaa13143aa50f905d3d1f6eff0af",
+      "packages": [
+        "sentence-transformers>=3"
+      ],
+      "imports": [
+        "sentence_transformers"
+      ],
+      "remote_code": false,
+      "remote_code_hashes": [],
+      "dim": 384,
+      "modalities": [
+        "text"
+      ]
+    }
+  ],
+  "excluded": [
+    {
+      "name": "potion",
+      "embedding_model": "minishlab/potion-base-8M/v1",
+      "reason": "ships inside the payload; nothing to install"
+    },
+    {
+      "name": "clip-vit-b32",
+      "embedding_model": "open_clip/ViT-B-32/openai",
+      "reason": "open_clip fetches its own weights; no pinned hub revision yet"
+    },
+    {
+      "name": "siglip2",
+      "embedding_model": "open_clip/ViT-B-16-SigLIP2/webli",
+      "reason": "open_clip fetches its own weights; no pinned hub revision yet"
+    },
+    {
+      "name": "jina-v5-omni-nano",
+      "embedding_model": "jinaai/jina-embeddings-v5-omni-nano",
+      "reason": "runs model-repo code that has not been reviewed and pinned"
+    },
+    {
+      "name": "jina-v5-omni-small",
+      "embedding_model": "jinaai/jina-embeddings-v5-omni-small",
+      "reason": "runs model-repo code that has not been reviewed and pinned"
+    },
+    {
+      "name": "wemm-2b",
+      "embedding_model": "tencent/WeMM-Embedding-2B",
+      "reason": "validated against a local snapshot only; no pinned hub revision yet"
+    },
+    {
+      "name": "wemm-4b",
+      "embedding_model": "tencent/WeMM-Embedding-4B",
+      "reason": "flagged too heavy for a default machine"
+    },
+    {
+      "name": "wemm-9b",
+      "embedding_model": "tencent/WeMM-Embedding-9B",
+      "reason": "flagged too heavy for a default machine"
+    }
+  ]
+}

@@ -35,8 +35,25 @@ impl Tool {
     }
 }
 
-/// Runs `cmd`, forwarding stdout and stderr line by line to `log`.
-pub fn stream(mut cmd: Command, log: &mut dyn FnMut(String)) -> Result<()> {
+/// Runs `cmd`, forwarding stdout and stderr line by line to `log`; a
+/// non-zero exit is an error naming the command.
+pub fn stream(cmd: Command, log: &mut dyn FnMut(String)) -> Result<()> {
+    let shown = format!("{cmd:?}").replace('"', "");
+    let status = stream_status(cmd, log)?;
+    if !status.success() {
+        bail!("{shown} exited with {status}");
+    }
+    Ok(())
+}
+
+/// Like `stream`, but hands back the exit status for the caller to read
+/// (the model fetch names its refusals by exit code). a child that prints
+/// progress with carriage returns (pip, uv) has each `\r` segment logged
+/// as its own line, so a log never shows a half-redrawn bar.
+pub fn stream_status(
+    mut cmd: Command,
+    log: &mut dyn FnMut(String),
+) -> Result<std::process::ExitStatus> {
     let shown = format!("{cmd:?}").replace('"', "");
     log(format!("$ {shown}"));
     let mut child = cmd
@@ -49,13 +66,13 @@ pub fn stream(mut cmd: Command, log: &mut dyn FnMut(String)) -> Result<()> {
         let tx = tx.clone();
         std::thread::spawn(move || {
             for line in BufReader::new(e).lines().map_while(Result::ok) {
-                let _ = tx.send(line);
+                send_segments(&tx, &line);
             }
         })
     });
     if let Some(out) = child.stdout.take() {
         for line in BufReader::new(out).lines().map_while(Result::ok) {
-            let _ = tx.send(line);
+            send_segments(&tx, &line);
             while let Ok(l) = rx.try_recv() {
                 log(l);
             }
@@ -68,11 +85,38 @@ pub fn stream(mut cmd: Command, log: &mut dyn FnMut(String)) -> Result<()> {
     for l in rx {
         log(l);
     }
-    let status = child.wait()?;
-    if !status.success() {
-        bail!("{shown} exited with {status}");
+    Ok(child.wait()?)
+}
+
+/// One line as printed, split on the carriage returns a progress bar
+/// redraws with; empty segments are dropped.
+fn send_segments(tx: &std::sync::mpsc::Sender<String>, line: &str) {
+    for seg in line
+        .split('\r')
+        .map(str::trim_end)
+        .filter(|s| !s.is_empty())
+    {
+        let _ = tx.send(seg.to_string());
     }
-    Ok(())
+}
+
+/// The command that adds `pkgs` to the env whose interpreter is `py`: uv
+/// when it is on PATH, else that interpreter's own pip.
+pub fn add_command(uv: Option<&Path>, py: &Path, pkgs: &[String]) -> Command {
+    match uv {
+        Some(uv) => {
+            let mut c = Command::new(uv);
+            c.args(["pip", "install", "--python"]).arg(py).args(pkgs);
+            c
+        }
+        None => {
+            let mut c = Command::new(py);
+            c.args(["-m", "pip", "install", "--disable-pip-version-check"])
+                .args(["--progress-bar", "off"])
+                .args(pkgs);
+            c
+        }
+    }
 }
 
 /// Creates (or refreshes) the venv at `dir` and installs the deps; returns
@@ -142,5 +186,37 @@ mod tests {
         let mut fail = Command::new("sh");
         fail.args(["-c", "exit 3"]);
         assert!(stream(fail, &mut |_| {}).is_err());
+        let mut code = Command::new("sh");
+        code.args(["-c", "exit 5"]);
+        let status = stream_status(code, &mut |_| {}).unwrap();
+        assert_eq!(status.code(), Some(5));
+    }
+
+    #[test]
+    fn a_redrawn_progress_bar_logs_each_state_once() {
+        if !cfg!(unix) {
+            return;
+        }
+        let mut lines = Vec::new();
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "printf '10%%\\r50%%\\r100%%\\ndone\\n'"]);
+        stream(cmd, &mut |l| lines.push(l)).unwrap();
+        assert_eq!(lines[1..], ["10%", "50%", "100%", "done"]);
+    }
+
+    #[test]
+    fn packages_go_through_uv_or_the_envs_own_pip() {
+        let py = Path::new("/h/urna/venv/bin/python");
+        let pkgs = vec!["sentence-transformers>=3".to_string()];
+        let uv = format!("{:?}", add_command(Some(Path::new("/u/uv")), py, &pkgs));
+        assert!(
+            uv.contains("--python") && uv.contains("/h/urna/venv/bin/python"),
+            "{uv}"
+        );
+        let pip = format!("{:?}", add_command(None, py, &pkgs));
+        assert!(
+            pip.starts_with("\"/h/urna/venv/bin/python\"") && pip.contains("pip"),
+            "{pip}"
+        );
     }
 }

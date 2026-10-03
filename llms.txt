@@ -1,29 +1,30 @@
-# urna
+# Urna
 
-> a vector database in one file, with citations that stay valid. a `.urna` file holds the chunks, the embeddings, the source spans, the indices and the search contract; a rust runtime maps it into memory, checks its hashes and answers offline with exact cosine scores and a `urna://content_hash/chunk_id` citation for every hit. python builds the file, rust serves it.
+> A vector database in one file, with citations that stay valid. A `.urna` file holds the chunks, the embeddings, the source spans, the indices and the search contract; a Rust runtime maps it into memory, checks its hashes and answers offline with exact cosine scores and a `urna://content_hash/chunk_id` citation for every hit. Python builds the file, Rust serves it.
 
-install with `brew tap hoffresearch/urna && brew install urna`, `cargo install urna`, `npm install -g @urna/cli` or `pip install "urna[embed]"`, then run `urna setup` once. mit license, hoff research. site: https://urna.dev. docs: https://docs.urna.dev. source: https://github.com/hoffresearch/urna
+Install with `brew tap hoffresearch/urna && brew install urna`, `cargo install urna`, `npm install -g @urna/cli` or `pip install "urna[embed]"`, then run `urna setup` once. MIT license, Hoff Research. Site: https://urna.dev. Docs: https://docs.urna.dev. Source: https://github.com/hoffresearch/urna
 
-## docs
+## Docs
 
-- [docs.urna.dev](https://docs.urna.dev): the documentation site, with install, quickstart, concepts, guides and the full cli, build spec, python and file format reference; its [llms.txt](https://docs.urna.dev/llms.txt) indexes every page
-- [readme](https://github.com/hoffresearch/urna/blob/main/README.md): what it is, install, the two terminal screens, quickstart, the python and cli surfaces, benchmarks
-- [usage](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md): every verb, `urna setup` and `urna tui`, presets, offline mode, citations, the model registry, declarative builds, the compression levers, every install channel and the maintainer checklist
-- [architecture](https://github.com/hoffresearch/urna/blob/main/docs/arc/ARC.toml): the single architecture reference, in toml: narrative, contracts, the file inventory and the mermaid map of the build and query flows
-- [benchmarks](https://github.com/hoffresearch/urna/blob/main/docs/BENCH.md): urna against usearch, hnswlib, sqlite-vec and lancedb on the same rows, same machine
-- [changelog](https://github.com/hoffresearch/urna/blob/main/docs/CHANGELOG): every release, with the why and the measured numbers
-- [security](https://github.com/hoffresearch/urna/blob/main/docs/SECURITY.md): reporting, supported versions, hardening, the data-governance posture
-- [contributing](https://github.com/hoffresearch/urna/blob/main/docs/CONTRIBUTING.md): the contribution flow, the gate, code style
+- [docs.urna.dev](https://docs.urna.dev): the documentation site, with install, quickstart, concepts, guides and the full CLI, build spec, Python and file format reference; its [llms.txt](https://docs.urna.dev/llms.txt) indexes every page
+- [README](https://github.com/hoffresearch/urna/blob/main/README.md): what it is, install, the two terminal screens, quickstart, the Python and CLI surfaces, benchmarks
+- [Usage](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md): every verb, `urna setup` and `urna tui`, presets, offline mode, citations, the model registry, declarative builds, the compression levers, every install channel and the maintainer checklist
+- [Architecture](https://github.com/hoffresearch/urna/blob/main/docs/arc/ARC.toml): the single architecture reference, in TOML: narrative, contracts, the file inventory and the Mermaid map of the build and query flows
+- [Benchmarks](https://github.com/hoffresearch/urna/blob/main/docs/BENCH.md): Urna against usearch, hnswlib, sqlite-vec and LanceDB on the same rows, same machine
+- [Changelog](https://github.com/hoffresearch/urna/blob/main/docs/CHANGELOG): every release, with the why and the measured numbers
+- [Security](https://github.com/hoffresearch/urna/blob/main/docs/SECURITY.md): reporting, supported versions, hardening, the data-governance posture
+- [Contributing](https://github.com/hoffresearch/urna/blob/main/docs/CONTRIBUTING.md): the contribution flow, the gate, code style
 
-## code
+## Code
 
-- [crates](https://github.com/hoffresearch/urna/tree/main/crates): urna-format (the frozen v1 container), urna-runtime (mmap, simd, exact, hnsw, bm25, graph and hybrid search with exact rerank), urna-cli (the `urna` binary, published as the crate `urna`), urna-python (the pyo3 bridge, shipped as the `urna` wheel)
+- [Crates](https://github.com/hoffresearch/urna/tree/main/crates): urna-format (the frozen v1 container), urna-runtime (mmap, SIMD, exact, HNSW, BM25, graph and hybrid search with exact rerank), urna-cli (the `urna` binary, published as the crate `urna`), urna-python (the PyO3 bridge, shipped as the `urna` wheel)
 - [python/forge](https://github.com/hoffresearch/urna/tree/main/python/forge): the offline embedders, the model registry, declarative builds, the media stage, the quality gate
-- [examples](https://github.com/hoffresearch/urna/tree/main/examples): quickstart (the five-verb loop on twelve cc0 paragraphs), fastapi, flask, jupyter
-- [agents contract](https://github.com/hoffresearch/urna/blob/main/.contracts/.agents/AGENTS.md): the one instruction source for ai coding agents and contributors
+- [Examples](https://github.com/hoffresearch/urna/tree/main/examples): quickstart (the five-verb loop on twelve CC0 paragraphs), FastAPI, Flask, Jupyter
+- [Agents contract](https://github.com/hoffresearch/urna/blob/main/.contracts/.agents/AGENTS.md): the one instruction source for AI coding agents and contributors
 
-## optional
+## Optional
 
-- [demo datasets](https://github.com/hoffresearch/urna/blob/main/data/demo/Instructions.md): the upstream pt-br sources and how the demo corpus is rebuilt
-- [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark): 38,627 magic card scans in single-file `.urna` containers, five image models; private for now
+- [Demo datasets](https://github.com/hoffresearch/urna/blob/main/data/demo/Instructions.md): the frozen pt-BR regression corpus, its identity and limitations, and the external reproducible benchmark
+- [fakenews-ptbr-urna-benchmark](https://github.com/brennercruvinel/fakenews-ptbr-urna-benchmark): 23,335 pt-BR fake-news documents from seven public datasets, 2,601 queries with relevance judgments, three embedders and three presets in `.urna` files, rebuildable from pinned sources; files on [Hugging Face](https://huggingface.co/datasets/brennercruvinel/fakenews-ptbr-urna-benchmark)
+- [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark): 38,627 Magic card scans in single-file `.urna` containers, the media profiles and the image models compared; files on [Hugging Face](https://huggingface.co/datasets/brennercruvinel/mtg-urna-benchmark)
 - [urna.dev](https://urna.dev): the site

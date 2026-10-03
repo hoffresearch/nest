@@ -30,6 +30,8 @@ writes: <dest>/urna/model_fingerprint.py          (imported by the registry)
         <dest>/urna/forge/embed_st.py
         <dest>/urna/forge/embed_st_worker.py
         <dest>/urna/forge/embed_image.py
+        <dest>/urna/forge/catalog.json              (the installable models, from the registry)
+        <dest>/urna/forge/install_model.py          (fetches one into the hf cache, verified)
         <dest>/urna/forge/models/potion-base-8M/...
 
 with --tar, also packs the staged `urna/` tree as a single gzipped tarball
@@ -62,6 +64,11 @@ MODULES = [
     "embed_st.py",
     "embed_st_worker.py",
     "embed_image.py",
+    # the models setup and the explorer offer to install (generated from the
+    # registry by model_catalog.py; a stale copy fails the stage).
+    "catalog.json",
+    # the fetch half of the model install setup and the explorer share.
+    "install_model.py",
 ]
 
 # `python/` modules the registry imports as top-level names (the scripts put
@@ -83,6 +90,21 @@ def workspace_version() -> str:
         return tomllib.load(f)["workspace"]["package"]["version"]
 
 
+def catalog_drift() -> str | None:
+    """An error when python/forge/catalog.json is not what the registry
+    generates now: the payload must offer exactly the validated presets."""
+    sys.path.insert(0, str(ROOT / "python"))
+    from forge import model_catalog
+
+    want = model_catalog.render(model_catalog.build())
+    have = (FORGE / "catalog.json").read_text() if (FORGE / "catalog.json").is_file() else ""
+    if have != want:
+        return (
+            "python/forge/catalog.json is stale: run python python/forge/model_catalog.py --write"
+        )
+    return None
+
+
 def fail(msg: str) -> None:
     print(f"stage_embedder_payload: error: {msg}", file=sys.stderr)
     raise SystemExit(1)
@@ -97,20 +119,20 @@ def main() -> None:
         del args[i : i + 2]
     if len(args) != 1:
         fail("usage: stage_embedder_payload.py <dest> [--tar <out.tar.gz>]")
+    sources = [(FORGE / n, Path(n)) for n in MODULES]
+    sources += [(ROOT / "python" / n, Path("..") / n) for n in TOP_LEVEL_MODULES]
+    for src, _ in sources:
+        if not src.is_file():
+            fail(f"missing source: {src}")
+    stale = catalog_drift()
+    if stale:
+        fail(stale)
     dest = Path(args[0]).resolve() / "urna" / "forge"
     if dest.exists():
         shutil.rmtree(dest)
     dest.mkdir(parents=True)
-    for name in MODULES:
-        src = FORGE / name
-        if not src.is_file():
-            fail(f"missing source: {src}")
-        shutil.copyfile(src, dest / name)
-    for name in TOP_LEVEL_MODULES:
-        src = ROOT / "python" / name
-        if not src.is_file():
-            fail(f"missing source: {src}")
-        shutil.copyfile(src, dest.parent / name)
+    for src, rel in sources:
+        shutil.copyfile(src, (dest / rel).resolve())
     (dest.parent / "VERSION").write_text(workspace_version() + "\n")
     model_src = FORGE / "models" / "potion-base-8M"
     if not model_src.is_dir():
