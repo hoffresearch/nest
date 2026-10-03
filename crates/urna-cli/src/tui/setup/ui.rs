@@ -24,6 +24,9 @@ pub enum Step {
     Splash,
     Scan,
     Plan,
+    /// the model picker, opened from the plan or, after a fresh install,
+    /// from the done screen (the catalog comes with the payload).
+    Models,
     Run,
     Done,
 }
@@ -49,6 +52,9 @@ pub struct Ui {
     pub drawn: usize,
     pub plan: Vec<Item>,
     pub cursor: usize,
+    /// the picker's cursor and the step it returns to.
+    pub pick: usize,
+    pick_from: Step,
     pub rows: Vec<RunRow>,
     pub log: Vec<String>,
     /// `None` follows the tail of the log.
@@ -86,6 +92,8 @@ impl Ui {
             drawn: 0,
             plan: Vec::new(),
             cursor: 0,
+            pick: 0,
+            pick_from: Step::Plan,
             rows: Vec::new(),
             log: Vec::new(),
             scroll: None,
@@ -201,9 +209,6 @@ impl Ui {
     }
 
     fn start(&mut self) {
-        let Some(scan) = self.scan.clone() else {
-            return;
-        };
         self.code = plan::blocked_code(&self.plan);
         let tasks: Vec<Task> = self
             .plan
@@ -211,6 +216,16 @@ impl Ui {
             .filter(|i| i.runs())
             .map(|i| i.task)
             .collect();
+        self.run(tasks);
+    }
+
+    fn run(&mut self, tasks: Vec<Task>) {
+        let Some(scan) = self.scan.clone() else {
+            return;
+        };
+        self.finished = false;
+        self.log.clear();
+        self.scroll = None;
         self.rows = tasks
             .iter()
             .map(|&task| RunRow {
@@ -222,9 +237,109 @@ impl Ui {
                 result: None,
             })
             .collect();
-        let version = plan::wanted_version(&scan, &self.opts);
-        self.job = Some(job::spawn(scan, tasks, version));
+        self.job = Some(job::spawn(scan, tasks, self.opts.clone()));
         self.go(Step::Run);
+    }
+
+    /// The offered models, from the scan's payload kit.
+    pub fn offered(&self) -> Vec<super::models::Entry> {
+        self.scan
+            .as_ref()
+            .and_then(|s| s.kit.as_ref())
+            .map(|k| k.catalog.models.clone())
+            .unwrap_or_default()
+    }
+
+    pub fn chosen(&self, name: &str) -> bool {
+        self.opts.models.iter().any(|m| m == name || m == "all")
+    }
+
+    /// Opens the picker when a catalog is at hand; after a run the payload
+    /// may just have arrived, so the kit is read again first.
+    fn open_picker(&mut self, from: Step) {
+        if from == Step::Done
+            && let Some(scan) = self.scan.as_mut()
+        {
+            scan.kit = scan
+                .home
+                .as_ref()
+                .and_then(|h| super::models::Kit::at(&h.join("forge")));
+        }
+        if self.offered().is_empty() {
+            return;
+        }
+        self.pick = 0;
+        self.pick_from = from;
+        self.go(Step::Models);
+    }
+
+    fn pick_key(&mut self, code: KeyCode) {
+        let offered = self.offered();
+        let Some(here) = offered.get(self.pick).cloned() else {
+            return;
+        };
+        // `all` is spelled out so one model can be dropped from it.
+        if self.opts.models.iter().any(|m| m == "all") {
+            self.opts.models = offered.iter().map(|e| e.name.clone()).collect();
+        }
+        let toggle = |list: &mut Vec<String>, name: &str| {
+            if let Some(i) = list.iter().position(|m| m == name) {
+                list.remove(i);
+            } else {
+                list.push(name.to_string());
+            }
+        };
+        match code {
+            KeyCode::Up | KeyCode::Char('k') => self.pick = self.pick.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.pick = (self.pick + 1).min(offered.len().saturating_sub(1))
+            }
+            KeyCode::Char(' ') | KeyCode::Char('x') => toggle(&mut self.opts.models, &here.name),
+            KeyCode::Char('a') => {
+                let every = offered.iter().all(|e| self.chosen(&e.name));
+                self.opts.models = if every {
+                    Vec::new()
+                } else {
+                    offered.iter().map(|e| e.name.clone()).collect()
+                };
+            }
+            KeyCode::Char('r') if here.remote_code => {
+                toggle(&mut self.opts.allow_remote_code, &here.name)
+            }
+            KeyCode::Enter | KeyCode::Esc | KeyCode::Char('q') => self.close_picker(code),
+            _ => {}
+        }
+    }
+
+    fn close_picker(&mut self, code: KeyCode) {
+        if let Some(scan) = &self.scan {
+            plan::reselect(&mut self.plan, scan, &self.opts);
+        }
+        let ready = self.plan.iter().any(|i| i.task == Task::Models && i.runs());
+        if self.pick_from == Step::Done && code == KeyCode::Enter && ready {
+            // the run after a fresh install: the managed venv when models
+            // need one it lacks, the models, then verify again.
+            if let Some(scan) = self.scan.as_mut() {
+                scan.venv = scan
+                    .home
+                    .as_ref()
+                    .is_some_and(|h| crate::cmd::paths::venv_python(&h.join("venv")).is_file());
+            }
+            let tasks: Vec<Task> = match &self.scan {
+                Some(scan) => plan::plan(scan, &self.opts)
+                    .into_iter()
+                    .filter(|i| matches!(i.task, Task::Python | Task::Models) && i.runs())
+                    .map(|i| i.task)
+                    .chain([Task::Verify])
+                    .collect(),
+                None => return,
+            };
+            self.code = 0;
+            self.run(tasks);
+        } else {
+            let back = self.pick_from;
+            self.go(back);
+        }
     }
 
     pub(super) fn key(&mut self, code: KeyCode, mods: KeyModifiers) {
@@ -249,6 +364,12 @@ impl Ui {
                 KeyCode::Down | KeyCode::Char('j') => {
                     self.cursor = (self.cursor + 1).min(self.plan.len().saturating_sub(1))
                 }
+                // the models step is ticked by choosing models, in the picker.
+                KeyCode::Char(' ') | KeyCode::Char('x')
+                    if self.plan.get(self.cursor).map(|i| i.task) == Some(Task::Models) =>
+                {
+                    self.open_picker(Step::Plan)
+                }
                 KeyCode::Char(' ') | KeyCode::Char('x') => {
                     if let Some(i) = self.plan.get_mut(self.cursor)
                         && !i.locked
@@ -257,10 +378,12 @@ impl Ui {
                         i.on = !i.on;
                     }
                 }
+                KeyCode::Char('m') => self.open_picker(Step::Plan),
                 KeyCode::Enter => self.start(),
                 _ if quit => self.quit = Some(130),
                 _ => {}
             },
+            Step::Models => self.pick_key(code),
             Step::Run => match code {
                 KeyCode::Up | KeyCode::Char('k') => {
                     let top = self.scroll.unwrap_or(self.log.len());
@@ -273,7 +396,9 @@ impl Ui {
                 _ => {}
             },
             Step::Done => {
-                if quit || matches!(code, KeyCode::Enter) {
+                if code == KeyCode::Char('m') {
+                    self.open_picker(Step::Done);
+                } else if quit || matches!(code, KeyCode::Enter) {
                     self.quit = Some(self.code);
                 }
             }

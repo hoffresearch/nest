@@ -105,11 +105,15 @@ pub struct Scan {
     /// of the scan (its tests run under whatever env the gate exports).
     pub pinned_python: Option<String>,
     pub deps: bool,
+    /// the venv setup manages exists in `home` (model packages go only there).
+    pub venv: bool,
     /// a python able to create a venv (`python3 -m venv`), when present.
     pub base_python: Option<String>,
     pub uv: Option<PathBuf>,
     pub curl: Option<PathBuf>,
     pub simd: &'static str,
+    /// the model catalog and installer of the payload in `home`.
+    pub kit: Option<super::models::Kit>,
 }
 
 /// First match for `name` on PATH (with the PATHEXT suffixes on windows).
@@ -179,10 +183,12 @@ impl Scan {
             python,
             pinned_python: std::env::var("URNA_PYTHON").ok().filter(|s| !s.is_empty()),
             deps,
+            venv: paths::urna_home().is_some_and(|h| paths::venv_python(&h.join("venv")).is_file()),
             base_python: base_python(),
             uv: which("uv"),
             curl: which("curl"),
             simd: urna_runtime::simd::detect_backend().name(),
+            kit: paths::urna_home().and_then(|h| super::models::Kit::at(&h.join("forge"))),
         }
     }
 

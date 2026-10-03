@@ -1,10 +1,10 @@
-![urna: offline-first vector database, rust and python](https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-hoff-research-db-iage-thumb-git.png)
+![Urna: offline-first vector database, Rust and Python](https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-hoff-research-db-iage-thumb-git.png)
 
 # Urna
 
 A vector database in one file, with citations that stay valid.
 
-A `.urna` file holds the chunks, the embeddings, the source spans, the indices and the search contract. The rust runtime maps it into memory, checks its hashes, and answers with exact cosine scores and a `urna://content_hash/chunk_id` citation for every hit. It works offline and rebuilds byte for byte. Python builds the file, rust serves it.
+A `.urna` file holds the chunks, the embeddings, the source spans, the indices and the search contract. The Rust runtime maps it into memory, checks its hashes, and answers with exact cosine scores and a `urna://content_hash/chunk_id` citation for every hit. It works offline and rebuilds byte for byte. Python builds the file, Rust serves it.
 
 Documentation: [docs.urna.dev](https://docs.urna.dev), with install, a quickstart, the concepts, the guides and the full CLI, build spec, Python and file format reference. Project site: [urna.dev](https://urna.dev).
 
@@ -29,7 +29,7 @@ cargo install urna
 curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/scripts/install.sh | sh
 ```
 
-Then run setup once. It downloads the offline embedder, prepares a python env and checks the install:
+Then run setup once. It downloads the offline embedder, prepares a Python env and checks the install:
 
 ```sh
 urna setup
@@ -41,11 +41,11 @@ Python only, no setup step needed:
 pip install "urna[embed]"
 ```
 
-Windows, docker, `cargo binstall` and how to verify a download are in the [install reference](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md#reference).
+Windows, Docker, `cargo binstall` and how to verify a download are in the [install reference](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md#reference).
 
 ## In the terminal
 
-`urna setup` shows the plan before it writes anything and ends on the doctor checks.
+`urna setup` shows the plan before it writes anything and ends on the doctor checks. A corpus built with a heavier model, like the pt-BR MiniLM, needs that model on the machine: `urna setup --model minilm-multilingual` installs it (or `m` on the plan screen), and the ask tab of `urna tui` offers the same install when a query needs it. Nothing is downloaded until you say so.
 
 <img src="https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-setup.png" alt="urna setup: the verify step with every doctor check passing" width="100%">
 
@@ -81,14 +81,14 @@ urna cite examples/quickstart/out/quickstart.urna 'urna://sha256:1147b256.../sha
 urna validate examples/quickstart/out/quickstart.urna
 ```
 
-`ask` prints the answer with its citation, `retrieve` prints json for another program, `cite` turns a citation back into the stored text, and `validate` checks every hash. To build from your own rows, see [usage section 13](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
+`ask` prints the answer with its citation, `retrieve` prints JSON for another program, `cite` turns a citation back into the stored text, and `validate` checks every hash. To build from your own rows, see [usage section 13](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
 
 ## What the file guarantees
 
 | Property | How |
 |----------|-----|
-| Self-contained | The file is the whole database. Copy it like a sqlite file. |
-| Verifiable | Sha-256 over the whole file and over the decoded content, plus a checksum on the header and on every section. `urna cite` resolves any citation. |
+| Self-contained | The file is the whole database. Copy it like a SQLite file. |
+| Verifiable | SHA-256 over the whole file and over the decoded content, plus a checksum on the header and on every section. `urna cite` resolves any citation. |
 | Reproducible | Same chunks and same model give a byte-identical file on any machine. |
 | Offline | The runtime never opens a socket. A query from the wrong model fails at the `model_hash` check. |
 
@@ -141,7 +141,7 @@ urna.build(
 
 ## CLI
 
-The engine verbs take a file and a vector; two of them run python (`search-text` for its embedder, `doctor` to probe the environment), the other ten never do. The agent verbs (`ask`, `retrieve`, `build`) take text and use the offline embedder; `ask` and `retrieve` search by what the file carries: bm25 plus vectors when the file has a bm25 index, hnsw when it has one, exact otherwise. `setup` and `tui` are the terminal ui. `urna --help` lists all three groups.
+The engine verbs take a file and a vector; two of them run Python (`search-text` for its embedder, `doctor` to probe the environment), the other ten never do. The agent verbs (`ask`, `retrieve`, `build`) take text and use the offline embedder; `ask` and `retrieve` search by what the file carries: BM25 plus vectors when the file has a BM25 index, HNSW when it has one, exact otherwise. `setup` and `tui` are the terminal UI. `urna --help` lists all three groups.
 
 <details>
 <summary>Agent verbs</summary>
@@ -158,7 +158,7 @@ urna retrieve my_corpus.urna "can I use this offline" -k 5 --format jsonl
 urna build --spec corpus.toml --dry-run
 ```
 
-`build` reads one toml: the source (sqlite, csv, jsonl, an image dir), the media settings, and one or more embedding models from the registry (`potion`, `clip-vit-b32`, `siglip2`, `wemm-2b`, ...). Each model becomes a named vector space in the same file. The full spec is in [usage section 13](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
+`build` reads one TOML: the source (SQLite, CSV, JSONL, an image dir), the media settings, and one or more embedding models from the registry (`potion`, `clip-vit-b32`, `siglip2`, `wemm-2b`, ...). Each model becomes a named vector space in the same file. The full spec is in [usage section 13](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
 
 </details>
 
@@ -228,12 +228,12 @@ urna doctor
 |-------|---------:|---------:|---------------:|
 | hnswlib | 0.32 | 0.53 | 182 |
 | usearch | 0.67 | 61.4 | 58 |
-| urna hybrid | 0.72 | 1.02 | 356 |
-| urna exact | 7.80 | 8.32 | 292 |
-| lancedb | 16.7 | 19.4 | 612 |
+| Urna hybrid | 0.72 | 1.02 | 356 |
+| Urna exact | 7.80 | 8.32 | 292 |
+| LanceDB | 16.7 | 19.4 | 612 |
 | sqlite-vec | 19.8 | 24.8 | 50 |
 
-Both urna rows return recall@10 = 1.000. Urna's cold open includes checking every section hash before the first answer. Urna does not do updates, filters or concurrent writers. Method and the full table: [docs/BENCH.md](https://github.com/hoffresearch/urna/blob/main/docs/BENCH.md).
+Both Urna rows return recall@10 = 1.000. Urna's cold open includes checking every section hash before the first answer. Urna does not do updates, filters or concurrent writers. Method and the full table: [docs/BENCH.md](https://github.com/hoffresearch/urna/blob/main/docs/BENCH.md).
 
 <details>
 <summary>Presets: size vs recall</summary>
@@ -242,26 +242,28 @@ Both urna rows return recall@10 = 1.000. Urna's cold open includes checking ever
 |--------|------------|-------|-----:|----------:|
 | `exact` | float32 | | 1.000 | 1.000 |
 | `compressed` | float16 | | 0.339 | 1.000 |
-| `tiny` | int8 | hnsw | 0.256 | 0.992 |
-| `micro` | mrl256-int8 | hnsw | 0.223 | 0.810 |
-| `nano` | int4 | hnsw | 0.209 | 0.913 |
-| `hybrid` | float32 | hnsw + bm25 | 0.609 | 1.000 |
+| `tiny` | int8 | HNSW | 0.256 | 0.992 |
+| `micro` | mrl256-int8 | HNSW | 0.223 | 0.810 |
+| `nano` | int4 | HNSW | 0.209 | 0.913 |
+| `hybrid` | float32 | HNSW + BM25 | 0.609 | 1.000 |
 
-Measured on a 30,725-chunk pt-br corpus. Recall here is rank stability under quantization, not real-query quality. Details in [usage section 6](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
+Measured on a 30,725-chunk pt-BR corpus. Recall here is rank stability under quantization, not real-query quality. Details in [usage section 6](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
+
+Real-query quality is in [fakenews-ptbr-urna-benchmark](https://github.com/brennercruvinel/fakenews-ptbr-urna-benchmark): seven public pt-BR fake-news datasets deduplicated into 23,335 documents, 2,601 queries with relevance judgments, three embedders and three presets each, rebuildable from pinned sources. On the `exact` preset, nDCG@10 is 0.528 for mpnet, 0.503 for the multilingual MiniLM and 0.326 for potion. The files are on [Hugging Face](https://huggingface.co/datasets/brennercruvinel/fakenews-ptbr-urna-benchmark).
 
 </details>
 
 <details>
-<summary>Images: 38,627 magic cards in one file</summary>
+<summary>Images: 38,627 Magic cards in one file</summary>
 
-| Profile | Media | File | Vs the jpeg source |
+| Profile | Media | File | Vs the JPEG source |
 |---------|-------|-----:|-------------------:|
 | `archive` | JPEG XL, byte-reversible | 3.61 GB | 1.10x |
 | `stills` | AVIF, one image per file (q48) | 1.20 GB | 3.32x |
 | `stills-av1` | AV1 all-intra crf35 | 1.37 GB | 2.89x |
 | `retrieval` | AV1 all-intra crf50 | 533 MB | 7.46x |
 
-The profile names are the forge's (`[media] profile = "..."`, usage section 14). Text-to-image hit@1 over every card: siglip2 0.750, wemm-2b 0.744, jina 0.336, clip 0.098. The benchmark code and the card data are not published yet; the measurements are recorded in `python/forge/media_profiles.py` and `docs/CHANGELOG`.
+The profile names are the forge's (`[media] profile = "..."`, usage section 14). Text-to-image hit@1 over every card: SigLIP2 0.750, wemm-2b 0.744, Jina 0.336, CLIP 0.098. The benchmark is [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark), and the `.urna` files are on [Hugging Face](https://huggingface.co/datasets/brennercruvinel/mtg-urna-benchmark); the recipes the forge uses are recorded in `python/forge/media_profiles.py` and `docs/CHANGELOG`.
 
 </details>
 
@@ -270,6 +272,7 @@ The profile names are the forge's (`[media] profile = "..."`, usage section 14).
 - [docs.urna.dev](https://docs.urna.dev): the documentation site, with guides, concepts and the full reference
 - [docs/USAGE.md](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md): every verb, presets, models, builds, install channels
 - [docs/BENCH.md](https://github.com/hoffresearch/urna/blob/main/docs/BENCH.md): how the numbers were measured
+- [fakenews-ptbr-urna-benchmark](https://github.com/brennercruvinel/fakenews-ptbr-urna-benchmark) and [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark): the text and image benchmarks, with their files on Hugging Face
 - [docs/SECURITY.md](https://github.com/hoffresearch/urna/blob/main/docs/SECURITY.md): reporting, hardening, data governance
 - [docs/CHANGELOG](https://github.com/hoffresearch/urna/blob/main/docs/CHANGELOG): releases with measured numbers
 - [docs/arc/ARC.toml](https://github.com/hoffresearch/urna/blob/main/docs/arc/ARC.toml): the architecture map
