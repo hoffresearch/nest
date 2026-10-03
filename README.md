@@ -45,7 +45,7 @@ Windows, docker, `cargo binstall` and how to verify a download are in the [insta
 
 ## In the terminal
 
-`urna setup` shows the plan before it writes anything and ends on the doctor checks.
+`urna setup` shows the plan before it writes anything and ends on the doctor checks. A corpus built with a heavier model, like the pt-br MiniLM, needs that model on the machine: `urna setup --model minilm-multilingual` installs it (or `m` on the plan screen), and the ask tab of `urna tui` offers the same install when a query needs it. Nothing is downloaded until you say so.
 
 <img src="https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-setup.png" alt="urna setup: the verify step with every doctor check passing" width="100%">
 

@@ -110,6 +110,8 @@ fn main() -> Result<()> {
             force,
             no_payload,
             no_python,
+            models,
+            allow_remote_code,
             uninstall,
         } => {
             let code = if uninstall {
@@ -121,6 +123,8 @@ fn main() -> Result<()> {
                     force,
                     no_payload,
                     no_python,
+                    models,
+                    allow_remote_code,
                 })?
             };
             std::process::exit(code)
