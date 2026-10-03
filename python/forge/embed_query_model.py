@@ -144,6 +144,8 @@ def main() -> int:
         return 4
     except FileNotFoundError as e:
         print(f"error: model asset missing: {e}", file=sys.stderr)
+        if isinstance(e, mr.SnapshotMissing):
+            print(f"urna-fetch: {e.repo}", file=sys.stderr)
         return 3
 
     dim = int(vec.shape[0])

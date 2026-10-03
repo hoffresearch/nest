@@ -7,7 +7,10 @@ runtime, and no `.urna` reader needs it.
 Models are addressed the way open_clip addresses them:
 `hf-hub:redlessone/DermLIP_ViT-B-16` for dermatology, or a plain
 architecture name plus a pretrained tag (`ViT-B-32` + `openai`) for the
-general-image case.
+general-image case. A preset pinned to a hub revision hands over that
+snapshot's directory instead (`snapshot` plus `weights`): the weights and
+the tokenizer are then read from those files, never resolved by name, so a
+query runs offline against exactly the revision that was verified.
 
 `model_hash` fingerprints the weights that were actually loaded, not the
 model name. The manifest gate only means something if a different
@@ -40,9 +43,14 @@ class ImageEmbedder:
         pretrained: str | None = None,
         device: str | None = None,
         batch_size: int = 32,
+        snapshot: Path | None = None,
+        weights: str | None = None,
     ):
         self.model_id = model_id
         self.pretrained = pretrained
+        self.snapshot = Path(snapshot) if snapshot is not None else None
+        self.weights = weights
+        self._tokenizer = None
         self.device = device or self._default_device()
         self.batch_size = batch_size
         self._model = None
@@ -83,14 +91,39 @@ class ImageEmbedder:
                     "(for example --pretrained openai); without it open_clip "
                     "initializes random weights and search silently returns noise"
                 )
-            model, _, preprocess = open_clip.create_model_and_transforms(
-                self.model_id, pretrained=self.pretrained
-            )
+            model, _, preprocess = self._create(open_clip)
         self._model_hash = self._fingerprint(model, preprocess)
         self._model = model.to(self.device).eval()
         self._preprocess = preprocess
         self._image = Image
         self._dim = self._resolve_dim(model)
+
+    def _create(self, open_clip):
+        """The model and preprocess for an architecture name plus a pretrained tag.
+
+        With a snapshot, the checkpoint file is loaded into the built-in
+        architecture and the preprocess is the tag's own (mean, std,
+        interpolation, resize mode), so the fingerprint below sees the same
+        weights and the same transform as a load by tag, and model_hash does
+        not move. `local-dir:` is not used for the weights: it reads the
+        preprocess back from json, and the lists it builds repr differently
+        from the tag's tuples.
+        """
+        if self.snapshot is None:
+            return open_clip.create_model_and_transforms(self.model_id, pretrained=self.pretrained)
+        cfg = open_clip.get_pretrained_cfg(self.model_id, self.pretrained)
+        if not cfg:
+            raise ValueError(
+                f"open_clip has no pretrained tag '{self.pretrained}' for {self.model_id}"
+            )
+        return open_clip.create_model_and_transforms(
+            self.model_id,
+            pretrained=str(self.snapshot / self.weights),
+            image_mean=cfg.get("mean"),
+            image_std=cfg.get("std"),
+            image_interpolation=cfg.get("interpolation"),
+            image_resize_mode=cfg.get("resize_mode"),
+        )
 
     def _fingerprint(self, model, preprocess) -> str:
         """Hash the loaded weights plus the preprocess transform.
@@ -177,15 +210,21 @@ class ImageEmbedder:
 
         The space is an image-text set: a clinical description searches the
         corpus directly, and the `model_hash` gate applies unchanged because
-        the weights behind both towers are the ones fingerprinted.
+        the weights behind both towers are the ones fingerprinted. The
+        tokenizer is not in the fingerprint; with a snapshot it is read from
+        the snapshot's files (`local-dir:`), the revision the weights came
+        from. By name, an hf tokenizer (siglip2) resolves through the hub and
+        fails offline on a repo without config.json, even fully cached.
         """
         self._load()
         import open_clip
         import torch
 
-        tokenizer = open_clip.get_tokenizer(self.model_id)
+        if self._tokenizer is None:
+            source = f"local-dir:{self.snapshot}" if self.snapshot is not None else self.model_id
+            self._tokenizer = open_clip.get_tokenizer(source)
         with torch.no_grad():
-            feats = self._model.encode_text(tokenizer(list(texts)).to(self.device))
+            feats = self._model.encode_text(self._tokenizer(list(texts)).to(self.device))
             feats = feats / feats.norm(dim=-1, keepdim=True)
         return feats.cpu().numpy().astype(np.float32)
 
