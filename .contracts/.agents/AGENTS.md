@@ -16,8 +16,8 @@ the principal author writes fast and uses voice transcription: typos, caps lock 
 
 1. read `docs/arc/ARC.toml` in a short pass: the architecture, the file inventory, the build and query flows.
 2. work on a short-lived branch off `origin/main`, one pull request per topic, squash merged.
-3. every change ships with real tests: happy path, error path, one edge case, against real artifacts (built `.urna` files, golden fixtures, real corpora), no mocks. nothing merges without executable proof.
-4. before the pull request: `./scripts/release_check.sh` (the gate) and `.contracts/.agents/.skills/AFTERWORK.md` (every doc the change owns, updated in place).
+3. every code change ships with real tests: happy path, error path, one edge case, against real artifacts (built `.urna` files, golden fixtures, real corpora), no mocks. no code merges without executable proof.
+4. before the pull request: `.contracts/.agents/.skills/AFTERWORK.md` (every doc the change owns, updated in place) and, for a code change, `./scripts/release_check.sh` (the gate); a docs-only change says in the pull request that the gate did not run.
 5. the hard rules below protect three things: the frozen file format, the offline promise (no network stack in the binary, no socket at query time) and the release channels. everything else is judgment. when a rule stands in the way of a better design, say so in the pull request and change the rule together with the change.
 
 # autonomy
@@ -43,7 +43,7 @@ secrets live in the github repository secrets (`CARGO_REGISTRY_TOKEN`, `NPM_TOKE
 - `cargo semver-checks -p urna-format --baseline-rev origin/main`: the rust api of the frozen format against the pull request's base; ci fails a pull request that breaks it (in 0.x a minor bump is the major bump)
 - `cargo bench -p urna-runtime --no-run`: the criterion benches (simd, rerank, hnsw_build) have to compile; ci checks that, the numbers are not a gate
 - `sh scripts/ruff_check.sh`: ruff over the one python file list shared with ci (`URNA_PYTHON=.venv/bin/python` picks the interpreter)
-- `./scripts/release_check.sh`: the full pipeline (the rust suite in release, the extension rebuilt, ten python suites, ruff when importable) plus the regression gates against `data/measure/baseline.json`; exits non-zero on any failure. it is the definition of pull-request ready
+- `./scripts/release_check.sh`: the full pipeline (the rust suite in release, the extension rebuilt, ten python suites, ruff when importable) plus the regression gates against `data/measure/baseline.json`; exits non-zero on any failure. it is the definition of pull-request ready for a code change
 - `forge-core/` is a separate cargo workspace outside `crates/` (the ingestion layer, the frozen `.fci` schema). `--workspace` and `release_check.sh` never reach it; run `cargo build`, `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --all --check` with `--manifest-path forge-core/Cargo.toml`
 - `fuzz/` is the third cargo workspace (cargo-fuzz, nightly toolchain): `sh scripts/fuzz_soak.sh [seconds]` runs every target with the corpus kept under `fuzz/corpus/`; `fuzz/README.md` has the targets and how a finding becomes a test
 
