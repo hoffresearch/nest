@@ -14,6 +14,11 @@ dim is mathematically possible and semantically unsupported, so it is refused
 remote code: a preset with `trust_remote_code` loads ONLY when the caller
 passes its name in `allow_remote_code` AND every code file matches the pinned
 `remote_code_hashes` allowlist; the opt-in is the consent, the pin the identity.
+
+hub snapshot: an open_clip preset with `hf_repo` and `revision` loads from
+`snapshots/<revision>` of the hf cache, every file in `snapshot_files` present,
+never through `refs/main`; a missing file is a typed SnapshotMissing naming it
+and the fetch line (URNA_ALLOW_DOWNLOAD=1 fetches the pinned files once).
 """
 
 from __future__ import annotations
@@ -32,6 +37,14 @@ class RegistryError(ValueError):
 
 class CapabilityError(RuntimeError):
     """The preset does not support the requested modality."""
+
+
+class SnapshotMissing(FileNotFoundError):
+    """A file of a preset's pinned hub snapshot is not on disk."""
+
+    def __init__(self, message: str, repo: str):
+        super().__init__(message)
+        self.repo = repo
 
 
 @dataclass(frozen=True)
@@ -70,6 +83,12 @@ class ModelPreset:
     # different images vs 0.45 bare). recipe-hashed.
     image_doc_format: str = "dict"
     encode_kwargs: tuple[tuple[str, object], ...] = ()  # ST encode() extras (recipe-hashed)
+    # the hub snapshot an open_clip preset loads from: repo, pinned commit, the
+    # checkpoint file and every file the load and the tokenizer read.
+    hf_repo: str = ""
+    revision: str = ""
+    weights_file: str = ""
+    snapshot_files: tuple[str, ...] = ()
 
 
 _ST_REQUIRES = (
@@ -152,7 +171,20 @@ PRESETS: dict[str, ModelPreset] = {
             pretrained="webli",
             default_dim=768,
             modalities=frozenset({"text", "image"}),
-            requires=_OPEN_CLIP_REQUIRES,
+            # its text tower tokenizes through transformers' AutoTokenizer
+            requires=_OPEN_CLIP_REQUIRES + (("transformers", 'pip install "transformers==5.2.0"'),),
+            # the revision whose weights fingerprint to the model_hash of the
+            # mtg stills-5models build (sha256:a9946db1...), checked 2026-10-02
+            hf_repo="timm/ViT-B-16-SigLIP2",
+            revision="eee10eff6dd8cabae2d7f379d4e8cfcd352030aa",
+            weights_file="open_clip_model.safetensors",
+            snapshot_files=(
+                "open_clip_model.safetensors",
+                "open_clip_config.json",
+                "tokenizer.json",
+                "tokenizer_config.json",
+                "special_tokens_map.json",
+            ),
         ),
         ModelPreset(
             name="jina-v5-omni-nano",
@@ -265,6 +297,52 @@ def resolve_model_dir(preset: ModelPreset, model_path: str | os.PathLike | None 
     return None
 
 
+def pinned_snapshot(preset: ModelPreset, model_path: str | os.PathLike | None = None) -> Path:
+    """The directory holding the preset's pinned hub snapshot, every file present.
+
+    explicit model_path > URNA_MODEL_DIR_<NAME> > `snapshots/<revision>` in the
+    hf cache. refs/main is never read: it names whatever was fetched last, not
+    the revision the preset verified. A missing file raises SnapshotMissing,
+    unless URNA_ALLOW_DOWNLOAD=1, which fetches the pinned files first.
+    """
+    env_key = "URNA_MODEL_DIR_" + preset.name.upper().replace("-", "_")
+    explicit = model_path or os.environ.get(env_key)
+    if explicit:
+        snap = Path(explicit)
+    else:
+        hf_home = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
+        cache = hf_home / "hub" / f"models--{preset.hf_repo.replace('/', '--')}"
+        snap = cache / "snapshots" / preset.revision
+    missing = [f for f in preset.snapshot_files if not (snap / f).is_file()]
+    if missing and not explicit and os.environ.get("URNA_ALLOW_DOWNLOAD") == "1":
+        snap = _fetch_snapshot(preset)
+        missing = [f for f in preset.snapshot_files if not (snap / f).is_file()]
+    if missing:
+        files = " ".join(preset.snapshot_files)
+        fetch = f"hf download {preset.hf_repo} {files} --revision {preset.revision}"
+        where = str(snap) if explicit else f"the hf cache ({preset.hf_repo}@{preset.revision[:12]})"
+        raise SnapshotMissing(
+            f"preset '{preset.name}': {', '.join(missing)} missing from {where}. fetch the pinned "
+            f"files with: {fetch}, or run once with URNA_ALLOW_DOWNLOAD=1",
+            preset.hf_repo,
+        )
+    return snap
+
+
+def _fetch_snapshot(preset: ModelPreset) -> Path:
+    """Download the preset's pinned files: the explicit URNA_ALLOW_DOWNLOAD=1 opt-in."""
+    # importing forge (embed_potion) defaults the hub offline; the opt-in wins,
+    # as in embed_st. huggingface_hub reads the flag when it is first imported.
+    for k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
+        os.environ.pop(k, None)
+    from huggingface_hub import hf_hub_download
+
+    path = None
+    for f in preset.snapshot_files:
+        path = hf_hub_download(preset.hf_repo, f, revision=preset.revision)
+    return Path(path).parent
+
+
 def verify_remote_code(preset: ModelPreset, model_dir: Path) -> None:
     """Pin gate (N11): every allowlisted code file must match its sha256."""
     for filename, expected in preset.remote_code_hashes:
@@ -324,11 +402,14 @@ def create_embedder(
     if preset.kind == "open_clip":
         from forge import embed_image
 
+        snapshot = pinned_snapshot(preset, model_path) if preset.revision else None
         inner = embed_image.ImageEmbedder(
             model_id=preset.model_id,
             pretrained=preset.pretrained,
             device=device,
             batch_size=batch_size or 32,
+            snapshot=snapshot,
+            weights=preset.weights_file or None,
         )
         return _adapters._OpenClipAdapter(preset, inner)
     if preset.kind == "st_text":

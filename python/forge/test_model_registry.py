@@ -1,7 +1,8 @@
 """Prove the model registry contract without heavy ML deps: preset table
 integrity, the RFC-0 gates (fake env, remote-code opt-in, pinned hashes,
-heavy flag), deterministic fake embeddings, and slice_renorm equivalence
-with the engine's mrl_dim truncate-then-renormalize.
+heavy flag), the pinned hub snapshot of an open_clip preset (the revision,
+never refs/main; a missing file named), deterministic fake embeddings, and
+slice_renorm equivalence with the engine's mrl_dim truncate-then-renormalize.
 
 Run: .venv/bin/python python/forge/test_model_registry.py
 """
@@ -103,6 +104,69 @@ def test_resolve_model_dir_precedence() -> None:
         assert mr.resolve_model_dir(preset) == Path("/from/env")
     finally:
         del os.environ["URNA_MODEL_DIR_WEMM_2B"]
+
+
+def _fake_hf_home(tmp: str, files: tuple[str, ...]) -> Path:
+    """An hf cache holding siglip2's pinned snapshot with `files`, plus a newer
+    snapshot that refs/main points to: the layout `hf download` leaves."""
+    preset = mr.PRESETS["siglip2"]
+    cache = Path(tmp) / "hub" / f"models--{preset.hf_repo.replace('/', '--')}"
+    pinned = cache / "snapshots" / preset.revision
+    newer = cache / "snapshots" / ("f" * 40)
+    for snap, names in ((pinned, files), (newer, preset.snapshot_files)):
+        snap.mkdir(parents=True)
+        for name in names:
+            (snap / name).write_text(name)
+    (cache / "refs").mkdir()
+    (cache / "refs" / "main").write_text("f" * 40)
+    return pinned
+
+
+def _snapshot_missing(preset, model_path=None) -> str:
+    try:
+        mr.pinned_snapshot(preset, model_path)
+    except mr.SnapshotMissing as e:
+        assert e.repo == preset.hf_repo
+        return str(e)
+    raise AssertionError("a missing snapshot file must raise SnapshotMissing")
+
+
+def test_siglip2_pins_a_revision() -> None:
+    p = mr.PRESETS["siglip2"]
+    assert len(p.revision) == 40 and all(c in "0123456789abcdef" for c in p.revision)
+    assert p.weights_file in p.snapshot_files
+    assert {"tokenizer.json", "tokenizer_config.json"} <= set(p.snapshot_files)
+    assert "transformers" in {m for m, _ in p.requires}
+
+
+def test_pinned_snapshot_reads_the_revision_not_refs_main() -> None:
+    preset = mr.PRESETS["siglip2"]
+    with tempfile.TemporaryDirectory() as tmp:
+        pinned = _fake_hf_home(tmp, preset.snapshot_files)
+        os.environ["HF_HOME"] = tmp
+        try:
+            assert mr.pinned_snapshot(preset) == pinned
+        finally:
+            del os.environ["HF_HOME"]
+
+
+def test_pinned_snapshot_names_a_missing_file() -> None:
+    preset = mr.PRESETS["siglip2"]
+    os.environ.pop("URNA_ALLOW_DOWNLOAD", None)
+    with tempfile.TemporaryDirectory() as tmp:
+        files = tuple(f for f in preset.snapshot_files if f != "tokenizer.json")
+        _fake_hf_home(tmp, files)
+        os.environ["HF_HOME"] = tmp
+        try:
+            msg = _snapshot_missing(preset)
+        finally:
+            del os.environ["HF_HOME"]
+    assert "tokenizer.json missing" in msg, msg
+    assert f"--revision {preset.revision}" in msg and "URNA_ALLOW_DOWNLOAD=1" in msg, msg
+    # the newer snapshot under refs/main has every file and is still not used
+    with tempfile.TemporaryDirectory() as tmp:
+        msg = _snapshot_missing(preset, tmp)
+    assert f"missing from {tmp}" in msg and preset.weights_file in msg, msg
 
 
 def test_potion_adapter_is_text_only() -> None:
