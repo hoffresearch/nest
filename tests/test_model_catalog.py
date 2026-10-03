@@ -80,6 +80,9 @@ def test_every_other_preset_says_why() -> None:
         or "model-repo code" in excluded["jina-v5-omni-nano"]
     )
     assert "no pinned hub revision" in excluded["clip-vit-b32"]
+    # siglip2 pins a snapshot but the installer cannot verify a tensor hash
+    assert "pinned hub snapshot" in excluded["siglip2"], excluded["siglip2"]
+    assert "no pinned hub revision" not in excluded["siglip2"]
     assert "payload" in excluded["potion"]
     print("error path (each preset not offered carries its reason; fake hidden): OK")
 
