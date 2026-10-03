@@ -59,13 +59,12 @@ data/hoff.db
 # from a `--no-verify` commit, which still honors .gitignore.
 #
 # Ignore ALL .urna by default (a PHI export with any name, not just cohort_*),
-# then negate ONLY the three sanctioned PUBLIC, non-PHI corpora that ARE tracked.
+# then negate ONLY the two sanctioned PUBLIC, non-PHI files that ARE tracked.
 *.urna
 *.sidecar.jsonl
 **/pairs/
 !data/corpus_next.v1.urna
 !crates/urna-format/tests/fixtures/golden_v1_minimal.urna
-!data/measure/fakerecogna_exact.urna
 
 # demo datasets are local-only (data/demo/Instructions.md says how to fetch them).
 data/demo/*
