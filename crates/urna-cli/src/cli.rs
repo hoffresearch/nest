@@ -6,6 +6,29 @@ use std::path::PathBuf;
 
 use crate::cmd;
 
+/// The help footer every build shares; the terminal-ui lines are added only
+/// when the `tui` feature (`setup`, `tui`) is compiled in.
+macro_rules! help_footer {
+    () => {
+        "start here (the five verbs that cover the loop):\n  build     creates the base       rows + embedding model in, one .urna out     urna build --spec corpus.toml\n  ask       queries it             text in, one cited answer out                urna ask corpus.urna \"question\"\n  retrieve  results for a program  json/jsonl of cited spans, exact score       urna retrieve corpus.urna \"question\" --format jsonl\n  cite      resolves the source    a urna:// citation back to its stored text   urna cite corpus.urna 'urna://...'\n  validate  proves the file        every checksum, every hash, the contract     urna validate corpus.urna\n\nverb groups:\n  engine  inspect, validate, stats, media, search, search-ann, search-graph,\n          search-space, search-text, benchmark, cite, doctor  (file + vector in, hits out; python only in search-text and doctor)\n  agent   ask, retrieve, build  (text or spec in, cited answers out; shells out to the offline python embedder / forge)\n"
+    };
+}
+
+#[cfg(feature = "tui")]
+const AFTER_HELP: &str = concat!(
+    help_footer!(),
+    "  setup   setup, tui  (the installer every channel ends in, and the terminal explorer)\n\n",
+    "first run: urna setup (a bare `urna` on a terminal opens the explorer)\n",
+    "a corpus to try: examples/quickstart/ in the repo (urna build --spec examples/quickstart/corpus.toml)"
+);
+
+#[cfg(not(feature = "tui"))]
+const AFTER_HELP: &str = concat!(
+    help_footer!(),
+    "\nthis build has no terminal ui (`setup`, `tui`): it was compiled without the `tui` feature\n",
+    "a corpus to try: examples/quickstart/ in the repo (urna build --spec examples/quickstart/corpus.toml)"
+);
+
 /// Two products share one binary and one engine. The ENGINE verbs take a
 /// `.urna` file and (where relevant) a query VECTOR; none of them needs
 /// python except `search-text` (the sentence-transformers embedder) and
@@ -21,7 +44,7 @@ use crate::cmd;
 #[command(
     about = "urna: single-file, memory-mapped, hash-verified vector database with stable citations",
     long_about = None,
-    after_help = "start here (the five verbs that cover the loop):\n  build     creates the base       rows + embedding model in, one .urna out     urna build --spec corpus.toml\n  ask       queries it             text in, one cited answer out                urna ask corpus.urna \"question\"\n  retrieve  results for a program  json/jsonl of cited spans, exact score       urna retrieve corpus.urna \"question\" --format jsonl\n  cite      resolves the source    a urna:// citation back to its stored text   urna cite corpus.urna 'urna://...'\n  validate  proves the file        every checksum, every hash, the contract     urna validate corpus.urna\n\nverb groups:\n  engine  inspect, validate, stats, media, search, search-ann, search-graph,\n          search-space, search-text, benchmark, cite, doctor  (file + vector in, hits out; python only in search-text and doctor)\n  agent   ask, retrieve, build  (text or spec in, cited answers out; shells out to the offline python embedder / forge)\n  setup   setup, tui  (the installer every channel ends in, and the terminal explorer)\n\nfirst run: urna setup (a bare `urna` on a terminal opens the explorer)\na corpus to try: examples/quickstart/ in the repo (urna build --spec examples/quickstart/corpus.toml)"
+    after_help = AFTER_HELP
 )]
 pub struct Cli {
     /// none on a terminal opens `urna tui`; none in a pipe prints this help.
@@ -312,4 +335,26 @@ pub enum Commands {
     #[cfg(feature = "tui")]
     #[command(display_order = 31)]
     Tui { file: Option<PathBuf> },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Cli;
+    use clap::CommandFactory;
+
+    #[test]
+    fn the_help_footer_names_the_terminal_ui_only_when_it_is_built() {
+        let help = Cli::command().render_long_help().to_string();
+        assert!(help.contains("start here"), "{help}");
+        assert_eq!(
+            help.contains("first run: urna setup"),
+            cfg!(feature = "tui"),
+            "{help}"
+        );
+        assert_eq!(
+            help.contains("has no terminal ui"),
+            !cfg!(feature = "tui"),
+            "{help}"
+        );
+    }
 }
