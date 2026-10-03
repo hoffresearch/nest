@@ -79,7 +79,7 @@
     {
       "name": "siglip2",
       "embedding_model": "open_clip/ViT-B-16-SigLIP2/webli",
-      "reason": "open_clip fetches its own weights; no pinned hub revision yet"
+      "reason": "pinned hub snapshot, fetched on first use with URNA_ALLOW_DOWNLOAD=1; the installer cannot verify an open_clip model_hash yet (it hashes the loaded tensors)"
     },
     {
       "name": "jina-v5-omni-nano",
