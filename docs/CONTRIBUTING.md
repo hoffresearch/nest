@@ -43,7 +43,7 @@ pip install ruff numpy tokenizers pillow sentence-transformers pandas zstandard 
 
 `numpy` and `tokenizers` are the forge deps the potion embedder needs; `pillow` is for the image tests; `sentence-transformers` only for the pt-br corpus and `search-text`.
 
-`data/corpus_next.v1.urna` is tracked via git lfs. demo datasets under `data/demo/` are local-only and gitignored; fetch them with the commands documented in `data/demo/Instructions.md`. without those datasets, runtime unit tests still pass.
+`data/corpus_next.v1.urna` is tracked via git lfs; it is the frozen baseline of the regression gate, and `data/demo/Instructions.md` gives its hashes. demo data under `data/demo/` is local-only and gitignored. without it, runtime unit tests still pass.
 
 ## conventions and writing style
 

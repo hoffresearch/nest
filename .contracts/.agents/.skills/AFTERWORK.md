@@ -55,7 +55,7 @@ edit in place, as if the file had always said the right thing. history lives in 
 ## rarely
 
 - `docs/CONTRIBUTING.md`: only when the contribution flow (branch, pr, gate) changes.
-- `data/demo/Instructions.md`: only when an upstream dataset or the corpus rebuild changes.
+- `data/demo/Instructions.md`: only when the gate corpus or an image source changes.
 - `.editorconfig`: only for a new language or file type.
 
 ## file hygiene

@@ -26,8 +26,15 @@ pub fn draw(buf: &mut Buffer, body: Rect, ui: &mut Ui) {
         &format!("{n_on} of {} steps", ui.plan.len()),
         true,
     );
+    // four rows a step (title, two of detail, a gap), three on a short
+    // terminal so the last step still shows.
+    let per: u16 = if inner.height as usize >= ui.plan.len() * 4 {
+        4
+    } else {
+        3
+    };
     for (i, item) in ui.plan.iter().enumerate() {
-        let y = inner.y + i as u16 * 4;
+        let y = inner.y + i as u16 * per;
         if y + 1 >= inner.bottom() {
             break;
         }
@@ -48,7 +55,8 @@ pub fn draw(buf: &mut Buffer, body: Rect, ui: &mut Ui) {
             None => (item.detail.as_str(), pal::faint()),
         };
         let w = inner.width.saturating_sub(6);
-        for (j, line) in hud::wrap(note, w as usize).iter().take(2).enumerate() {
+        let room = (per - 2) as usize;
+        for (j, line) in hud::wrap(note, w as usize).iter().take(room).enumerate() {
             hud::put(buf, inner.x + 6, y + 1 + j as u16, line, st, w);
         }
         if blocked {
@@ -79,11 +87,12 @@ pub fn draw(buf: &mut Buffer, body: Rect, ui: &mut Ui) {
         let rows = [
             ("payload", format!("{home}/forge")),
             ("python env", format!("{home}/venv")),
+            ("models", "the shared hugging face cache".into()),
             (
                 "source",
                 format!("github release v{}", version.trim_start_matches('v')),
             ),
-            ("network", "curl, only while downloading".into()),
+            ("network", "curl; the hf hub for picked models".into()),
             ("binary", "left to its package manager".into()),
         ];
         for (i, (k, v)) in rows.iter().enumerate() {

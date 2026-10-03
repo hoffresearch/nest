@@ -22,8 +22,10 @@ import hashlib
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import numpy as np
+if TYPE_CHECKING:
+    import numpy as np
 
 
 class RegistryError(ValueError):
@@ -39,6 +41,23 @@ class MrlSpec:
     supported: bool = False
     dims: tuple[int, ...] = ()
     method: str = "prefix_slice_l2"
+
+
+@dataclass(frozen=True)
+class InstallSpec:
+    """A validated install: the hub revision, the exact files fetched at it
+    (path, bytes), the `model_hash` those files fingerprint to, and the pip
+    specs its backend needs. a preset carries one only after an install of
+    exactly this was run end to end and its hash checked; `model_catalog`
+    exposes only those. the file list is part of the identity: the
+    fingerprint hashes every relevant file present, so fetching one more
+    weights file (a pytorch_model.bin beside model.safetensors) would change
+    the model_hash."""
+
+    revision: str
+    files: tuple[tuple[str, int], ...]
+    model_hash: str
+    packages: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -70,6 +89,7 @@ class ModelPreset:
     # different images vs 0.45 bare). recipe-hashed.
     image_doc_format: str = "dict"
     encode_kwargs: tuple[tuple[str, object], ...] = ()  # ST encode() extras (recipe-hashed)
+    install: InstallSpec | None = None  # validated install; None = not offered by setup
 
 
 _ST_REQUIRES = (
@@ -193,6 +213,26 @@ PRESETS: dict[str, ModelPreset] = {
             model_id="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
             default_dim=384,
             requires=(("sentence_transformers", 'pip install "sentence-transformers"'),),
+            # the revision and files the pt-br corpora were built from (the
+            # files sentence-transformers itself fetches; the repo also holds
+            # onnx, openvino and a pytorch_model.bin that are never fetched).
+            install=InstallSpec(
+                revision="e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+                files=(
+                    ("1_Pooling/config.json", 190),
+                    ("README.md", 3888),
+                    ("config.json", 645),
+                    ("config_sentence_transformers.json", 122),
+                    ("model.safetensors", 470641600),
+                    ("modules.json", 229),
+                    ("sentence_bert_config.json", 53),
+                    ("special_tokens_map.json", 239),
+                    ("tokenizer.json", 9081518),
+                    ("tokenizer_config.json", 526),
+                ),
+                model_hash="sha256:97a500de1ad2dc9ffb41fbe3dec27d4fd26ddaa13143aa50f905d3d1f6eff0af",
+                packages=("sentence-transformers>=3",),
+            ),
         ),
         _wemm(
             "wemm-2b",
@@ -280,7 +320,11 @@ def verify_remote_code(preset: ModelPreset, model_dir: Path) -> None:
 
 
 def slice_renorm(vecs: np.ndarray, dim: int) -> np.ndarray:
-    """First-`dim` prefix slice + re-L2 (same semantics as build_fn's mrl_dim)."""
+    """First-`dim` prefix slice + re-L2 (same semantics as build_fn's mrl_dim).
+    numpy loads here, not at import: the catalog generator reads the
+    registry under a bare python3 (the release's stage step)."""
+    import numpy as np
+
     v = np.asarray(vecs, dtype=np.float32)
     if not 0 < dim <= v.shape[1]:
         raise ValueError(f"slice dim {dim} out of range for source dim {v.shape[1]}")

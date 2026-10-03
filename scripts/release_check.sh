@@ -143,7 +143,20 @@ ok "query embedder routing (10 cases; 7 to 10 need sentence-transformers, URNA_S
 # does not stage.
 step "python tests/test_embedder_payload.py"
 "$PY" tests/test_embedder_payload.py
-ok "embedder payload (2 cases)"
+ok "embedder payload (3 cases)"
+
+# the model catalog setup offers is the registry's validated presets, with a
+# reason for every preset it leaves out.
+step "python tests/test_model_catalog.py"
+"$PY" tests/test_model_catalog.py
+ok "model catalog (5 cases)"
+
+# the model fetch: confirmed downloads only, the pinned files only, kept
+# only when the fingerprint is the catalog's (an 18 MB hub model; the
+# download cases skip by name when huggingface.co does not answer).
+step "python tests/test_model_install.py"
+"$PY" tests/test_model_install.py
+ok "model install (4 cases)"
 
 # the benchmark rebuild builds beside the corpus and renames at the end, so
 # an interrupted gate never leaves data/measure without its corpora.

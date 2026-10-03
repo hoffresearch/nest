@@ -180,6 +180,17 @@ jobs:
         run: |
           urna doctor
           urna validate "$GITHUB_WORKSPACE/crates/urna-format/tests/fixtures/golden_v1_minimal.urna"
+      # the released payload carries the model catalog: a model it leaves out
+      # is refused with its reason (exit 14), with nothing downloaded.
+      - name: the payload carries the model catalog
+        working-directory: ${{ runner.temp }}
+        shell: bash
+        run: |
+          code=0
+          out=$(urna setup --yes --no-payload --no-python --model wemm-4b) || code=$?
+          echo "$out"
+          test "$code" = 14
+          grep -q "wemm-4b is not offered: flagged too heavy" <<<"$out"
 
   wheel:
     name: wheel ${{ matrix.os }}

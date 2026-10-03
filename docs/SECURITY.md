@@ -2,7 +2,7 @@
 project: urna
 audience: users and security researchers
 status: active
-last-updated: 2026-09-29
+last-updated: 2026-10-02
 domain: security
 ---
 
@@ -61,7 +61,7 @@ things we do not treat as security bugs:
 
 ## hardening notes
 
-- the runtime (rust) never opens a network socket. queries are answered from `mmap`. the default query embedders are offline too: `ask`/`retrieve` use the vendored potion table (no network by construction), and the `search-text` sentence-transformers path forces `HF_HUB_OFFLINE`/`TRANSFORMERS_OFFLINE` unless you opt in with `URNA_ALLOW_DOWNLOAD=1` (or pass `--model-path`).
+- the runtime (rust) never opens a network socket. queries are answered from `mmap`. the default query embedders are offline too: `ask`/`retrieve` use the vendored potion table (no network by construction), and the `search-text` sentence-transformers path forces `HF_HUB_OFFLINE`/`TRANSFORMERS_OFFLINE` unless you opt in with `URNA_ALLOW_DOWNLOAD=1` (or pass `--model-path`). the one other place a model is fetched is the model install (`urna setup --model`, the explorer's install panel): only after an explicit confirmation, only the files the payload's catalog pins at a fixed hub revision, with `URNA_ALLOW_DOWNLOAD=1` set for that fetch child alone, and kept only when they fingerprint to the catalog's `model_hash`; a model that runs its repo's code needs a second, separate consent and its reviewed file hashes. packages go only into the venv `urna setup` manages.
 - `model_hash` is a granular fingerprint over the local model snapshot (config + tokenizer + weights + pooling + dim + normalize). a mismatch fails with a typed error, never silently. the CLI (`search-text`) enforces this; the Python `UrnaFile.retrieve` binding accepts `expected_model_hash` and the flagship `forge/retrieve.py` passes it by default, so the honesty gate holds on the Python surface too.
 - `unsafe` lives in the SIMD kernels (`crates/urna-runtime/src/simd/`) and the two `mmap` calls (`crates/urna-runtime/src/mmap_file.rs`, `mmap_cold.rs`); the former zero-copy casts in `crates/urna-format` (header / footer / section-entry byte views, the int8 row view) are now safe `bytemuck` casts whose layout invariants the compiler checks, and the whole format crate runs under miri nightly (`ci.yml` job `miri`), so "no undefined behaviour" in the parsers is a run, not a claim. every remaining `unsafe` block carries a `// SAFETY:` comment naming the invariant, and `clippy::undocumented_unsafe_blocks` is denied workspace-wide so a new undocumented block fails the build. the safe SIMD dispatchers check every slice length with `assert!` (kept in release), so the raw-pointer kernels never run on a mismatched row even if a validation layer upstream regresses.
 - no `unwrap()` on a parse path: `clippy::unwrap_used` is denied workspace-wide (tests exempt), little-endian field reads go through `urna_format::bytes` and return `UnexpectedEof`, every header-derived size (`n * dim * width`) is overflow-checked, every payload cursor bounds-checks as `need > remaining` (never `pos + need > len`, which wraps), every count read from the file is bounded against the remaining bytes before it sizes an allocation, and every f32 ranking sort is a NaN-last total order.

@@ -7,7 +7,7 @@ use ratatui::DefaultTerminal;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
-use super::{App, Tab, chrome, corpus, health, hits, home, pick};
+use super::{App, Tab, chrome, corpus, health, hits, home, offer, pick};
 use crate::tui::{fx, hud, pal};
 
 impl App {
@@ -92,6 +92,11 @@ impl App {
                     self.fx.cancel_unique_effect("shimmer");
                 }
                 self.fx.add_unique_effect("page", fx::page_in(body));
+            }
+            if self.tab == Tab::Ask
+                && let Some(o) = &self.ask.offer
+            {
+                offer::render(buf, body, o, &spin);
             }
             if let Some(fe) = &self.picker {
                 let r = pick::render(buf, area, fe);
