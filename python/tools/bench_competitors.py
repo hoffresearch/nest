@@ -11,8 +11,10 @@ the recall ruler is brute-force top-k over the same rows.
 columns: build time, bytes on disk, cold open + first query in a fresh
 process (python startup subtracted), warm p50/p99 latency, recall@10 (exact
 systems are 1.0 by construction and asserted), byte-identical rebuild
-(measured by building twice), built-in integrity check. every hnsw path runs
-m=16, ef_construction=200, ef_search=100 so the ann rows compare like for like.
+(measured by building twice), built-in integrity check. every hnsw path is
+built with m=16, ef_construction=200 and asked for ef_search=100; urna's
+search_ann never searches fewer than ef_construction candidates (the beam
+floor), so its ann row runs a 200-wide beam, and the table says so.
 """
 
 from __future__ import annotations
@@ -49,8 +51,13 @@ NOTES = (
             " at 1.0.",
             "- `rebuild byte-identical`: two builds from the same rows compared by SHA256 over the"
             " artefact (a directory is hashed file by file).",
-            "- `integrity check`: whether the store can prove its own bytes. Urna verifies SHA256"
-            " per section, per file and over the decoded content on `validate()`.",
+            "- `integrity check`: whether the store can prove its own bytes. Urna's `validate()`"
+            " checks each section against the first 8 bytes of its SHA-256, the whole file against"
+            " its `file_hash` and the decoded content against its `content_hash`.",
+            "- The ann rows are built with m=16 and ef_construction=200 and asked for ef=100. Urna's"
+            " `search_ann` never searches fewer than ef_construction candidates (the beam floor that"
+            " keeps the recall measured at build), so its row ran a 200-wide beam against 100 for"
+            " hnswlib and usearch.",
             "- The same rows written with raw text and with zstd text share one `content_hash`:"
             " {same_citation}. Re-encoding never moves a `urna://content_hash/chunk_id` citation;"
             " the other stores have no equivalent notion.",
