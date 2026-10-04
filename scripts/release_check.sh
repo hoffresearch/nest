@@ -180,6 +180,12 @@ step "python tests/test_pypi_release.py"
 "$PY" tests/test_pypi_release.py
 ok "pypi release (5 cases)"
 
+# the release rehearsal is generated from release.yml, publishes nothing,
+# and its required check fails a needed build that did not pass.
+step "python tests/test_release_rehearsal.py"
+"$PY" tests/test_release_rehearsal.py
+ok "release rehearsal (7 cases)"
+
 # ---- ruff (best-effort) ----
 # the file list lives in scripts/ruff_check.sh so ci.yml and this gate stay
 # in lockstep; ruff missing from $PY is a skip here, a failure in ci.
