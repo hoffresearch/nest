@@ -26,7 +26,7 @@
 
 use std::collections::HashSet;
 
-use urna_runtime::ann::{DEFAULT_EF_CONSTRUCTION, DEFAULT_M, HnswIndex};
+use urna_engine::ann::{DEFAULT_EF_CONSTRUCTION, DEFAULT_M, HnswIndex};
 
 /// Tiny LCG (deterministic) for synthetic corpora.
 struct Lcg(u64);
@@ -197,7 +197,7 @@ fn graph_digest(idx: &HnswIndex) -> String {
 /// heuristic or the tie-breaking shows up here as a different digest.
 /// any build-throughput work must either keep these
 /// digests or change them on purpose, in the same commit, with the reason.
-/// `PIN_HNSW_DIGESTS=1 cargo test --release -p urna-runtime --test
+/// `PIN_HNSW_DIGESTS=1 cargo test --release -p urna-engine --test
 /// hnsw_recall graph_bytes_are_pinned -- --nocapture` prints the current
 /// values to paste below.
 #[test]

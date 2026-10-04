@@ -41,7 +41,7 @@ O projeto usa commits assinados e squash merge. Ao atualizar um PR empilhado, re
 ## Principais responsabilidades da aplicação
 
 - `crates/urna-format`: formato binário, leitura, escrita e hashes.
-- `crates/urna-runtime`: mmap, índices, kernels e busca.
+- `crates/urna-engine`: mmap, índices, kernels e busca.
 - `crates/urna-cli`: binário `urna`, comandos e interface de terminal.
 - `crates/urna-python`: extensão PyO3 distribuída na wheel.
 - `python/`: API Python, construção dos corpora, embedders e catálogo de modelos.
@@ -77,7 +77,7 @@ Escolha verificações que exercitem o comportamento alterado e cumpram os check
 
 O CI, o ensaio e o gate local têm coberturas diferentes. Leia seus scripts para saber o que executam e justifique no PR as verificações usadas. O check `rehearsal` é obrigatório: a dispensa explícita por ausência de impacto é válida; falha, cancelamento ou build necessário pulado não comprovam o ensaio.
 
-Reconstrua a extensão antes dos testes Python quando alterar `urna-format`, `urna-runtime` ou `urna-python`: `cargo build --release -p urna-python --features pyo3/extension-module`. Use o interpretador dos testes e siga o procedimento de cópia da biblioteca no CONTRIBUTING. O gate completo faz essa preparação; uma extensão antiga pode produzir resultados enganosos.
+Reconstrua a extensão antes dos testes Python quando alterar `urna-format`, `urna-engine` ou `urna-python`: `cargo build --release -p urna-python --features pyo3/extension-module`. Use o interpretador dos testes e siga o procedimento de cópia da biblioteca no CONTRIBUTING. O gate completo faz essa preparação; uma extensão antiga pode produzir resultados enganosos.
 
 Registre o que passou, falhou ou foi pulado e em qual commit. Um teste dispensado por falta de ferramenta ou dependência não conta como executado. Consulte os pré-requisitos antes de confiar no resumo de uma suíte, incluindo a versão fixada do cargo-release nos testes de preparação.
 

@@ -19,7 +19,7 @@ pub fn run(
 ) -> Result<()> {
     let qvec: Vec<f32> = serde_json::from_str(&query)
         .map_err(|e| anyhow::anyhow!("query must be a JSON array of f32: {}", e))?;
-    let runtime = urna_runtime::MmapUrnaFile::open(&file)?;
+    let runtime = urna_engine::MmapUrnaFile::open(&file)?;
     let result = runtime.search_space(&space, &qvec, k, expect_model_hash.as_deref())?;
     println!("space:        {}", space);
     print_result(&result);

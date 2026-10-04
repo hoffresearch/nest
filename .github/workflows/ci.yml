@@ -67,13 +67,13 @@ jobs:
       - name: test
         run: cargo test --workspace
       - name: benches compile (numbers are not a gate on shared runners)
-        run: cargo bench -p urna-runtime --no-run
+        run: cargo bench -p urna-engine --no-run
       - name: mutation fuzz (deterministic, higher count)
         env:
           URNA_MUTATION_ITERS: "6000"
         run: |
           cargo test --release -p urna-format --test mutation_fuzz
-          URNA_MUTATION_ITERS=800 cargo test --release -p urna-runtime --test mutation_fuzz
+          URNA_MUTATION_ITERS=800 cargo test --release -p urna-engine --test mutation_fuzz
       - name: 639-line guard (crates/**/src)
         run: |
           overlong="$(find crates -name '*.rs' -path '*/src/*' -not -path '*/tests/*' \

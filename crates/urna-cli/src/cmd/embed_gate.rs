@@ -13,7 +13,7 @@ use anyhow::Result;
 use std::path::{Path, PathBuf};
 use std::process::Command as ProcCommand;
 
-use urna_runtime::{MmapUrnaFile, SearchResult};
+use urna_engine::{MmapUrnaFile, SearchResult};
 
 use super::embed_failure::EmbedFailure;
 

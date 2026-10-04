@@ -10,15 +10,15 @@
 //!   allocation-free int4 path) shows.
 //!
 //! files land under the os temp dir and are rebuilt on every run (the
-//! build is not timed). run: `cargo bench -p urna-runtime --bench rerank`
+//! build is not timed). run: `cargo bench -p urna-engine --bench rerank`
 
 use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use std::path::PathBuf;
+use urna_engine::MmapUrnaFile;
+use urna_engine::ann::{DEFAULT_M, HnswIndex};
 use urna_format::ChunkInput;
 use urna_format::manifest::Manifest;
 use urna_format::writer::{EmbeddingDType, UrnaFileBuilder};
-use urna_runtime::MmapUrnaFile;
-use urna_runtime::ann::{DEFAULT_M, HnswIndex};
 
 const N: usize = 20_000;
 const DIM: usize = 384;

@@ -95,7 +95,7 @@ fn good_hash() -> [u8; 32] {
 /// the `urna://content_hash/chunk_id` citation of chunk `i`, read from the
 /// file the way `retrieve` would hand it out.
 fn citation(path: &Path, i: usize) -> String {
-    let rt = urna_runtime::MmapUrnaFile::open(path).unwrap();
+    let rt = urna_engine::MmapUrnaFile::open(path).unwrap();
     let mut q = vec![0.0f32; 4];
     q[i] = 1.0;
     let hit = rt.search(&q, 1).unwrap().hits.remove(0);
@@ -134,7 +134,7 @@ fn cite_prints_the_overlay_span_like_retrieve() {
     assert!(stdout.contains("frame 1"), "{stdout}");
 
     // the runtime reports the same span for the same chunk
-    let rt = urna_runtime::MmapUrnaFile::open(&path).unwrap();
+    let rt = urna_engine::MmapUrnaFile::open(&path).unwrap();
     let hit = rt.search(&[0.0, 1.0, 0.0, 0.0], 1).unwrap().hits.remove(0);
     assert_eq!(hit.source_uri, "media/corpus.av1");
     assert_eq!(hit.offset_start, 16);

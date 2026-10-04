@@ -16,12 +16,12 @@
     reason = "test code: a failing unwrap is a failing test"
 )]
 use std::path::PathBuf;
+use urna_engine::{MmapUrnaFile, RuntimeError};
 use urna_format::manifest::Manifest;
 use urna_format::writer::UrnaFileBuilder;
 use urna_format::{
     ChunkInput, SECTION_ENCODING_RAW, SPACE_DTYPE_F32, SpaceEntry, UrnaView, encode_space_table,
 };
-use urna_runtime::{MmapUrnaFile, RuntimeError};
 
 const TEXT_DIM: usize = 4;
 const VIS_DIM: usize = 2;

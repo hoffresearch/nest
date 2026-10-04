@@ -2411,8 +2411,25 @@ dependencies = [
  "tachyonfx",
  "tar",
  "tui-scrollbar",
+ "urna-engine",
  "urna-format",
- "urna-runtime",
+]
+
+[[package]]
+name = "urna-engine"
+version = "0.5.3"
+dependencies = [
+ "criterion",
+ "half",
+ "hex",
+ "libc",
+ "memmap2",
+ "rayon",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "thiserror 2.0.20",
+ "urna-format",
 ]
 
 [[package]]
@@ -2439,24 +2456,7 @@ dependencies = [
  "pyo3",
  "pyo3-build-config",
  "serde_json",
- "urna-format",
- "urna-runtime",
-]
-
-[[package]]
-name = "urna-runtime"
-version = "0.5.3"
-dependencies = [
- "criterion",
- "half",
- "hex",
- "libc",
- "memmap2",
- "rayon",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "thiserror 2.0.20",
+ "urna-engine",
  "urna-format",
 ]
 

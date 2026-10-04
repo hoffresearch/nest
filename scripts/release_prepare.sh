@@ -6,7 +6,7 @@
 # works in a new worktree of origin/main (never the current checkout) on the
 # branch release-X.Y.Z:
 #   1. cargo-release, at the version pinned below, sets the workspace version,
-#      the urna-format and urna-runtime pins and the lockfile (`cargo release
+#      the urna-format and urna-engine pins and the lockfile (`cargo release
 #      version`), then the changelog section and the versioned fields of
 #      CITATION.cff (`cargo release replace`, the list in
 #      crates/urna-cli/Cargo.toml); the rest of CITATION.cff does not move;
@@ -79,7 +79,7 @@ changed="$(git status --porcelain | awk '{print $2}' | LC_ALL=C sort | tr '\n' '
 [[ "$changed" == "${FILES[*]} " ]] || die "expected changes in exactly ${FILES[*]}, got: $changed"
 git add -- "${FILES[@]}"
 date="$(sed -n 's/^date-released: "\(.*\)"$/\1/p' CITATION.cff)"
-git commit --quiet -S -m "Release $version" -m "The workspace version, the urna-format and urna-runtime pins, the lockfile,
+git commit --quiet -S -m "Release $version" -m "The workspace version, the urna-format and urna-engine pins, the lockfile,
 the changelog section dated $date and the versioned fields of CITATION.cff,
 prepared by scripts/release_prepare.sh with cargo-release $CARGO_RELEASE_VERSION."
 echo "release-prepare: $branch at $(git rev-parse --short HEAD) in $worktree, release date $date (UTC)"
@@ -88,6 +88,6 @@ if [[ "$push" == 0 ]]; then
   exit 0
 fi
 git push --quiet origin "refs/heads/$branch:refs/heads/$branch"
-gh pr create --base main --head "$branch" --title "Release $version" --body "Prepares $version: the workspace version, the urna-format and urna-runtime pins, the lockfile, the changelog section dated $date and the versioned fields of \`CITATION.cff\`, by \`scripts/release_prepare.sh\` (cargo-release $CARGO_RELEASE_VERSION). The preflight passed on this tree.
+gh pr create --base main --head "$branch" --title "Release $version" --body "Prepares $version: the workspace version, the urna-format and urna-engine pins, the lockfile, the changelog section dated $date and the versioned fields of \`CITATION.cff\`, by \`scripts/release_prepare.sh\` (cargo-release $CARGO_RELEASE_VERSION). The preflight passed on this tree.
 
 After CI and the required \`rehearsal\` check pass and this merges, the release is the signed tag on that merge commit, a separate step (\`docs/USAGE.md\`, maintainer checklist step 8). The tag's UTC day must not be before $date."

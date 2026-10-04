@@ -9,7 +9,7 @@
 mod reseal;
 
 use libfuzzer_sys::fuzz_target;
-use urna_runtime::MmapUrnaFile;
+use urna_engine::MmapUrnaFile;
 
 fuzz_target!(|data: &[u8]| {
     let Some(bytes) = reseal::split(data) else {

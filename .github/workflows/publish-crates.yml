@@ -4,7 +4,7 @@
 # signature check or the build never reaches crates.io.
 #
 # order matters (each crate depends on the one before it): urna-format,
-# urna-runtime, urna (the cli). urna-python and urna-ingest are `publish = false`.
+# urna-engine, urna (the cli). urna-python and urna-ingest are `publish = false`.
 # a crate whose version is already on crates.io is skipped, so re-running a
 # half-finished release picks up where it stopped instead of failing.
 #
@@ -40,7 +40,7 @@ jobs:
           set -eu
           version=$(cargo metadata --no-deps --format-version 1 \
             | jq -r '.packages[] | select(.name == "urna") | .version')
-          for crate in urna-format urna-runtime urna; do
+          for crate in urna-format urna-engine urna; do
             # 0 published, 10 absent; a 429, a 5xx or no answer exits 1 after
             # retries and stops here instead of publishing over an outage.
             state=0

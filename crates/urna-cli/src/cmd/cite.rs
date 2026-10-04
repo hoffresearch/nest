@@ -50,7 +50,7 @@ pub fn run(file: PathBuf, citation: String) -> Result<()> {
     )?;
     // a media corpus stores row ordinals in 0x03 and the real blob span in
     // the 0x16 overlay: cite prints the same span retrieve and search do.
-    urna_runtime::apply_blob_span_overlay(&view, &mut spans)?;
+    urna_engine::apply_blob_span_overlay(&view, &mut spans)?;
 
     let span = &spans[idx];
     println!("citation_id:  {}", citation);

@@ -126,7 +126,7 @@ impl UrnaFileBuilder {
         self
     }
 
-    /// Attach an HNSW index payload (already encoded by `urna-runtime`).
+    /// Attach an HNSW index payload (already encoded by `urna-engine`).
     /// Sets `index_type=hnsw`, `rerank_policy=exact`, `supports_ann=true`.
     pub fn hnsw_index(mut self, payload: Vec<u8>) -> Self {
         self.hnsw_index = Some(payload);

@@ -6,7 +6,7 @@
 use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
-use urna_runtime::MmapUrnaFile;
+use urna_engine::MmapUrnaFile;
 
 pub fn run(file: PathBuf, export: Option<PathBuf>) -> Result<()> {
     let urna = MmapUrnaFile::open(&file)?;
