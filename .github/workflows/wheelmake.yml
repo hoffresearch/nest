@@ -51,7 +51,7 @@ jobs:
           persist-credentials: false
       - name: fetch the potion table the wheel bundles (verified against its lfs pointer)
         shell: bash
-        run: sh script/fetch_potion.sh
+        run: sh script/getpotion.sh
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"

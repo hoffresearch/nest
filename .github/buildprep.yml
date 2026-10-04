@@ -1,9 +1,9 @@
 # cargo-dist `github-build-setup` steps (see [workspace.metadata.dist] in
 # Cargo.toml). injected into the release build jobs before anything builds.
 # the embedder payload stages the potion table, which git checks out as an
-# lfs pointer; script/fetch_potion.sh downloads it from its upstream and
+# lfs pointer; script/getpotion.sh downloads it from its upstream and
 # verifies it against the pointer's sha256, so a release spends no lfs
 # budget. every step needs a `name`, the dist template requires it.
 - name: fetch the potion table (embedder payload), verified against its lfs pointer
   shell: bash
-  run: sh script/fetch_potion.sh
+  run: sh script/getpotion.sh
