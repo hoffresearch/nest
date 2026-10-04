@@ -3,7 +3,7 @@
 
 # Comece aqui
 
-1. Leia `docs/arc/ARC.toml` numa passada curta: a arquitetura, o inventário de arquivos, os fluxos de build e de consulta.
+1. Leia `docs/ARC.toml` numa passada curta: a arquitetura, o inventário de arquivos, os fluxos de build e de consulta.
 2. Trabalhe numa branch de vida curta a partir de `origin/main`, um pull request por assunto, squash merge.
 3. Toda mudança de código vem com testes de verdade: caminho feliz, caminho de erro, um caso de borda, contra artefatos reais (arquivos `.urna` construídos, fixtures golden, corpora reais), sem mocks. Nenhum código entra sem prova executável.
 4. Antes do pull request: `.contracts/.agents/.skills/afterwork/AFTERWORK.md` (ele lê o `specs.yaml` ao lado, a lista de todo arquivo que uma mudança pode deixar desatualizado; cada um atualizado no próprio lugar) e, para uma mudança de código, `./scripts/release_check.sh` (o gate); uma mudança só de docs diz no pull request que o gate não rodou.
@@ -124,7 +124,7 @@ examples/             quickstart (o laço de cinco verbos sobre doze parágrafos
 assets/images/        o cabeçalho do readme, as thumbs sociais, as capturas do setup e da tui
 ```
 
-O mapa completo (todo arquivo, os fluxos, os contratos) é `docs/arc/ARC.toml`. Deps Rust principais: memmap2, rayon, zstd, half, bytemuck, sha2, thiserror, clap, serde.
+O mapa completo (todo arquivo, os fluxos, os contratos) é `docs/ARC.toml`. Deps Rust principais: memmap2, rayon, zstd, half, bytemuck, sha2, thiserror, clap, serde.
 
 Três workspaces cargo, uma política cada: o `Cargo.toml` da raiz (`crates/*`, o que é distribuído), `forge-core/` e `fuzz/`. `deny.toml` é a política do cargo-deny para os três. `clippy.toml` fixa a complexidade cognitiva em 15 (o padrão do Clippy é 25) e 7 argumentos por função; uma exceção legítima recebe `#[allow(clippy::...)]` no local, o limite nunca se move. `rustfmt.toml` fixa os padrões stable com largura 100.
 
@@ -184,7 +184,7 @@ Os invariantes do formato e do runtime. Uma mudança que os toca precisa dos tes
 - Parágrafos curtos, voz direta, sem texto de marketing. Docs são orientados a tarefa: o que faz, como rodar, um exemplo.
 - Todo doc começa com um cabeçalho YAML: `project`, `audience`, `status`, `last-updated`, `domain` (skills também carregam `name` e `description`). Isentos: `README.md` (empacotado pelo crates.io, PyPI e npm; o GitHub renderiza front matter como tabela), `LICENSE`, `.github/pull_request_template.md` (seu texto vira o corpo do pull request), `llms.txt` (segue o formato llms.txt) e os documentos do corpus demo em `python/forge/demo_corpus/` (são dados).
 - `llms.txt` é descoberta para LLMs e busca: título, resumo, links com uma linha cada. Ele aponta para os docs e não carrega instrução; este arquivo é a instrução.
-- `docs/arc/ARC.toml` é a única referência de arquitetura: narrativa (system_view, contract, quality, risks), inventário de arquivos e o mapa Mermaid dos fluxos de build e consulta (`diagram.source`). Depois de qualquer mudança em módulo, fronteira, fluxo, contrato público, armazenamento ou comportamento de runtime, atualize-o na mesma mudança: avance `last-updated`, acrescente uma nota datada à `summary`, adicione arquivos novos ao inventário. Nenhum segundo documento de arquitetura.
+- `docs/ARC.toml` é a única referência de arquitetura: narrativa (system_view, contract, quality, risks), inventário de arquivos e o mapa Mermaid dos fluxos de build e consulta (`diagram.source`). Depois de qualquer mudança em módulo, fronteira, fluxo, contrato público, armazenamento ou comportamento de runtime, atualize-o na mesma mudança: avance `last-updated`, acrescente uma nota datada à `summary`, adicione arquivos novos ao inventário. Nenhum segundo documento de arquitetura.
 - Docs são corrigidos no próprio lugar. Histórico e decisões, incluindo uma decisão que se mostrou errada e o que a substituiu, vão para `docs/CHANGELOG`, o commit e o pull request; nunca como notas "mudou x para y" dentro de um doc.
 - Nomes: diretórios, docs e assets em kebab-case em inglês; arquivos fonte idiomáticos à sua linguagem. Proponha um rename como comandos `mv`, corrija todo import que ele toca, rode os testes.
 - `.editorconfig` é a formatação base: UTF-8, LF, indentação de 4 espaços (2 para TOML, YAML, JSON), newline final.
@@ -244,7 +244,7 @@ Limitações documentadas, não bugs para consertar de passagem. Aponte-as em qu
 
 - `README.md`: a vitrine: o que é, instalação, as duas telas, quickstart, Python, CLI, benchmarks.
 - `docs/USAGE.md`: o como-fazer de cada verbo, `urna setup` e `urna tui`, presets, modo offline, citações, o registry de modelos e espaços multimodelo (seção 12), builds declarativos (13), as alavancas de compressão e o gate de qualidade duplo (14), e a seção de referência: a tabela de toda variável de ambiente `URNA_*`, todo canal de instalação, verificação, notas de offline, o checklist do mantenedor.
-- `docs/arc/ARC.toml`: a referência de arquitetura descrita acima.
+- `docs/ARC.toml`: a referência de arquitetura descrita acima.
 - `docs/CHANGELOG`: toda release e os deltas não lançados, com o porquê e os números medidos.
 - `docs/BENCH.md`: Urna contra usearch, hnswlib, sqlite-vec e LanceDB; regenerado por `python/tools/bench_competitors.py`, nunca editado à mão.
 - `docs/SECURITY.md`: como reportar, versões suportadas, escopo, hardening, a postura de governança de dados.

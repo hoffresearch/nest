@@ -40,7 +40,7 @@ for group in spec["groups"]:
 EOF
 ```
 
-Três entradas carregam a maior parte das mudanças e merecem ser nomeadas: `docs/CHANGELOG` recebe uma linha em `[Unreleased]` para qualquer coisa que um usuário, um operador ou um contribuidor perceberia, com o porquê e os números medidos (ele é também o registro de decisões, e as contagens de testes nele batem com o que roda); `docs/arc/ARC.toml` recebe a mudança de arquitetura, um arquivo versionado novo no seu `inventory`, o `last-updated` avançado e uma frase curta e datada na `summary`; `.contracts/.agents/AGENTS.md` recebe um comando, gotcha, limitação conhecida, contagem de testes ou layout que mudou (o `CLAUDE.md` da raiz é um symlink para ele; nunca edite o link nem crie um arquivo paralelo).
+Três entradas carregam a maior parte das mudanças e merecem ser nomeadas: `docs/CHANGELOG` recebe uma linha em `[Unreleased]` para qualquer coisa que um usuário, um operador ou um contribuidor perceberia, com o porquê e os números medidos (ele é também o registro de decisões, e as contagens de testes nele batem com o que roda); `docs/ARC.toml` recebe a mudança de arquitetura, um arquivo versionado novo no seu `inventory`, o `last-updated` avançado e uma frase curta e datada na `summary`; `.contracts/.agents/AGENTS.md` recebe um comando, gotcha, limitação conhecida, contagem de testes ou layout que mudou (o `CLAUDE.md` da raiz é um symlink para ele; nunca edite o link nem crie um arquivo paralelo).
 
 ## Higiene de arquivos
 
