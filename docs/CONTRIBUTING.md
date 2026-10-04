@@ -2,7 +2,7 @@
 project: urna
 audience: contributors
 status: active
-last-updated: 2026-09-29
+last-updated: 2026-10-04
 domain: contributing
 ---
 
@@ -17,9 +17,9 @@ domain: contributing
 3. Keep each PR focused on one concern. Small is better.
 4. Add or update tests for the change. New behavior needs a new test. Write real tests against real artifacts (built .urna files, golden fixtures, real corpora), no mocks; cover the happy path, the error path, and one edge case.
 5. If the change alters architecture, module boundaries, data flow, or doc locations, update `docs/arc/ARC.toml` in the same PR. Keep it concise and pragmatic. Do not add a separate human architecture doc; `ARC.toml` is the machine map, the human reference, and the mermaid diagram all in one file.
-6. For a code change, run `./scripts/release_check.sh` locally before pushing; a docs-only change skips it and says so in the PR. It is the gate (the Rust suite in release, the extension rebuilt, the Python suites, ruff, the regression gates against `data/measure/baseline.json`). `.github/workflows/ci.yml` covers the Rust side on Linux, macOS and Windows plus checks the local gate does not run (cargo-deny, cargo-semver-checks, the engine-only Clippy, the benches compiled, a cargo-fuzz smoke); it runs ruff but not the Python suites, so run them locally.
+6. For a code change, run `./scripts/release_check.sh` locally before pushing; a docs-only change skips it and says so in the PR. It is the gate (the Rust suite in release, the extension rebuilt, the Python suites, ruff, the regression gates against `data/measure/baseline.json`). `.github/workflows/ci.yml` covers the Rust side on Linux, macOS and Windows plus checks the local gate does not run (cargo-deny, cargo-semver-checks, the engine-only Clippy, the benches compiled, a cargo-fuzz smoke, the embedder payload staged under Python 3.10). Its Python job runs ruff, the model catalog check and the release suites that need no built extension; the suites that load `_urna.so` run only in the local gate, so run them locally. A pull request that touches a release input also runs the release rehearsal (`release-rehearsal.yml`), a required check.
 7. Commit with a clear message in plain English. No conventional commits prefix.
-8. Open a PR against `main`. The maintainer squash merges it; `main` requires verified (SSH-signed) commits and linear history, so sign your commits (`git config commit.gpgsign true` with an SSH or GPG key registered on GitHub).
+8. Open a PR against `main`. The maintainer squash merges it; `main` requires verified (SSH-signed) commits, linear history and a passing `rehearsal` check (the release rehearsal, dispensed when the change touches no release input), so sign your commits (`git config commit.gpgsign true` with an SSH or GPG key registered on GitHub).
 
 ## Setup
 
@@ -38,10 +38,10 @@ cp target/release/lib_urna.dylib python/_urna.so   # macOS
 cp target/release/lib_urna.so   python/_urna.so    # linux
 
 python3 -m venv .venv && source .venv/bin/activate
-pip install ruff numpy tokenizers pillow sentence-transformers pandas zstandard pyarrow
+pip install ruff pyyaml numpy tokenizers pillow sentence-transformers pandas zstandard pyarrow
 ```
 
-`numpy` and `tokenizers` are the forge deps the potion embedder needs; `pillow` is for the image tests; `sentence-transformers` only for the pt-BR corpus and `search-text`.
+`numpy` and `tokenizers` are the forge deps the potion embedder needs; `pyyaml` is for the release rehearsal generator and its tests; `pillow` is for the image tests; `sentence-transformers` only for the pt-BR corpus and `search-text`.
 
 `data/corpus_next.v1.urna` is tracked via Git LFS; it is the frozen baseline of the regression gate, and `data/demo/Instructions.md` gives its hashes. Demo data under `data/demo/` is local-only and gitignored. Without it, runtime unit tests still pass.
 
@@ -51,8 +51,8 @@ These conventions are not aesthetic preferences. They exist to keep the repo rea
 
 ### Naming
 
-- Directories, docs and assets are **kebab-case English** (`data/`, `docs/`, `examples/`, `assets/images/`); Rust workspace conventions (`crates/`, `target/`) and language defaults (`python/`, `scripts/`, `tests/`) stay as their stacks expect.
-- Multi-word documentation and asset names use **kebab-case in English** (`code-of-conduct.md`-style filenames, dataset folders, etc.).
+- Directories and assets are **kebab-case English** (`data/`, `docs/`, `examples/`, `assets/images/`, dataset folders); Rust workspace conventions (`crates/`, `target/`) and language defaults (`python/`, `scripts/`, `tests/`) stay as their stacks expect.
+- The docs keep their upper-case names: `docs/USAGE.md`, `docs/BENCH.md`, `docs/SECURITY.md`, `docs/CONTRIBUTING.md`, `docs/CODE_OF_CONDUCT.md`, `docs/CHANGELOG`, `docs/LICENSE`, `docs/arc/ARC.toml`.
 - Source files follow the conventions of their language (`snake_case.rs`, `snake_case.py`).
 - When proposing renames or moves, list exact `mv` commands first, execute the move, fix every touched import, and run the test suite after.
 
@@ -88,7 +88,7 @@ Rust:
 Python:
 
 - Target `py312`, line length 100. Ruff config in `pyproject.toml`.
-- Lints: `E F W I B UP SIM`. Run `ruff check .` and `ruff format --check .`.
+- Lints: `E F W I B UP SIM`. Run `sh scripts/ruff_check.sh` (`URNA_PYTHON=.venv/bin/python` picks the interpreter): it checks and format-checks the one file list CI and `release_check.sh` share; a new Python module goes on that list.
 - Private helpers in `python/tools/` use the `_` prefix (e.g. `_baseline_decoder.py`).
 - File hygiene as above: 639 lines.
 

@@ -165,6 +165,39 @@ def test_tags_that_do_not_fit_are_refused() -> None:
         assert any("is after the tag date 2001-01-01" in e for e in errors), errors
 
 
+def test_the_tag_day_is_the_utc_day() -> None:
+    # release_prepare.sh dates the release in UTC. prepared and tagged the same
+    # evening in Brasilia (22:30 at -03:00 is 01:30 UTC the next day), the
+    # release carries the next day's date; read in the tagger's timezone the
+    # tag was dated the day before and was refused.
+    def dated(root: Path, day: str) -> None:
+        log = (root / "docs/CHANGELOG").read_text(encoding="utf-8")
+        log = re.sub(
+            rf"^## \[{re.escape(VERSION)}\] - \S+$",
+            f"## [{VERSION}] - {day}",
+            log,
+            count=1,
+            flags=re.M,
+        )
+        (root / "docs/CHANGELOG").write_text(log, encoding="utf-8")
+        cff = (root / "CITATION.cff").read_text(encoding="utf-8")
+        cff = re.sub(r'date-released: "[^"]+"', f'date-released: "{day}"', cff)
+        (root / "CITATION.cff").write_text(cff, encoding="utf-8")
+
+    evening = "2026-10-04T22:30:00-03:00"
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_tree(Path(tmp))
+        dated(root, "2026-10-05")
+        git_repo(root, tag_date=evening)
+        assert preflight.check_tag(f"v{VERSION}", root) == []
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_tree(Path(tmp))
+        dated(root, "2026-10-06")
+        git_repo(root, tag_date=evening)
+        errors = preflight.check_tag(f"v{VERSION}", root)
+        assert errors == ["release date 2026-10-06 is after the tag date 2026-10-05"], errors
+
+
 def test_the_tag_commit_is_what_is_checked() -> None:
     # the tag points at a commit with a stale CITATION; main and the checkout
     # carry the fix afterwards. the files of the tag's commit decide.

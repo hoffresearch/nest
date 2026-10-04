@@ -2,7 +2,7 @@
 
 > A vector database in one file, with citations that stay valid. A `.urna` file holds the chunks, the embeddings, the source spans, the indices and the search contract; a Rust runtime maps it into memory, checks its hashes and answers offline with exact cosine scores and a `urna://content_hash/chunk_id` citation for every hit. Python builds the file, Rust serves it.
 
-Install with `brew tap hoffresearch/urna && brew install urna`, `cargo install urna`, `npm install -g @urna/cli` or `pip install "urna[embed]"`, then run `urna setup` once. MIT license, Hoff Research. Site: https://urna.dev. Docs: https://docs.urna.dev. Source: https://github.com/hoffresearch/urna
+The CLI is a Rust binary: `brew tap hoffresearch/urna && brew install urna`, `cargo install urna` or `npm install -g @urna/cli`, then `urna setup` once (the embedder payload and its Python env). The Python package is separate: `pip install "urna[embed]"` (Python 3.12+) installs the library, the potion table and a read-only `urna` command (`validate`, `inspect`, `stats`, `search`); it needs no `urna setup`. MIT license, Hoff Research. Site: https://urna.dev. Docs: https://docs.urna.dev. Source: https://github.com/hoffresearch/urna
 
 ## Docs
 

@@ -172,7 +172,7 @@ ok "bench runner (4 cases)"
 # CITATION.cff and the changelog; the tag checks need a tag and run in ci.
 step "python tests/test_release_preflight.py"
 "$PY" tests/test_release_preflight.py
-ok "release preflight (6 cases)"
+ok "release preflight (7 cases)"
 
 # the pypi upload takes the release's wheels from the run its index allows,
 # and a rerun uploads only what the index does not have yet.
@@ -185,6 +185,19 @@ ok "pypi release (5 cases)"
 step "python tests/test_release_rehearsal.py"
 "$PY" tests/test_release_rehearsal.py
 ok "release rehearsal (7 cases)"
+
+# install-test waits for the exact version on each registry, and the release
+# report names what every channel serves, a failed or cancelled run included.
+step "python tests/test_release_channels.py"
+"$PY" tests/test_release_channels.py
+ok "release channels (8 cases)"
+
+# the release pull request is prepared by cargo-release in its own worktree,
+# signed, and touches only the version, the lockfile, the changelog and
+# CITATION.cff; skips without the pinned cargo-release.
+step "python tests/test_release_prepare.py"
+"$PY" tests/test_release_prepare.py
+ok "release prepare (4 cases)"
 
 # ---- ruff (best-effort) ----
 # the file list lives in scripts/ruff_check.sh so ci.yml and this gate stay
@@ -210,4 +223,4 @@ ok "regression gates"
 printf '\n\033[1;32m== release check passed ==\033[0m\n'
 printf '  baseline: %s\n' "$BASELINE"
 printf '  post:     %s\n' "$OUT"
-printf '  next:     git tag -a vX.Y.Z -m "..." && git push --tags\n'
+printf '  next:     scripts/release_prepare.sh X.Y.Z (docs/USAGE.md, maintainer checklist step 8)\n'

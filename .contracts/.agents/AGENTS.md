@@ -7,10 +7,7 @@ domain: repo-ops
 ---
 
 # Agents
-
-The one instruction source for this repo. The root `CLAUDE.md` is a symlink to this file; never edit the link or add a parallel instruction file (GEMINI.md, CODEX.md, Cursor rules). Most agent tooling reads `.contracts/.agents/AGENTS.md` on its own; point the rest here on init.
-
-The principal author writes fast and uses voice transcription: typos, caps lock and missing accents are common. Read the intent; do not flag tone or project emotional risk.
+`AGENTS.md` and `CLAUDE.md` is a symlink to this single source of directives for agetic developers. Dont create aditional agentic isntrctyion in the roote like GEMINI.md, CODEX.md, CLAUDE.md,Cursor rules orn any agent isntructions files.
 
 # Start here
 
@@ -43,7 +40,7 @@ Secrets live in the GitHub repository secrets (`CARGO_REGISTRY_TOKEN`, `NPM_TOKE
 - `cargo semver-checks -p urna-format --baseline-rev origin/main`: the Rust API of the frozen format against the pull request's base; CI fails a pull request that breaks it (in 0.x a minor bump is the major bump)
 - `cargo bench -p urna-runtime --no-run`: the criterion benches (simd, rerank, hnsw_build) have to compile; CI checks that, the numbers are not a gate
 - `sh scripts/ruff_check.sh`: ruff over the one Python file list shared with CI (`URNA_PYTHON=.venv/bin/python` picks the interpreter)
-- `./scripts/release_check.sh`: the full pipeline (the Rust suite in release, the extension rebuilt, fifteen Python suites, ruff when importable) plus the regression gates against `data/measure/baseline.json`; exits non-zero on any failure. It is the definition of pull-request ready
+- `./scripts/release_check.sh`: the full pipeline (the Rust suite in release, the extension rebuilt, seventeen Python suites, ruff when importable) plus the regression gates against `data/measure/baseline.json`; exits non-zero on any failure. It is the definition of pull-request ready
 - `forge-core/` is a separate cargo workspace outside `crates/` (the ingestion layer, the frozen `.fci` schema). `--workspace` and `release_check.sh` never reach it; run `cargo build`, `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --all --check` with `--manifest-path forge-core/Cargo.toml`
 - `fuzz/` is the third cargo workspace (cargo-fuzz, nightly toolchain): `sh scripts/fuzz_soak.sh [seconds]` runs every target with the corpus kept under `fuzz/corpus/`; `fuzz/README.md` has the targets and how a finding becomes a test
 
@@ -98,9 +95,11 @@ python tests/test_model_install.py
 python tests/test_release_preflight.py
 python tests/test_pypi_release.py
 python tests/test_release_rehearsal.py
+python tests/test_release_channels.py
+python tests/test_release_prepare.py
 ```
 
-`release_check.sh` runs fifteen of them; `test_offline_guard.py`, `test_blob_bridge.py` and `test_space_bridge.py` run by hand.
+`release_check.sh` runs seventeen of them; `test_offline_guard.py`, `test_blob_bridge.py` and `test_space_bridge.py` run by hand.
 
 `test_image_corpus.py` covers the forge image pillar (encode and decode, GOP probe, sharding, ordering) with a stub embedder and skips cleanly without FFmpeg's AV1 and AVIF encoders. Building a real image corpus (`python/forge/embed_image.py`) needs `open_clip` and torch, outside the default forge dependency group.
 
@@ -175,15 +174,16 @@ The format and runtime invariants. A change that touches them needs the tests na
 # Workflow
 
 - Remote `git@github.com:hoffresearch/urna.git`, owner Hoff Research, maintainer Brenner Cruvinel (`brenner@hoffresearch.com`).
-- `main` is the only long-lived branch. The ruleset requires pull requests, verified SSH-signed commits and linear history; pull requests are squash merged. Delete the branch after the merge and start the next one from `origin/main`.
-- Tags on `main` only; the workspace version in `Cargo.toml` tracks the latest tag. Cutting a release is step 8 of the maintainer checklist in `docs/USAGE.md`; item 11 there is what the 0.5.0 tag taught (LFS, dist, moving a tag, the PyPI run, npm naming). Read both before touching `release.yml`, `pypi.yml` or the dist config; after editing the dist config run `dist generate` and then `python scripts/release_rehearsal.py generate`, never hand-edit `release.yml` or `release-rehearsal.yml` (usage step 12).
+- `main` is the only long-lived branch. The ruleset requires pull requests, verified SSH-signed commits, linear history and the `rehearsal` check (usage step 12); pull requests are squash merged. Delete the branch after the merge and start the next one from `origin/main`.
+- Tags on `main` only; the workspace version in `Cargo.toml` tracks the latest tag. Cutting a release is step 8 of the maintainer checklist in `docs/USAGE.md` (`scripts/release_prepare.sh X.Y.Z` opens the release pull request with the pinned cargo-release; the signed tag stays a separate step after the merge); item 11 there is what the 0.5.0 tag taught (LFS, dist, moving a tag, the PyPI run, npm naming). Read both before touching `release.yml`, `pypi.yml` or the dist config; after editing the dist config run `dist generate` and then `python scripts/release_rehearsal.py generate`, never hand-edit `release.yml` or `release-rehearsal.yml` (usage step 12).
 - `.github/workflows/ci.yml` runs on every push to `main` and every pull request: fmt, Clippy with the deny lints (the full CLI and the engine-only `--no-default-features` CLI), build and test on Ubuntu (AVX2) and macOS (NEON), the benches compiled, the mutation-fuzz harnesses at a higher count, the 639-line guard, forge-core's gate, cargo-deny on the three workspaces, cargo-semver-checks on `urna-format` against the pull request's base, a Windows job (Clippy, the CLI unit tests and `setup_e2e`: the only Windows check before a tag, so a crossterm or path change that breaks only there shows up there), ruff, and a bounded cargo-fuzz smoke on nightly. It is `release_check.sh` minus the LFS corpus measurement.
 - On the nightly schedule (or `workflow_dispatch`) CI instead runs a 30-minute soak per fuzz target with the corpus cached between nights, and `urna-format`'s suite under Miri.
 - A `v*` tag runs the release:
   - `tag-verify.yml` (the signature, then `scripts/release_preflight.py --tag`) is the first job of `build-wheels.yml` inside the release, and runs again before a PyPI upload: a lightweight or unsigned tag, a key missing from `.github/allowed_signers`, or a version that does not agree stops the release before the host job releases anything.
   - `release.yml` (cargo-dist): archives for 5 targets, checksums, Sigstore attestations, the Homebrew formula `urna`, the npm package `@urna/cli`, the embedder payload, and `publish-crates.yml` for urna-format, urna-runtime and urna.
   - The wheels (maturin abi3, 4 platforms) build in `build-wheels.yml`, a dist local-artifacts job, so the host and every publish job wait for them; the release carries them with a `.sha256` and an attestation each. PyPI is the `publish-pypi.yml` publish job: it dispatches the top-level `pypi.yml` on the tag (trusted publishing does not take a reusable workflow) and waits for that run, whose upload skips wheels already published with the same sha256.
-  - `install-test.yml` runs inside the release run once it is announced and tests the installed product per platform and per channel (one-liner, Homebrew, npm, bun, pnpm, yarn, binstall, wheel), each ending in `urna setup --yes` and `urna doctor`.
+  - `install-test.yml` runs inside the release run once it is announced and tests the installed product per platform and per channel (one-liner, Homebrew, npm, bun, pnpm, yarn, binstall, wheel), each ending in `urna setup --yes` and `urna doctor`; registry legs first wait for the exact version (`scripts/release_channels.py wait`).
+  - `release-report.yml` summarizes every completed release run, failed or cancelled included: the jobs, the tag's commit, and what each channel serves (usage, install verification).
 - Git LFS tracks `*.urna`, `*.safetensors` and datasets, including `data/corpus_next.v1.urna` and the potion table; the golden fixtures stay in regular git. No release job touches LFS (`scripts/fetch_potion.sh` fetches the table from its pinned upstream and checks it against the pointer).
 - `data/demo/` is gitignored; `data/demo/Instructions.md` names what it holds and where the pt-BR corpus is rebuilt (the fakenews-ptbr-urna-benchmark repo, not this one). Only `measure_presets.py` and `release_check.sh` need the baseline corpus, and they read the LFS file, never the datasets. `data/measure/corpus_*.urna` are regeneration artifacts and gitignored; the JSON baselines next to them are tracked.
 - `scripts/pre-commit` aborts a commit that stages a data artifact off the allow-list (the PHI backstop). Install it per clone: `cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit` (a copy, not `core.hooksPath`, so the LFS hooks keep working).
@@ -195,9 +195,9 @@ The format and runtime invariants. A change that touches them needs the tests na
 - Short paragraphs, direct voice, no marketing copy. Docs are task-oriented: what it does, how to run it, an example.
 - Every doc starts with a YAML header: `project`, `audience`, `status`, `last-updated`, `domain` (skills also carry `name` and `description`). Exempt: `README.md` (packaged by crates.io, PyPI and npm; GitHub renders front matter as a table), `docs/LICENSE`, `.github/pull_request_template.md` (its text becomes the pull request body), `llms.txt` (it follows the llms.txt format) and the demo corpus documents under `python/forge/demo_corpus/` (they are data).
 - `llms.txt` is discovery for LLMs and search: title, summary, links with a line each. It points at the docs and carries no instruction; this file is the instruction.
-- `docs/arc/ARC.toml` is the single architecture reference: narrative (system_view, contract, quality, risks), file inventory and the Mermaid map of the build and query flows (`diagram.source`). After any change to a module, boundary, flow, public contract, storage or runtime behavior, update it in the same change: bump `last-updated`, append a dated note to `summary`, add new files to the inventory. No second architecture document.
+- `docs/arc/ARC.toml` is the single architecture reference: narrative (system_view, contract, quality, risks), file inventory and the Mermaid map of the build and query flows (`diagram.source`). After any change to a module, boundary, flow, public contract, storage or runtime behavior, update it in the same change: bump `last-updated`, append a one-sentence dated note to `summary` (the reasoning and history go to the CHANGELOG), add new files to the inventory. No second architecture document.
 - Docs are corrected in place. History and decisions, including a decision that turned out wrong and what replaced it, go to `docs/CHANGELOG`, the commit and the pull request; never as "changed x to y" notes inside a doc.
-- Naming: directories, docs and assets in kebab-case English; source files idiomatic to their language. Propose a rename as `mv` commands, fix every import it touches, run the tests.
+- Naming: directories and assets in kebab-case English; the docs keep their upper-case names (`USAGE.md`, `BENCH.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG`, `LICENSE`, `arc/ARC.toml`); source files idiomatic to their language. Propose a rename as `mv` commands, fix every import it touches, run the tests.
 - `.editorconfig` is the base formatting: UTF-8, LF, 4-space indent (2 for TOML, YAML, JSON), final newline.
 
 # File hygiene
@@ -208,7 +208,9 @@ A file created or modified that goes over 639 lines is read in full (what it doe
 
 # Finishing a task
 
-Run `.contracts/.agents/.skills/AFTERWORK.md`: it names which file owns what and where a lesson goes. On the way, sweep the session's changes for dead code, temporary scripts, stray files and files outside the folder their role belongs to; delete or move them, fix what they touched, run the tests. Write a temporary task manifest under your tmp folder, never in the tree.
+Before closing a task or session, run AFTERWORK against the final diff. Follow each changed behavior through its callers, workflows, configuration, documentation and examples; update every affected reference in the same work. Repeat the check for references affected by those updates until none remain inconsistent. Operational instructions belong in USAGE, architecture in ARC, and history in CHANGELOG. Preserve unaffected files and distinguish implemented behavior from verified publication. Report tested commits, remaining limitations and any indispensable maintainer action.
+
+`.contracts/.agents/.skills/AFTERWORK.md` names which file owns what and where a lesson goes. On the way, sweep the session's changes for dead code, temporary scripts, stray files and files outside the folder their role belongs to; delete or move them, fix what they touched, run the tests. Write a temporary task manifest under your tmp folder, never in the tree.
 
 # Gotchas
 
@@ -249,7 +251,7 @@ Documented limitations, not bugs to fix in passing. Flag them in any work that t
 - The ST registry models have measured cost cliffs: wemm-2b runs fp16 on MPS with `image_max_side=768` (about 0.6 img/s); jina-v5-omni-nano has no `image_max_side` default and embeds at native resolution (about 0.3 img/s); changing either invalidates that model's cache by design (the knob is recipe-hashed).
 - The semantic default embedder is English: `potion-base-8M` is distilled from `bge-base-en-v1.5`. English synonyms cluster tightly (car ~ automobile +0.78, car ~ banana +0.04); non-English text rides English subword rows and the signal is weak (carro ~ automovel +0.08, carro ~ banana -0.05). A primarily non-English corpus needs a multilingual sentence-transformers model or a multilingual potion table; the lexical floor is language-agnostic but literal.
 
-# Documentation
+# Documentation do review and update or inclusion:
 
 - `README.md`: the storefront: what it is, install, the two screens, quickstart, Python, CLI, benchmarks.
 - `docs/USAGE.md`: how-to for every verb, `urna setup` and `urna tui`, presets, offline mode, citations, the model registry and multi-model spaces (section 12), declarative builds (13), the compression levers and the dual quality gate (14), and the reference section: the table of every `URNA_*` environment variable, every install channel, verification, offline notes, the maintainer checklist.
@@ -262,4 +264,8 @@ Documented limitations, not bugs to fix in passing. Flag them in any work that t
 - `scripts/release_check.sh`: read it; it documents the gate by being the gate.
 - `fuzz/README.md`: the four cargo-fuzz targets, running a soak, regenerating the seeds, turning a finding into a test.
 - `.contracts/.agents/.skills/AFTERWORK.md`: the end-of-task walk; `.github/pull_request_template.md` carries it as checkboxes.
-- `llms.txt`: discovery for LLMs and search.
+- `llms.txt`: discovery for LLMs and search
+
+# About the human behavior inputs in agents code sessions
+
+The principal author writes fast and uses voice transcription: typos, caps lock and missing accents are common. Read the intent; do not flag tone or project emotional risk.
