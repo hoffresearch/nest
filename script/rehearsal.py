@@ -94,7 +94,7 @@ def _plan_job(job: dict) -> dict:
         "id": "version",
         "name": "the version a tag would carry",
         "run": 'echo "tag-flag=--tag=v$(python3 -c \'import sys; sys.path.insert(0, "script");'
-        " import stage_embedder_payload as s; print(s.workspace_version())')\""
+        " import embedpack as s; print(s.workspace_version())')\""
         ' >> "$GITHUB_OUTPUT"',
     }
     steps = []
@@ -292,7 +292,7 @@ def _load(name: str):
 
 def release_inputs() -> tuple[set[str], tuple[str, ...]]:
     """(exact paths, path prefixes) whose change reaches a release artifact."""
-    payload, wheel = _load("stage_embedder_payload"), _load("stage_wheel")
+    payload, wheel = _load("embedpack"), _load("stage_wheel")
     exact = {f"python/forge/{n}" for n in payload.MODULES}
     exact |= {f"python/{n}" for n in payload.TOP_LEVEL_MODULES}
     exact |= {src.relative_to(ROOT).as_posix() for src, _ in wheel.COPIES}
@@ -303,7 +303,7 @@ def release_inputs() -> tuple[set[str], tuple[str, ...]]:
         "LICENSE",
         ".github/buildprep.yml",
         "script/fetch_potion.sh",
-        "script/stage_embedder_payload.py",
+        "script/embedpack.py",
         "script/stage_wheel.py",
         "script/rehearsal.py",
         "script/preflight.py",
@@ -478,7 +478,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"rehearsal: {why}", file=sys.stdout if ok else sys.stderr)
         return 0 if ok else 1
     plan = json.loads(args.plan.read_text(encoding="utf-8"))
-    version = _load("stage_embedder_payload").workspace_version()
+    version = _load("embedpack").workspace_version()
     errors = check_assets(args.dir, plan, version)
     if args.golden:
         errors += check_binary(args.dir, args.target, args.golden, version)
