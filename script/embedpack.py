@@ -15,7 +15,7 @@ exact `pip install` line for what a registry model still needs (torch,
 sentence-transformers, open_clip), exit 4, instead of the old "embedder
 script not found".
 
-usage:  python script/stage_embedder_payload.py <dest> [--tar <out.tar.gz>]
+usage:  python script/embedpack.py <dest> [--tar <out.tar.gz>]
 writes: <dest>/urna/model_fingerprint.py          (imported by the registry)
         <dest>/urna/embed_query.py                (st models outside the registry)
         <dest>/urna/VERSION                       (the workspace version: setup
@@ -96,7 +96,7 @@ def workspace_version(manifest: Path | None = None) -> str:
         section = re.search(r"^\[workspace\.package\]\s*$(.*?)(?=^\[|\Z)", text, re.M | re.S)
         version = section and re.search(r'^version\s*=\s*"([^"]+)"\s*$', section.group(1), re.M)
         if not version:
-            msg = "stage_embedder_payload: no version in [workspace.package] of Cargo.toml"
+            msg = "embedpack: no version in [workspace.package] of Cargo.toml"
             raise SystemExit(msg) from None
         return version.group(1)
     return tomllib.loads(text)["workspace"]["package"]["version"]
@@ -118,7 +118,7 @@ def catalog_drift() -> str | None:
 
 
 def fail(msg: str) -> None:
-    print(f"stage_embedder_payload: error: {msg}", file=sys.stderr)
+    print(f"embedpack: error: {msg}", file=sys.stderr)
     raise SystemExit(1)
 
 
@@ -130,7 +130,7 @@ def main() -> None:
         tar_out = Path(args[i + 1]).resolve()
         del args[i : i + 2]
     if len(args) != 1:
-        fail("usage: stage_embedder_payload.py <dest> [--tar <out.tar.gz>]")
+        fail("usage: embedpack.py <dest> [--tar <out.tar.gz>]")
     sources = [(FORGE / n, Path(n)) for n in MODULES]
     sources += [(ROOT / "python" / n, Path("..") / n) for n in TOP_LEVEL_MODULES]
     for src, _ in sources:

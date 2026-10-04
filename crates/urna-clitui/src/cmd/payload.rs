@@ -5,12 +5,12 @@
 use std::path::{Path, PathBuf};
 
 /// What a complete payload holds, relative to `urna/`: every file
-/// `stage_embedder_payload.py` ships, since each query path imports or reads
+/// `embedpack.py` ships, since each query path imports or reads
 /// one of them (the potion route reads the table's config, tokenizer and
 /// weights; the registry route imports the adapters, the st and image
 /// backends and model_fingerprint; search-text runs embed_query.py). setup
 /// refuses a payload missing one, and the scan reports an installed payload
-/// missing one so setup repairs it. `tests/test_embedder_payload.py` checks
+/// missing one so setup repairs it. `tests/test_embedpack.py` checks
 /// that this list and the staged payload are the same set of files.
 pub const REQUIRED: [&str; 22] = [
     "VERSION",

@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use flate2::read::GzDecoder;
 
-/// The files a payload lays down beside `forge/` (`stage_embedder_payload.py`
+/// The files a payload lays down beside `forge/` (`embedpack.py`
 /// writes them); `--uninstall` removes exactly these.
 pub const TOP_LEVEL: [&str; 3] = ["model_fingerprint.py", "embed_query.py", "VERSION"];
 
