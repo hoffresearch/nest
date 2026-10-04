@@ -13,7 +13,7 @@
 //! tends to land in the 1e-4..1e-5 range. If drift ever exceeds 1e-3
 //! the SIMD f32-accumulation invariant has regressed.
 //!
-//! Determinism: `Lcg` from `urna_runtime::ann` is reused so the
+//! Determinism: `Lcg` from `urna_engine::ann` is reused so the
 //! corpus is identical to the one in `hnsw_recall.rs`.
 
 #![allow(
@@ -25,10 +25,10 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use urna_engine::MmapUrnaFile;
 use urna_format::ChunkInput;
 use urna_format::manifest::{Capabilities, Manifest};
 use urna_format::writer::{EmbeddingDType, UrnaFileBuilder};
-use urna_runtime::MmapUrnaFile;
 
 static TMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
 

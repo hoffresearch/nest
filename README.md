@@ -279,7 +279,7 @@ The profile names are the forge's (`[media] profile = "..."`, usage section 14).
 - [docs/ADR](https://github.com/hoffresearch/urna/blob/main/docs/ADR/README.md): architecture decision records, by category
 - [AGENTS.md](https://github.com/hoffresearch/urna/blob/main/.contracts/.ai/.agents/AGENTS.md): notes for dev contributors and agents of code. 
 
-The crates are `urna-format` (the container), `urna-runtime` (search), `urna` (the binary) and `urna-python` (the bridge).
+The crates are `urna-format` (the container), `urna-engine` (search), `urna` (the binary) and `urna-python` (the bridge).
 
 > Renamed from `nest` after 0.4.0. A `.nest` file written by 0.4.0 still opens.
 

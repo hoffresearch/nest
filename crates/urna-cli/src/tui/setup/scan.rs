@@ -187,7 +187,7 @@ impl Scan {
             base_python: base_python(),
             uv: which("uv"),
             curl: which("curl"),
-            simd: urna_runtime::simd::detect_backend().name(),
+            simd: urna_engine::simd::detect_backend().name(),
             kit: paths::urna_home().and_then(|h| super::models::Kit::at(&h.join("forge"))),
         }
     }

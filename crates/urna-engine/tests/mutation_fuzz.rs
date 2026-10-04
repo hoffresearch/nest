@@ -20,6 +20,9 @@ mod common;
 
 use common::mutation::{Rng, mutate, reseal, sha256};
 use std::path::PathBuf;
+use urna_engine::MmapUrnaFile;
+use urna_engine::ann::HnswIndex;
+use urna_engine::bm25::Bm25Index;
 use urna_format::manifest::Manifest;
 use urna_format::writer::{EmbeddingDType, SectionEncoding, UrnaFileBuilder};
 use urna_format::{
@@ -27,9 +30,6 @@ use urna_format::{
     EDGE_TYPE_SEMANTIC, Edge, SECTION_ENCODING_RAW, SPACE_DTYPE_F32, SpaceEntry, encode_blob_data,
     encode_blob_refs, encode_blob_span_overlay, encode_graph_adjacency, encode_space_table,
 };
-use urna_runtime::MmapUrnaFile;
-use urna_runtime::ann::HnswIndex;
-use urna_runtime::bm25::Bm25Index;
 
 const N: usize = 40;
 const DIM: usize = 64;

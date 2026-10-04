@@ -9,7 +9,7 @@
     reason = "test code: a failing unwrap is a failing test"
 )]
 
-use urna_runtime::bm25::Bm25Index;
+use urna_engine::bm25::Bm25Index;
 
 fn valid_payload() -> Vec<u8> {
     let docs: Vec<String> = (0..4).map(|i| format!("alpha beta term{i}")).collect();

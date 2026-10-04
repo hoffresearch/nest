@@ -46,7 +46,7 @@ fn short(h: &str) -> String {
 /// Opens, inspects and validates `path` (the same checks `urna validate`
 /// runs on the header, sections, hashes and embedding values).
 pub fn load(path: &Path) -> Result<Corpus> {
-    let rt = urna_runtime::MmapUrnaFile::open(path)?;
+    let rt = urna_engine::MmapUrnaFile::open(path)?;
     let info: serde_json::Value = serde_json::from_str(&rt.inspect_json()?)?;
     let m = &info["manifest"];
     let s = |v: &serde_json::Value| {

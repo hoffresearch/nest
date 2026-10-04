@@ -10,14 +10,14 @@ use crate::search_hit::SearchHitPy;
 
 #[pyclass]
 pub struct UrnaFile {
-    pub(super) rt: urna_runtime::MmapUrnaFile,
+    pub(super) rt: urna_engine::MmapUrnaFile,
 }
 
 #[pymethods]
 impl UrnaFile {
     #[staticmethod]
     fn open(path: &str) -> PyResult<Self> {
-        let rt = urna_runtime::MmapUrnaFile::open(std::path::Path::new(path))
+        let rt = urna_engine::MmapUrnaFile::open(std::path::Path::new(path))
             .map_err(|e| PyValueError::new_err(format!("{}", e)))?;
         Ok(Self { rt })
     }

@@ -11,13 +11,13 @@
     reason = "test code: a failing unwrap is a failing test"
 )]
 use std::path::PathBuf;
+use urna_engine::MmapUrnaFile;
 use urna_format::manifest::Manifest;
 use urna_format::writer::UrnaFileBuilder;
 use urna_format::{
     BLOB_REF_NONE, BlobRefRecord, BlobSpanEntry, ChunkInput, encode_blob_refs,
     encode_blob_span_overlay,
 };
-use urna_runtime::MmapUrnaFile;
 
 fn tmp_path(name: &str) -> PathBuf {
     let mut p = std::env::temp_dir();

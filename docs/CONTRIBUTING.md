@@ -110,7 +110,7 @@ The Python tests are plain scripts (`pytest tests/` does not run them). Suites t
 Two lints are denied workspace-wide and will fail the build: `clippy::unwrap_used` (tests are exempt; parse paths read fields through `urna_format::bytes`) and `clippy::undocumented_unsafe_blocks` (every `unsafe` block states its invariant in a `// SAFETY:` comment). A change to any section decoder or search path should also run the mutation harness, and a new codec gets an arm in `fuzz/fuzz_targets/section_decoders.rs`:
 
 ```
-cargo test -p urna-format --test mutation_fuzz -p urna-runtime --test mutation_fuzz
+cargo test -p urna-format --test mutation_fuzz -p urna-engine --test mutation_fuzz
 URNA_MUTATION_ITERS=25000 cargo test --release -p urna-format --test mutation_fuzz
 cargo +nightly fuzz run urna-view -- -max_total_time=600      # needs cargo-fuzz, see fuzz/README.md
 ```

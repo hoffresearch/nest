@@ -22,13 +22,13 @@
 )]
 use std::collections::HashMap;
 use std::path::PathBuf;
+use urna_engine::ann::{DEFAULT_EF_CONSTRUCTION, DEFAULT_M, HnswIndex};
+use urna_engine::bm25::Bm25Index;
+use urna_engine::{MmapUrnaFile, RerankSourceKind, SearchResult};
 use urna_format::ChunkInput;
 use urna_format::manifest::Manifest;
 use urna_format::writer::UrnaFileBuilder;
 use urna_format::{EDGE_TYPE_NEXT_CHUNK, EDGE_TYPE_SEMANTIC, Edge, encode_graph_adjacency};
-use urna_runtime::ann::{DEFAULT_EF_CONSTRUCTION, DEFAULT_M, HnswIndex};
-use urna_runtime::bm25::Bm25Index;
-use urna_runtime::{MmapUrnaFile, RerankSourceKind, SearchResult};
 
 struct Lcg(u64);
 impl Lcg {
@@ -348,7 +348,7 @@ fn search_explain_stored_precision_when_no_fp_slab_and_score_is_byte_identical()
     builder.write_to_path(&path).unwrap();
 
     let rt = MmapUrnaFile::open(&path).unwrap();
-    assert_eq!(rt.dtype(), urna_runtime::DType::Int8);
+    assert_eq!(rt.dtype(), urna_engine::DType::Int8);
 
     let q = random_l2(1, dim, 0xABCD);
     let ex = rt.search(&q, n as i32).unwrap();

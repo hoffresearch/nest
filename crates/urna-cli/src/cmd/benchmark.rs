@@ -13,7 +13,7 @@ pub fn run(
     madvise_cold: bool,
     space: Option<String>,
 ) -> Result<()> {
-    let runtime = urna_runtime::MmapUrnaFile::open(&file)?;
+    let runtime = urna_engine::MmapUrnaFile::open(&file)?;
 
     // l--space NAME: bench the named band through search_space at ITS dim.
     if let Some(name) = space {
@@ -119,13 +119,13 @@ pub fn run(
 }
 
 fn run_bench(
-    rt: &urna_runtime::MmapUrnaFile,
+    rt: &urna_engine::MmapUrnaFile,
     queries: &[Vec<f32>],
     madvise_cold: bool,
     mut f: impl FnMut(
-        &urna_runtime::MmapUrnaFile,
+        &urna_engine::MmapUrnaFile,
         &[f32],
-    ) -> Result<urna_runtime::SearchResult, urna_runtime::RuntimeError>,
+    ) -> Result<urna_engine::SearchResult, urna_engine::RuntimeError>,
 ) -> Result<Vec<f64>> {
     let mut times = Vec::with_capacity(queries.len());
     for q in queries {

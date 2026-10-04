@@ -9,14 +9,14 @@ domain: fuzzing
 # Fuzzing
 
 Coverage-guided fuzzing of every byte-level entry point in `urna-format` and
-`urna-runtime` with [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz)
+`urna-engine` with [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz)
 (libFuzzer + AddressSanitizer). The contract is docs/SECURITY.md: a malformed
 `.urna` may be rejected with a typed error, never with a panic, a hang, or an
 out-of-bounds read.
 
 The deterministic twins of these targets run on stable under plain `cargo
 test` (`crates/urna-format/tests/mutation_fuzz.rs`,
-`crates/urna-runtime/tests/mutation_fuzz.rs`), so every CI run already
+`crates/urna-engine/tests/mutation_fuzz.rs`), so every CI run already
 executes a few thousand mutations; this directory is the long soak.
 
 ## Targets
@@ -58,7 +58,7 @@ stable harness:
 ```sh
 mkdir -p fuzz/seeds
 URNA_FUZZ_SEED_DIR=$PWD/fuzz/seeds cargo test -p urna-format --test mutation_fuzz
-URNA_FUZZ_SEED_DIR=$PWD/fuzz/seeds cargo test -p urna-runtime --test mutation_fuzz
+URNA_FUZZ_SEED_DIR=$PWD/fuzz/seeds cargo test -p urna-engine --test mutation_fuzz
 ```
 
 `ci.yml` runs every target for a short bounded time on each push (smoke,

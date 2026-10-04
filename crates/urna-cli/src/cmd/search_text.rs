@@ -20,7 +20,7 @@ pub fn run(
     model_path: Option<PathBuf>,
     skip_model_hash_check: bool,
 ) -> Result<()> {
-    let runtime = urna_runtime::MmapUrnaFile::open(&file)?;
+    let runtime = urna_engine::MmapUrnaFile::open(&file)?;
     let info: serde_json::Value = serde_json::from_str(&runtime.inspect_json()?)?;
     let model = info["manifest"]["embedding_model"]
         .as_str()

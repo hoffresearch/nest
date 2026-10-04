@@ -1,7 +1,7 @@
 //! Shared CLI pretty-printers. Embedder discovery and the model gate live
 //! in `embed_gate` (the one copy of the spawn protocol + three-layer gate).
 
-pub fn print_result(result: &urna_runtime::SearchResult) {
+pub fn print_result(result: &urna_engine::SearchResult) {
     println!("index_type:   {}", result.index_type);
     if !result.recall.is_nan() {
         println!("recall:       {}", result.recall);

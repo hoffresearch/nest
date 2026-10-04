@@ -406,8 +406,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
 
 [[package]]
+name = "urna-engine"
+version = "0.5.3"
+dependencies = [
+ "half",
+ "hex",
+ "libc",
+ "memmap2",
+ "rayon",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "urna-format",
+]
+
+[[package]]
 name = "urna-format"
-version = "0.4.0"
+version = "0.5.3"
 dependencies = [
  "bytemuck",
  "half",
@@ -425,23 +441,7 @@ version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
  "sha2",
- "urna-format",
- "urna-runtime",
-]
-
-[[package]]
-name = "urna-runtime"
-version = "0.4.0"
-dependencies = [
- "half",
- "hex",
- "libc",
- "memmap2",
- "rayon",
- "serde",
- "serde_json",
- "sha2",
- "thiserror",
+ "urna-engine",
  "urna-format",
 ]
 

@@ -4,16 +4,16 @@
 //! neon / avx2 / scalar). `URNA_FORCE_SCALAR=1` benches the scalar path.
 //!
 //! throughput is in elements (dim) so the numbers compare across dims.
-//! run: `cargo bench -p urna-runtime --bench simd`
+//! run: `cargo bench -p urna-engine --bench simd`
 
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use urna_engine::simd::{
+    detect_backend, dot_f32_bytes, dot_f32_f16_bytes, dot_f32_i4_blocked, dot_f32_i8,
+    score_int8_section,
+};
 use urna_format::{
     INT4_BLOCK, Int4EmbeddingsView, Int8EmbeddingsView, encode_int4_embeddings,
     encode_int8_embeddings, f32_to_f16_bytes,
-};
-use urna_runtime::simd::{
-    detect_backend, dot_f32_bytes, dot_f32_f16_bytes, dot_f32_i4_blocked, dot_f32_i8,
-    score_int8_section,
 };
 
 const DIMS: [usize; 3] = [256, 384, 768];

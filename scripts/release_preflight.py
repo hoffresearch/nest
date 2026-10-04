@@ -3,11 +3,11 @@
 Tree mode (every pull request, ``ci.yml``): the workspace version in
 ``Cargo.toml`` is the one version everywhere a release names it:
 
-- the ``urna-format`` and ``urna-runtime`` pins in ``[workspace.dependencies]``
+- the ``urna-format`` and ``urna-engine`` pins in ``[workspace.dependencies]``
   (``cargo publish`` keeps the version and strips the path);
 - every crate under ``crates/`` inherits it (``version.workspace = true``),
   except one that is its own workspace (``crates/urna-ingest``, excluded at the root);
-- ``Cargo.lock`` carries it for urna, urna-format, urna-runtime, urna-python;
+- ``Cargo.lock`` carries it for urna, urna-format, urna-engine, urna-python;
 - ``CITATION.cff``: ``version``, the versioned ``repository-artifact`` and
   release URLs, and a ``date-released`` equal to the changelog's date;
 - ``docs/CHANGELOG`` has a ``## [X.Y.Z] - YYYY-MM-DD`` section.
@@ -38,8 +38,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PINNED = ("urna-format", "urna-runtime")
-LOCKED = ("urna", "urna-format", "urna-runtime", "urna-python")
+PINNED = ("urna-format", "urna-engine")
+LOCKED = ("urna", "urna-format", "urna-engine", "urna-python")
 CRATES_URL = "https://crates.io/crates/urna/{v}"
 RELEASE_URL = "https://github.com/hoffresearch/urna/releases/tag/v{v}"
 RELEASE_DESCRIPTION = "Release of Urna version {v}."
