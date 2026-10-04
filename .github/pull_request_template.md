@@ -7,7 +7,7 @@
 tick what the change touched; leave the rest. the full walk is `.contracts/.agents/.skills/afterwork/AFTERWORK.md`, over the file list in `.contracts/.agents/.skills/afterwork/specs.yaml`.
 
 - [ ] `docs/CHANGELOG` `[Unreleased]`: the why, measured numbers, test counts
-- [ ] `docs/arc/ARC.toml`: architecture, contracts, inventory, dated `summary` note
+- [ ] `docs/ARC.toml`: architecture, contracts, inventory, dated `summary` note
 - [ ] `.contracts/.agents/AGENTS.md`: commands, gotchas, known gaps, layout
 - [ ] tests: happy path, error path, edge case, real artifacts
 - [ ] user-visible: `README.md`, `llms.txt`, `docs/USAGE.md`, `examples/`, `assets/images/`
