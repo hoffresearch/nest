@@ -585,7 +585,7 @@ Every `URNA_*` variable read anywhere in the codebase (installers, CLI, forge, d
 | `URNA_ENABLE_FAKE_PRESET` | Test-only | Unset | Unlocks the `fake-test` model preset used by the registry's own test suite |
 | `URNA_MUTATION_ITERS` | Dev | `1500` | Iteration count for the mutation-fuzz harness; raise for a soak run |
 | `URNA_FUZZ_SEED_DIR` | Dev | Unset | Seed corpus dir override for the mutation-fuzz harness |
-| `URNA_FUZZ_TARGETS` | Dev | `urna-view section-decoders runtime-indexes mmap-open-search` | Space-separated cargo-fuzz targets `script/fuzz_soak.sh` runs |
+| `URNA_FUZZ_TARGETS` | Dev | `urna-view section-decoders runtime-indexes mmap-open-search` | Space-separated cargo-fuzz targets `script/fuzzsweep.sh` runs |
 | `URNA_BASELINE` | Dev | `data/measure/baseline.json` | Regression baseline `fullcheck.sh` compares against |
 | `URNA_QUERIES` | Dev | `100` | Query count `measure_presets.py` uses via `fullcheck.sh` |
 | `URNA_K` | Dev | `10` | Top-k `measure_presets.py` uses via `fullcheck.sh` |

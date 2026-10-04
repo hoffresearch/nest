@@ -6,9 +6,9 @@
 # crates/*/tests/negative_*.rs regression and a fuzz/seeds/regress-*.bin
 # seed before fixing.
 #
-#   sh script/fuzz_soak.sh            # 1 hour per target
-#   sh script/fuzz_soak.sh 600        # 10 minutes per target
-#   URNA_FUZZ_TARGETS="section-decoders" sh script/fuzz_soak.sh 300
+#   sh script/fuzzsweep.sh            # 1 hour per target
+#   sh script/fuzzsweep.sh 600        # 10 minutes per target
+#   URNA_FUZZ_TARGETS="section-decoders" sh script/fuzzsweep.sh 300
 #
 # needs the nightly toolchain and cargo-fuzz (`cargo install cargo-fuzz`).
 

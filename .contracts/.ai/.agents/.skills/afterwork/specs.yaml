@@ -201,7 +201,7 @@ groups:
         when: mudarem instalação Windows, arquivos baixados, checksums ou destinos.
       - path: script/pre-commit
         when: mudarem as regras sobre dados e arquivos permitidos nos commits.
-      - path: script/fuzz_soak.sh
+      - path: script/fuzzsweep.sh
         when: mudarem alvos, duração ou execução dos testes de fuzzing.
 
   - name: python forge
