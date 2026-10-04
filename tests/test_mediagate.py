@@ -11,7 +11,7 @@ for non-JPEG sources.
 
 Skips cleanly without ffmpeg / ssimulacra2 / cjxl.
 
-Run: .venv/bin/python tests/test_quality_gate.py
+Run: .venv/bin/python tests/test_mediagate.py
 """
 
 import shutil

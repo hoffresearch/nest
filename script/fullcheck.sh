@@ -130,8 +130,8 @@ step "python tests/test_forgespec.py"
 ok "forge spec + pipeline"
 
 # dual quality gate + jxl round-trip; skips cleanly without ssimulacra2/cjxl.
-step "python tests/test_quality_gate.py"
-"$PY" tests/test_quality_gate.py
+step "python tests/test_mediagate.py"
+"$PY" tests/test_mediagate.py
 ok "quality gate + jxl"
 
 step "python tests/test_clispaces.py"
