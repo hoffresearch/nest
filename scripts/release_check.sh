@@ -168,6 +168,12 @@ step "python tests/test_bench_runner.py"
 "$PY" tests/test_bench_runner.py
 ok "bench runner (4 cases)"
 
+# the version a release names agrees across the manifests, the lockfile,
+# CITATION.cff and the changelog; the tag checks need a tag and run in ci.
+step "python tests/test_release_preflight.py"
+"$PY" tests/test_release_preflight.py
+ok "release preflight (6 cases)"
+
 # ---- ruff (best-effort) ----
 # the file list lives in scripts/ruff_check.sh so ci.yml and this gate stay
 # in lockstep; ruff missing from $PY is a skip here, a failure in ci.
