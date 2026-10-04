@@ -109,8 +109,8 @@ step "python tests/test_pythonapi.py"
 "$PY" tests/test_pythonapi.py
 ok "e2e"
 
-step "python tests/test_builder.py"
-"$PY" tests/test_builder.py
+step "python tests/test_ingestion.py"
+"$PY" tests/test_ingestion.py
 ok "builder"
 
 step "python tests/test_search_text_model_hash.py"
