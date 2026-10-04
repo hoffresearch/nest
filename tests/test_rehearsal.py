@@ -145,7 +145,7 @@ def test_what_needs_the_rehearsal() -> None:
         "script/wheelprep.py",
         "python/urna_cli.py",
         "packs/pyproject.toml",
-        "crates/urna-clitui/src/main.rs",
+        "crates/clitui/src/main.rs",
         "Cargo.lock",
         "README.md",
         "LICENSE",
@@ -215,14 +215,14 @@ def _plan() -> dict:
     kinds = {
         "sha256.sum": "unified-checksum",
         "urna.rb": "installer",
-        "urna-clitui-npm-package.tar.gz": "installer",
-        "urna-clitui.cdx.xml": "sbom",
+        "urna-npm-package.tar.gz": "installer",
+        "urna.cdx.xml": "sbom",
         "urna-embedder-payload.tar.gz": "extra-artifact",
         "urna-embedder-payload.tar.gz.sha256": "extra-artifact",
     }
     for target in ["aarch64-apple-darwin", "x86_64-unknown-linux-musl"]:
-        kinds[f"urna-clitui-{target}.tar.xz"] = "executable-zip"
-        kinds[f"urna-clitui-{target}.tar.xz.sha256"] = "checksum"
+        kinds[f"urna-{target}.tar.xz"] = "executable-zip"
+        kinds[f"urna-{target}.tar.xz.sha256"] = "checksum"
     return {"artifacts": {n: {"kind": k} for n, k in kinds.items()}}
 
 
@@ -233,10 +233,10 @@ def test_the_artifacts_a_release_uploads() -> None:
         _artifacts(d, plan)
         assert rh.check_assets(d, plan, VERSION) == []
         (d / "urna.rb").unlink()
-        (d / "urna-clitui-aarch64-apple-darwin.tar.xz").write_bytes(b"rebuilt")
+        (d / "urna-aarch64-apple-darwin.tar.xz").write_bytes(b"rebuilt")
         errors = rh.check_assets(d, plan, VERSION)
         assert "missing urna.rb" in errors, errors
-        mismatch = "urna-clitui-aarch64-apple-darwin.tar.xz does not match its .sha256"
+        mismatch = "urna-aarch64-apple-darwin.tar.xz does not match its .sha256"
         assert mismatch in errors, errors
         assert any(e.startswith("sha256.sum: ") for e in errors), errors
     with tempfile.TemporaryDirectory() as tmp:
@@ -250,17 +250,17 @@ def test_the_artifacts_a_release_uploads() -> None:
         d = Path(tmp)
         _artifacts(d, plan)
         (d / "sha256.sum").write_text("", encoding="utf-8")
-        (d / "urna-clitui-npm-package.tar.gz").write_bytes(b"altered")
+        (d / "urna-npm-package.tar.gz").write_bytes(b"altered")
         errors = rh.check_assets(d, plan, VERSION)
-        assert "sha256.sum lacks urna-clitui-npm-package.tar.gz" in errors, errors
-        assert "sha256.sum lacks urna-clitui-x86_64-unknown-linux-musl.tar.xz" in errors, errors
+        assert "sha256.sum lacks urna-npm-package.tar.gz" in errors, errors
+        assert "sha256.sum lacks urna-x86_64-unknown-linux-musl.tar.xz" in errors, errors
     with tempfile.TemporaryDirectory() as tmp:
         d = Path(tmp)
         _artifacts(d, plan)
         index = d / "sha256.sum"
-        kept = [ln for ln in index.read_text().splitlines() if "urna-clitui-npm-package" not in ln]
+        kept = [ln for ln in index.read_text().splitlines() if "urna-npm-package" not in ln]
         index.write_text("\n".join(kept) + "\n", encoding="utf-8")
-        lacks = "sha256.sum lacks urna-clitui-npm-package.tar.gz"
+        lacks = "sha256.sum lacks urna-npm-package.tar.gz"
         assert rh.check_assets(d, plan, VERSION) == [lacks]
     print("happy/error (artifacts, wheels, checksums, sha256.sum coverage, payload VERSION): OK")
 
@@ -273,12 +273,12 @@ def test_a_real_binary_against_the_golden_fixture() -> None:
     golden = REPO / "crates/format/tests/fixtures/golden_v1_minimal.urna"
     with tempfile.TemporaryDirectory() as tmp:
         d = Path(tmp)
-        with tarfile.open(d / "urna-clitui-host.tar.xz", "w:xz") as tar:
-            tar.add(binary, arcname="urna-clitui-host/urna")
+        with tarfile.open(d / "urna-host.tar.xz", "w:xz") as tar:
+            tar.add(binary, arcname="urna-host/urna")
         # beside it, its checksum, as in a release (a glob once picked this).
-        digest = hashlib.sha256((d / "urna-clitui-host.tar.xz").read_bytes()).hexdigest()
-        (d / "urna-clitui-host.tar.xz.sha256").write_text(
-            f"{digest} *urna-clitui-host.tar.xz\n", encoding="utf-8"
+        digest = hashlib.sha256((d / "urna-host.tar.xz").read_bytes()).hexdigest()
+        (d / "urna-host.tar.xz.sha256").write_text(
+            f"{digest} *urna-host.tar.xz\n", encoding="utf-8"
         )
         assert rh.check_binary(d, "host", golden, VERSION) == []
         broken = d / "broken.urna"
@@ -288,7 +288,7 @@ def test_a_real_binary_against_the_golden_fixture() -> None:
         errors = rh.check_binary(d, "host", broken, VERSION)
         assert errors and "validate broken.urna exited" in errors[0], errors
         assert rh.check_binary(d, "other-target", golden, VERSION) == [
-            "no urna-clitui-other-target archive"
+            "no urna-other-target archive"
         ]
         # the exact version: a binary saying 0.5.3 is not 0.5 (nor 0.5.30 not 0.5.3).
         prefix = VERSION.rsplit(".", 1)[0]
@@ -298,8 +298,8 @@ def test_a_real_binary_against_the_golden_fixture() -> None:
         fails = d / "fails.sh"
         fails.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
         fails.chmod(0o755)
-        with tarfile.open(d / "urna-clitui-fails.tar.xz", "w:xz") as tar:
-            tar.add(fails, arcname="urna-clitui-fails/urna")
+        with tarfile.open(d / "urna-fails.tar.xz", "w:xz") as tar:
+            tar.add(fails, arcname="urna-fails/urna")
         errors = rh.check_binary(d, "fails", golden, VERSION)
         assert errors and "(exit 1)" in errors[0], errors
     print("happy/error (a real binary validates the golden fixture, rejects a flipped byte): OK")

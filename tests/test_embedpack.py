@@ -85,7 +85,7 @@ def test_stage_and_query(base: Path) -> None:
     # what `urna setup` requires (cmd/payload.rs REQUIRED) is exactly what the stage
     # script ships: a shipped file it does not require could go missing
     # unnoticed, a required file it does not ship would fail every install.
-    src = (REPO / "crates/urna-clitui/src/cmd/payload.rs").read_text()
+    src = (REPO / "crates/clitui/src/cmd/payload.rs").read_text()
     block = src[src.index("pub const REQUIRED") : src.index("];", src.index("pub const REQUIRED"))]
     required = {"urna/" + r for r in re.findall(r'"([^"]+)"', block)}
     assert len(required) >= 8, required

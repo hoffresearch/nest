@@ -1,7 +1,7 @@
 """install_model.py - fetch one catalog model into the local hugging face cache.
 
 the second half of the one install operation `urna setup` and the explorer
-share (`crates/urna-clitui/src/cmd/models.rs`): the rust side installs the
+share (`crates/clitui/src/cmd/models.rs`): the rust side installs the
 packages into the managed venv, then runs this script with that venv's
 python to fetch the weights and prove them.
 

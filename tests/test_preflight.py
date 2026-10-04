@@ -83,18 +83,13 @@ def test_each_drift_is_named() -> None:
     cases = [
         ("Cargo.toml", pin, pin.replace(VERSION, other), "urna-engine pins"),
         (
-            "crates/urna-clitui/Cargo.toml",
+            "crates/clitui/Cargo.toml",
             "version.workspace = true",
             f'version = "{other}"',
             "inherits",
         ),
         ("CITATION.cff", f'version: "{VERSION}"', f'version: "{other}"', "CITATION.cff: version"),
-        (
-            "CITATION.cff",
-            f"crates/urna-clitui/{VERSION}",
-            f"crates/urna-clitui/{other}",
-            "repository-artifact",
-        ),
+        ("CITATION.cff", f"crates/urna/{VERSION}", f"crates/urna/{other}", "repository-artifact"),
         ("CITATION.cff", f"tag/v{VERSION}", f"tag/v{other}", "CITATION.cff: value"),
         ("CITATION.cff", f"version {VERSION}.", f"version {other}.", "CITATION.cff: description"),
         ("docs/CHANGELOG", f"## [{VERSION}] - ", f"## [{VERSION}] ", "no '## ["),
@@ -226,8 +221,8 @@ def test_the_tag_commit_is_what_is_checked() -> None:
         edit(
             root,
             "Cargo.lock",
-            f'name = "urna-clitui"\nversion = "{VERSION}"',
-            'name = "urna-clitui"\nversion = "0.0.1"',
+            f'name = "urna"\nversion = "{VERSION}"',
+            'name = "urna"\nversion = "0.0.1"',
         )
         assert preflight.check_tree(root) != []
         assert preflight.check_tag(f"v{VERSION}", root) == []

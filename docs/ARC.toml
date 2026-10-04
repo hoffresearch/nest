@@ -8,13 +8,13 @@
 project = "urna"
 last-updated = "2026-10-04"
 domain = "architecture"
-summary = "Single-file semantic knowledge stack: Rust owns format, runtime, CLI, and bindings; Python owns ingestion, model fingerprinting, and support tooling. p1#07 (G1) added the optional chunk-to-chunk graph_adjacency (0x0C) CSR + search-graph. p1#08 stood up the agent-native flagship over the EXISTING engine: CLI `ask`/`retrieve` + Python UrnaFile.retrieve (offline potion embed, model_hash gate, capability route, tier-1 cited spans whose score IS the exact rerank value) + the additive SearchExplain honesty backbone (rerank_source: real cosine vs real cosine at stored precision). 2026-08-10: The media blob pillar (F4b) brought codec-backed media INTO the container (blob_refs 0x14 + blob_span_overlay 0x16, capabilities_ext.blobs_present) and the multimodal space pillar (F4c) added the space_table 0x15 registry plus per-space embedding slabs in the 0x20-0x2F band behind capabilities_ext.supports_multimodal, each space gated by its own model_hash in isolation; F5 added the build-time levers gop_policy=auto probe, sharding, similarity ordering, and the dtype ladder for image corpora. All additive, content_hash-excluded, zero format bytes changed for text corpora, no URNA_FORMAT_VERSION bump; verb-collapse / urna dev / urna-profile deferred. 2026-08-11: The distribution surface (issue #75) landed: cargo-dist CLI releases (5 targets, SHA256, Sigstore attestations, Homebrew tap), the maturin `urna` wheel with the bundled potion table (abi3 cp312, OIDC trusted publishing), one-liner installers, `urna doctor` with typed exit codes, the minimal Docker image, and offline integration examples. 2026-08-31: Declarative builds + model registry + compression levers (RFCs 0-5, no format change): `urna build --spec corpus.toml` launches python/tools/urna_forge.py -> forge/build_spec.py (TOML contract, SpecError names the key, total-order enforcement) -> forge/corpus_sources.py (sqlite/csv/jsonl/image_dir rows with per-item input_hash) -> forge/forge_pipeline.py (transactional stages, dedup via shared 0x16 spans, triad-keyed embed caches model_hash+recipe_hash+input_hash, single/per-model/both outputs from one embed pass, manifest_schema_version=1 + build.lock.json); forge/model_registry.py holds the model presets (potion/clip-vit-b32/siglip2/jina-v5-omni/wemm-2b|4b|9b/fake-test) with validated MRL ladders, remote-code opt-in + pinned hash allowlist, and subprocess-isolated ST adapters (one worker per model via forge/embed_st_worker.py -- two trust_remote_code ST models in one process collide in transformers dynamic modules, measured); forge/quality_gate.py is the dual crf=auto gate (stratified ssimulacra2 floors + embedding-drift floor); jxl/jxl-transcode backends are the lossless modes (round-trip verified); CLI grew search-space, build, stats/inspect spaces, benchmark --space, and cmd/embed_gate.rs (the ONE copy of the three-layer model gate, routing ask/retrieve by manifest model through forge/embed_query_model.py); python/tools/urna_model_bench.py compares models in three never-aggregated tiers. 2026-09-03: Single-asset access + frontend bridge (no format change): UrnaFile.chunk_ids() (chunk identity in file order) and UrnaFile.blob_bytes(i) (one inlined 0x17 blob without exporting the store) landed in urna-python; python/tools/urna_ui_bridge.py is the JSON bridge any frontend drives a corpus through (browse with media resolved to blob URI + shard-local frame via SHA256 segment matching, search in every mode with hits matched by chunk_id, single-blob extraction); the bench now matches by chunk_id (ordinal==offset only held for single-shard unordered video; cluster and per-image corpora silently zeroed) and expands ${ENV} placeholders in redacted manifest paths. Measured full-corpus: retrieval-only AV1 crf50 = 7.8x with hit@k parity against the lossless twin while the drift floor would have vetoed it (drift is stability, not utility; a hit@k gate floor is the registered follow-up, landed 2026-09-12 as the utility leg); AVIF q48 = the crf35 still class's drift at -20% bytes; the AV1/AVIF twins share one content_hash across a backend swap. 2026-09-05: Hardening pass driven by an external review: workspace deny lints unwrap_used + undocumented_unsafe_blocks, urna_format::bytes typed field readers, bytemuck views replacing the layout/int8 raw-parts casts (urna-format has zero unsafe), release-kept asserts at the SIMD safe/unsafe boundary, allocation-free int4 rerank (caller scratch), deterministic mutation-fuzz harnesses in both crates + four cargo-fuzz targets under fuzz/ (first runs found and fixed four malformed-file panic classes: unchecked n*dim, NaN reaching a partial_cmp sort, wrapping cursor bounds checks, unvalidated BM25 postings), .github/workflows/ci.yml (the first workflow to run cargo test on a pull request), the CLI regrouped into engine verbs (cmd/*) and agent verbs (cmd/agent/*), and docs/BENCH.md measured against usearch / hnswlib / sqlite-vec / LanceDB. 2026-09-18: docs/arc consolidated into a single docs/arc/ARC.toml (previously the arc.yaml + arc.mmd pair plus the arc.schema.json IDE-validation schema); doc-location change only, no architecture, format, or runtime change. 2026-09-22: `doc/` renamed to `docs/` and `dat/` to `data/` (paths only); examples/quickstart/ added (JSONL + potion spec + Python twin, the five-verb loop from a clean checkout). 2026-09-26: The release feeds two more channels, configured and not yet published: crates.io (urna-format, urna-runtime, urna-cli in dependency order via the custom cargo-dist publish job .github/workflows/publish-crates.yml; urna-python and forge-core publish = false) and npm (`@urna/cli`, the cargo-dist npm installer fetching the release archive); the Homebrew formula is named `urna`. 2026-09-26 (later): The terminal UI, behind the default-on `tui` feature of urna-cli (Ratatui 0.30 + tachyonfx; urna-cli's own rust-version moves to 1.88, the format and runtime crates keep 1.85): `urna setup` is the installer every channel ends in (scan, plan, install, verify; downloads the embedder payload through a system `curl` child with the SHA256 checked while it streams, unpacks through a staging dir, builds a managed Python env at <data root>/urna/venv with uv or venv+pip, proves the result with the doctor checks; plain lines with --yes or without a terminal; exit codes 10-14 above doctor's 2-6) and `urna tui` (also a bare `urna` on a terminal) is the corpus explorer (manifest + validate verdict, section table, ask through the same embed_gate, the doctor checks, a hand-off to setup and back). The doctor checks became data (cmd/health.rs) shared by doctor, setup and the explorer; the data roots became one ladder (cmd/paths.rs: URNA_DATA_DIR, XDG_DATA_HOME, ~/.local/share, %LOCALAPPDATA%, <exe>/../share), which also fixes the Windows one-liner payload the CLI never searched; the interpreter ladder gained the setup venv right after URNA_PYTHON. The binary still links no network stack. No format or runtime change. 2026-09-26 (release): The release and wheel jobs stopped pulling git-lfs (the repo ran out of LFS budget on the first 0.5.0 tag); scripts/fetch_potion.sh downloads the potion table from its pinned upstream revision and checks it against the LFS pointer's SHA256, so a release spends no LFS bandwidth. The CLI crate publishes as `urna` (`cargo install urna`) while npm refuses the bare `urna` (too similar to url, lerna, ora), so the npm package stays `@urna/cli`; the directory stays crates/urna-cli, dist release archives are urna-<target>. 2026-09-27: Every change ends with the afterwork walk (.contracts/.ai/.agents/.skills/afterwork/AFTERWORK.md, mirrored as checkboxes in .github/pull_request_template.md): each doc a change owns is updated in place, history stays in the changelog, the commit and the PR. 2026-09-29: The flagship search route is by capability, not by the declared index_type: MmapUrnaFile::search_routed (BM25 section + query text -> hybrid, HNSW section -> ann, else exact; the graph only through search_graph) is the one route ask, retrieve, search-text and the Python UrnaFile.retrieve (new `query_text` kwarg) share, so a `hybrid` preset file (index_type hnsw, supports_bm25 true) runs its BM25 leg from the CLI. No format change. 2026-09-29: The release payload carries the registry query embedder (embed_query_model.py, the registry, its adapters, model_fingerprint.py) so an installed binary asks wemm/clip/jina corpora once their deps are in the setup venv; `tests/test_embedder_payload.py` runs the staged tree from outside the checkout (the ninth gate suite). 2026-09-29: The hash contract is stated as the layout has it: header and section checksums are 8-byte SHA-256 prefixes, file_hash covers the whole file (the footer digest covers everything before it), content_hash the decoded canonical sections. 2026-09-29: The contract names every encoding and section id the writer emits (intpack 4, zstd_dict 5, fsst 9, txt_streams 10, dictionary 0x0A, dedup_map 0x0B, blob_data 0x17 were missing from the agents contract's list). 2026-09-29: The standalone image tool (urna_build_image_corpus.py, image_corpus.py) is described as what it writes: a .media/ sidecar and the default space; the in-file media layout and the named spaces belong to the declarative build. 2026-09-29: `urna cite` resolves spans through urna_runtime::apply_blob_span_overlay (the 0x16 overlay the runtime applies at open), so a media corpus cites the blob span retrieve reports; `urna validate` runs every check before printing; forge --rebuild-only never rewrites the build lock (a divergent rebuild writes <name>.build.lock.rebuild.json). No format change. 2026-10-02: CITATION.cff at the root carries the citation metadata of the released version; no code change. 2026-10-02 (#262, task 1): An installed urna queries a sentence-transformers corpus: the payload carries urna/embed_query.py, model_fingerprint.py and VERSION beside forge/ and setup lays them all down (never a directory but forge/, so never the venv); setup replaces a payload of another release or without the stamp in its own data dir; the MiniLM is the st_text preset minilm-multilingual, sharing embed_query.py's load/encode/fingerprint so old corpora keep their model_hash; installed_script_in takes a path under python/ so search-text resolves through the data roots; embed failures are typed (cmd/embed_failure.rs); the benchmark rebuild is atomic (_bench_runner). After review: the payload install is one restorable step (cmd::payload::REQUIRED checked first, the previous payload moved aside and restored on failure, kept at <root>/.urna-previous-* and named in the error when the restore itself fails, VERSION last; REQUIRED is every shipped file), setup repairs a payload missing a required file, and the benchmark keeps a live run's temporary. No format or runtime change. 2026-10-02 (later): The pt-BR corpus build left the repo: python/tools/urna_build_corpus.py and _corpus_sources.py are gone (their upstream CSVs and one mirror no longer exist, so they could not run), the python-corpus-build flow with them; data/corpus_next.v1.urna stays in LFS as the frozen gate baseline, identified by its file_hash in data/demo/Instructions.md and data/measure/baseline.json, and the pinned, rebuildable corpus lives in the fakenews-ptbr-urna-benchmark repo. No code, format or gate change. 2026-10-02 (#262, task 2): Optional model install. The registry carries an InstallSpec for each preset whose install was validated end to end (pinned revision, exact files, model_hash; today minilm-multilingual), model_catalog.py generates python/forge/catalog.json from it with every other preset and its reason, and the payload ships it beside forge/install_model.py. One install (tui/setup/models.rs) serves urna setup (a models step, the picker, --model NAME|all, --allow-remote-code NAME, exit 15) and the explorer's install panel (tui/app/offer.rs): packages only into the managed venv, the pinned files into the shared HF cache, the fingerprint checked against the catalog and the corpus, the download and repo code as two separate consents, the query run again on success. install-test checks every channel's payload carries the catalog. No format or runtime change; urna-format, urna-runtime, the wheel and Docker are untouched. 2026-10-02 (later): open_clip presets can pin a hub snapshot (hf_repo, revision, weights_file, snapshot_files), separate from InstallSpec; SigLIP2 does, and model_registry.pinned_snapshot resolves snapshots/<revision> of the HF cache (never refs/main), so embed_image.py loads the checkpoint into the built-in architecture with the tag's preprocess (model_hash unchanged) and the tokenizer through local-dir: from the same snapshot. The SigLIP2 text tower runs offline; a missing file is SnapshotMissing, exit 3 with urna-fetch. 2026-10-03: the #271 merge had dropped those four ModelPreset fields while the SigLIP2 preset kept using them, so the registry did not import; restored, and CI's python job now runs model_catalog.py --check, which imports the registry under a bare python. No format or runtime change. 2026-10-03 (0.5.2): The release ships the MIT text in the three crates (crates/*/LICENSE link to docs/LICENSE) and in the wheel (license-files); the Docker image builds the engine-only CLI with --locked and --no-default-features from a pinned toolchain image. No format or runtime change. 2026-10-03 (0.5.3): the v0.5.2 tag reached PyPI only, because the release global job stages the payload with ubuntu-22.04 python3 (3.10) and the VERSION stamp imported tomllib; scripts/stage_embedder_payload.py falls back to reading [workspace.package] and 0.5.3 is the release for every channel. No format or runtime change. 2026-10-03 (release automation, preflight): scripts/release_preflight.py checks that the version agrees across the pins, the lockfile, CITATION.cff and the changelog on every pull request, and tag-verify.yml runs it in tag mode after the signature (tag name, commit on main, tag date), so a mismatched tag stops before any build. 2026-10-03 (release automation, wheels and PyPI): the wheels build inside the release run (build-wheels.yml, a dist local-artifacts job) so the host and every publish job wait for them, and the release carries them with a .sha256 and an attestation each; PyPI moved from its own tag-triggered run to the publish-pypi job, which dispatches the top-level pypi.yml on the tag (trusted publishing does not take a reusable workflow) and waits for it; the upload is idempotent per sha256. The tag check moved from dist plan-jobs into build-wheels.yml: a failed plan job only skips the builds, and dist's host runs on skipped builds. No format or runtime change. 2026-10-04 (release automation, rehearsal): release-rehearsal.yml, generated from release.yml by scripts/release_rehearsal.py, runs the release's own build jobs on pull requests and pushes to main without publishing (read-only, no secrets, no attestations), checks the artifacts, the payload VERSION and the Linux binary, and gives the required rehearsal check; build-wheels.yml takes its caller's permissions so the read-only rehearsal can call it. CI stages the payload under Python 3.10. No format or runtime change. 2026-10-04 (release automation, channels): install-test's registry legs wait for the exact version (scripts/release_channels.py), and release-report.yml summarizes every completed release run, failed or cancelled included, by the triggering run's id and commit. No format or runtime change. 2026-10-04 (release automation, preparation): scripts/release_prepare.sh opens the release pull request with a pinned cargo-release; release dates and the tag check are UTC days. 2026-10-04 (afterwork): .contracts/.ai/.agents/ holds the shared Portuguese instructions and the final review procedure with its conditional specs.yaml catalog; AGENTS.md and CLAUDE.md at the root link to the same source. 2026-10-04 (later): ARC.toml moved from docs/arc/ to docs/ beside the other docs; doc-location change only. 2026-10-04 (later): docs/ADR/ holds the architecture decision records and reference lessons, one folder per category, each record from docs/ADR/TEMPLATE.md with a searchable YAML header. 2026-10-04 (later): AFTERWORK rewritten as nine steps matching nine epics; the agent builds its task list in its task tool before starting, so the tech lead can audit each item against the PR, and closing criteria state what must hold at the end. 2026-10-04 (later): the root llms.txt is gone; it is a site convention no tool reads from a repository, and docs.urna.dev/llms.txt is the one index. 2026-10-04 (later): LICENSE moved from docs/ to the root, where GitHub detects it, and the Dockerfile from docker/ to the root, so `docker build .` needs no -f; paths only. 2026-10-04 (later): the root AGENTS.md and CLAUDE.md links are gone; .contracts/.ai/.agents/AGENTS.md is the one instruction source, and each contributor points their own agent tooling at it. 2026-10-04 (later, #296): names line up by length (ADR-0001): every crate is urna- plus six letters and its directory carries the package name (forge-core is crates/urna-ingest, outside the root workspace through exclude; urna-runtime is urna-engine, urna-python urna-bridge, the CLI crate urna is urna-clitui, binary still urna, archives urna-clitui-<target>); scripts/ is script/, examples/ demos/, packaging/ packs/, assets/images/ assets/image/; workflows, scripts and tests take nine-letter names (gatecheck.yml, preflight.py, installer.sh, test_hashguard.py); release.yml keeps the name cargo-dist writes. No format, runtime or API change."
+summary = "Single-file semantic knowledge stack: Rust owns format, runtime, CLI, and bindings; Python owns ingestion, model fingerprinting, and support tooling. p1#07 (G1) added the optional chunk-to-chunk graph_adjacency (0x0C) CSR + search-graph. p1#08 stood up the agent-native flagship over the EXISTING engine: CLI `ask`/`retrieve` + Python UrnaFile.retrieve (offline potion embed, model_hash gate, capability route, tier-1 cited spans whose score IS the exact rerank value) + the additive SearchExplain honesty backbone (rerank_source: real cosine vs real cosine at stored precision). 2026-08-10: The media blob pillar (F4b) brought codec-backed media INTO the container (blob_refs 0x14 + blob_span_overlay 0x16, capabilities_ext.blobs_present) and the multimodal space pillar (F4c) added the space_table 0x15 registry plus per-space embedding slabs in the 0x20-0x2F band behind capabilities_ext.supports_multimodal, each space gated by its own model_hash in isolation; F5 added the build-time levers gop_policy=auto probe, sharding, similarity ordering, and the dtype ladder for image corpora. All additive, content_hash-excluded, zero format bytes changed for text corpora, no URNA_FORMAT_VERSION bump; verb-collapse / urna dev / urna-profile deferred. 2026-08-11: The distribution surface (issue #75) landed: cargo-dist CLI releases (5 targets, SHA256, Sigstore attestations, Homebrew tap), the maturin `urna` wheel with the bundled potion table (abi3 cp312, OIDC trusted publishing), one-liner installers, `urna doctor` with typed exit codes, the minimal Docker image, and offline integration examples. 2026-08-31: Declarative builds + model registry + compression levers (RFCs 0-5, no format change): `urna build --spec corpus.toml` launches python/tools/urna_forge.py -> forge/build_spec.py (TOML contract, SpecError names the key, total-order enforcement) -> forge/corpus_sources.py (sqlite/csv/jsonl/image_dir rows with per-item input_hash) -> forge/forge_pipeline.py (transactional stages, dedup via shared 0x16 spans, triad-keyed embed caches model_hash+recipe_hash+input_hash, single/per-model/both outputs from one embed pass, manifest_schema_version=1 + build.lock.json); forge/model_registry.py holds the model presets (potion/clip-vit-b32/siglip2/jina-v5-omni/wemm-2b|4b|9b/fake-test) with validated MRL ladders, remote-code opt-in + pinned hash allowlist, and subprocess-isolated ST adapters (one worker per model via forge/embed_st_worker.py -- two trust_remote_code ST models in one process collide in transformers dynamic modules, measured); forge/quality_gate.py is the dual crf=auto gate (stratified ssimulacra2 floors + embedding-drift floor); jxl/jxl-transcode backends are the lossless modes (round-trip verified); CLI grew search-space, build, stats/inspect spaces, benchmark --space, and cmd/embed_gate.rs (the ONE copy of the three-layer model gate, routing ask/retrieve by manifest model through forge/embed_query_model.py); python/tools/urna_model_bench.py compares models in three never-aggregated tiers. 2026-09-03: Single-asset access + frontend bridge (no format change): UrnaFile.chunk_ids() (chunk identity in file order) and UrnaFile.blob_bytes(i) (one inlined 0x17 blob without exporting the store) landed in urna-python; python/tools/urna_ui_bridge.py is the JSON bridge any frontend drives a corpus through (browse with media resolved to blob URI + shard-local frame via SHA256 segment matching, search in every mode with hits matched by chunk_id, single-blob extraction); the bench now matches by chunk_id (ordinal==offset only held for single-shard unordered video; cluster and per-image corpora silently zeroed) and expands ${ENV} placeholders in redacted manifest paths. Measured full-corpus: retrieval-only AV1 crf50 = 7.8x with hit@k parity against the lossless twin while the drift floor would have vetoed it (drift is stability, not utility; a hit@k gate floor is the registered follow-up, landed 2026-09-12 as the utility leg); AVIF q48 = the crf35 still class's drift at -20% bytes; the AV1/AVIF twins share one content_hash across a backend swap. 2026-09-05: Hardening pass driven by an external review: workspace deny lints unwrap_used + undocumented_unsafe_blocks, urna_format::bytes typed field readers, bytemuck views replacing the layout/int8 raw-parts casts (urna-format has zero unsafe), release-kept asserts at the SIMD safe/unsafe boundary, allocation-free int4 rerank (caller scratch), deterministic mutation-fuzz harnesses in both crates + four cargo-fuzz targets under fuzz/ (first runs found and fixed four malformed-file panic classes: unchecked n*dim, NaN reaching a partial_cmp sort, wrapping cursor bounds checks, unvalidated BM25 postings), .github/workflows/ci.yml (the first workflow to run cargo test on a pull request), the CLI regrouped into engine verbs (cmd/*) and agent verbs (cmd/agent/*), and docs/BENCH.md measured against usearch / hnswlib / sqlite-vec / LanceDB. 2026-09-18: docs/arc consolidated into a single docs/arc/ARC.toml (previously the arc.yaml + arc.mmd pair plus the arc.schema.json IDE-validation schema); doc-location change only, no architecture, format, or runtime change. 2026-09-22: `doc/` renamed to `docs/` and `dat/` to `data/` (paths only); examples/quickstart/ added (JSONL + potion spec + Python twin, the five-verb loop from a clean checkout). 2026-09-26: The release feeds two more channels, configured and not yet published: crates.io (urna-format, urna-runtime, urna-cli in dependency order via the custom cargo-dist publish job .github/workflows/publish-crates.yml; urna-python and forge-core publish = false) and npm (`@urna/cli`, the cargo-dist npm installer fetching the release archive); the Homebrew formula is named `urna`. 2026-09-26 (later): The terminal UI, behind the default-on `tui` feature of urna-cli (Ratatui 0.30 + tachyonfx; urna-cli's own rust-version moves to 1.88, the format and runtime crates keep 1.85): `urna setup` is the installer every channel ends in (scan, plan, install, verify; downloads the embedder payload through a system `curl` child with the SHA256 checked while it streams, unpacks through a staging dir, builds a managed Python env at <data root>/urna/venv with uv or venv+pip, proves the result with the doctor checks; plain lines with --yes or without a terminal; exit codes 10-14 above doctor's 2-6) and `urna tui` (also a bare `urna` on a terminal) is the corpus explorer (manifest + validate verdict, section table, ask through the same embed_gate, the doctor checks, a hand-off to setup and back). The doctor checks became data (cmd/health.rs) shared by doctor, setup and the explorer; the data roots became one ladder (cmd/paths.rs: URNA_DATA_DIR, XDG_DATA_HOME, ~/.local/share, %LOCALAPPDATA%, <exe>/../share), which also fixes the Windows one-liner payload the CLI never searched; the interpreter ladder gained the setup venv right after URNA_PYTHON. The binary still links no network stack. No format or runtime change. 2026-09-26 (release): The release and wheel jobs stopped pulling git-lfs (the repo ran out of LFS budget on the first 0.5.0 tag); scripts/fetch_potion.sh downloads the potion table from its pinned upstream revision and checks it against the LFS pointer's SHA256, so a release spends no LFS bandwidth. The CLI crate publishes as `urna` (`cargo install urna`) while npm refuses the bare `urna` (too similar to url, lerna, ora), so the npm package stays `@urna/cli`; the directory stays crates/urna-cli, dist release archives are urna-<target>. 2026-09-27: Every change ends with the afterwork walk (.contracts/.ai/.agents/.skills/afterwork/AFTERWORK.md, mirrored as checkboxes in .github/pull_request_template.md): each doc a change owns is updated in place, history stays in the changelog, the commit and the PR. 2026-09-29: The flagship search route is by capability, not by the declared index_type: MmapUrnaFile::search_routed (BM25 section + query text -> hybrid, HNSW section -> ann, else exact; the graph only through search_graph) is the one route ask, retrieve, search-text and the Python UrnaFile.retrieve (new `query_text` kwarg) share, so a `hybrid` preset file (index_type hnsw, supports_bm25 true) runs its BM25 leg from the CLI. No format change. 2026-09-29: The release payload carries the registry query embedder (embed_query_model.py, the registry, its adapters, model_fingerprint.py) so an installed binary asks wemm/clip/jina corpora once their deps are in the setup venv; `tests/test_embedder_payload.py` runs the staged tree from outside the checkout (the ninth gate suite). 2026-09-29: The hash contract is stated as the layout has it: header and section checksums are 8-byte SHA-256 prefixes, file_hash covers the whole file (the footer digest covers everything before it), content_hash the decoded canonical sections. 2026-09-29: The contract names every encoding and section id the writer emits (intpack 4, zstd_dict 5, fsst 9, txt_streams 10, dictionary 0x0A, dedup_map 0x0B, blob_data 0x17 were missing from the agents contract's list). 2026-09-29: The standalone image tool (urna_build_image_corpus.py, image_corpus.py) is described as what it writes: a .media/ sidecar and the default space; the in-file media layout and the named spaces belong to the declarative build. 2026-09-29: `urna cite` resolves spans through urna_runtime::apply_blob_span_overlay (the 0x16 overlay the runtime applies at open), so a media corpus cites the blob span retrieve reports; `urna validate` runs every check before printing; forge --rebuild-only never rewrites the build lock (a divergent rebuild writes <name>.build.lock.rebuild.json). No format change. 2026-10-02: CITATION.cff at the root carries the citation metadata of the released version; no code change. 2026-10-02 (#262, task 1): An installed urna queries a sentence-transformers corpus: the payload carries urna/embed_query.py, model_fingerprint.py and VERSION beside forge/ and setup lays them all down (never a directory but forge/, so never the venv); setup replaces a payload of another release or without the stamp in its own data dir; the MiniLM is the st_text preset minilm-multilingual, sharing embed_query.py's load/encode/fingerprint so old corpora keep their model_hash; installed_script_in takes a path under python/ so search-text resolves through the data roots; embed failures are typed (cmd/embed_failure.rs); the benchmark rebuild is atomic (_bench_runner). After review: the payload install is one restorable step (cmd::payload::REQUIRED checked first, the previous payload moved aside and restored on failure, kept at <root>/.urna-previous-* and named in the error when the restore itself fails, VERSION last; REQUIRED is every shipped file), setup repairs a payload missing a required file, and the benchmark keeps a live run's temporary. No format or runtime change. 2026-10-02 (later): The pt-BR corpus build left the repo: python/tools/urna_build_corpus.py and _corpus_sources.py are gone (their upstream CSVs and one mirror no longer exist, so they could not run), the python-corpus-build flow with them; data/corpus_next.v1.urna stays in LFS as the frozen gate baseline, identified by its file_hash in data/demo/Instructions.md and data/measure/baseline.json, and the pinned, rebuildable corpus lives in the fakenews-ptbr-urna-benchmark repo. No code, format or gate change. 2026-10-02 (#262, task 2): Optional model install. The registry carries an InstallSpec for each preset whose install was validated end to end (pinned revision, exact files, model_hash; today minilm-multilingual), model_catalog.py generates python/forge/catalog.json from it with every other preset and its reason, and the payload ships it beside forge/install_model.py. One install (tui/setup/models.rs) serves urna setup (a models step, the picker, --model NAME|all, --allow-remote-code NAME, exit 15) and the explorer's install panel (tui/app/offer.rs): packages only into the managed venv, the pinned files into the shared HF cache, the fingerprint checked against the catalog and the corpus, the download and repo code as two separate consents, the query run again on success. install-test checks every channel's payload carries the catalog. No format or runtime change; urna-format, urna-runtime, the wheel and Docker are untouched. 2026-10-02 (later): open_clip presets can pin a hub snapshot (hf_repo, revision, weights_file, snapshot_files), separate from InstallSpec; SigLIP2 does, and model_registry.pinned_snapshot resolves snapshots/<revision> of the HF cache (never refs/main), so embed_image.py loads the checkpoint into the built-in architecture with the tag's preprocess (model_hash unchanged) and the tokenizer through local-dir: from the same snapshot. The SigLIP2 text tower runs offline; a missing file is SnapshotMissing, exit 3 with urna-fetch. 2026-10-03: the #271 merge had dropped those four ModelPreset fields while the SigLIP2 preset kept using them, so the registry did not import; restored, and CI's python job now runs model_catalog.py --check, which imports the registry under a bare python. No format or runtime change. 2026-10-03 (0.5.2): The release ships the MIT text in the three crates (crates/*/LICENSE link to docs/LICENSE) and in the wheel (license-files); the Docker image builds the engine-only CLI with --locked and --no-default-features from a pinned toolchain image. No format or runtime change. 2026-10-03 (0.5.3): the v0.5.2 tag reached PyPI only, because the release global job stages the payload with ubuntu-22.04 python3 (3.10) and the VERSION stamp imported tomllib; scripts/stage_embedder_payload.py falls back to reading [workspace.package] and 0.5.3 is the release for every channel. No format or runtime change. 2026-10-03 (release automation, preflight): scripts/release_preflight.py checks that the version agrees across the pins, the lockfile, CITATION.cff and the changelog on every pull request, and tag-verify.yml runs it in tag mode after the signature (tag name, commit on main, tag date), so a mismatched tag stops before any build. 2026-10-03 (release automation, wheels and PyPI): the wheels build inside the release run (build-wheels.yml, a dist local-artifacts job) so the host and every publish job wait for them, and the release carries them with a .sha256 and an attestation each; PyPI moved from its own tag-triggered run to the publish-pypi job, which dispatches the top-level pypi.yml on the tag (trusted publishing does not take a reusable workflow) and waits for it; the upload is idempotent per sha256. The tag check moved from dist plan-jobs into build-wheels.yml: a failed plan job only skips the builds, and dist's host runs on skipped builds. No format or runtime change. 2026-10-04 (release automation, rehearsal): release-rehearsal.yml, generated from release.yml by scripts/release_rehearsal.py, runs the release's own build jobs on pull requests and pushes to main without publishing (read-only, no secrets, no attestations), checks the artifacts, the payload VERSION and the Linux binary, and gives the required rehearsal check; build-wheels.yml takes its caller's permissions so the read-only rehearsal can call it. CI stages the payload under Python 3.10. No format or runtime change. 2026-10-04 (release automation, channels): install-test's registry legs wait for the exact version (scripts/release_channels.py), and release-report.yml summarizes every completed release run, failed or cancelled included, by the triggering run's id and commit. No format or runtime change. 2026-10-04 (release automation, preparation): scripts/release_prepare.sh opens the release pull request with a pinned cargo-release; release dates and the tag check are UTC days. 2026-10-04 (afterwork): .contracts/.ai/.agents/ holds the shared Portuguese instructions and the final review procedure with its conditional specs.yaml catalog; AGENTS.md and CLAUDE.md at the root link to the same source. 2026-10-04 (later): ARC.toml moved from docs/arc/ to docs/ beside the other docs; doc-location change only. 2026-10-04 (later): docs/ADR/ holds the architecture decision records and reference lessons, one folder per category, each record from docs/ADR/TEMPLATE.md with a searchable YAML header. 2026-10-04 (later): AFTERWORK rewritten as nine steps matching nine epics; the agent builds its task list in its task tool before starting, so the tech lead can audit each item against the PR, and closing criteria state what must hold at the end. 2026-10-04 (later): the root llms.txt is gone; it is a site convention no tool reads from a repository, and docs.urna.dev/llms.txt is the one index. 2026-10-04 (later): LICENSE moved from docs/ to the root, where GitHub detects it, and the Dockerfile from docker/ to the root, so `docker build .` needs no -f; paths only. 2026-10-04 (later): the root AGENTS.md and CLAUDE.md links are gone; .contracts/.ai/.agents/AGENTS.md is the one instruction source, and each contributor points their own agent tooling at it. 2026-10-04 (later, #296): names line up by length (ADR-0001): every crate is urna- plus six letters and its directory carries the package name (forge-core is crates/urna-ingest, outside the root workspace through exclude; urna-runtime is urna-engine, urna-python urna-bridge, the CLI crate urna is urna-clitui, binary still urna, archives urna-clitui-<target>); scripts/ is script/, examples/ demos/, packaging/ packs/, assets/images/ assets/image/; workflows, scripts and tests take nine-letter names (gatecheck.yml, preflight.py, installer.sh, test_hashguard.py); release.yml keeps the name cargo-dist writes. No format, runtime or API change. 2026-10-04 (later, #391 to #395): ADR-0002 supersedes ADR-0001 for the crates: folders are crates/format, crates/engine, crates/clitui, crates/bridge, crates/ingest with no prefix, while the published packages keep their crates.io names (urna-format, urna-engine, and urna for the CLI, so cargo install urna and the urna-<target> archives stay as in 0.5.3)."
 
 system_view = [
     "urna-format is the frozen v1 container contract. It owns layout, manifest, reader, writer, canonical sections, hashes, and wire encodings. Embeddings stay raw float32, float16, int8, or int4 (fixed-stride quant only); zstd is reserved for non-embedding sections.",
     "urna-engine opens .urna files through mmap, validates queries, dispatches SIMD, and executes exact, ANN, graph, and hybrid search while reranking candidates with real cosine. That hot path is why embeddings are never zstd-compressed.",
-    "urna-clitui is a thin clap surface over the runtime and format crates. It carries the twelve engine subcommands (inspect, validate, stats, media, search, search-text, search-ann, search-graph, search-space, benchmark, cite, doctor: file + vector in; only search-text and doctor spawn Python) and the three agent verbs (ask, retrieve, build: text or spec in, shell out to the offline Python embedder / forge), tagged [engine] / [agent] in --help. ask and retrieve are the agent-native flagship verbs layered over the engine (text query in, cited answer out; both embed the query offline with the default potion static table, validate the embedder's model_hash against the manifest exactly like search-text, and route by what the file carries through MmapUrnaFile::search_routed: hybrid when a BM25 section is present, hnsw when an HNSW section is present, exact otherwise; ask prints one cited answer (--disclose answer) or adds the rerank-source honesty line + route + candidate counts (--disclose explain); retrieve emits the agent-shaped JSON/JSONL answer-pack where each hit's score IS the exact-cosine rerank value). doctor is the post-install health check with typed exit codes (0 ok, 2 Python missing, 3 deps missing, 4 embedder missing, 5 potion table missing, 6 embedder run failed). Behind the default-on `tui` feature the CLI also carries the terminal UI in src/tui: `setup` (the interactive installer, exit codes 10 download, 11 checksum, 12 unpack, 13 Python env, 14 blocked, 15 a model install; --model installs catalog models) and `tui` (the corpus explorer; a bare `urna` on a terminal opens it, in a pipe it prints the help and exits 2). Verb-collapse, the urna dev namespace, and the urna-profile crate are deferred.",
-    "The distribution layer (issue #75) turns tags on main into installs: cargo-dist builds the CLI for five targets with SHA256 checksums, Sigstore keyless attestations on the five archives, one CycloneDX SBOM for the CLI package, a Homebrew tap formula (`urna`) and an npm package (`@urna/cli`), and publishes urna-format / urna-engine / urna-clitui (the CLI crate, binary `urna`) to crates.io; maturin builds the `urna` abi3 wheel with the potion table bundled (offline embedding after pip install); script/installer.sh / installer.ps1 are the one-liner installers (verify-before-write, --version, --uninstall); urna doctor validates the install offline and `urna setup` completes the channels that ship the bare binary (Homebrew, npm, crates.io); .github/workflows/setuptest.yml tests the INSTALLED product per platform after each release, including a job per package channel that waits for the exact version on its registry and ends in `urna setup --yes` + `urna doctor`; .github/workflows/runreport.yml summarizes every completed release run, failed or cancelled included. Three levels of evidence, not interchangeable: script/fullcheck.sh is the full local gate (no release build), rehearsal.yml builds the release on pull requests and publishes nothing, and only a tag exercises publishing, setuptest and the report.",
+    "urna is a thin clap surface over the runtime and format crates. It carries the twelve engine subcommands (inspect, validate, stats, media, search, search-text, search-ann, search-graph, search-space, benchmark, cite, doctor: file + vector in; only search-text and doctor spawn Python) and the three agent verbs (ask, retrieve, build: text or spec in, shell out to the offline Python embedder / forge), tagged [engine] / [agent] in --help. ask and retrieve are the agent-native flagship verbs layered over the engine (text query in, cited answer out; both embed the query offline with the default potion static table, validate the embedder's model_hash against the manifest exactly like search-text, and route by what the file carries through MmapUrnaFile::search_routed: hybrid when a BM25 section is present, hnsw when an HNSW section is present, exact otherwise; ask prints one cited answer (--disclose answer) or adds the rerank-source honesty line + route + candidate counts (--disclose explain); retrieve emits the agent-shaped JSON/JSONL answer-pack where each hit's score IS the exact-cosine rerank value). doctor is the post-install health check with typed exit codes (0 ok, 2 Python missing, 3 deps missing, 4 embedder missing, 5 potion table missing, 6 embedder run failed). Behind the default-on `tui` feature the CLI also carries the terminal UI in src/tui: `setup` (the interactive installer, exit codes 10 download, 11 checksum, 12 unpack, 13 Python env, 14 blocked, 15 a model install; --model installs catalog models) and `tui` (the corpus explorer; a bare `urna` on a terminal opens it, in a pipe it prints the help and exits 2). Verb-collapse, the urna dev namespace, and the urna-profile crate are deferred.",
+    "The distribution layer (issue #75) turns tags on main into installs: cargo-dist builds the CLI for five targets with SHA256 checksums, Sigstore keyless attestations on the five archives, one CycloneDX SBOM for the CLI package, a Homebrew tap formula (`urna`) and an npm package (`@urna/cli`), and publishes urna-format / urna-engine / urna (the CLI crate, binary `urna`) to crates.io; maturin builds the `urna` abi3 wheel with the potion table bundled (offline embedding after pip install); script/installer.sh / installer.ps1 are the one-liner installers (verify-before-write, --version, --uninstall); urna doctor validates the install offline and `urna setup` completes the channels that ship the bare binary (Homebrew, npm, crates.io); .github/workflows/setuptest.yml tests the INSTALLED product per platform after each release, including a job per package channel that waits for the exact version on its registry and ends in `urna setup --yes` + `urna doctor`; .github/workflows/runreport.yml summarizes every completed release run, failed or cancelled included. Three levels of evidence, not interchangeable: script/fullcheck.sh is the full local gate (no release build), rehearsal.yml builds the release on pull requests and publishes nothing, and only a tag exercises publishing, setuptest and the report.",
     "urna-bridge is the PyO3 bridge. python/urna.py loads the compiled extension, python/builder.py orchestrates chunking and caching, and python/embed_query.py preserves model parity for search-text. The agent-native flagship is UrnaFile.retrieve(query, k, ...): a pre-embedded query in, cited spans out, whose score IS the exact rerank value, with tier-1 stored canonical text + hashes + citation_id + rerank-source marker.",
     "script/fullcheck.sh is the release gate: rebuilds the extension, runs Rust and Python suites, checks lint and format, measures presets, and compares against the committed baseline.",
     "crates/ingest is the ingestion layer, a SEPARATE cargo workspace under crates/ that the root Cargo.toml excludes, so its (eventually heavy, possibly non-deterministic) deps never enter urna-format or urna-engine. This phase ships FORGE-0a: the frozen .fci canonical-intermediate schema only. It is not built by the sovereign release gate; it has its own cargo workspace.",
@@ -83,29 +83,29 @@ links = [
 ]
 
 [[layers]]
-name = "urna-clitui"
+name = "urna"
 role = "Thin clap front-end over format and runtime APIs, two verb groups in one binary: the ENGINE verbs in cmd/*.rs (inspect, validate, stats, media, search, search-ann, search-graph, search-space over named bands, search-text, benchmark, cite, doctor: file + vector in; only search-text and doctor spawn Python) and the AGENT verbs in cmd/agent/*.rs (ask, retrieve, build: text or spec in, offline embed routed by manifest model through the ONE three-layer model gate in cmd/embed_gate.rs, capability route, tier-1 cited spans, --disclose answer|explain honesty, the declarative build launcher); --help orders and tags the groups"
-entrypoints = ["crates/urna-clitui/src/main.rs"]
+entrypoints = ["crates/clitui/src/main.rs"]
 links = [
-    "crates/urna-clitui/src/cli.rs",
-    "crates/urna-clitui/src/cmd/mod.rs",
-    "crates/urna-clitui/src/cmd/agent/mod.rs",
-    "crates/urna-clitui/src/cmd/agent/ask.rs",
-    "crates/urna-clitui/src/cmd/agent/retrieve.rs",
-    "crates/urna-clitui/src/cmd/doctor.rs",
+    "crates/clitui/src/cli.rs",
+    "crates/clitui/src/cmd/mod.rs",
+    "crates/clitui/src/cmd/agent/mod.rs",
+    "crates/clitui/src/cmd/agent/ask.rs",
+    "crates/clitui/src/cmd/agent/retrieve.rs",
+    "crates/clitui/src/cmd/doctor.rs",
     "crates/engine/src/mmap_file.rs",
 ]
 
 [[layers]]
-name = "urna-clitui terminal ui"
-role = "The default-on `tui` feature of urna-clitui: `urna setup` (inline installer: scan the machine, plan with checkboxes, install the payload via a curl child + SHA256 + staged unpack and the managed Python env, verify with the doctor checks; plain printer for --yes / no terminal, both reading one worker) and `urna tui` (full-screen explorer: home with the hash rain, corpus, ask, health, a file picker, toasts). The urna.dev palette folded to the terminal's color depth, tachyonfx on every screen change. No network stack is linked; no format or runtime API is touched"
-entrypoints = ["crates/urna-clitui/src/tui/mod.rs"]
+name = "urna terminal ui"
+role = "The default-on `tui` feature of urna: `urna setup` (inline installer: scan the machine, plan with checkboxes, install the payload via a curl child + SHA256 + staged unpack and the managed Python env, verify with the doctor checks; plain printer for --yes / no terminal, both reading one worker) and `urna tui` (full-screen explorer: home with the hash rain, corpus, ask, health, a file picker, toasts). The urna.dev palette folded to the terminal's color depth, tachyonfx on every screen change. No network stack is linked; no format or runtime API is touched"
+entrypoints = ["crates/clitui/src/tui/mod.rs"]
 links = [
-    "crates/urna-clitui/src/tui/setup/mod.rs",
-    "crates/urna-clitui/src/tui/app/mod.rs",
-    "crates/urna-clitui/src/cmd/health.rs",
-    "crates/urna-clitui/src/cmd/paths.rs",
-    "crates/urna-clitui/src/cmd/embed_gate.rs",
+    "crates/clitui/src/tui/setup/mod.rs",
+    "crates/clitui/src/tui/app/mod.rs",
+    "crates/clitui/src/cmd/health.rs",
+    "crates/clitui/src/cmd/paths.rs",
+    "crates/clitui/src/cmd/embed_gate.rs",
 ]
 
 [[layers]]
@@ -180,8 +180,8 @@ links = [
     "python/forge/forge_media_stage.py",
     "python/forge/forge_manifest.py",
     "python/forge/embed_query_model.py",
-    "crates/urna-clitui/src/cmd/agent/build.rs",
-    "crates/urna-clitui/src/cmd/embed_gate.rs",
+    "crates/clitui/src/cmd/agent/build.rs",
+    "crates/clitui/src/cmd/embed_gate.rs",
     "python/tools/urna_model_bench.py",
     "python/tools/urna_ui_bridge.py",
 ]
@@ -213,27 +213,27 @@ links = [
 
 [[flows]]
 name = "cli-setup"
-entry = "crates/urna-clitui/src/tui/setup/mod.rs"
+entry = "crates/clitui/src/tui/setup/mod.rs"
 path = [
-    "crates/urna-clitui/src/tui/setup/scan.rs",
-    "crates/urna-clitui/src/tui/setup/plan.rs",
-    "crates/urna-clitui/src/tui/setup/job.rs",
-    "crates/urna-clitui/src/tui/setup/net.rs",
-    "crates/urna-clitui/src/tui/setup/unpack.rs",
-    "crates/urna-clitui/src/tui/setup/venv.rs",
-    "crates/urna-clitui/src/tui/setup/models.rs",
+    "crates/clitui/src/tui/setup/scan.rs",
+    "crates/clitui/src/tui/setup/plan.rs",
+    "crates/clitui/src/tui/setup/job.rs",
+    "crates/clitui/src/tui/setup/net.rs",
+    "crates/clitui/src/tui/setup/unpack.rs",
+    "crates/clitui/src/tui/setup/venv.rs",
+    "crates/clitui/src/tui/setup/models.rs",
     "python/forge/install_model.py",
-    "crates/urna-clitui/src/cmd/health.rs",
+    "crates/clitui/src/cmd/health.rs",
 ]
 summary = "Probe the machine (channel from the exe path, data root, payload, interpreter + deps, curl/uv/python3), derive the plan (satisfied steps unticked, impossible ones blocked with the reason), then on a worker: fetch the release .sha256, stream the payload through a curl child hashing as it arrives, unpack into a staging dir (entries escaping it abort) and swap it in for <root>/urna/forge, build <root>/urna/venv with uv or venv+pip (also when chosen models need it and another Python has the base deps), install the chosen catalog models (--model, or the picker; packages only into that venv, then install_model.py fetches the pinned revision's exact files into the shared HF cache and refuses any model_hash but the catalog's; repo code needs --allow-remote-code), and run the doctor checks; the inline screen and the --yes printer render the same event stream"
 
 [[flows]]
 name = "tui-model-install"
-entry = "crates/urna-clitui/src/tui/app/offer.rs"
+entry = "crates/clitui/src/tui/app/offer.rs"
 path = [
-    "crates/urna-clitui/src/tui/app/ask.rs",
-    "crates/urna-clitui/src/cmd/embed_failure.rs",
-    "crates/urna-clitui/src/tui/setup/models.rs",
+    "crates/clitui/src/tui/app/ask.rs",
+    "crates/clitui/src/cmd/embed_failure.rs",
+    "crates/clitui/src/tui/setup/models.rs",
     "python/forge/catalog.json",
     "python/forge/install_model.py",
     "python/model_fingerprint.py",
@@ -242,10 +242,10 @@ summary = "A query that fails with packages or weights missing, on a model the p
 
 [[flows]]
 name = "cli-search-text"
-entry = "crates/urna-clitui/src/cmd/search_text.rs"
+entry = "crates/clitui/src/cmd/search_text.rs"
 path = [
-    "crates/urna-clitui/src/cmd/embed_gate.rs",
-    "crates/urna-clitui/src/cmd/embed_failure.rs",
+    "crates/clitui/src/cmd/embed_gate.rs",
+    "crates/clitui/src/cmd/embed_failure.rs",
     "python/embed_query.py",
     "python/model_fingerprint.py",
     "crates/engine/src/search.rs",
@@ -254,15 +254,15 @@ summary = "Embed a query in Python (embed_query.py resolved from a checkout or t
 
 [[flows]]
 name = "cli-ask-retrieve"
-entry = "crates/urna-clitui/src/cmd/agent/ask.rs"
+entry = "crates/clitui/src/cmd/agent/ask.rs"
 path = [
-    "crates/urna-clitui/src/cmd/embed_gate.rs",
-    "crates/urna-clitui/src/cmd/embed_failure.rs",
+    "crates/clitui/src/cmd/embed_gate.rs",
+    "crates/clitui/src/cmd/embed_failure.rs",
     "python/forge/embed_query_potion.py",
     "python/forge/embed_query_model.py",
     "python/embed_query.py",
     "crates/engine/src/search.rs",
-    "crates/urna-clitui/src/cmd/agent/retrieve.rs",
+    "crates/clitui/src/cmd/agent/retrieve.rs",
 ]
 summary = "The agent-native flagship: embed_gate::embed_and_search embeds the query OFFLINE routing by the manifest model (potion corpora keep the potion table byte-for-byte; any registry model goes through embed_query_model.py with the query-role encode and --mrl-dim for truncated default spaces; st_text presets such as minilm-multilingual, and ST models no preset names, continue into embed_query.py), runs the ONE name/dim/model_hash gate shared with search-text, routes by manifest capability, then ask renders the cited canonical text (--disclose answer) or adds the rerank-source honesty line (--disclose explain) and retrieve emits the JSON/JSONL answer-pack where every hit score IS the exact rerank value with tier-1 text + hashes + citation_id"
 
@@ -426,11 +426,11 @@ links = ["Cargo.toml"]
 [[inventory.root]]
 path = "Cargo.toml"
 kind = "workspace-manifest"
-purpose = "Workspace members, edition, resolver, rust-version 1.85 (the MSRV of urna-format, urna-engine and urna-bridge; crates/urna-clitui pins its own 1.88), and shared dependencies"
+purpose = "Workspace members, edition, resolver, rust-version 1.85 (the MSRV of urna-format, urna-engine and urna-bridge; crates/clitui pins its own 1.88), and shared dependencies"
 links = [
     "crates/format/Cargo.toml",
     "crates/engine/Cargo.toml",
-    "crates/urna-clitui/Cargo.toml",
+    "crates/clitui/Cargo.toml",
     "crates/bridge/Cargo.toml",
 ]
 
@@ -650,64 +650,64 @@ purpose = "Workspace crate root"
 links = [
     "crates/format",
     "crates/engine",
-    "crates/urna-clitui",
+    "crates/clitui",
     "crates/bridge",
 ]
 
 [[inventory.workspace]]
-path = "crates/urna-clitui"
+path = "crates/clitui"
 kind = "crate-dir"
 purpose = "CLI crate"
-links = ["crates/urna-clitui/src/main.rs"]
+links = ["crates/clitui/src/main.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-clitui/src"
+path = "crates/clitui/src"
 kind = "directory"
 purpose = "CLI source root"
 links = [
-    "crates/urna-clitui/src/main.rs",
-    "crates/urna-clitui/src/cmd",
+    "crates/clitui/src/main.rs",
+    "crates/clitui/src/cmd",
 ]
 
 [[inventory.workspace]]
-path = "crates/urna-clitui/src/cmd"
+path = "crates/clitui/src/cmd"
 kind = "directory"
 purpose = "CLI subcommands and helpers"
 links = [
-    "crates/urna-clitui/src/cmd/search_text.rs",
-    "crates/urna-clitui/src/cmd/util.rs",
+    "crates/clitui/src/cmd/search_text.rs",
+    "crates/clitui/src/cmd/util.rs",
 ]
 
 [[inventory.workspace]]
-path = "crates/urna-clitui/src/tui"
+path = "crates/clitui/src/tui"
 kind = "directory"
 purpose = "The terminal UI (feature `tui`): pal (urna.dev palette + depth fold), art (the symbol and wordmark as braille), fx (the tachyonfx presets), rain (hash rain, adapted from tui-rain), hud + row + txt (panel, gauge, leader, checkbox, badges, text fitting; adapted from noble and tui-checkbox), toast (adapted from ratatui-toaster), term (terminal lifecycle), setup/ (the installer), app/ (the explorer)"
 links = [
-    "crates/urna-clitui/src/tui/setup",
-    "crates/urna-clitui/src/tui/app",
+    "crates/clitui/src/tui/setup",
+    "crates/clitui/src/tui/app",
 ]
 
 [[inventory.workspace]]
-path = "crates/urna-clitui/src/tui/setup"
+path = "crates/clitui/src/tui/setup"
 kind = "directory"
 purpose = "urna setup: scan, plan, job (the worker and its event stream), net (curl downloads + streaming SHA256), unpack (staged, traversal-safe), venv (uv or venv+pip, streamed with exit status), models (the payload's model catalog and the one model install setup and the explorer share: packages into the managed venv, then forge/install_model.py's verified fetch), text (the --yes printer), ui (state + keys, the model picker), screen/ (the frame and one file per step, models.rs the picker)"
-links = ["crates/urna-clitui/src/tui/setup/mod.rs"]
+links = ["crates/clitui/src/tui/setup/mod.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-clitui/src/tui/app"
+path = "crates/clitui/src/tui/app"
 kind = "directory"
 purpose = "urna tui: the explorer state and loop (mod), draw, keys (keyboard + mouse routing), chrome (header tabs + footer help), home, corpus (inspect + validate model and view), ask (query worker + error wording, the failure's model when an install can fix it) and hits (its view), offer (the install panel over the ask tab: plan, y/r/n consents, progress, retry), health, pick (the ratatui-explorer overlay)"
-links = ["crates/urna-clitui/src/tui/app/mod.rs"]
+links = ["crates/clitui/src/tui/app/mod.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-clitui/tests"
+path = "crates/clitui/tests"
 kind = "directory"
 purpose = "CLI integration tests"
 links = [
-    "crates/urna-clitui/tests/cli_e2e.rs",
-    "crates/urna-clitui/tests/media_cite_validate.rs",
-    "crates/urna-clitui/tests/embedder_resolution.rs",
-    "crates/urna-clitui/tests/setup_e2e.rs",
+    "crates/clitui/tests/cli_e2e.rs",
+    "crates/clitui/tests/media_cite_validate.rs",
+    "crates/clitui/tests/embedder_resolution.rs",
+    "crates/clitui/tests/setup_e2e.rs",
 ]
 
 [[inventory.workspace]]
@@ -908,106 +908,106 @@ links = [
 ]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/Cargo.toml"
+path = "crates/clitui/Cargo.toml"
 kind = "rust-manifest"
 purpose = "CLI crate manifest"
 links = ["Cargo.toml"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/LICENSE"
+path = "crates/clitui/LICENSE"
 kind = "symlink"
 purpose = "Link to the root LICENSE; cargo package copies its content, so the published crate carries the MIT text"
 links = ["LICENSE"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/main.rs"
+path = "crates/clitui/src/main.rs"
 kind = "rust-source"
 purpose = "Dispatch only: matches cli::Commands to cmd::* (engine) and cmd::agent::* (agent) implementations"
 links = [
-    "crates/urna-clitui/src/cli.rs",
-    "crates/urna-clitui/src/cmd/mod.rs",
+    "crates/clitui/src/cli.rs",
+    "crates/clitui/src/cmd/mod.rs",
 ]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cli.rs"
+path = "crates/clitui/src/cli.rs"
 kind = "rust-source"
 purpose = "The clap surface: Cli + Commands, every verb tagged [engine] or [agent] in its summary, display_order groups them, after_help carries the two-group legend"
-links = ["crates/urna-clitui/src/main.rs"]
+links = ["crates/clitui/src/main.rs"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/agent"
+path = "crates/clitui/src/cmd/agent"
 kind = "directory"
 purpose = "The agent verbs (ask, retrieve, build): text or spec in, cited answers out, shell out to the offline Python embedder / forge; a product layered over the engine verbs in the parent module"
 links = [
-    "crates/urna-clitui/src/cmd/agent/mod.rs",
-    "crates/urna-clitui/src/cmd/agent/ask.rs",
-    "crates/urna-clitui/src/cmd/agent/retrieve.rs",
-    "crates/urna-clitui/src/cmd/agent/build.rs",
+    "crates/clitui/src/cmd/agent/mod.rs",
+    "crates/clitui/src/cmd/agent/ask.rs",
+    "crates/clitui/src/cmd/agent/retrieve.rs",
+    "crates/clitui/src/cmd/agent/build.rs",
 ]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cli.rs"
+path = "crates/clitui/src/cli.rs"
 kind = "rust-source"
 purpose = "The clap surface (Cli + Commands), split from main.rs, which keeps the dispatch"
-links = ["crates/urna-clitui/src/main.rs"]
+links = ["crates/clitui/src/main.rs"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/payload.rs"
+path = "crates/clitui/src/cmd/payload.rs"
 kind = "rust-source"
 purpose = "The embedder payload's contract, outside the tui feature: REQUIRED (every file the stage script ships; tests/test_embedpack.py pins the two to the same set), missing(home), home_of(script) (an installed <root>/urna, never a checkout) and MODULES (the Python modules the payload provides); setup installs and repairs by it, the gate names a broken payload by it"
-links = ["crates/urna-clitui/src/tui/setup/unpack.rs", "crates/urna-clitui/src/cmd/embed_gate.rs", "script/embedpack.py"]
+links = ["crates/clitui/src/tui/setup/unpack.rs", "crates/clitui/src/cmd/embed_gate.rs", "script/embedpack.py"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/embed_failure.rs"
+path = "crates/clitui/src/cmd/embed_failure.rs"
 kind = "rust-source"
 purpose = "Why a query could not be embedded or gated, typed: script missing, payload incomplete (named by path and missing files, fixed by urna setup, never a pip hint), packages missing (the embedder's urna-needs line, or a Python import error), weights missing (urna-fetch), model incompatible (no backend, a refused preset, a name or dim mismatch), model_hash mismatch; the long Display form with the fix for the CLI, short() for the explorer's ask tab"
-links = ["crates/urna-clitui/src/cmd/embed_gate.rs", "crates/urna-clitui/src/tui/app/ask.rs"]
+links = ["crates/clitui/src/cmd/embed_gate.rs", "crates/clitui/src/tui/app/ask.rs"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/embed_gate.rs"
+path = "crates/clitui/src/cmd/embed_gate.rs"
 kind = "rust-source"
 purpose = "The ONE copy of the query-embedder spawn protocol and the three-layer model gate (name/dim/model_hash); routes ask/retrieve by manifest model (potion script for potion corpora, embed_query_model.py for registry models, --mrl-dim for truncated default spaces) and by capability through MmapUrnaFile::search_routed; installed_script_in is the script ladder every Python child shares (repo layout, then each data root); spawn and gate failures are typed cmd/embed_failure.rs values; every embedder script (search-text's embed_query.py included) resolves through installed_script_in, a path under python/ in a checkout or under <data root>/urna/"
 links = [
-    "crates/urna-clitui/src/cmd/search_text.rs",
+    "crates/clitui/src/cmd/search_text.rs",
     "python/forge/embed_query_model.py",
     "python/forge/embed_query_potion.py",
 ]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/search_space.rs"
+path = "crates/clitui/src/cmd/search_space.rs"
 kind = "rust-source"
 purpose = "`search-space` verb: exact search over one named multimodal band with the runtime's typed errors, never a silent text-path fallback"
 links = ["crates/engine/src/space_search.rs"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/agent/build.rs"
+path = "crates/clitui/src/cmd/agent/build.rs"
 kind = "rust-source"
 purpose = "`build --spec` launcher over python/tools/urna_forge.py (the build is officially a Python frontend, RFC-0 N13): resolve interpreter + tool, forward --out-dir/--cache-dir and the flags, stream output, propagate exit code"
 links = [
     "python/tools/urna_forge.py",
-    "crates/urna-clitui/src/cmd/pyenv.rs",
+    "crates/clitui/src/cmd/pyenv.rs",
 ]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/agent/ask.rs"
+path = "crates/clitui/src/cmd/agent/ask.rs"
 kind = "rust-source"
 purpose = "The flagship `ask` verb: offline embed via embed_gate (routed by manifest model) + model_hash gate + capability route, then the --disclose answer|explain renderer with the rerank-source honesty line; tier-1 cited text only"
 links = [
-    "crates/urna-clitui/src/cmd/embed_gate.rs",
-    "crates/urna-clitui/src/cmd/agent/retrieve.rs",
+    "crates/clitui/src/cmd/embed_gate.rs",
+    "crates/clitui/src/cmd/agent/retrieve.rs",
 ]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/agent/retrieve.rs"
+path = "crates/clitui/src/cmd/agent/retrieve.rs"
 kind = "rust-source"
 purpose = "The agent-shaped `retrieve` verb: JSON/JSONL answer-pack of cited spans where score IS the exact rerank value + tier-1 stored canonical text + verifying hashes + citation_id + rerank_source; owns canonical_texts() shared with ask"
 links = [
-    "crates/urna-clitui/src/cmd/util.rs",
+    "crates/clitui/src/cmd/util.rs",
     "crates/format/src/sections/canonical.rs",
 ]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/benchmark.rs"
+path = "crates/clitui/src/cmd/benchmark.rs"
 kind = "rust-source"
 purpose = "Bench exact and ANN latency plus cold-cache hint mode"
 links = [
@@ -1016,7 +1016,7 @@ links = [
 ]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/cite.rs"
+path = "crates/clitui/src/cmd/cite.rs"
 kind = "rust-source"
 purpose = "Resolve citation ids into text and spans"
 links = [
@@ -1025,37 +1025,37 @@ links = [
 ]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/inspect.rs"
+path = "crates/clitui/src/cmd/inspect.rs"
 kind = "rust-source"
 purpose = "Print header, sections, manifest, and hashes (the CLI inspect surface; the runtime inspect_json + canonical_texts live in crates/engine/src/inspect.rs)"
 links = ["crates/engine/src/mmap_file.rs"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/mod.rs"
+path = "crates/clitui/src/cmd/mod.rs"
 kind = "rust-source"
 purpose = "Module export list for subcommands"
 links = []
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/search.rs"
+path = "crates/clitui/src/cmd/search.rs"
 kind = "rust-source"
 purpose = "Exact vector search command"
 links = ["crates/engine/src/search.rs"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/search_ann.rs"
+path = "crates/clitui/src/cmd/search_ann.rs"
 kind = "rust-source"
 purpose = "Forced ANN search command"
 links = ["crates/engine/src/search.rs"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/search_graph.rs"
+path = "crates/clitui/src/cmd/search_graph.rs"
 kind = "rust-source"
 purpose = "9th subcommand: graph search (exact top-ef seed -> bounded bfs over the chunk graph -> exact rerank; falls back to exact if no 0x0C section)"
 links = ["crates/engine/src/search.rs"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/search_text.rs"
+path = "crates/clitui/src/cmd/search_text.rs"
 kind = "rust-source"
 purpose = "Python embedder orchestration (interpreter via pyenv::resolve_interpreter: URNA_PYTHON, else the repo .venv, else python3) plus strict model_hash gate"
 links = [
@@ -1065,7 +1065,7 @@ links = [
 ]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/stats.rs"
+path = "crates/clitui/src/cmd/stats.rs"
 kind = "rust-source"
 purpose = "stats command for size, dim (plus mrl_dim/full_dim when matryoshka-truncated), dtype, sections, hashes, and SIMD backend"
 links = [
@@ -1074,76 +1074,76 @@ links = [
 ]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/pyenv.rs"
+path = "crates/clitui/src/cmd/pyenv.rs"
 kind = "rust-source"
 purpose = "resolve_interpreter: the Python interpreter the offline embedder runs under (URNA_PYTHON, else the venv `urna setup` built, else the nearest .venv walking up, else python3; set_quiet keeps the choice off stderr under the terminal UI), with a unit-tested resolve_interpreter_from core; shared by search-text and the flagship verbs, and the embedder opens no socket regardless of interpreter"
 links = [
-    "crates/urna-clitui/src/cmd/util.rs",
-    "crates/urna-clitui/src/cmd/search_text.rs",
+    "crates/clitui/src/cmd/util.rs",
+    "crates/clitui/src/cmd/search_text.rs",
 ]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/util.rs"
+path = "crates/clitui/src/cmd/util.rs"
 kind = "rust-source"
 purpose = "Shared output + embedder path helpers (incl default_potion_embedder_path) and embed_and_search: the shared offline-potion-embed + model_hash gate + capability route used by ask and retrieve (interpreter via cmd::pyenv::resolve_interpreter)"
 links = ["crates/engine/src/lib.rs"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/validate.rs"
+path = "crates/clitui/src/cmd/validate.rs"
 kind = "rust-source"
 purpose = "Full integrity validation command"
 links = ["crates/format/src/reader/mod.rs"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/doctor.rs"
+path = "crates/clitui/src/cmd/doctor.rs"
 kind = "rust-source"
 purpose = "urna doctor: prints the health rows (colored on a terminal, plain when piped), points at `urna setup` on install failures, exits with the first failing typed code"
-links = ["crates/urna-clitui/src/cmd/health.rs"]
+links = ["crates/clitui/src/cmd/health.rs"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/health.rs"
+path = "crates/clitui/src/cmd/health.rs"
 kind = "rust-source"
 purpose = "The doctor checks as data (version, SIMD, interpreter, deps, embedder, potion table, one offline embed) with doctor's stop points and typed codes; shared by doctor, setup's verify step and the explorer's health tab"
 links = [
-    "crates/urna-clitui/src/cmd/pyenv.rs",
-    "crates/urna-clitui/src/cmd/embed_gate.rs",
+    "crates/clitui/src/cmd/pyenv.rs",
+    "crates/clitui/src/cmd/embed_gate.rs",
 ]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/paths.rs"
+path = "crates/clitui/src/cmd/paths.rs"
 kind = "rust-source"
 purpose = "The one data-root ladder (URNA_DATA_DIR, XDG_DATA_HOME, ~/.local/share, %LOCALAPPDATA%, <exe>/../share) every reader searches and `urna setup` writes into, plus the managed venv interpreter path"
-links = ["crates/urna-clitui/src/cmd/embed_gate.rs"]
+links = ["crates/clitui/src/cmd/embed_gate.rs"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/src/cmd/tone.rs"
+path = "crates/clitui/src/cmd/tone.rs"
 kind = "rust-source"
 purpose = "Color depth probe (NO_COLOR, URNA_COLOR, COLORTERM and known terminals) and the RGB -> xterm-256 fold (coolor's perceptual search, memoized) shared by the plain output and the terminal UI"
-links = ["crates/urna-clitui/src/tui/pal.rs"]
+links = ["crates/clitui/src/tui/pal.rs"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/tests/setup_e2e.rs"
+path = "crates/clitui/tests/setup_e2e.rs"
 kind = "rust-test"
 purpose = "urna setup end to end against a file:// release built in the test: the payload installs, a tampered checksum exits 11 and installs nothing, a missing release exits 10, --uninstall keeps the binary; a bare urna in a pipe prints help and exits 2; doctor in a pipe prints no escapes and names setup"
-links = ["crates/urna-clitui/src/tui/setup/mod.rs"]
+links = ["crates/clitui/src/tui/setup/mod.rs"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/tests/embedder_resolution.rs"
+path = "crates/clitui/tests/embedder_resolution.rs"
 kind = "rust-test"
 purpose = "ask, retrieve and search-text resolve their Python embedders from the data roots with a binary copied out of the checkout and a cwd outside it: the data-root scripts are found, a missing payload names the missing script, a checkout in the cwd wins over the data root"
-links = ["crates/urna-clitui/src/cmd/embed_gate.rs"]
+links = ["crates/clitui/src/cmd/embed_gate.rs"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/tests/media_cite_validate.rs"
+path = "crates/clitui/tests/media_cite_validate.rs"
 kind = "rust-test"
 purpose = "cite and validate on a real media corpus (blob_refs + inlined blob_data + span overlay): cite prints the overlay span retrieve reports and keeps the stored span of a BLOB_REF_NONE chunk; validate reports the inlined blobs on a good file and prints no OK when a blob fails its content_hash"
-links = ["crates/urna-clitui/src/cmd/cite.rs", "crates/urna-clitui/src/cmd/validate.rs", "crates/engine/src/blobs.rs"]
+links = ["crates/clitui/src/cmd/cite.rs", "crates/clitui/src/cmd/validate.rs", "crates/engine/src/blobs.rs"]
 
 [[inventory.urna_clitui]]
-path = "crates/urna-clitui/tests/cli_e2e.rs"
+path = "crates/clitui/tests/cli_e2e.rs"
 kind = "rust-test"
 purpose = "Integration coverage for the compiled CLI, incl the flagship verbs (ask answer=cited-text-only + urna:// citation, ask explain adds the real-cosine honesty line; retrieve emits a valid JSON/JSONL answer-pack with score_type=cosine + well-formed citation_id that cite round-trips, mismatched cite still fails) - these two skip cleanly when no Python with the forge deps is present"
-links = ["crates/urna-clitui/src/main.rs"]
+links = ["crates/clitui/src/main.rs"]
 
 [[inventory.urna_format]]
 path = "crates/format/Cargo.toml"
@@ -2265,7 +2265,7 @@ path = "python/forge/embed_query_model.py"
 kind = "python-source"
 purpose = "Registry-backed query embedder for the CLI (same argv/stdout contract as embed_query_potion.py + --preset + --mrl-dim, query-role encoding for asymmetric models; exit codes 2/3/4); a manifest model no preset names goes to python/embed_query.py when sentence-transformers imports"
 links = [
-    "crates/urna-clitui/src/cmd/embed_gate.rs",
+    "crates/clitui/src/cmd/embed_gate.rs",
     "python/forge/model_registry.py",
 ]
 
@@ -2275,7 +2275,7 @@ kind = "python-tool"
 purpose = "The declarative build CLI (--spec/--sample/--models/--out-dir/--cache-dir/--resume/--rebuild-only/--strict-env/--dry-run/--allow-heavy); dry-run resolves the plan, dep status and the out + cache roots without loading a model; `urna build` launches it"
 links = [
     "python/forge/forge_pipeline.py",
-    "crates/urna-clitui/src/cmd/agent/build.rs",
+    "crates/clitui/src/cmd/agent/build.rs",
 ]
 
 [[inventory.data_docs_python_script_tests]]
@@ -2321,7 +2321,7 @@ links = ["python/forge/quality_gate.py"]
 path = "tests/test_clispaces.py"
 kind = "python-test"
 purpose = "Release-binary space surface: search-space happy + typed errors, stats spaces block, inspect --json spaces[], benchmark --space, no-spaces degradation"
-links = ["crates/urna-clitui/src/cmd/search_space.rs"]
+links = ["crates/clitui/src/cmd/search_space.rs"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "python/forge/model_catalog.py"
@@ -2333,13 +2333,13 @@ links = ["python/forge/model_registry.py", "python/forge/catalog.json", "script/
 path = "python/forge/catalog.json"
 kind = "generated"
 purpose = "The installable model catalog the payload ships (forge/catalog.json): what urna setup's picker and --model, and the explorer's install panel, offer; generated by model_catalog.py, checked in, refused by the stage script when stale"
-links = ["python/forge/model_catalog.py", "crates/urna-clitui/src/tui/setup/models.rs"]
+links = ["python/forge/model_catalog.py", "crates/clitui/src/tui/setup/models.rs"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "python/forge/install_model.py"
 kind = "python-source"
 purpose = "The fetch half of the model install: plan (missing packages, cached or not, bytes, no network) and fetch (exactly the catalog's files at the pinned revision into $HF_HOME/hub, progress lines per megabyte over HTTP and xet, refs/main pinned when absent and never moved, then the fingerprint must equal the catalog's model_hash and the corpus's); downloads only with URNA_ALLOW_DOWNLOAD=1, repo code only with --allow-remote-code and its reviewed hashes; typed exit codes 3 to 8"
-links = ["python/forge/catalog.json", "python/model_fingerprint.py", "crates/urna-clitui/src/tui/setup/models.rs"]
+links = ["python/forge/catalog.json", "python/model_fingerprint.py", "crates/clitui/src/tui/setup/models.rs"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "tests/test_catalogue.py"
@@ -2399,7 +2399,7 @@ links = ["script/chanprobe.py"]
 path = "tests/test_askrouter.py"
 kind = "python-test"
 purpose = "Routing by manifest model observable via the fake preset; --mrl-dim passed for truncated default spaces; slice_renorm equals the engine truncation"
-links = ["crates/urna-clitui/src/cmd/embed_gate.rs"]
+links = ["crates/clitui/src/cmd/embed_gate.rs"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "docs/ARC.toml"
@@ -2425,7 +2425,7 @@ kind = "usage-doc"
 purpose = "The operator guide: every verb with examples, presets and the recall ladder, model_hash and offline operation, benchmark, citations, release verification, urna doctor, the model registry, declarative builds, compression levers, media blobs, and the collapsed reference section: every install channel (one-liner, Windows, urna wheel, Homebrew tap, cargo binstall, Docker, dev build), verification (SHA256, Sigstore attestations, SBOM, setuptest), offline and air-gapped notes, and the maintainer one-time checklist"
 links = [
     "README.md",
-    "crates/urna-clitui/src/main.rs",
+    "crates/clitui/src/main.rs",
 ]
 
 [[inventory.data_docs_python_script_tests]]
@@ -2528,7 +2528,7 @@ kind = "python-source"
 purpose = "sentence-transformers query embedder: the default of CLI search-text, the path of st_text presets and of any ST model no preset names (through embed_query_model.py), and the load/encode/fingerprint functions the st_text adapter reuses; prints urna-needs (exit 4) and urna-fetch (exit 3) lines; ships in the payload at urna/embed_query.py"
 links = [
     "python/model_fingerprint.py",
-    "crates/urna-clitui/src/cmd/search_text.rs",
+    "crates/clitui/src/cmd/search_text.rs",
 ]
 
 [[inventory.data_docs_python_script_tests]]
@@ -2621,7 +2621,7 @@ kind = "python-source"
 purpose = "The OFFLINE query embedder the CLI ask/retrieve verbs shell out to: potion table (numpy + tokenizers, no torch, no socket), emits the SAME JSON contract as embed_query.py so the Rust model_hash gate is reused verbatim"
 links = [
     "python/forge/embed_potion.py",
-    "crates/urna-clitui/src/cmd/util.rs",
+    "crates/clitui/src/cmd/util.rs",
 ]
 
 [[inventory.data_docs_python_script_tests]]
@@ -2905,7 +2905,7 @@ path = "tests/test_hashguard.py"
 kind = "python-test"
 purpose = "model_hash gate coverage for search-text"
 links = [
-    "crates/urna-clitui/src/cmd/search_text.rs",
+    "crates/clitui/src/cmd/search_text.rs",
     "python/embed_query.py",
 ]
 
@@ -2932,7 +2932,7 @@ links = [
 path = "script/embedpack.py"
 kind = "python-source"
 purpose = "Stage + tar the offline embedder payload for release artifacts and installers: the potion route (embed_query_potion.py + the table) and the registry route (embed_query_model.py, model_registry, model_adapters, embed_st + worker, embed_image, and python/model_fingerprint.py at the tree root), and the sentence-transformers route (python/embed_query.py at the tree root); the registry's model deps are not bundled, embed_query_model.py names them"
-links = ["crates/urna-clitui/src/cmd/embed_gate.rs", "tests/test_embedpack.py"]
+links = ["crates/clitui/src/cmd/embed_gate.rs", "tests/test_embedpack.py"]
 
 [[inventory.distribution]]
 path = "script/getpotion.sh"
@@ -2977,7 +2977,7 @@ links = ["Cargo.toml", ".github/workflows/release.yml", "script/getpotion.sh"]
 [[inventory.distribution]]
 path = ".github/workflows/rustready.yml"
 kind = "ci-workflow"
-purpose = "Custom cargo-dist publish job: urna-format, urna-engine, urna-clitui to crates.io in dependency order after the GitHub release, skipping versions already published; needs the CARGO_REGISTRY_TOKEN repo secret"
+purpose = "Custom cargo-dist publish job: urna-format, urna-engine, urna to crates.io in dependency order after the GitHub release, skipping versions already published; needs the CARGO_REGISTRY_TOKEN repo secret"
 links = [
     ".github/workflows/release.yml",
     "Cargo.toml",
@@ -3014,7 +3014,7 @@ links = [".github/workflows/release.yml", ".github/workflows/wheelmake.yml", "sc
 path = "script/releasepr.sh"
 kind = "shell-script"
 purpose = "Opens the release pull request (usage step 8): in a new worktree of origin/main on release-X.Y.Z, cargo-release (version pinned here) runs `version` (workspace version, urna-format and urna-engine pins, lockfile) and `replace` (the dated changelog section, CITATION.cff's versioned fields); then the preflight, a refusal of any change outside those four files, a signed commit, an explicit push of that branch and gh pr create. Refuses a version not after the current one, an empty [Unreleased], another cargo-release; never tags or publishes"
-links = ["release.toml", "crates/urna-clitui/Cargo.toml", "script/preflight.py", "tests/test_releasepr.py"]
+links = ["release.toml", "crates/clitui/Cargo.toml", "script/preflight.py", "tests/test_releasepr.py"]
 
 [[inventory.distribution]]
 path = "release.toml"
@@ -3088,7 +3088,7 @@ links = [
 path = "Dockerfile"
 kind = "container-image"
 purpose = "Minimal static-musl image on scratch: the engine-only CLI (--no-default-features, no setup or tui) built --locked from a toolchain image pinned by tag and digest; corpus via mounted volume, air-gapped friendly"
-links = ["crates/urna-clitui"]
+links = ["crates/clitui"]
 
 [[inventory.distribution]]
 path = "demos"
