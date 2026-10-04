@@ -134,8 +134,8 @@ step "python tests/test_quality_gate.py"
 "$PY" tests/test_quality_gate.py
 ok "quality gate + jxl"
 
-step "python tests/test_cli_space.py"
-"$PY" tests/test_cli_space.py
+step "python tests/test_clispaces.py"
+"$PY" tests/test_clispaces.py
 ok "cli space verbs (8 cases)"
 
 step "python tests/test_query_embedder_routing.py"
