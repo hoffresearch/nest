@@ -1,18 +1,18 @@
-//! forge-core: the forge canonical intermediate (.fci) schema and the
+//! urna-ingest: the forge canonical intermediate (.fci) schema and the
 //! deterministic core of the forge ingestion layer.
 //!
 //! forge is the messy half of urna: it turns raw heterogeneous files
 //! (pdf, image, font, dataset, dump) into a deterministic canonical
 //! intermediate that the sovereign urna build path already eats. it lives
-//! in its OWN cargo workspace, OUTSIDE crates/, so its dependency tree
-//! never touches urna-format or urna-runtime and the byte-identical
-//! container guarantee stays untainted.
+//! in its OWN cargo workspace, excluded from the sovereign one in the root
+//! manifest, so its dependency tree never touches urna-format or
+//! urna-runtime and the byte-identical container guarantee stays untainted.
 //!
 //! this crate is FORGE-0a: the FROZEN .fci schema only. it owns the stable
 //! contract between forge (produces) and the python adapter (consumes).
 //! it deliberately does NOT:
 //!   - chunk text. there is ONE authoritative chunker, builder.chunk_text,
-//!     called by the python adapter; forge-core never duplicates it.
+//!     called by the python adapter; urna-ingest never duplicates it.
 //!   - run models or heavy extraction. normalization, native extractors,
 //!     and the toolbelt land later and stay behind a subprocess contract.
 //!

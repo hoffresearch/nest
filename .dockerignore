@@ -10,7 +10,7 @@ tools/
 docs/
 examples/
 python/
-forge-core/
+crates/urna-ingest/
 scripts/
 tests/
 *.md
