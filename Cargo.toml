@@ -63,10 +63,18 @@ targets = [
 ]
 install-path = "~/.local/bin"
 pr-run-mode = "plan"
+# the four abi3 wheels build next to the archives (a custom local-artifacts
+# job, .github/workflows/build-wheels.yml): host and every publish job wait
+# for them, so a wheel that does not build stops the release before any
+# channel publishes, and the host attaches the same wheels to the release.
+local-artifacts-jobs = ["./build-wheels"]
 # homebrew needs HOMEBREW_TAP_TOKEN, npm needs NPM_TOKEN, and the custom
 # crates.io job (.github/workflows/publish-crates.yml) needs
 # CARGO_REGISTRY_TOKEN, all repo secrets; see the maintainer checklist.
-publish-jobs = ["homebrew", "npm", "./publish-crates"]
+# publish-pypi uploads nothing itself: pypi trusted publishing does not
+# support a reusable workflow as the publisher, so it dispatches the
+# top-level pypi.yml on the tag and waits for that run.
+publish-jobs = ["homebrew", "npm", "./publish-crates", "./publish-pypi"]
 # the installed-product test runs after the release is announced. it cannot
 # listen for `release: published`: the release is created with
 # GITHUB_TOKEN, and events from that token start no workflows.
@@ -74,19 +82,24 @@ post-announce-jobs = ["./install-test"]
 # a custom job gets `id-token` + `packages` by default, which zeroes
 # `contents`; the crates job checks out the tag, so it asks for read (and
 # keeps id-token for a later move to crates.io trusted publishing).
-github-custom-job-permissions = { "publish-crates" = { contents = "read", id-token = "write" }, "install-test" = { contents = "read" } }
+# build-wheels attests its wheels (id-token + attestations); publish-pypi
+# dispatches pypi.yml and reads its run (actions: write).
+github-custom-job-permissions = { "publish-crates" = { contents = "read", id-token = "write" }, "install-test" = { contents = "read" }, "build-wheels" = { contents = "read", id-token = "write", attestations = "write" }, "publish-pypi" = { contents = "read", actions = "write" } }
 # sigstore keyless provenance for every release artifact, verifiable with
 # `gh attestation verify` (issue #75).
 github-attestations = true
 # supply chain: a cyclonedx sbom per release artifact,
 # uploaded next to it and covered by the same attestations; binaries built
 # with cargo-auditable so `cargo audit bin urna` can read the dependency
-# tree out of the executable. the tag-verify job runs in the plan phase and
-# blocks the build when the release tag is not signed by a key listed in
-# .github/allowed_signers.
+# tree out of the executable.
 cargo-cyclonedx = true
 cargo-auditable = true
-plan-jobs = ["./tag-verify"]
+# the tag check (signature + scripts/release_preflight.py, tag-verify.yml)
+# runs as the first job of build-wheels.yml, not as a plan job: when a plan
+# job fails, the builds that need it are skipped, and dist's host job runs
+# on skipped builds (`always()`, "skipped is fine"), so a refused tag would
+# still reach the release and the publish jobs. a failed build-wheels call
+# is a failure, which the host condition does refuse.
 
 # build only the packages that ship (the `urna` cli crate). without it dist compiles the
 # whole workspace per target, and urna-python's cdylib cannot be built for

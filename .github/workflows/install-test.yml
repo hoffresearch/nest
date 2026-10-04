@@ -211,7 +211,7 @@ jobs:
       - name: pip install urna and validate
         shell: bash
         run: |
-          # pypi.yml publishes on its own run; give it time to land.
+          # the release announces once pypi.yml uploaded; the index can lag.
           for i in $(seq 1 20); do
             python -m pip install "urna==${TAG#v}" && break
             sleep 30

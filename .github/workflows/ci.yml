@@ -291,3 +291,4 @@ jobs:
         run: |
           python scripts/release_preflight.py
           python tests/test_release_preflight.py
+          python tests/test_pypi_release.py

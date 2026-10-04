@@ -43,7 +43,7 @@ Secrets live in the GitHub repository secrets (`CARGO_REGISTRY_TOKEN`, `NPM_TOKE
 - `cargo semver-checks -p urna-format --baseline-rev origin/main`: the Rust API of the frozen format against the pull request's base; CI fails a pull request that breaks it (in 0.x a minor bump is the major bump)
 - `cargo bench -p urna-runtime --no-run`: the criterion benches (simd, rerank, hnsw_build) have to compile; CI checks that, the numbers are not a gate
 - `sh scripts/ruff_check.sh`: ruff over the one Python file list shared with CI (`URNA_PYTHON=.venv/bin/python` picks the interpreter)
-- `./scripts/release_check.sh`: the full pipeline (the Rust suite in release, the extension rebuilt, thirteen Python suites, ruff when importable) plus the regression gates against `data/measure/baseline.json`; exits non-zero on any failure. It is the definition of pull-request ready
+- `./scripts/release_check.sh`: the full pipeline (the Rust suite in release, the extension rebuilt, fourteen Python suites, ruff when importable) plus the regression gates against `data/measure/baseline.json`; exits non-zero on any failure. It is the definition of pull-request ready
 - `forge-core/` is a separate cargo workspace outside `crates/` (the ingestion layer, the frozen `.fci` schema). `--workspace` and `release_check.sh` never reach it; run `cargo build`, `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --all --check` with `--manifest-path forge-core/Cargo.toml`
 - `fuzz/` is the third cargo workspace (cargo-fuzz, nightly toolchain): `sh scripts/fuzz_soak.sh [seconds]` runs every target with the corpus kept under `fuzz/corpus/`; `fuzz/README.md` has the targets and how a finding becomes a test
 
@@ -96,9 +96,10 @@ python tests/test_bench_runner.py
 python tests/test_model_catalog.py
 python tests/test_model_install.py
 python tests/test_release_preflight.py
+python tests/test_pypi_release.py
 ```
 
-`release_check.sh` runs thirteen of them; `test_offline_guard.py`, `test_blob_bridge.py` and `test_space_bridge.py` run by hand.
+`release_check.sh` runs fourteen of them; `test_offline_guard.py`, `test_blob_bridge.py` and `test_space_bridge.py` run by hand.
 
 `test_image_corpus.py` covers the forge image pillar (encode and decode, GOP probe, sharding, ordering) with a stub embedder and skips cleanly without FFmpeg's AV1 and AVIF encoders. Building a real image corpus (`python/forge/embed_image.py`) needs `open_clip` and torch, outside the default forge dependency group.
 
@@ -178,9 +179,9 @@ The format and runtime invariants. A change that touches them needs the tests na
 - `.github/workflows/ci.yml` runs on every push to `main` and every pull request: fmt, Clippy with the deny lints (the full CLI and the engine-only `--no-default-features` CLI), build and test on Ubuntu (AVX2) and macOS (NEON), the benches compiled, the mutation-fuzz harnesses at a higher count, the 639-line guard, forge-core's gate, cargo-deny on the three workspaces, cargo-semver-checks on `urna-format` against the pull request's base, a Windows job (Clippy, the CLI unit tests and `setup_e2e`: the only Windows check before a tag, so a crossterm or path change that breaks only there shows up there), ruff, and a bounded cargo-fuzz smoke on nightly. It is `release_check.sh` minus the LFS corpus measurement.
 - On the nightly schedule (or `workflow_dispatch`) CI instead runs a 30-minute soak per fuzz target with the corpus cached between nights, and `urna-format`'s suite under Miri.
 - A `v*` tag runs the release:
-  - `tag-verify.yml` goes first, in dist's plan phase and again before the wheels build: a lightweight or unsigned tag, or a key missing from `.github/allowed_signers`, stops both runs before anything is built or uploaded.
+  - `tag-verify.yml` (the signature, then `scripts/release_preflight.py --tag`) is the first job of `build-wheels.yml` inside the release, and runs again before a PyPI upload: a lightweight or unsigned tag, a key missing from `.github/allowed_signers`, or a version that does not agree stops the release before the host job releases anything.
   - `release.yml` (cargo-dist): archives for 5 targets, checksums, Sigstore attestations, the Homebrew formula `urna`, the npm package `@urna/cli`, the embedder payload, and `publish-crates.yml` for urna-format, urna-runtime and urna.
-  - `pypi.yml`: maturin abi3 wheels for 4 platforms, on its own run.
+  - The wheels (maturin abi3, 4 platforms) build in `build-wheels.yml`, a dist local-artifacts job, so the host and every publish job wait for them; the release carries them with a `.sha256` and an attestation each. PyPI is the `publish-pypi.yml` publish job: it dispatches the top-level `pypi.yml` on the tag (trusted publishing does not take a reusable workflow) and waits for that run, whose upload skips wheels already published with the same sha256.
   - `install-test.yml` runs inside the release run once it is announced and tests the installed product per platform and per channel (one-liner, Homebrew, npm, bun, pnpm, yarn, binstall, wheel), each ending in `urna setup --yes` and `urna doctor`.
 - Git LFS tracks `*.urna`, `*.safetensors` and datasets, including `data/corpus_next.v1.urna` and the potion table; the golden fixtures stay in regular git. No release job touches LFS (`scripts/fetch_potion.sh` fetches the table from its pinned upstream and checks it against the pointer).
 - `data/demo/` is gitignored; `data/demo/Instructions.md` names what it holds and where the pt-BR corpus is rebuilt (the fakenews-ptbr-urna-benchmark repo, not this one). Only `measure_presets.py` and `release_check.sh` need the baseline corpus, and they read the LFS file, never the datasets. `data/measure/corpus_*.urna` are regeneration artifacts and gitignored; the JSON baselines next to them are tracked.
