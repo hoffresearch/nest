@@ -164,8 +164,12 @@ def transform(release: dict) -> dict:
         "custom-build-wheels": _wheels_job(jobs["custom-build-wheels"]),
         "build-global-artifacts": _global_job(jobs["build-global-artifacts"]),
     }
-    secrets = set(re.findall(r"secrets\.([A-Za-z_]+)", json.dumps(kept))) - {"GITHUB_TOKEN"}
-    _expect(not secrets, f"a kept job reads secrets {sorted(secrets)}")
+    # every mention of the secrets context must be the run's own token: this
+    # refuses secrets.X, secrets['X'] and toJSON(secrets) alike.
+    text = json.dumps(kept)
+    reads = [m.group(0) for m in re.finditer(r"\bsecrets\b\S{0,24}", text)]
+    others = sorted({r for r in reads if not r.startswith("secrets.GITHUB_TOKEN")})
+    _expect(not others, f"a kept job reads secrets {others}")
     return {
         "name": "Release rehearsal",
         "on": {"pull_request": None, "push": {"branches": ["main"]}, "workflow_dispatch": None},
@@ -359,12 +363,23 @@ def check_assets(directory: Path, plan: dict, version: str) -> list[str]:
     errors += [f"{p.name} does not match its .sha256" for p in checked if not _sidecar_ok(p)]
     unified = directory / "sha256.sum"
     if unified.is_file():
+        listed = set()
         # dist's file ends in a blank line.
         for line in filter(str.strip, unified.read_text(encoding="utf-8").splitlines()):
             digest, _, name = line.partition(" ")
-            target = directory / name.strip().lstrip("*")
+            name = name.strip().lstrip("*")
+            listed.add(name)
+            target = directory / name
             if not target.is_file() or _sha256(target) != digest:
-                errors.append(f"sha256.sum: {name.strip()} does not match")
+                errors.append(f"sha256.sum: {name} does not match")
+        # what dist indexes there: the archives and the packaged installers.
+        covered = {
+            n
+            for n, a in plan["artifacts"].items()
+            if a.get("kind") == "executable-zip"
+            or (a.get("kind") == "installer" and n.endswith((".tar.gz", ".zip")))
+        }
+        errors += [f"sha256.sum lacks {n}" for n in sorted(covered - listed)]
     payload = directory / "urna-embedder-payload.tar.gz"
     if payload.is_file():
         with tarfile.open(payload) as tar:
@@ -391,8 +406,9 @@ def check_binary(directory: Path, target: str, golden: Path, version: str) -> li
         shown = subprocess.run([str(exe), "--version"], capture_output=True, text=True)
         valid = subprocess.run([str(exe), "validate", str(golden)], capture_output=True, text=True)
     errors = []
-    if version not in shown.stdout:
-        errors.append(f"{archive.name}: --version says {shown.stdout.strip()!r}, not {version}")
+    if shown.returncode != 0 or shown.stdout.split() != ["urna", version]:
+        said = f"{shown.stdout.strip()!r} (exit {shown.returncode})"
+        errors.append(f"{archive.name}: --version says {said}, not 'urna {version}'")
     if valid.returncode != 0:
         why = valid.stderr.strip()
         errors.append(f"{archive.name}: validate {golden.name} exited {valid.returncode}: {why}")
@@ -403,8 +419,11 @@ def verdict(needs: dict) -> tuple[bool, str]:
     impact = needs.get("impact", {})
     if impact.get("result") != "success":
         return False, f"the impact job ended {impact.get('result')!r}"
-    if impact.get("outputs", {}).get("run") != "true":
+    run = (impact.get("outputs") or {}).get("run")
+    if run == "false":
         return True, "no release input changed: rehearsal dispensed"
+    if run != "true":
+        return False, f"the impact job gave run={run!r}, neither 'true' nor 'false'"
     bad = {j: needs.get(j, {}).get("result") for j in (*REQUIRED, "assets")}
     bad = {j: r for j, r in bad.items() if r != "success"}
     if bad:

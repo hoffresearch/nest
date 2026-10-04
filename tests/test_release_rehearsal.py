@@ -122,7 +122,13 @@ def test_unknown_shapes_are_refused() -> None:
     cases.append((top, "top-level keys"))
     secret = copy.deepcopy(RELEASE)
     secret["jobs"]["build-global-artifacts"]["env"]["NPM"] = "${{ secrets.NPM_TOKEN }}"
-    cases.append((secret, "reads secrets ['NPM_TOKEN']"))
+    cases.append((secret, "reads secrets ['secrets.NPM_TOKEN"))
+    bracket = copy.deepcopy(RELEASE)
+    bracket["jobs"]["build-global-artifacts"]["env"]["NPM"] = "${{ secrets['NPM_TOKEN'] }}"
+    cases.append((bracket, "reads secrets [\"secrets['NPM_TOKEN']"))
+    whole = copy.deepcopy(RELEASE)
+    whole["jobs"]["plan"]["env"]["ALL"] = "${{ toJSON(secrets) }}"
+    cases.append((whole, "reads secrets ['secrets)"))
     for release, message in cases:
         refused(release, message)
     print(
@@ -206,17 +212,19 @@ def _artifacts(directory: Path, plan: dict, version: str = VERSION, wheels: int 
 
 
 def _plan() -> dict:
-    names = [
-        "sha256.sum",
-        "urna.rb",
-        "urna-npm-package.tar.gz",
-        "urna.cdx.xml",
-        "urna-embedder-payload.tar.gz",
-        "urna-embedder-payload.tar.gz.sha256",
-    ]
+    # the kinds dist's plan gives (dist plan --output-format=json).
+    kinds = {
+        "sha256.sum": "unified-checksum",
+        "urna.rb": "installer",
+        "urna-npm-package.tar.gz": "installer",
+        "urna.cdx.xml": "sbom",
+        "urna-embedder-payload.tar.gz": "extra-artifact",
+        "urna-embedder-payload.tar.gz.sha256": "extra-artifact",
+    }
     for target in ["aarch64-apple-darwin", "x86_64-unknown-linux-musl"]:
-        names += [f"urna-{target}.tar.xz", f"urna-{target}.tar.xz.sha256"]
-    return {"artifacts": {n: {} for n in names}}
+        kinds[f"urna-{target}.tar.xz"] = "executable-zip"
+        kinds[f"urna-{target}.tar.xz.sha256"] = "checksum"
+    return {"artifacts": {n: {"kind": k} for n, k in kinds.items()}}
 
 
 def test_the_artifacts_a_release_uploads() -> None:
@@ -237,7 +245,23 @@ def test_the_artifacts_a_release_uploads() -> None:
         errors = rh.check_assets(d, plan, VERSION)
         assert f"payload VERSION is '0.0.1', not {VERSION!r}" in errors, errors
         assert f"3 urna {VERSION} wheels, expected 4" in errors, errors
-    print("happy/error (artifacts, wheels, checksums, payload VERSION): OK")
+    # an empty index cannot vouch for an altered npm package (it has no own .sha256).
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        _artifacts(d, plan)
+        (d / "sha256.sum").write_text("", encoding="utf-8")
+        (d / "urna-npm-package.tar.gz").write_bytes(b"altered")
+        errors = rh.check_assets(d, plan, VERSION)
+        assert "sha256.sum lacks urna-npm-package.tar.gz" in errors, errors
+        assert "sha256.sum lacks urna-x86_64-unknown-linux-musl.tar.xz" in errors, errors
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        _artifacts(d, plan)
+        index = d / "sha256.sum"
+        kept = [ln for ln in index.read_text().splitlines() if "urna-npm-package" not in ln]
+        index.write_text("\n".join(kept) + "\n", encoding="utf-8")
+        assert rh.check_assets(d, plan, VERSION) == ["sha256.sum lacks urna-npm-package.tar.gz"]
+    print("happy/error (artifacts, wheels, checksums, sha256.sum coverage, payload VERSION): OK")
 
 
 def test_a_real_binary_against_the_golden_fixture() -> None:
@@ -265,6 +289,18 @@ def test_a_real_binary_against_the_golden_fixture() -> None:
         assert rh.check_binary(d, "other-target", golden, VERSION) == [
             "no urna-other-target archive"
         ]
+        # the exact version: a binary saying 0.5.3 is not 0.5 (nor 0.5.30 not 0.5.3).
+        prefix = VERSION.rsplit(".", 1)[0]
+        errors = rh.check_binary(d, "host", golden, prefix)
+        assert errors and f"not 'urna {prefix}'" in errors[0], errors
+        # --version has to succeed: an executable that exits 1 is refused.
+        fails = d / "fails.sh"
+        fails.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        fails.chmod(0o755)
+        with tarfile.open(d / "urna-fails.tar.xz", "w:xz") as tar:
+            tar.add(fails, arcname="urna-fails/urna")
+        errors = rh.check_binary(d, "fails", golden, VERSION)
+        assert errors and "(exit 1)" in errors[0], errors
     print("happy/error (a real binary validates the golden fixture, rejects a flipped byte): OK")
 
 
@@ -288,6 +324,10 @@ def test_the_required_check() -> None:
         ok, why = rh.verdict(bad)
         assert not ok and f"{job} {result}" in why, why
     assert not rh.verdict({"impact": {"result": "failure"}})[0]
+    # only an explicit run=false dispenses: a missing or odd output fails.
+    for outputs in ({}, {"run": ""}, {"run": "yes"}, None):
+        ok, why = rh.verdict({"impact": {"result": "success", "outputs": outputs}})
+        assert not ok and "neither 'true' nor 'false'" in why, (outputs, why)
     print("happy/error (dispensed passes; a needed build failed, cancelled or skipped fails): OK")
 
 
