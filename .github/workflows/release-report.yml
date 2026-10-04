@@ -1,0 +1,69 @@
+# one summary per release, written when the release run completes, whatever
+# its conclusion: a publish job that failed, a run that was cancelled, a
+# channel that does not serve the version yet all show up here, including
+# when install-test never started (it runs only after the announce job).
+#
+# a workflow_run event runs on main, so github.sha is main's commit, not the
+# release's: the report names the release by the triggering run's id and
+# head_sha, and the tag by that run's head_branch (the tag name on a tag
+# push). scripts/release_channels.py checks the tag points at that commit,
+# lists every job that did not succeed, the pypi.yml run of that commit, and
+# what the GitHub release, crates.io, npm, Homebrew and PyPI serve. the
+# summary is written before the step fails on anything missing.
+
+name: release-report
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  attestations: read
+
+jobs:
+  report:
+    name: release report
+    # tag pushes only: pull requests run the same Release workflow (plan only).
+    if: github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, 'v')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: what each channel serves for this release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          TAG: ${{ github.event.workflow_run.head_branch }}
+        run: python3 scripts/release_channels.py report --run "$RUN_ID" --sha "$HEAD_SHA" --tag "$TAG" --repo "$GITHUB_REPOSITORY"
+      - name: verify the attestations of the archives and wheels
+        # cryptographically, after the report and whatever it found: the signer
+        # workflow (release.yml for archives, build-wheels.yml for wheels), the
+        # tag's commit and the tag's ref.
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          TAG: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -u
+          summary="$GITHUB_STEP_SUMMARY"
+          rm -rf assets && mkdir assets
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -D assets -p '*.tar.xz' -p '*.zip' -p '*.whl' 2>/dev/null
+          echo "" >> "$summary"; echo "Attestations verified (signer, commit $HEAD_SHA, ref refs/tags/$TAG):" >> "$summary"
+          fail=0
+          for f in assets/*; do
+            [ -e "$f" ] || { echo "- the release has no archives or wheels" >> "$summary"; fail=1; break; }
+            case "$f" in *.whl) signer=build-wheels.yml ;; *) signer=release.yml ;; esac
+            if gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/$signer" \
+                 --source-digest "$HEAD_SHA" --source-ref "refs/tags/$TAG" >/dev/null 2>&1; then
+              echo "- $(basename "$f"): verified ($signer)" >> "$summary"
+            else
+              echo "- $(basename "$f"): NOT verified against $signer" >> "$summary"; fail=1
+            fi
+          done
+          exit $fail
