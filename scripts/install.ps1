@@ -52,14 +52,24 @@ if ($env:URNA_RELEASE_BASE) {
     $Base = "https://github.com/$Repo/releases/latest/download"
 }
 
-$Archive = "urna-$Target.zip"
 $Payload = "urna-embedder-payload.tar.gz"
 
 $Tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("urna-install-" + [System.IO.Path]::GetRandomFileName())
 New-Item -ItemType Directory -Force $Tmp | Out-Null
 try {
+    # the archive carries the cli package's name: urna-clitui-<target> since
+    # the package rename, urna-<target> up to 0.5.3. try the new name, then
+    # the old one, so the latest release and an older pinned version install.
+    $Archive = $null
+    foreach ($name in @("urna-clitui-$Target.zip", "urna-$Target.zip")) {
+        try {
+            Invoke-WebRequest -Uri "$Base/$name" -OutFile (Join-Path $Tmp $name)
+            $Archive = $name
+            break
+        } catch {}
+    }
+    if (-not $Archive) { throw "urna-install: download failed: $Base/urna-clitui-$Target.zip (nor urna-$Target.zip)" }
     Write-Output "urna-install: fetching $Archive + payload ($Target)"
-    Invoke-WebRequest -Uri "$Base/$Archive" -OutFile (Join-Path $Tmp $Archive)
     Invoke-WebRequest -Uri "$Base/$Archive.sha256" -OutFile (Join-Path $Tmp "$Archive.sha256")
     Invoke-WebRequest -Uri "$Base/$Payload" -OutFile (Join-Path $Tmp $Payload)
     Invoke-WebRequest -Uri "$Base/$Payload.sha256" -OutFile (Join-Path $Tmp "$Payload.sha256")

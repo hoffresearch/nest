@@ -61,7 +61,7 @@ jobs:
       - name: clippy (workspace deny lints)
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: clippy (engine-only cli, no terminal ui)
-        run: cargo clippy -p urna --no-default-features --all-targets -- -D warnings
+        run: cargo clippy -p urna-clitui --no-default-features --all-targets -- -D warnings
       - name: build
         run: cargo build --workspace --all-targets
       - name: test
@@ -100,9 +100,9 @@ jobs:
         run: rustup toolchain install stable --profile minimal --component clippy && rustup default stable
       - uses: Swatinem/rust-cache@v2
       - name: clippy
-        run: cargo clippy -p urna --all-targets -- -D warnings
+        run: cargo clippy -p urna-clitui --all-targets -- -D warnings
       - name: test (unit + setup end to end)
-        run: cargo test -p urna --bins --test setup_e2e
+        run: cargo test -p urna-clitui --bins --test setup_e2e
 
   fuzz:
     name: cargo-fuzz smoke

@@ -7,7 +7,7 @@ corpora whose default model is a registry model (wemm, clip, jina). a
 released binary has no repo around it, so the release archives and the
 one-liner installer carry this payload and lay it down where the cli looks
 (`<exe>/../share/urna/forge/` or `$XDG_DATA_HOME/urna/forge/`; see
-crates/urna-cli/src/cmd/embed_gate.rs `installed_script_in`).
+crates/urna-clitui/src/cmd/embed_gate.rs `installed_script_in`).
 
 the registry path ships its scripts only, not its model dependencies: the
 setup venv has numpy and tokenizers, and `embed_query_model.py` names the
