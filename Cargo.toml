@@ -118,7 +118,7 @@ source-tarball = false
 # from its upstream and checks it against the lfs pointer (no git-lfs).
 github-build-setup = "../buildprep.yml"
 
-# the offline embedder payload (staged by script/stage_embedder_payload.py
+# the offline embedder payload (staged by script/embedpack.py
 # and packed as one artifact) ships next to the binary archives so the
 # one-liner installer can lay it down under the data dir and a released
 # binary passes `urna doctor` with no network and no repo checkout.
@@ -128,7 +128,7 @@ github-build-setup = "../buildprep.yml"
 build = [
     "sh",
     "-c",
-    "sh script/fetch_potion.sh && python3 script/stage_embedder_payload.py target/dist-payload --tar target/urna-embedder-payload.tar.gz",
+    "sh script/fetch_potion.sh && python3 script/embedpack.py target/dist-payload --tar target/urna-embedder-payload.tar.gz",
 ]
 artifacts = [
     "target/urna-embedder-payload.tar.gz",

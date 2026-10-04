@@ -41,7 +41,7 @@ rh = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rh)
 
 RELEASE = yaml.safe_load(rh.RELEASE.read_text(encoding="utf-8"))
-VERSION = rh._load("stage_embedder_payload").workspace_version()
+VERSION = rh._load("embedpack").workspace_version()
 
 
 def refused(release: dict, contains: str) -> None:
@@ -141,7 +141,7 @@ def test_what_needs_the_rehearsal() -> None:
         "python/forge/catalog.json",
         "python/forge/models/potion-base-8M/model.safetensors",
         "python/embed_query.py",
-        "script/stage_embedder_payload.py",
+        "script/embedpack.py",
         "script/stage_wheel.py",
         "python/urna_cli.py",
         "packs/pyproject.toml",

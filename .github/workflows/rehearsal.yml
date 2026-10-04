@@ -64,7 +64,7 @@ jobs:
         path: ~/.cargo/bin/dist
     - id: version
       name: the version a tag would carry
-      run: echo "tag-flag=--tag=v$(python3 -c 'import sys; sys.path.insert(0, "script"); import stage_embedder_payload as s; print(s.workspace_version())')" >> "$GITHUB_OUTPUT"
+      run: echo "tag-flag=--tag=v$(python3 -c 'import sys; sys.path.insert(0, "script"); import embedpack as s; print(s.workspace_version())')" >> "$GITHUB_OUTPUT"
     - id: plan
       run: |
         dist plan ${{ steps.version.outputs.tag-flag }} --output-format=json > plan-dist-manifest.json

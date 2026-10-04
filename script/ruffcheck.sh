@@ -63,11 +63,11 @@ tests/test_forge_spec.py
 tests/test_quality_gate.py
 tests/test_cli_space.py
 tests/test_query_embedder_routing.py
-tests/test_embedder_payload.py
+tests/test_embedpack.py
 tests/test_bench_runner.py
 tests/test_model_catalog.py
 tests/test_model_install.py
-script/stage_embedder_payload.py
+script/embedpack.py
 script/preflight.py
 tests/test_preflight.py
 script/pypiindex.py

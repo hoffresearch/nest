@@ -1,6 +1,6 @@
 """Prove the staged embedder payload answers queries with no repo around it.
 
-`script/stage_embedder_payload.py` is what the release archives and
+`script/embedpack.py` is what the release archives and
 `urna setup` lay down; an installed binary resolves both query embedders
 inside that tree (`urna/forge/embed_query_potion.py` for potion corpora,
 `urna/forge/embed_query_model.py` for registry models, `urna/embed_query.py`
@@ -21,7 +21,7 @@ outside the checkout, with only the staged tree on their path:
   staging itself, so a release never ships half the route; so does a
   `catalog.json` that is not what the registry generates.
 
-Run: .venv/bin/python tests/test_embedder_payload.py
+Run: .venv/bin/python tests/test_embedpack.py
 """
 
 import importlib.util
@@ -34,7 +34,7 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-STAGE = REPO / "script" / "stage_embedder_payload.py"
+STAGE = REPO / "script" / "embedpack.py"
 POTION = "minishlab/potion-base-8M/v1"
 
 EXPECTED_FILES = {

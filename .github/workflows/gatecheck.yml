@@ -321,5 +321,5 @@ jobs:
         run: |
           set -eu
           sh script/fetch_potion.sh
-          python script/stage_embedder_payload.py "$RUNNER_TEMP/payload" --tar "$RUNNER_TEMP/payload.tar.gz"
+          python script/embedpack.py "$RUNNER_TEMP/payload" --tar "$RUNNER_TEMP/payload.tar.gz"
           python -c "import sys, tarfile; v = tarfile.open(sys.argv[1]).extractfile('urna/VERSION').read().decode().strip(); print('payload VERSION', v)" "$RUNNER_TEMP/payload.tar.gz"

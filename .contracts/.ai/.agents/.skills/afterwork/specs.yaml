@@ -189,7 +189,7 @@ groups:
         when: mudarem suítes, pré-requisitos, critérios de execução ou resultados de aprovação, falha e dispensa do gate local.
       - path: script/ruffcheck.sh
         when: surgir um módulo Python sujeito a lint ou mudar a execução do Ruff.
-      - path: script/stage_embedder_payload.py
+      - path: script/embedpack.py
         when: mudarem arquivos distribuídos, modelos ou o processo de staging do payload.
       - path: script/stage_wheel.py
         when: mudarem arquivos distribuídos, modelos ou o processo de staging da wheel.
