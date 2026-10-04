@@ -7,7 +7,7 @@ and the sentence-transformers path (embed_query.py, behind search-text)
 slices a query the same way the registry does. A manifest model no preset
 names falls through to embed_query.py, so ask works on a corpus built with
 any sentence-transformers model (cases 6 to 9).
-The three-layer gate itself is covered by test_search_text_model_hash.py.
+The three-layer gate itself is covered by test_hashguard.py.
 
 Run: .venv/bin/python tests/test_askrouter.py
 """

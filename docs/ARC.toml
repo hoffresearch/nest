@@ -323,7 +323,7 @@ path = [
     "python/_urna.so",
     "tests/test_pythonapi.py",
     "tests/test_ingestion.py",
-    "tests/test_search_text_model_hash.py",
+    "tests/test_hashguard.py",
     "script/ruffcheck.sh",
 ]
 summary = "Build, test, lint, rebuild the extension, run Python suites, and compare preset metrics against the baseline"
@@ -904,7 +904,7 @@ purpose = "Python integration test scripts"
 links = [
     "tests/test_pythonapi.py",
     "tests/test_ingestion.py",
-    "tests/test_search_text_model_hash.py",
+    "tests/test_hashguard.py",
 ]
 
 [[inventory.urna_clitui]]
@@ -2841,7 +2841,7 @@ links = [
     "python/tools/compare_measure.py",
     "tests/test_pythonapi.py",
     "tests/test_ingestion.py",
-    "tests/test_search_text_model_hash.py",
+    "tests/test_hashguard.py",
 ]
 
 [[inventory.data_docs_python_script_tests]]
@@ -2895,7 +2895,7 @@ links = [
 ]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_search_text_model_hash.py"
+path = "tests/test_hashguard.py"
 kind = "python-test"
 purpose = "model_hash gate coverage for search-text"
 links = [
