@@ -71,7 +71,7 @@ Escolha verificações que exercitem o comportamento alterado e cumpram os check
 | Rust | Testes dos crates afetados, `cargo fmt --all --check` e Clippy; confira também `--no-default-features` ao tocar na CLI |
 | Python | Scripts `tests/test_*.py` e testes próximos ao módulo, mais `sh script/ruff_check.sh` |
 | `crates/urna-ingest/` ou `fuzz/` | Comandos no manifesto próprio, conforme CONTRIBUTING e `fuzz/README.md` |
-| Formato, busca, desempenho ou integração ampla | `./script/release_check.sh`, incluindo a medição quando aplicável |
+| Formato, busca, desempenho ou integração ampla | `./script/fullcheck.sh`, incluindo a medição quando aplicável |
 | Empacotamento e distribuição | Testes dos scripts afetados, coerência dos workflows gerados e ensaio de empacotamento |
 | Documentação, links ou comentários | Conferência de caminhos, exemplos e sintaxe afetados; sem repetir a medição de corpora |
 

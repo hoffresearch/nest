@@ -24,7 +24,7 @@ data/demo/
 
 ## The fake-news corpus
 
-`data/corpus_next.v1.urna` (Git LFS) is the file the regression gate measures: `measure_presets.py` rebuilds it at the other presets and `release_check.sh` compares the numbers with `data/measure/baseline.json`. The gate reads the file and never rebuilds it from the datasets.
+`data/corpus_next.v1.urna` (Git LFS) is the file the regression gate measures: `measure_presets.py` rebuilds it at the other presets and `fullcheck.sh` compares the numbers with `data/measure/baseline.json`. The gate reads the file and never rebuilds it from the datasets.
 
 | Field | Value |
 |---|---|

@@ -14,9 +14,9 @@ system_view = [
     "urna-format is the frozen v1 container contract. It owns layout, manifest, reader, writer, canonical sections, hashes, and wire encodings. Embeddings stay raw float32, float16, int8, or int4 (fixed-stride quant only); zstd is reserved for non-embedding sections.",
     "urna-engine opens .urna files through mmap, validates queries, dispatches SIMD, and executes exact, ANN, graph, and hybrid search while reranking candidates with real cosine. That hot path is why embeddings are never zstd-compressed.",
     "urna-clitui is a thin clap surface over the runtime and format crates. It carries the twelve engine subcommands (inspect, validate, stats, media, search, search-text, search-ann, search-graph, search-space, benchmark, cite, doctor: file + vector in; only search-text and doctor spawn Python) and the three agent verbs (ask, retrieve, build: text or spec in, shell out to the offline Python embedder / forge), tagged [engine] / [agent] in --help. ask and retrieve are the agent-native flagship verbs layered over the engine (text query in, cited answer out; both embed the query offline with the default potion static table, validate the embedder's model_hash against the manifest exactly like search-text, and route by what the file carries through MmapUrnaFile::search_routed: hybrid when a BM25 section is present, hnsw when an HNSW section is present, exact otherwise; ask prints one cited answer (--disclose answer) or adds the rerank-source honesty line + route + candidate counts (--disclose explain); retrieve emits the agent-shaped JSON/JSONL answer-pack where each hit's score IS the exact-cosine rerank value). doctor is the post-install health check with typed exit codes (0 ok, 2 Python missing, 3 deps missing, 4 embedder missing, 5 potion table missing, 6 embedder run failed). Behind the default-on `tui` feature the CLI also carries the terminal UI in src/tui: `setup` (the interactive installer, exit codes 10 download, 11 checksum, 12 unpack, 13 Python env, 14 blocked, 15 a model install; --model installs catalog models) and `tui` (the corpus explorer; a bare `urna` on a terminal opens it, in a pipe it prints the help and exits 2). Verb-collapse, the urna dev namespace, and the urna-profile crate are deferred.",
-    "The distribution layer (issue #75) turns tags on main into installs: cargo-dist builds the CLI for five targets with SHA256 checksums, Sigstore keyless attestations on the five archives, one CycloneDX SBOM for the CLI package, a Homebrew tap formula (`urna`) and an npm package (`@urna/cli`), and publishes urna-format / urna-engine / urna-clitui (the CLI crate, binary `urna`) to crates.io; maturin builds the `urna` abi3 wheel with the potion table bundled (offline embedding after pip install); script/install.sh / install.ps1 are the one-liner installers (verify-before-write, --version, --uninstall); urna doctor validates the install offline and `urna setup` completes the channels that ship the bare binary (Homebrew, npm, crates.io); .github/workflows/setuptest.yml tests the INSTALLED product per platform after each release, including a job per package channel that waits for the exact version on its registry and ends in `urna setup --yes` + `urna doctor`; .github/workflows/runreport.yml summarizes every completed release run, failed or cancelled included. Three levels of evidence, not interchangeable: script/release_check.sh is the full local gate (no release build), rehearsal.yml builds the release on pull requests and publishes nothing, and only a tag exercises publishing, setuptest and the report.",
+    "The distribution layer (issue #75) turns tags on main into installs: cargo-dist builds the CLI for five targets with SHA256 checksums, Sigstore keyless attestations on the five archives, one CycloneDX SBOM for the CLI package, a Homebrew tap formula (`urna`) and an npm package (`@urna/cli`), and publishes urna-format / urna-engine / urna-clitui (the CLI crate, binary `urna`) to crates.io; maturin builds the `urna` abi3 wheel with the potion table bundled (offline embedding after pip install); script/install.sh / install.ps1 are the one-liner installers (verify-before-write, --version, --uninstall); urna doctor validates the install offline and `urna setup` completes the channels that ship the bare binary (Homebrew, npm, crates.io); .github/workflows/setuptest.yml tests the INSTALLED product per platform after each release, including a job per package channel that waits for the exact version on its registry and ends in `urna setup --yes` + `urna doctor`; .github/workflows/runreport.yml summarizes every completed release run, failed or cancelled included. Three levels of evidence, not interchangeable: script/fullcheck.sh is the full local gate (no release build), rehearsal.yml builds the release on pull requests and publishes nothing, and only a tag exercises publishing, setuptest and the report.",
     "urna-bridge is the PyO3 bridge. python/urna.py loads the compiled extension, python/builder.py orchestrates chunking and caching, and python/embed_query.py preserves model parity for search-text. The agent-native flagship is UrnaFile.retrieve(query, k, ...): a pre-embedded query in, cited spans out, whose score IS the exact rerank value, with tier-1 stored canonical text + hashes + citation_id + rerank-source marker.",
-    "script/release_check.sh is the release gate: rebuilds the extension, runs Rust and Python suites, checks lint and format, measures presets, and compares against the committed baseline.",
+    "script/fullcheck.sh is the release gate: rebuilds the extension, runs Rust and Python suites, checks lint and format, measures presets, and compares against the committed baseline.",
     "crates/urna-ingest is the ingestion layer, a SEPARATE cargo workspace under crates/ that the root Cargo.toml excludes, so its (eventually heavy, possibly non-deterministic) deps never enter urna-format or urna-engine. This phase ships FORGE-0a: the frozen .fci canonical-intermediate schema only. It is not built by the sovereign release gate; it has its own cargo workspace.",
     "python/forge is the forge Python surface. Its build-side default is an offline semantic static embedder (python/forge/embed_potion.py): a vendored model2vec/potion-base-8M table (MIT, dim 256, ~30MB via git-lfs), numpy + tokenizers only, no torch, no network round-trip; it self-fingerprints to a SHA256 model_hash recorded in provenance. The #04 lexical bag-of-words (python/forge/embed_default.py) stays as the stdlib-only zero-dependency floor/fallback.",
     "The image corpus path is Python-only and stays in the forge tooling layer, because a vision tower needs torch and the sovereign runtime does not take that dependency; no format or runtime code depends on it and the .urna it emits is an ordinary .urna. python/forge/image_items.py owns discovery (sorted, reproducible: an item's position IS its corpus ordinal, its frame number, and the byte_start its citation resolves through). python/forge/image_media.py, image_encode.py (+ image_encode_still.py for AVIF/JXL, image_gop_probe.py for the probe), and image_backends.py (+ image_backends_av1.py for the stream) own the codec path: images are letterboxed onto one canvas, frames move through a rawvideo pipe, the encoded frame count is verified against the item count, and gop_policy=auto probe-encodes both directions before choosing. Every codec backend (av1, avif, jxl, jxl-transcode) records media.source_bytes as the byte size of the original source files, so compression_ratio is one quantity across them (the AVIF letterboxed PNG sum is kept apart as letterboxed_input_bytes; the png-lossless control reports output_bytes only, it is the ruler). python/forge/embed_image.py fingerprints the weights actually loaded plus the preprocess transform, and rejects a bare architecture name with no pretrained tag. A corpus is corpus.urna beside corpus.media/ plus corpus.manifest.json, or, since the media blob pillar, the media travels inside the .urna itself via blob_refs (0x14) + blob_span_overlay (0x16).",
@@ -128,7 +128,7 @@ entrypoints = [
 ]
 links = [
     "crates/urna-bridge/src/build_fn.rs",
-    "script/release_check.sh",
+    "script/fullcheck.sh",
 ]
 
 [[layers]]
@@ -316,7 +316,7 @@ summary = "Load + validate the TOML spec (unknown keys and non-total order_by ar
 
 [[flows]]
 name = "release-gate"
-entry = "script/release_check.sh"
+entry = "script/fullcheck.sh"
 path = [
     "Cargo.toml",
     "crates/*",
@@ -393,7 +393,7 @@ links = []
 path = ".contracts/.ai/.agents/AGENTS.md"
 kind = "repo-ops"
 purpose = "Portuguese entry point for agents and contributors: autonomy, essential technical contracts, validation by impact, and links to operational documentation"
-links = ["script/release_check.sh"]
+links = ["script/fullcheck.sh"]
 
 [[inventory.root]]
 path = ".contracts/.ai/.agents/.skills/afterwork/AFTERWORK.md"
@@ -472,7 +472,7 @@ path = ".github/workflows/gatecheck.yml"
 kind = "ci-workflow"
 purpose = "The pull-request gate: fmt, Clippy with the deny lints, build + test on Ubuntu and macOS, mutation-fuzz harnesses, 639-line guard, crates/urna-ingest gate, ruff via script/ruff_check.sh, cargo-fuzz smoke on nightly; nightly: fuzz soak, Miri on urna-format"
 links = [
-    "script/release_check.sh",
+    "script/fullcheck.sh",
     "script/ruff_check.sh",
     "fuzz/Cargo.toml",
 ]
@@ -480,9 +480,9 @@ links = [
 [[inventory.root]]
 path = "script/ruff_check.sh"
 kind = "shell-script"
-purpose = "The ONE list of Python files ruff checks and format-checks, shared by release_check.sh and gatecheck.yml"
+purpose = "The ONE list of Python files ruff checks and format-checks, shared by fullcheck.sh and gatecheck.yml"
 links = [
-    "script/release_check.sh",
+    "script/fullcheck.sh",
     ".github/workflows/gatecheck.yml",
 ]
 
@@ -889,7 +889,7 @@ links = []
 path = "script"
 kind = "directory"
 purpose = "Shell entrypoints for repo operations"
-links = ["script/release_check.sh"]
+links = ["script/fullcheck.sh"]
 
 [[inventory.workspace]]
 path = "target"
@@ -2344,20 +2344,20 @@ links = ["python/forge/catalog.json", "python/model_fingerprint.py", "crates/urn
 [[inventory.data_docs_python_script_tests]]
 path = "tests/test_model_catalog.py"
 kind = "python-test"
-purpose = "The checked-in catalog is the registry's (generated without numpy), the MiniLM is offered at its pinned revision and hash, every other preset carries its reason, a stale catalog fails the check, conflicting pins keep the first model; in release_check.sh"
-links = ["python/forge/model_catalog.py", "script/release_check.sh"]
+purpose = "The checked-in catalog is the registry's (generated without numpy), the MiniLM is offered at its pinned revision and hash, every other preset carries its reason, a stale catalog fails the check, conflicting pins keep the first model; in fullcheck.sh"
+links = ["python/forge/model_catalog.py", "script/fullcheck.sh"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "tests/test_model_install.py"
 kind = "python-test"
-purpose = "install_model.py against a real 18 MB hub test model in a scratch HF_HOME: refusals before any download (no confirmation, no remote-code consent, another corpus's hash, an excluded model), the pinned files only with progress as bytes arrive, refs/main, an offline rerun, a wrong catalog hash or a changed reviewed file refused, another revision's refs/main left alone; the download cases skip by name when huggingface.co does not answer; in release_check.sh"
-links = ["python/forge/install_model.py", "script/release_check.sh"]
+purpose = "install_model.py against a real 18 MB hub test model in a scratch HF_HOME: refusals before any download (no confirmation, no remote-code consent, another corpus's hash, an excluded model), the pinned files only with progress as bytes arrive, refs/main, an offline rerun, a wrong catalog hash or a changed reviewed file refused, another revision's refs/main left alone; the download cases skip by name when huggingface.co does not answer; in fullcheck.sh"
+links = ["python/forge/install_model.py", "script/fullcheck.sh"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "tests/test_bench_runner.py"
 kind = "python-test"
-purpose = "The benchmark rebuild never destroys the corpus it replaces: an existing corpus is replaced by a validated build, a failing build leaves it byte-for-byte with no temporary, a stale temporary is cleaned and a first build creates the corpus; in release_check.sh"
-links = ["python/tools/_bench_runner.py", "script/release_check.sh"]
+purpose = "The benchmark rebuild never destroys the corpus it replaces: an existing corpus is replaced by a validated build, a failing build leaves it byte-for-byte with no temporary, a stale temporary is cleaned and a first build creates the corpus; in fullcheck.sh"
+links = ["python/tools/_bench_runner.py", "script/fullcheck.sh"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "tests/test_embedder_payload.py"
@@ -2368,13 +2368,13 @@ links = ["script/stage_embedder_payload.py", "python/forge/embed_query_model.py"
 [[inventory.data_docs_python_script_tests]]
 path = "tests/test_preflight.py"
 kind = "python-test"
-purpose = "The release preflight against the checkout and against temp copies with one field drifted per case (a workspace pin, a crate not inheriting, a lockfile entry, each versioned CITATION field, the citation date, the changelog section), and the tag checks in throwaway repos (another version, off main, dated before the release, lightweight, a stale CITATION on the tag's commit while the checkout carries the fix, a release file missing from the commit); in release_check.sh and gatecheck.yml; a tag made at 22:30 at -03:00 fits a release dated the next UTC day, one dated two days later is refused"
+purpose = "The release preflight against the checkout and against temp copies with one field drifted per case (a workspace pin, a crate not inheriting, a lockfile entry, each versioned CITATION field, the citation date, the changelog section), and the tag checks in throwaway repos (another version, off main, dated before the release, lightweight, a stale CITATION on the tag's commit while the checkout carries the fix, a release file missing from the commit); in fullcheck.sh and gatecheck.yml; a tag made at 22:30 at -03:00 fits a release dated the next UTC day, one dated two days later is refused"
 links = ["script/preflight.py"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "tests/test_pypiindex.py"
 kind = "python-test"
-purpose = "pypiindex.py against a local HTTP server standing in for the GitHub runs API and the index JSON: the source each index allows and the ones it refuses (another workflow, commit, failed host, failed or off-main rehearsal), wheels against their .sha256, count and version, a partial upload planning only the rest, a clashing sha256 and a stray file refused; in release_check.sh and gatecheck.yml"
+purpose = "pypiindex.py against a local HTTP server standing in for the GitHub runs API and the index JSON: the source each index allows and the ones it refuses (another workflow, commit, failed host, failed or off-main rehearsal), wheels against their .sha256, count and version, a partial upload planning only the rest, a clashing sha256 and a stray file refused; in fullcheck.sh and gatecheck.yml"
 links = ["script/pypiindex.py"]
 
 [[inventory.data_docs_python_script_tests]]
@@ -2386,13 +2386,13 @@ links = ["script/releasepr.sh"]
 [[inventory.data_docs_python_script_tests]]
 path = "tests/test_rehearsal.py"
 kind = "python-test"
-purpose = "The checked-in rehearsal is what release.yml generates and its build jobs carry the release's steps, runners and matrix; it has no write permission, secret, attestation or publish job; unknown shapes are refused; what needs the rehearsal and what does not (with real history when present); the artifact checks on a synthetic set in dist's format; a real binary on the golden fixture and a flipped byte; the verdict for dispensed, green, failed, cancelled and skipped; in release_check.sh and gatecheck.yml"
+purpose = "The checked-in rehearsal is what release.yml generates and its build jobs carry the release's steps, runners and matrix; it has no write permission, secret, attestation or publish job; unknown shapes are refused; what needs the rehearsal and what does not (with real history when present); the artifact checks on a synthetic set in dist's format; a real binary on the golden fixture and a flipped byte; the verdict for dispensed, green, failed, cancelled and skipped; in fullcheck.sh and gatecheck.yml"
 links = ["script/rehearsal.py"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "tests/test_chanprobe.py"
 kind = "python-test"
-purpose = "chanprobe.py against a local HTTP server standing in for the GitHub API and the registries: a propagating version waited for, a missing one failing at the deadline, the exact version only (0.5.30, a yanked line, no files), a full release reported released, a cancelled run with absent, unavailable and stale channels still summarized with exit 1, a tag on another commit, unavailable jobs, no pypiindex.yml run, non-JSON and unreadable answers never reported as success; in release_check.sh and gatecheck.yml"
+purpose = "chanprobe.py against a local HTTP server standing in for the GitHub API and the registries: a propagating version waited for, a missing one failing at the deadline, the exact version only (0.5.30, a yanked line, no files), a full release reported released, a cancelled run with absent, unavailable and stale channels still summarized with exit 1, a tag on another commit, unavailable jobs, no pypiindex.yml run, non-JSON and unreadable answers never reported as success; in fullcheck.sh and gatecheck.yml"
 links = ["script/chanprobe.py"]
 
 [[inventory.data_docs_python_script_tests]]
@@ -2417,7 +2417,7 @@ links = []
 path = "docs/CONTRIBUTING.md"
 kind = "contributor-doc"
 purpose = "Setup, branching, testing, and style guidance"
-links = ["script/release_check.sh"]
+links = ["script/fullcheck.sh"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "docs/USAGE.md"
@@ -2590,7 +2590,7 @@ links = ["python/forge/embed_potion.py"]
 [[inventory.data_docs_python_script_tests]]
 path = "python/forge/test_embed_st.py"
 kind = "python-test"
-purpose = "Manual ST-backend self-test against the local wemm-2b snapshot: worker isolation, dim/norm contracts, model_hash stability, cross-modal sanity; skips without the deps or the snapshot, not run by release_check.sh (loads a 2b model)"
+purpose = "Manual ST-backend self-test against the local wemm-2b snapshot: worker isolation, dim/norm contracts, model_hash stability, cross-modal sanity; skips without the deps or the snapshot, not run by fullcheck.sh (loads a 2b model)"
 links = [
     "python/forge/embed_st.py",
     "python/forge/embed_st_worker.py",
@@ -2599,7 +2599,7 @@ links = [
 [[inventory.data_docs_python_script_tests]]
 path = "python/forge/test_open_clip_snapshot.py"
 kind = "python-test"
-purpose = "manual siglip2 self-test: embed_query_model.py offline against a cache holding only the pinned snapshot (no refs/main, no .no_exist), the model_hash of the mtg stills-5models build, and a missing tokenizer file reported as exit 3 with urna-fetch; skips without torch, open_clip, transformers or the snapshot, not run by release_check.sh"
+purpose = "manual siglip2 self-test: embed_query_model.py offline against a cache holding only the pinned snapshot (no refs/main, no .no_exist), the model_hash of the mtg stills-5models build, and a missing tokenizer file reported as exit 3 with urna-fetch; skips without torch, open_clip, transformers or the snapshot, not run by fullcheck.sh"
 links = [
     "python/forge/model_registry.py",
     "python/forge/embed_image.py",
@@ -2833,7 +2833,7 @@ links = [
 ]
 
 [[inventory.data_docs_python_script_tests]]
-path = "script/release_check.sh"
+path = "script/fullcheck.sh"
 kind = "shell-script"
 purpose = "Full release gate"
 links = [

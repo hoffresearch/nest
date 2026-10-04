@@ -354,7 +354,7 @@ urna cite my_corpus.urna 'urna://sha256:1aa9.../sha256:8f314...'
 ## 10. Release verification
 
 ```sh
-./script/release_check.sh
+./script/fullcheck.sh
 ```
 
 Runs the full pipeline: the release build, the Python extension rebuilt with `pyo3/extension-module` (before the Rust suite, whose CLI end-to-end tests load it), the Rust suite in release, Clippy, cargo fmt, the 639-line guard, the seventeen Python suites (e2e, builder, search_text_model_hash, image_corpus, forge_spec, quality_gate, cli_space, query_embedder_routing, embedder_payload, bench_runner, model_catalog, model_install, preflight, pypiindex, rehearsal, chanprobe, releasepr; model_install fetches an 18 MB hub test model and skips that case when huggingface.co does not answer), ruff when importable, `measure_presets.py` and `compare_measure.py` against the committed baseline. Exits non-zero on any failure. What it does not run: the flagship e2e tests that need the forge deps (`cli_e2e.rs` skips without them), `test_offline_guard.py`, `test_blob_bridge.py`, `test_space_bridge.py`, and the checks CI adds on top (cargo-deny, cargo-semver-checks, the Windows job, the fuzz smoke).
@@ -586,10 +586,10 @@ Every `URNA_*` variable read anywhere in the codebase (installers, CLI, forge, d
 | `URNA_MUTATION_ITERS` | Dev | `1500` | Iteration count for the mutation-fuzz harness; raise for a soak run |
 | `URNA_FUZZ_SEED_DIR` | Dev | Unset | Seed corpus dir override for the mutation-fuzz harness |
 | `URNA_FUZZ_TARGETS` | Dev | `urna-view section-decoders runtime-indexes mmap-open-search` | Space-separated cargo-fuzz targets `script/fuzz_soak.sh` runs |
-| `URNA_BASELINE` | Dev | `data/measure/baseline.json` | Regression baseline `release_check.sh` compares against |
-| `URNA_QUERIES` | Dev | `100` | Query count `measure_presets.py` uses via `release_check.sh` |
-| `URNA_K` | Dev | `10` | Top-k `measure_presets.py` uses via `release_check.sh` |
-| `URNA_OUT` | Dev | `/tmp/release_check_post.json` | Where `release_check.sh` writes the post-run measurement JSON |
+| `URNA_BASELINE` | Dev | `data/measure/baseline.json` | Regression baseline `fullcheck.sh` compares against |
+| `URNA_QUERIES` | Dev | `100` | Query count `measure_presets.py` uses via `fullcheck.sh` |
+| `URNA_K` | Dev | `10` | Top-k `measure_presets.py` uses via `fullcheck.sh` |
+| `URNA_OUT` | Dev | `/tmp/fullcheck_post.json` | Where `fullcheck.sh` writes the post-run measurement JSON |
 
 <details>
 <summary>One-liner (Linux, macOS)</summary>
@@ -786,6 +786,6 @@ The release workflows assume external state that a fresh org does not have. As o
     - setuptest's npm, bun, pnpm and yarn legs ran before the registry served 0.5.3 (`ETARGET`, no matching version). Each registry leg now waits for the exact version first; a leg that still fails after the 15-minute wait names the channel's last state.
     - GitHub retires runner labels (`macos-13` queued forever): keep setuptest's matrix on the runners dist uses (`dist plan` lists them).
 
-12. **The release rehearsal**: `.github/workflows/rehearsal.yml` runs the release's own build before a tag, publishing nothing. It is generated from `release.yml` by `script/rehearsal.py`: the same plan, the five archives with the same runners and matrix, the wheels (`wheelmake.yml`) and the global job, with the host and publish jobs dropped, every permission read-only, no secret but the run's token and no attestation. It runs on pull requests and pushes to `main`; its `impact` job decides whether the change touches a release input (the crates, the manifests and lockfile, `packs/`, the staging scripts, every file the payload and the wheel copy, the model dirs, `README.md`, `LICENSE`, the release workflows), and a `workflow_dispatch` always runs it. With impact, the `assets` job checks every artifact the plan names, the four wheels and their `.sha256`, every checksum and `sha256.sum`, the payload's `VERSION`, and runs the Linux binary against the golden fixture. The `rehearsal` job is a required check of the `main` ruleset (source: GitHub Actions), so a pull request cannot merge without it: no impact passes as dispensed; with impact, a failed, cancelled or skipped build or assets job fails it. It does not rebuild the measurement corpora (that is `release_check.sh`), and it proves neither the publishing jobs nor the attestations; those run only on a tag. A successful rehearsal on a `main` commit is the `source_run` of the TestPyPI proof (step 4).
+12. **The release rehearsal**: `.github/workflows/rehearsal.yml` runs the release's own build before a tag, publishing nothing. It is generated from `release.yml` by `script/rehearsal.py`: the same plan, the five archives with the same runners and matrix, the wheels (`wheelmake.yml`) and the global job, with the host and publish jobs dropped, every permission read-only, no secret but the run's token and no attestation. It runs on pull requests and pushes to `main`; its `impact` job decides whether the change touches a release input (the crates, the manifests and lockfile, `packs/`, the staging scripts, every file the payload and the wheel copy, the model dirs, `README.md`, `LICENSE`, the release workflows), and a `workflow_dispatch` always runs it. With impact, the `assets` job checks every artifact the plan names, the four wheels and their `.sha256`, every checksum and `sha256.sum`, the payload's `VERSION`, and runs the Linux binary against the golden fixture. The `rehearsal` job is a required check of the `main` ruleset (source: GitHub Actions), so a pull request cannot merge without it: no impact passes as dispensed; with impact, a failed, cancelled or skipped build or assets job fails it. It does not rebuild the measurement corpora (that is `fullcheck.sh`), and it proves neither the publishing jobs nor the attestations; those run only on a tag. A successful rehearsal on a `main` commit is the `source_run` of the TestPyPI proof (step 4).
 
 </details>
