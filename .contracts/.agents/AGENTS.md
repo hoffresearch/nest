@@ -182,8 +182,7 @@ Os invariantes do formato e do runtime. Uma mudança que os toca precisa dos tes
 
 - Sem emoji. Sem travessão, o caractere de traço longo: use vírgula, ponto e vírgula, ponto ou um hífen comum.
 - Parágrafos curtos, voz direta, sem texto de marketing. Docs são orientados a tarefa: o que faz, como rodar, um exemplo.
-- Todo doc começa com um cabeçalho YAML: `project`, `audience`, `status`, `last-updated`, `domain` (skills também carregam `name` e `description`). Isentos: `README.md` (empacotado pelo crates.io, PyPI e npm; o GitHub renderiza front matter como tabela), `LICENSE`, `.github/pull_request_template.md` (seu texto vira o corpo do pull request), `llms.txt` (segue o formato llms.txt) e os documentos do corpus demo em `python/forge/demo_corpus/` (são dados).
-- `llms.txt` é descoberta para LLMs e busca: título, resumo, links com uma linha cada. Ele aponta para os docs e não carrega instrução; este arquivo é a instrução.
+- Todo doc começa com um cabeçalho YAML: `project`, `audience`, `status`, `last-updated`, `domain` (skills também carregam `name` e `description`). Isentos: `README.md` (empacotado pelo crates.io, PyPI e npm; o GitHub renderiza front matter como tabela), `LICENSE`, `.github/pull_request_template.md` (seu texto vira o corpo do pull request) e os documentos do corpus demo em `python/forge/demo_corpus/` (são dados).
 - `docs/ARC.toml` é a única referência de arquitetura: narrativa (system_view, contract, quality, risks), inventário de arquivos e o mapa Mermaid dos fluxos de build e consulta (`diagram.source`). Depois de qualquer mudança em módulo, fronteira, fluxo, contrato público, armazenamento ou comportamento de runtime, atualize-o na mesma mudança: avance `last-updated`, acrescente uma nota datada à `summary`, adicione arquivos novos ao inventário. Nenhum segundo documento de arquitetura.
 - Docs são corrigidos no próprio lugar. Histórico e decisões, incluindo uma decisão que se mostrou errada e o que a substituiu, vão para `docs/CHANGELOG`, o commit e o pull request; nunca como notas "mudou x para y" dentro de um doc.
 - Nomes: diretórios, docs e assets em kebab-case em inglês; arquivos fonte idiomáticos à sua linguagem. Proponha um rename como comandos `mv`, corrija todo import que ele toca, rode os testes.
@@ -253,7 +252,6 @@ Limitações documentadas, não bugs para consertar de passagem. Aponte-as em qu
 - `scripts/release_check.sh`: leia; ele documenta o gate sendo o gate.
 - `fuzz/README.md`: os quatro alvos do cargo-fuzz, rodar um soak, regenerar as sementes, transformar um achado em teste.
 - `.contracts/.agents/.skills/afterwork/AFTERWORK.md`: o walk de fim de tarefa, sobre a lista de arquivos em `.contracts/.agents/.skills/afterwork/specs.yaml`; `.github/pull_request_template.md` o carrega como checkboxes.
-- `llms.txt`: descoberta para LLMs e busca
 
 # Sobre as entradas de comportamento humano nas sessões de código com agentes
 
