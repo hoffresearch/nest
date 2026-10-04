@@ -176,8 +176,8 @@ ok "release preflight (7 cases)"
 
 # the pypi upload takes the release's wheels from the run its index allows,
 # and a rerun uploads only what the index does not have yet.
-step "python tests/test_pypi_release.py"
-"$PY" tests/test_pypi_release.py
+step "python tests/test_pypiindex.py"
+"$PY" tests/test_pypiindex.py
 ok "pypi release (5 cases)"
 
 # the release rehearsal is generated from release.yml, publishes nothing,

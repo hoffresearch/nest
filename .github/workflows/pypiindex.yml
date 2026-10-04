@@ -18,7 +18,7 @@
 #   main; the wheels and checksums come from that run's artifacts (the
 #   rehearsal makes no attestations). this path can only reach testpypi.
 #
-# the upload is idempotent (script/pypi_release.py plan): a wheel the
+# the upload is idempotent (script/pypiindex.py plan): a wheel the
 # index already has with the same sha256 is skipped, one with another
 # sha256 fails, the rest are uploaded, so a rerun after a partial upload
 # finishes it. a manual dispatch goes through the same checks.
@@ -91,7 +91,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: the source run is the one this index allows
-        run: python3 script/pypi_release.py source --index "$INDEX" --run "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --sha "$(git rev-parse HEAD)"
+        run: python3 script/pypiindex.py source --index "$INDEX" --run "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --sha "$(git rev-parse HEAD)"
       - name: version
         id: version
         run: echo "version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')" >> "$GITHUB_OUTPUT"
@@ -118,7 +118,7 @@ jobs:
           github-token: ${{ github.token }}
       - name: which wheels the index still needs (same sha256 skipped, another fails)
         id: plan
-        run: python3 script/pypi_release.py plan --index "$INDEX" --dir dist --version "${{ steps.version.outputs.version }}" --out upload
+        run: python3 script/pypiindex.py plan --index "$INDEX" --dir dist --version "${{ steps.version.outputs.version }}" --out upload
       - name: publish to pypi
         if: inputs.index == 'pypi' && steps.plan.outputs.upload != '0'
         uses: pypa/gh-action-pypi-publish@release/v1

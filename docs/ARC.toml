@@ -2372,10 +2372,10 @@ purpose = "The release preflight against the checkout and against temp copies wi
 links = ["script/preflight.py"]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_pypi_release.py"
+path = "tests/test_pypiindex.py"
 kind = "python-test"
-purpose = "pypi_release.py against a local HTTP server standing in for the GitHub runs API and the index JSON: the source each index allows and the ones it refuses (another workflow, commit, failed host, failed or off-main rehearsal), wheels against their .sha256, count and version, a partial upload planning only the rest, a clashing sha256 and a stray file refused; in release_check.sh and gatecheck.yml"
-links = ["script/pypi_release.py"]
+purpose = "pypiindex.py against a local HTTP server standing in for the GitHub runs API and the index JSON: the source each index allows and the ones it refuses (another workflow, commit, failed host, failed or off-main rehearsal), wheels against their .sha256, count and version, a partial upload planning only the rest, a clashing sha256 and a stray file refused; in release_check.sh and gatecheck.yml"
+links = ["script/pypiindex.py"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "tests/test_release_prepare.py"
@@ -2980,11 +2980,11 @@ links = [
 [[inventory.distribution]]
 path = ".github/workflows/pypiindex.yml"
 kind = "ci-workflow"
-purpose = "Top-level, dispatch only (trusted publishing does not take a reusable workflow): publishes the wheels with OIDC + PEP 740. index=pypi on a signed v* tag, from the release run whose host succeeded, taking the wheels and .sha256 from the GitHub release and verifying each attestation against wheelmake.yml as signer, the tag's commit and ref; index=testpypi on main, from a successful rehearsal run on a main commit, testpypi only. The upload skips wheels already there with the same sha256 and fails on another (script/pypi_release.py)"
+purpose = "Top-level, dispatch only (trusted publishing does not take a reusable workflow): publishes the wheels with OIDC + PEP 740. index=pypi on a signed v* tag, from the release run whose host succeeded, taking the wheels and .sha256 from the GitHub release and verifying each attestation against wheelmake.yml as signer, the tag's commit and ref; index=testpypi on main, from a successful rehearsal run on a main commit, testpypi only. The upload skips wheels already there with the same sha256 and fails on another (script/pypiindex.py)"
 links = [
     ".github/workflows/pypiready.yml",
     ".github/workflows/tagverify.yml",
-    "script/pypi_release.py",
+    "script/pypiindex.py",
 ]
 
 [[inventory.distribution]]
@@ -3041,10 +3041,10 @@ purpose = "Custom cargo-dist publish job: dispatches pypiindex.yml on the releas
 links = [".github/workflows/release.yml", ".github/workflows/pypiindex.yml"]
 
 [[inventory.distribution]]
-path = "script/pypi_release.py"
+path = "script/pypiindex.py"
 kind = "python-source"
 purpose = "pypiindex.yml's checks: source (the run the index allows: the tag's release run with a successful host for pypi, a successful rehearsal on main for testpypi) and plan (each wheel matches its .sha256, the count and version, then the index JSON decides, every remote file checked before any copy: same sha256 skipped, another fails with nothing staged, the rest uploaded)"
-links = [".github/workflows/pypiindex.yml", "tests/test_pypi_release.py"]
+links = [".github/workflows/pypiindex.yml", "tests/test_pypiindex.py"]
 
 [[inventory.distribution]]
 path = ".github/workflows/tagverify.yml"

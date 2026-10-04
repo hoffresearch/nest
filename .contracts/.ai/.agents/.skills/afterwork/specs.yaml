@@ -183,7 +183,7 @@ groups:
         when: mudarem estrutura gerada, entradas distribuídas, classificação de impacto ou validação dos artefatos.
       - path: script/release_channels.py
         when: mudarem registries, respostas, retries ou verificações do relatório.
-      - path: script/pypi_release.py
+      - path: script/pypiindex.py
         when: mudarem validação da origem, checksums ou recuperação de uploads parciais.
       - path: script/release_check.sh
         when: mudarem suítes, pré-requisitos, critérios de execução ou resultados de aprovação, falha e dispensa do gate local.
