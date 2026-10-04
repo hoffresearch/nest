@@ -4,7 +4,7 @@
 
 ## afterwork
 
-tick what the change touched; leave the rest. the full walk is `.contracts/.agents/.skills/AFTERWORK.md`.
+tick what the change touched; leave the rest. the full walk is `.contracts/.agents/.skills/afterwork/AFTERWORK.md`, over the file list in `.contracts/.agents/.skills/afterwork/specs.yaml`.
 
 - [ ] `docs/CHANGELOG` `[Unreleased]`: the why, measured numbers, test counts
 - [ ] `docs/arc/ARC.toml`: architecture, contracts, inventory, dated `summary` note
