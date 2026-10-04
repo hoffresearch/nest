@@ -160,7 +160,7 @@ ok "model catalog (5 cases)"
 # download cases skip by name when huggingface.co does not answer).
 step "python tests/test_model_install.py"
 "$PY" tests/test_model_install.py
-ok "model install (4 cases)"
+ok "model install (5 cases)"
 
 # the benchmark rebuild builds beside the corpus and renames at the end, so
 # an interrupted gate never leaves data/measure without its corpora.
