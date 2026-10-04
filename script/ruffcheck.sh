@@ -60,7 +60,7 @@ python/tools/urna_model_bench.py
 python/tools/_model_bench_report.py
 python/tools/urna_ui_bridge.py
 tests/test_forgespec.py
-tests/test_quality_gate.py
+tests/test_mediagate.py
 tests/test_clispaces.py
 tests/test_query_embedder_routing.py
 tests/test_embedpack.py
