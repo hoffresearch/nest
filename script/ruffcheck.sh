@@ -62,7 +62,7 @@ python/tools/urna_ui_bridge.py
 tests/test_forgespec.py
 tests/test_mediagate.py
 tests/test_clispaces.py
-tests/test_query_embedder_routing.py
+tests/test_askrouter.py
 tests/test_embedpack.py
 tests/test_bench_runner.py
 tests/test_catalogue.py

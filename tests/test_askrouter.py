@@ -9,7 +9,7 @@ names falls through to embed_query.py, so ask works on a corpus built with
 any sentence-transformers model (cases 6 to 9).
 The three-layer gate itself is covered by test_search_text_model_hash.py.
 
-Run: .venv/bin/python tests/test_query_embedder_routing.py
+Run: .venv/bin/python tests/test_askrouter.py
 """
 
 import json
