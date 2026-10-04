@@ -113,7 +113,7 @@ crates/urna-cli       o binário `urna`, publicado como o crate `urna`: verbos d
 crates/urna-python    a ponte pyo3, cdylib `_urna`, abi3-py312; sai como a wheel, não como crate
 forge-core/           workspace cargo separado: o schema .fci congelado de intermediário canônico da camada de ingestão
 fuzz/                 workspace cargo separado (nightly, cargo-fuzz): quatro alvos, seeds/, README.md; corpus/ é local, nunca commitado
-docker/               Dockerfile: o binário musl estático numa imagem scratch; só verbos do engine, sem python dentro
+Dockerfile            o binário musl estático numa imagem scratch; só verbos do engine, sem python dentro
 python/               o pipeline do writer, fingerprint de modelo, embedders de consulta, e forge/ (builds declarativos, registry de modelos, gate de qualidade)
 tests/                scripts de teste python
 data/                 o corpus demo em lfs, measure/ com as baselines de regressão, demo/ com as fontes (gitignored, ver Instructions.md)
