@@ -64,8 +64,8 @@ pub fn collect() -> Vec<Row> {
         ),
     ));
 
-    let simd = urna_runtime::simd::detect_backend();
-    if simd == urna_runtime::SimdBackend::Scalar {
+    let simd = urna_engine::simd::detect_backend();
+    if simd == urna_engine::SimdBackend::Scalar {
         rows.push(Row::new(
             Level::Warn,
             "simd",

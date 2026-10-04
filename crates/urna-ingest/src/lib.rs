@@ -6,7 +6,7 @@
 //! intermediate that the sovereign urna build path already eats. it lives
 //! in its OWN cargo workspace, excluded from the sovereign one in the root
 //! manifest, so its dependency tree never touches urna-format or
-//! urna-runtime and the byte-identical container guarantee stays untainted.
+//! urna-engine and the byte-identical container guarantee stays untainted.
 //!
 //! this crate is FORGE-0a: the FROZEN .fci schema only. it owns the stable
 //! contract between forge (produces) and the python adapter (consumes).

@@ -186,7 +186,7 @@ pub(crate) fn truncate_renormalize(
 /// edge_type, dst) so two builds are byte-identical. returns `None` when
 /// there is nothing to emit (n < 2). deterministic and pure.
 pub(crate) fn build_graph_payload(
-    hnsw: Option<&urna_runtime::ann::HnswIndex>,
+    hnsw: Option<&urna_engine::ann::HnswIndex>,
     n: usize,
     top_m: usize,
 ) -> PyResult<Option<Vec<u8>>> {
@@ -246,12 +246,12 @@ pub(crate) fn build_hnsw(
     m: usize,
     ef_construction: usize,
     seed: u64,
-) -> urna_runtime::ann::HnswIndex {
+) -> urna_engine::ann::HnswIndex {
     let mut flat: Vec<f32> = Vec::with_capacity(chunks.len() * dim);
     for c in chunks {
         flat.extend_from_slice(&c.embedding);
     }
-    urna_runtime::ann::HnswIndex::build(flat, chunks.len(), dim, m, ef_construction, seed)
+    urna_engine::ann::HnswIndex::build(flat, chunks.len(), dim, m, ef_construction, seed)
 }
 
 pub(crate) fn parse_chunks(chunks: &Bound<PyList>) -> PyResult<Vec<urna_format::ChunkInput>> {

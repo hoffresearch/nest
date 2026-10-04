@@ -12,12 +12,12 @@ summary = "Single-file semantic knowledge stack: Rust owns format, runtime, CLI,
 
 system_view = [
     "urna-format is the frozen v1 container contract. It owns layout, manifest, reader, writer, canonical sections, hashes, and wire encodings. Embeddings stay raw float32, float16, int8, or int4 (fixed-stride quant only); zstd is reserved for non-embedding sections.",
-    "urna-runtime opens .urna files through mmap, validates queries, dispatches SIMD, and executes exact, ANN, graph, and hybrid search while reranking candidates with real cosine. That hot path is why embeddings are never zstd-compressed.",
+    "urna-engine opens .urna files through mmap, validates queries, dispatches SIMD, and executes exact, ANN, graph, and hybrid search while reranking candidates with real cosine. That hot path is why embeddings are never zstd-compressed.",
     "urna-cli is a thin clap surface over the runtime and format crates. It carries the twelve engine subcommands (inspect, validate, stats, media, search, search-text, search-ann, search-graph, search-space, benchmark, cite, doctor: file + vector in; only search-text and doctor spawn Python) and the three agent verbs (ask, retrieve, build: text or spec in, shell out to the offline Python embedder / forge), tagged [engine] / [agent] in --help. ask and retrieve are the agent-native flagship verbs layered over the engine (text query in, cited answer out; both embed the query offline with the default potion static table, validate the embedder's model_hash against the manifest exactly like search-text, and route by what the file carries through MmapUrnaFile::search_routed: hybrid when a BM25 section is present, hnsw when an HNSW section is present, exact otherwise; ask prints one cited answer (--disclose answer) or adds the rerank-source honesty line + route + candidate counts (--disclose explain); retrieve emits the agent-shaped JSON/JSONL answer-pack where each hit's score IS the exact-cosine rerank value). doctor is the post-install health check with typed exit codes (0 ok, 2 Python missing, 3 deps missing, 4 embedder missing, 5 potion table missing, 6 embedder run failed). Behind the default-on `tui` feature the CLI also carries the terminal UI in src/tui: `setup` (the interactive installer, exit codes 10 download, 11 checksum, 12 unpack, 13 Python env, 14 blocked, 15 a model install; --model installs catalog models) and `tui` (the corpus explorer; a bare `urna` on a terminal opens it, in a pipe it prints the help and exits 2). Verb-collapse, the urna dev namespace, and the urna-profile crate are deferred.",
-    "The distribution layer (issue #75) turns tags on main into installs: cargo-dist builds the CLI for five targets with SHA256 checksums, Sigstore keyless attestations on the five archives, one CycloneDX SBOM for the CLI package, a Homebrew tap formula (`urna`) and an npm package (`@urna/cli`), and publishes urna-format / urna-runtime / urna (the CLI crate) to crates.io; maturin builds the `urna` abi3 wheel with the potion table bundled (offline embedding after pip install); scripts/install.sh / install.ps1 are the one-liner installers (verify-before-write, --version, --uninstall); urna doctor validates the install offline and `urna setup` completes the channels that ship the bare binary (Homebrew, npm, crates.io); .github/workflows/install-test.yml tests the INSTALLED product per platform after each release, including a job per package channel that waits for the exact version on its registry and ends in `urna setup --yes` + `urna doctor`; .github/workflows/release-report.yml summarizes every completed release run, failed or cancelled included. Three levels of evidence, not interchangeable: scripts/release_check.sh is the full local gate (no release build), release-rehearsal.yml builds the release on pull requests and publishes nothing, and only a tag exercises publishing, install-test and the report.",
+    "The distribution layer (issue #75) turns tags on main into installs: cargo-dist builds the CLI for five targets with SHA256 checksums, Sigstore keyless attestations on the five archives, one CycloneDX SBOM for the CLI package, a Homebrew tap formula (`urna`) and an npm package (`@urna/cli`), and publishes urna-format / urna-engine / urna (the CLI crate) to crates.io; maturin builds the `urna` abi3 wheel with the potion table bundled (offline embedding after pip install); scripts/install.sh / install.ps1 are the one-liner installers (verify-before-write, --version, --uninstall); urna doctor validates the install offline and `urna setup` completes the channels that ship the bare binary (Homebrew, npm, crates.io); .github/workflows/install-test.yml tests the INSTALLED product per platform after each release, including a job per package channel that waits for the exact version on its registry and ends in `urna setup --yes` + `urna doctor`; .github/workflows/release-report.yml summarizes every completed release run, failed or cancelled included. Three levels of evidence, not interchangeable: scripts/release_check.sh is the full local gate (no release build), release-rehearsal.yml builds the release on pull requests and publishes nothing, and only a tag exercises publishing, install-test and the report.",
     "urna-python is the PyO3 bridge. python/urna.py loads the compiled extension, python/builder.py orchestrates chunking and caching, and python/embed_query.py preserves model parity for search-text. The agent-native flagship is UrnaFile.retrieve(query, k, ...): a pre-embedded query in, cited spans out, whose score IS the exact rerank value, with tier-1 stored canonical text + hashes + citation_id + rerank-source marker.",
     "scripts/release_check.sh is the release gate: rebuilds the extension, runs Rust and Python suites, checks lint and format, measures presets, and compares against the committed baseline.",
-    "crates/urna-ingest is the ingestion layer, a SEPARATE cargo workspace under crates/ that the root Cargo.toml excludes, so its (eventually heavy, possibly non-deterministic) deps never enter urna-format or urna-runtime. This phase ships FORGE-0a: the frozen .fci canonical-intermediate schema only. It is not built by the sovereign release gate; it has its own cargo workspace.",
+    "crates/urna-ingest is the ingestion layer, a SEPARATE cargo workspace under crates/ that the root Cargo.toml excludes, so its (eventually heavy, possibly non-deterministic) deps never enter urna-format or urna-engine. This phase ships FORGE-0a: the frozen .fci canonical-intermediate schema only. It is not built by the sovereign release gate; it has its own cargo workspace.",
     "python/forge is the forge Python surface. Its build-side default is an offline semantic static embedder (python/forge/embed_potion.py): a vendored model2vec/potion-base-8M table (MIT, dim 256, ~30MB via git-lfs), numpy + tokenizers only, no torch, no network round-trip; it self-fingerprints to a SHA256 model_hash recorded in provenance. The #04 lexical bag-of-words (python/forge/embed_default.py) stays as the stdlib-only zero-dependency floor/fallback.",
     "The image corpus path is Python-only and stays in the forge tooling layer, because a vision tower needs torch and the sovereign runtime does not take that dependency; no format or runtime code depends on it and the .urna it emits is an ordinary .urna. python/forge/image_items.py owns discovery (sorted, reproducible: an item's position IS its corpus ordinal, its frame number, and the byte_start its citation resolves through). python/forge/image_media.py, image_encode.py (+ image_encode_still.py for AVIF/JXL, image_gop_probe.py for the probe), and image_backends.py (+ image_backends_av1.py for the stream) own the codec path: images are letterboxed onto one canvas, frames move through a rawvideo pipe, the encoded frame count is verified against the item count, and gop_policy=auto probe-encodes both directions before choosing. Every codec backend (av1, avif, jxl, jxl-transcode) records media.source_bytes as the byte size of the original source files, so compression_ratio is one quantity across them (the AVIF letterboxed PNG sum is kept apart as letterboxed_input_bytes; the png-lossless control reports output_bytes only, it is the ruler). python/forge/embed_image.py fingerprints the weights actually loaded plus the preprocess transform, and rejects a bare architecture name with no pretrained tag. A corpus is corpus.urna beside corpus.media/ plus corpus.manifest.json, or, since the media blob pillar, the media travels inside the .urna itself via blob_refs (0x14) + blob_span_overlay (0x16).",
 ]
@@ -46,14 +46,14 @@ quality = [
     "The CLI stays intentionally thin and delegates behavior to runtime and format crates.",
     "The Python surface is small and explicit: load extension, build corpora, fingerprint models, and run support tooling.",
     "ANN, graph, hybrid, and space paths always rerank with exact cosine, which keeps scores consistent across search modes.",
-    "A malformed .urna may be rejected with a typed error, never with a panic: Clippy denies unwrap_used and undocumented_unsafe_blocks workspace-wide, urna-format carries zero unsafe (bytemuck views), fixed-width fields go through urna_format::bytes, header-derived sizes are overflow-checked, cursor bounds checks are written need > remaining, every scored slab (canonical, fp, bands) passes a finite-values gate at open, and every f32 sort is a NaN-last total order (urna_runtime::order). The mutation-fuzz harnesses run under cargo test and CI; fuzz/ holds the coverage-guided targets.",
+    "A malformed .urna may be rejected with a typed error, never with a panic: Clippy denies unwrap_used and undocumented_unsafe_blocks workspace-wide, urna-format carries zero unsafe (bytemuck views), fixed-width fields go through urna_format::bytes, header-derived sizes are overflow-checked, cursor bounds checks are written need > remaining, every scored slab (canonical, fp, bands) passes a finite-values gate at open, and every f32 sort is a NaN-last total order (urna_engine::order). The mutation-fuzz harnesses run under cargo test and CI; fuzz/ holds the coverage-guided targets.",
     "Media (blob_refs/blob_span_overlay) and multimodal spaces (space_table + bands) are additive and content_hash-excluded, so attaching them to a corpus never moves an existing text citation; each named space is gated by its own model_hash in isolation.",
 ]
 
 risks = [
     "docs/ARC.toml is the single architecture reference (narrative, contract, quality, risks, inventory, and the Mermaid diagram, merged 2026-09-18 from the former arc.yaml + arc.mmd + arc.schema.json) and must be updated in the same change as any edit to boundaries, data flow, module layout, or runtime contract. There is no separate human-prose architecture doc.",
     "BM25 tokenization is intentionally simple and documented as weak for CJK, Thai, and Lao.",
-    "python/_urna.so must be rebuilt after Rust changes that touch urna-format, urna-runtime, or urna-python.",
+    "python/_urna.so must be rebuilt after Rust changes that touch urna-format, urna-engine, or urna-python.",
     "crates/urna-ingest is a separate cargo workspace, excluded from the sovereign one by the root Cargo.toml, and must stay that way: its (eventually heavy) ingestion deps must never enter the sovereign workspace, and it is not built by the sovereign release gate, so it carries its own cargo build/test/fmt/clippy.",
 ]
 
@@ -69,17 +69,17 @@ links = [
 ]
 
 [[layers]]
-name = "urna-runtime"
+name = "urna-engine"
 role = "mmap-backed search runtime with SIMD, ANN, BM25, chunk-to-chunk graph (G1), and exact rerank"
 entrypoints = [
-    "crates/urna-runtime/src/lib.rs",
-    "crates/urna-runtime/src/mmap_file.rs",
-    "crates/urna-runtime/src/search.rs",
+    "crates/urna-engine/src/lib.rs",
+    "crates/urna-engine/src/mmap_file.rs",
+    "crates/urna-engine/src/search.rs",
 ]
 links = [
     "crates/urna-format/src/lib.rs",
-    "crates/urna-runtime/src/simd/mod.rs",
-    "crates/urna-runtime/src/graph/mod.rs",
+    "crates/urna-engine/src/simd/mod.rs",
+    "crates/urna-engine/src/graph/mod.rs",
 ]
 
 [[layers]]
@@ -93,7 +93,7 @@ links = [
     "crates/urna-cli/src/cmd/agent/ask.rs",
     "crates/urna-cli/src/cmd/agent/retrieve.rs",
     "crates/urna-cli/src/cmd/doctor.rs",
-    "crates/urna-runtime/src/mmap_file.rs",
+    "crates/urna-engine/src/mmap_file.rs",
 ]
 
 [[layers]]
@@ -248,7 +248,7 @@ path = [
     "crates/urna-cli/src/cmd/embed_failure.rs",
     "python/embed_query.py",
     "python/model_fingerprint.py",
-    "crates/urna-runtime/src/search.rs",
+    "crates/urna-engine/src/search.rs",
 ]
 summary = "Embed a query in Python (embed_query.py resolved from a checkout or the data roots), validate name, dim, and model_hash, then route to exact, hnsw, or hybrid search; a failure names its cause and fix"
 
@@ -261,7 +261,7 @@ path = [
     "python/forge/embed_query_potion.py",
     "python/forge/embed_query_model.py",
     "python/embed_query.py",
-    "crates/urna-runtime/src/search.rs",
+    "crates/urna-engine/src/search.rs",
     "crates/urna-cli/src/cmd/agent/retrieve.rs",
 ]
 summary = "The agent-native flagship: embed_gate::embed_and_search embeds the query OFFLINE routing by the manifest model (potion corpora keep the potion table byte-for-byte; any registry model goes through embed_query_model.py with the query-role encode and --mrl-dim for truncated default spaces; st_text presets such as minilm-multilingual, and ST models no preset names, continue into embed_query.py), runs the ONE name/dim/model_hash gate shared with search-text, routes by manifest capability, then ask renders the cited canonical text (--disclose answer) or adds the rerank-source honesty line (--disclose explain) and retrieve emits the JSON/JSONL answer-pack where every hit score IS the exact rerank value with tier-1 text + hashes + citation_id"
@@ -272,28 +272,28 @@ entry = "crates/urna-python/src/retrieve_fn.rs"
 path = [
     "python/forge/retrieve.py",
     "python/forge/embed_potion.py",
-    "crates/urna-runtime/src/search.rs",
-    "crates/urna-runtime/src/inspect.rs",
+    "crates/urna-engine/src/search.rs",
+    "crates/urna-engine/src/inspect.rs",
 ]
 summary = "UrnaFile.retrieve(qvec, k): route by manifest capability, run search, attach tier-1 stored canonical text (canonical_texts) per chunk_id; forge/retrieve.py does the offline potion embed first and drives the one-gif demo over demo_corpus, fully offline and deterministic"
 
 [[flows]]
 name = "runtime-open-and-search"
-entry = "crates/urna-runtime/src/mmap_file.rs"
+entry = "crates/urna-engine/src/mmap_file.rs"
 path = [
     "crates/urna-format/src/reader/mod.rs",
-    "crates/urna-runtime/src/search.rs",
-    "crates/urna-runtime/src/simd/mod.rs",
+    "crates/urna-engine/src/search.rs",
+    "crates/urna-engine/src/simd/mod.rs",
 ]
 summary = "Open mmap, decode metadata and optional indices (ANN/BM25/graph), and score rows directly from the embeddings section; embeddings stay raw, float16, or int8 so the runtime never has to zstd-decompress the hot path"
 
 [[flows]]
 name = "graph-search"
-entry = "crates/urna-runtime/src/search.rs"
+entry = "crates/urna-engine/src/search.rs"
 path = [
-    "crates/urna-runtime/src/graph/csr.rs",
-    "crates/urna-runtime/src/graph/traverse.rs",
-    "crates/urna-runtime/src/search.rs",
+    "crates/urna-engine/src/graph/csr.rs",
+    "crates/urna-engine/src/graph/traverse.rs",
+    "crates/urna-engine/src/search.rs",
 ]
 summary = "search_graph seeds the exact-cosine top-ef, runs a generational-buffer bounded-bfs over the graph_adjacency (0x0C) CSR to grow a candidate set, unions seed+frontier, then feeds the union to the SAME score_subset exact rerank; the graph only generates candidates (index_type=graph, recall=NaN), asserted by rerank_contract"
 
@@ -335,7 +335,7 @@ path = [
     "Cargo.toml",
     "clippy.toml",
     "crates/urna-format/tests/mutation_fuzz.rs",
-    "crates/urna-runtime/tests/mutation_fuzz.rs",
+    "crates/urna-engine/tests/mutation_fuzz.rs",
     "fuzz/Cargo.toml",
     "scripts/ruff_check.sh",
     "crates/urna-ingest/Cargo.toml",
@@ -349,8 +349,8 @@ path = [
     "crates/urna-format/tests/common/mutation.rs",
     "crates/urna-format/src/reader/parse.rs",
     "crates/urna-format/src/reader/decode.rs",
-    "crates/urna-runtime/tests/mutation_fuzz.rs",
-    "crates/urna-runtime/src/mmap_file.rs",
+    "crates/urna-engine/tests/mutation_fuzz.rs",
+    "crates/urna-engine/src/mmap_file.rs",
     "fuzz/fuzz_targets/urna_view.rs",
 ]
 summary = "Build real files in every dtype / text-encoding combination with every optional section present, mutate them (bit flips, byte sets, zero runs, integer specials, truncation, splices; half with checksums resealed so the corruption reaches the decoders), and drive the reader, every section decoder, the mmap open path and every search verb: a typed error is fine, a panic is a finding that becomes a tests/negative_*.rs"
@@ -426,10 +426,10 @@ links = ["Cargo.toml"]
 [[inventory.root]]
 path = "Cargo.toml"
 kind = "workspace-manifest"
-purpose = "Workspace members, edition, resolver, rust-version 1.85 (the MSRV of urna-format, urna-runtime and urna-python; crates/urna-cli pins its own 1.88), and shared dependencies"
+purpose = "Workspace members, edition, resolver, rust-version 1.85 (the MSRV of urna-format, urna-engine and urna-python; crates/urna-cli pins its own 1.88), and shared dependencies"
 links = [
     "crates/urna-format/Cargo.toml",
-    "crates/urna-runtime/Cargo.toml",
+    "crates/urna-engine/Cargo.toml",
     "crates/urna-cli/Cargo.toml",
     "crates/urna-python/Cargo.toml",
 ]
@@ -524,7 +524,7 @@ links = [
 [[inventory.root]]
 path = "crates/urna-format/tests/common/mutation.rs"
 kind = "rust-test"
-purpose = "The mutation engine: seeded xorshift RNG, libfuzzer-style mutation step, and reseal (recompute header checksum, section checksums, footer hash) so corruption reaches the decoders; duplicated in urna-runtime/tests/common"
+purpose = "The mutation engine: seeded xorshift RNG, libfuzzer-style mutation step, and reseal (recompute header checksum, section checksums, footer hash) so corruption reaches the decoders; duplicated in urna-engine/tests/common"
 links = [
     "crates/urna-format/src/layout/header.rs",
     "crates/urna-format/src/layout/section_entry.rs",
@@ -538,59 +538,59 @@ purpose = "Regression: a header whose n * dim overflows is a typed rejection, ne
 links = ["crates/urna-format/src/encoding/mod.rs"]
 
 [[inventory.root]]
-path = "crates/urna-runtime/src/order.rs"
+path = "crates/urna-engine/src/order.rs"
 kind = "rust-source"
 purpose = "NaN-last total-order comparators for f32 scores and distances; every runtime sort routes through them (a NaN in partial_cmp(..).unwrap_or(Equal) panics sort_by since Rust 1.81)"
 links = [
-    "crates/urna-runtime/src/search.rs",
-    "crates/urna-runtime/src/bm25/index.rs",
-    "crates/urna-runtime/src/ann/search.rs",
+    "crates/urna-engine/src/search.rs",
+    "crates/urna-engine/src/bm25/index.rs",
+    "crates/urna-engine/src/ann/search.rs",
 ]
 
 [[inventory.root]]
-path = "crates/urna-runtime/tests/mutation_fuzz.rs"
+path = "crates/urna-engine/tests/mutation_fuzz.rs"
 kind = "rust-test"
 purpose = "Deterministic mutation fuzz over the real mmap open path and every search verb (HNSW, BM25, graph, blobs, spaces present)"
 links = [
-    "crates/urna-runtime/tests/common/mutation.rs",
-    "crates/urna-runtime/src/mmap_file.rs",
+    "crates/urna-engine/tests/common/mutation.rs",
+    "crates/urna-engine/src/mmap_file.rs",
 ]
 
 [[inventory.root]]
-path = "crates/urna-runtime/tests/space_band_nan.rs"
+path = "crates/urna-engine/tests/space_band_nan.rs"
 kind = "rust-test"
 purpose = "Regression: a NaN lane in a multimodal band is rejected at open (validate_slab_values) instead of reaching the sort (second mutation-fuzz finding)"
 links = [
-    "crates/urna-runtime/src/spaces.rs",
+    "crates/urna-engine/src/spaces.rs",
     "crates/urna-format/src/reader/validate.rs",
 ]
 
 [[inventory.root]]
-path = "crates/urna-runtime/benches/simd.rs"
+path = "crates/urna-engine/benches/simd.rs"
 kind = "rust-bench"
 purpose = "criterion: f32/f16/i8/i4 dot per dim on the detected SIMD backend + the int8 section scan over 50k rows"
-links = ["crates/urna-runtime/src/simd/mod.rs"]
+links = ["crates/urna-engine/src/simd/mod.rs"]
 
 [[inventory.root]]
-path = "crates/urna-runtime/benches/rerank.rs"
+path = "crates/urna-engine/benches/rerank.rs"
 kind = "rust-bench"
 purpose = "criterion: search (exact scan) and search_ann (HNSW + exact rerank at ef=100) through the public API, one 20k-row .urna per stored dtype"
 links = [
-    "crates/urna-runtime/src/search.rs",
-    "crates/urna-runtime/src/rerank.rs",
+    "crates/urna-engine/src/search.rs",
+    "crates/urna-engine/src/rerank.rs",
 ]
 
 [[inventory.root]]
-path = "crates/urna-runtime/benches/hnsw_build.rs"
+path = "crates/urna-engine/benches/hnsw_build.rs"
 kind = "rust-bench"
 purpose = "criterion: HnswIndex::build over 20k x 384 at m=16 / ef_construction=200, the guard for the build-throughput work"
-links = ["crates/urna-runtime/src/ann/build.rs"]
+links = ["crates/urna-engine/src/ann/build.rs"]
 
 [[inventory.root]]
-path = "crates/urna-runtime/tests/negative_bm25_payload.rs"
+path = "crates/urna-engine/tests/negative_bm25_payload.rs"
 kind = "rust-test"
 purpose = "Regression: BM25 postings with doc ids beyond n_docs, non-finite parameters, and a wrapping length field are typed rejections at decode (third and fourth mutation-fuzz findings)"
-links = ["crates/urna-runtime/src/bm25/codec.rs"]
+links = ["crates/urna-engine/src/bm25/codec.rs"]
 
 [[inventory.root]]
 path = "crates/urna-python/src/search_hit.rs"
@@ -649,7 +649,7 @@ kind = "directory"
 purpose = "Workspace crate root"
 links = [
     "crates/urna-format",
-    "crates/urna-runtime",
+    "crates/urna-engine",
     "crates/urna-cli",
     "crates/urna-python",
 ]
@@ -799,45 +799,45 @@ links = [
 ]
 
 [[inventory.workspace]]
-path = "crates/urna-runtime"
+path = "crates/urna-engine"
 kind = "crate-dir"
 purpose = "Runtime crate"
-links = ["crates/urna-runtime/src/lib.rs"]
+links = ["crates/urna-engine/src/lib.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-runtime/src"
+path = "crates/urna-engine/src"
 kind = "directory"
 purpose = "Runtime source root"
 links = [
-    "crates/urna-runtime/src/mmap_file.rs",
-    "crates/urna-runtime/src/search.rs",
+    "crates/urna-engine/src/mmap_file.rs",
+    "crates/urna-engine/src/search.rs",
 ]
 
 [[inventory.workspace]]
-path = "crates/urna-runtime/src/ann"
+path = "crates/urna-engine/src/ann"
 kind = "directory"
 purpose = "HNSW subsystem"
-links = ["crates/urna-runtime/src/ann/mod.rs"]
+links = ["crates/urna-engine/src/ann/mod.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-runtime/src/bm25"
+path = "crates/urna-engine/src/bm25"
 kind = "directory"
 purpose = "BM25 subsystem"
-links = ["crates/urna-runtime/src/bm25/mod.rs"]
+links = ["crates/urna-engine/src/bm25/mod.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-runtime/src/simd"
+path = "crates/urna-engine/src/simd"
 kind = "directory"
 purpose = "SIMD kernels and dispatch"
-links = ["crates/urna-runtime/src/simd/mod.rs"]
+links = ["crates/urna-engine/src/simd/mod.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-runtime/tests"
+path = "crates/urna-engine/tests"
 kind = "directory"
 purpose = "Runtime integration tests"
 links = [
-    "crates/urna-runtime/tests/hnsw_recall.rs",
-    "crates/urna-runtime/tests/search_exact.rs",
+    "crates/urna-engine/tests/hnsw_recall.rs",
+    "crates/urna-engine/tests/search_exact.rs",
 ]
 
 [[inventory.workspace]]
@@ -977,7 +977,7 @@ links = [
 path = "crates/urna-cli/src/cmd/search_space.rs"
 kind = "rust-source"
 purpose = "`search-space` verb: exact search over one named multimodal band with the runtime's typed errors, never a silent text-path fallback"
-links = ["crates/urna-runtime/src/space_search.rs"]
+links = ["crates/urna-engine/src/space_search.rs"]
 
 [[inventory.urna_cli]]
 path = "crates/urna-cli/src/cmd/agent/build.rs"
@@ -1011,8 +1011,8 @@ path = "crates/urna-cli/src/cmd/benchmark.rs"
 kind = "rust-source"
 purpose = "Bench exact and ANN latency plus cold-cache hint mode"
 links = [
-    "crates/urna-runtime/src/mmap_file.rs",
-    "crates/urna-runtime/src/search.rs",
+    "crates/urna-engine/src/mmap_file.rs",
+    "crates/urna-engine/src/search.rs",
 ]
 
 [[inventory.urna_cli]]
@@ -1027,8 +1027,8 @@ links = [
 [[inventory.urna_cli]]
 path = "crates/urna-cli/src/cmd/inspect.rs"
 kind = "rust-source"
-purpose = "Print header, sections, manifest, and hashes (the CLI inspect surface; the runtime inspect_json + canonical_texts live in crates/urna-runtime/src/inspect.rs)"
-links = ["crates/urna-runtime/src/mmap_file.rs"]
+purpose = "Print header, sections, manifest, and hashes (the CLI inspect surface; the runtime inspect_json + canonical_texts live in crates/urna-engine/src/inspect.rs)"
+links = ["crates/urna-engine/src/mmap_file.rs"]
 
 [[inventory.urna_cli]]
 path = "crates/urna-cli/src/cmd/mod.rs"
@@ -1040,19 +1040,19 @@ links = []
 path = "crates/urna-cli/src/cmd/search.rs"
 kind = "rust-source"
 purpose = "Exact vector search command"
-links = ["crates/urna-runtime/src/search.rs"]
+links = ["crates/urna-engine/src/search.rs"]
 
 [[inventory.urna_cli]]
 path = "crates/urna-cli/src/cmd/search_ann.rs"
 kind = "rust-source"
 purpose = "Forced ANN search command"
-links = ["crates/urna-runtime/src/search.rs"]
+links = ["crates/urna-engine/src/search.rs"]
 
 [[inventory.urna_cli]]
 path = "crates/urna-cli/src/cmd/search_graph.rs"
 kind = "rust-source"
 purpose = "9th subcommand: graph search (exact top-ef seed -> bounded bfs over the chunk graph -> exact rerank; falls back to exact if no 0x0C section)"
-links = ["crates/urna-runtime/src/search.rs"]
+links = ["crates/urna-engine/src/search.rs"]
 
 [[inventory.urna_cli]]
 path = "crates/urna-cli/src/cmd/search_text.rs"
@@ -1061,7 +1061,7 @@ purpose = "Python embedder orchestration (interpreter via pyenv::resolve_interpr
 links = [
     "python/embed_query.py",
     "python/model_fingerprint.py",
-    "crates/urna-runtime/src/search.rs",
+    "crates/urna-engine/src/search.rs",
 ]
 
 [[inventory.urna_cli]]
@@ -1070,7 +1070,7 @@ kind = "rust-source"
 purpose = "stats command for size, dim (plus mrl_dim/full_dim when matryoshka-truncated), dtype, sections, hashes, and SIMD backend"
 links = [
     "crates/urna-format/src/reader/mod.rs",
-    "crates/urna-runtime/src/simd/mod.rs",
+    "crates/urna-engine/src/simd/mod.rs",
 ]
 
 [[inventory.urna_cli]]
@@ -1086,7 +1086,7 @@ links = [
 path = "crates/urna-cli/src/cmd/util.rs"
 kind = "rust-source"
 purpose = "Shared output + embedder path helpers (incl default_potion_embedder_path) and embed_and_search: the shared offline-potion-embed + model_hash gate + capability route used by ask and retrieve (interpreter via cmd::pyenv::resolve_interpreter)"
-links = ["crates/urna-runtime/src/lib.rs"]
+links = ["crates/urna-engine/src/lib.rs"]
 
 [[inventory.urna_cli]]
 path = "crates/urna-cli/src/cmd/validate.rs"
@@ -1137,7 +1137,7 @@ links = ["crates/urna-cli/src/cmd/embed_gate.rs"]
 path = "crates/urna-cli/tests/media_cite_validate.rs"
 kind = "rust-test"
 purpose = "cite and validate on a real media corpus (blob_refs + inlined blob_data + span overlay): cite prints the overlay span retrieve reports and keeps the stored span of a BLOB_REF_NONE chunk; validate reports the inlined blobs on a good file and prints no OK when a blob fails its content_hash"
-links = ["crates/urna-cli/src/cmd/cite.rs", "crates/urna-cli/src/cmd/validate.rs", "crates/urna-runtime/src/blobs.rs"]
+links = ["crates/urna-cli/src/cmd/cite.rs", "crates/urna-cli/src/cmd/validate.rs", "crates/urna-engine/src/blobs.rs"]
 
 [[inventory.urna_cli]]
 path = "crates/urna-cli/tests/cli_e2e.rs"
@@ -1180,15 +1180,15 @@ path = "crates/urna-format/src/encoding/int4.rs"
 kind = "rust-source"
 purpose = "int4 block-64 codec (encoding id 7): per-64-dim-group f16 absmax scales + packed 4-bit signed codes; the first sub-int8 size lever (~1.9x over int8, ~7.5x over f32), stored-precision, scored straight off mmap by the fused dequant+dot kernel, never zstd/dedup/shuffle"
 links = [
-    "crates/urna-runtime/src/rerank.rs",
-    "crates/urna-runtime/src/simd/mod.rs",
+    "crates/urna-engine/src/rerank.rs",
+    "crates/urna-engine/src/simd/mod.rs",
 ]
 
 [[inventory.urna_format]]
 path = "crates/urna-format/src/encoding/int8.rs"
 kind = "rust-source"
 purpose = "int8 quantization and parsed embedding views"
-links = ["crates/urna-runtime/src/search.rs"]
+links = ["crates/urna-engine/src/search.rs"]
 
 [[inventory.urna_format]]
 path = "crates/urna-format/src/encoding/intpack.rs"
@@ -1197,8 +1197,8 @@ purpose = "Shared integer bitpacking primitive (encoding id 4): per-128-block fr
 links = [
     "crates/urna-format/src/sections/mod.rs",
     "crates/urna-format/src/encoding/txt_streams.rs",
-    "crates/urna-runtime/src/ann/codec/mod.rs",
-    "crates/urna-runtime/src/bm25/codec.rs",
+    "crates/urna-engine/src/ann/codec/mod.rs",
+    "crates/urna-engine/src/bm25/codec.rs",
 ]
 
 [[inventory.urna_format]]
@@ -1375,7 +1375,7 @@ kind = "rust-source"
 purpose = "blob_refs codec for SECTION_BLOB_REFS (0x14, payload version 1): content-addressed media directory (codec id, container bytes, per-blob digest) referenced by chunk-level spans; canonical sort = byte-identical builds; typed errors, never panics; excluded from content_hash"
 links = [
     "crates/urna-format/src/sections/blob/mod.rs",
-    "crates/urna-runtime/src/blobs.rs",
+    "crates/urna-engine/src/blobs.rs",
 ]
 
 [[inventory.urna_format]]
@@ -1384,7 +1384,7 @@ kind = "rust-source"
 purpose = "blob_span_overlay codec for SECTION_BLOB_SPAN_OVERLAY (0x16, payload version 1): chunk_id -> (blob_idx, byte span) so a text chunk carries the exact media span it was embedded from; canonical sort, decodes byte-identically, excluded from content_hash"
 links = [
     "crates/urna-format/src/sections/blob/mod.rs",
-    "crates/urna-runtime/src/blobs.rs",
+    "crates/urna-engine/src/blobs.rs",
 ]
 
 [[inventory.urna_format]]
@@ -1426,7 +1426,7 @@ kind = "rust-source"
 purpose = "Chunk-to-chunk CSR adjacency codec for SECTION_GRAPH_ADJACENCY (0x0C, GRAPH_ADJACENCY_PAYLOAD_VERSION=1): intpack offsets + delta-gapped (per src,edge_type run) neighbor ids + falkordb-iso edge-type column in a raw self-describing payload; canonical (src,edge_type,dst) sort = byte-identical builds; typed errors, never panics; excluded from content_hash"
 links = [
     "crates/urna-format/src/encoding/intpack.rs",
-    "crates/urna-runtime/src/graph/csr.rs",
+    "crates/urna-engine/src/graph/csr.rs",
 ]
 
 [[inventory.urna_format]]
@@ -1452,7 +1452,7 @@ kind = "rust-source"
 purpose = "space_table codec for SECTION_SPACE_TABLE (0x15, payload version 1): the named-space registry (name, embedding_dim, dtype, per-space model_hash) gating multimodal corpora; a space's slab lives at the derived 0x20-0x2F band id so each space keeps its own model_hash gate; typed errors, never panics; excluded from content_hash"
 links = [
     "crates/urna-format/src/sections/mod.rs",
-    "crates/urna-runtime/src/spaces.rs",
+    "crates/urna-engine/src/spaces.rs",
 ]
 
 [[inventory.urna_format]]
@@ -1712,8 +1712,8 @@ kind = "rust-source"
 purpose = "Python build() bridge plus preset resolution (exact/compressed/tiny/nano/hybrid; nano = zstd text / int4 / HNSW, requires embedding_dim divisible by 64), build-time matryoshka prefix truncation (mrl_dim kwarg), optional index creation, the with_graph/graph_top_m kwargs that emit the G1 graph_adjacency (0x0C) CSR (NEXT_CHUNK + top-m SEMANTIC from the HNSW level-0 graph, default off), and the F4b/F4c kwargs blob_refs, chunk_blob_spans, and spaces (named-space multimodal corpora)"
 links = [
     "crates/urna-format/src/writer/mod.rs",
-    "crates/urna-runtime/src/ann/mod.rs",
-    "crates/urna-runtime/src/bm25/mod.rs",
+    "crates/urna-engine/src/ann/mod.rs",
+    "crates/urna-engine/src/bm25/mod.rs",
     "crates/urna-python/src/build_spaces.rs",
     "crates/urna-python/src/build_manifest.rs",
 ]
@@ -1767,9 +1767,9 @@ path = "crates/urna-python/src/urna_file.rs"
 kind = "rust-source"
 purpose = "PyO3 wrapper over MmapUrnaFile (search/search_ann/search_graph/search_hybrid, search_space for named spaces, the agent-native retrieve, has_ann/has_bm25/has_graph/has_blobs/blob_refs/has_spaces/space_names, inspect, validate)"
 links = [
-    "crates/urna-runtime/src/mmap_file.rs",
-    "crates/urna-runtime/src/search.rs",
-    "crates/urna-runtime/src/space_search.rs",
+    "crates/urna-engine/src/mmap_file.rs",
+    "crates/urna-engine/src/search.rs",
+    "crates/urna-engine/src/space_search.rs",
     "crates/urna-python/src/retrieve_fn.rs",
 ]
 
@@ -1778,12 +1778,12 @@ path = "crates/urna-python/src/retrieve_fn.rs"
 kind = "rust-source"
 purpose = "The agent-native flagship: RetrieveHitPy (cited span + tier-1 text + rerank_source marker) and retrieve() (route by capability, search, attach tier-1 canonical text per chunk_id); score IS the exact rerank value, typed errors -> PyValueError, never panic"
 links = [
-    "crates/urna-runtime/src/search.rs",
-    "crates/urna-runtime/src/inspect.rs",
+    "crates/urna-engine/src/search.rs",
+    "crates/urna-engine/src/inspect.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/Cargo.toml"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/Cargo.toml"
 kind = "rust-manifest"
 purpose = "Runtime crate manifest"
 links = [
@@ -1791,340 +1791,340 @@ links = [
     "crates/urna-format/Cargo.toml",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/LICENSE"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/LICENSE"
 kind = "symlink"
 purpose = "Link to the root LICENSE; cargo package copies its content, so the published crate carries the MIT text"
 links = ["LICENSE"]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/build.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/build.rs"
 kind = "rust-build-script"
 purpose = "Probe the compiling rustc and emit cfg(neon_f16) at >= 1.94, gating the aarch64 f16 NEON kernel while the workspace builds at MSRV 1.85 (scalar f16 fallback)"
 links = [
-    "crates/urna-runtime/src/simd/neon.rs",
-    "crates/urna-runtime/src/simd/mod.rs",
+    "crates/urna-engine/src/simd/neon.rs",
+    "crates/urna-engine/src/simd/mod.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/ann/build.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/ann/build.rs"
 kind = "rust-source"
 purpose = "Deterministic HNSW graph construction"
-links = ["crates/urna-runtime/src/ann/mod.rs"]
+links = ["crates/urna-engine/src/ann/mod.rs"]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/ann/codec/mod.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/ann/codec/mod.rs"
 kind = "rust-source"
 purpose = "HNSW payload codec; v2 bitpacks the level/count/neighbour-id columns with intpack (order-preserving, recall unchanged), reader still accepts v1"
 links = [
-    "crates/urna-runtime/src/ann/mod.rs",
+    "crates/urna-engine/src/ann/mod.rs",
     "crates/urna-format/src/encoding/intpack.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/ann/mod.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/ann/mod.rs"
 kind = "rust-source"
 purpose = "HNSW types, defaults, distance model, and tests"
 links = [
-    "crates/urna-runtime/src/ann/build.rs",
-    "crates/urna-runtime/src/ann/search.rs",
+    "crates/urna-engine/src/ann/build.rs",
+    "crates/urna-engine/src/ann/search.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/ann/search.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/ann/search.rs"
 kind = "rust-source"
 purpose = "ANN traversal over the HNSW graph"
-links = ["crates/urna-runtime/src/ann/mod.rs"]
+links = ["crates/urna-engine/src/ann/mod.rs"]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/ann/visited.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/ann/visited.rs"
 kind = "rust-source"
 purpose = "VisitSet trait + the epoch-stamped VisitedList the build reuses across layer searches (O(1) clear, one indexed load per visit check); the query path keeps a HashSet"
 links = [
-    "crates/urna-runtime/src/ann/search.rs",
-    "crates/urna-runtime/src/ann/build.rs",
+    "crates/urna-engine/src/ann/search.rs",
+    "crates/urna-engine/src/ann/build.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/ann/select_neighbors.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/ann/select_neighbors.rs"
 kind = "rust-source"
 purpose = "Neighbor selection heuristic"
-links = ["crates/urna-runtime/src/ann/build.rs"]
+links = ["crates/urna-engine/src/ann/build.rs"]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/blobs.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/blobs.rs"
 kind = "rust-source"
 purpose = "Media blob read path: opens blob_refs (0x14) + blob_span_overlay (0x16) off mmap behind the blobs_present capability, resolves chunk_id -> (blob, span), serves cold span bytes without touching the embedding hot path"
 links = [
     "crates/urna-format/src/sections/blob/refs.rs",
     "crates/urna-format/src/sections/blob/span_overlay.rs",
-    "crates/urna-runtime/src/mmap_file.rs",
+    "crates/urna-engine/src/mmap_file.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/bm25/codec.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/bm25/codec.rs"
 kind = "rust-source"
 purpose = "BM25 payload codec; v2 delta-gaps the sorted doc ids and bitpacks gaps/tfs/doc-lengths with intpack (scores unchanged), reader still accepts v1"
 links = [
-    "crates/urna-runtime/src/bm25/mod.rs",
+    "crates/urna-engine/src/bm25/mod.rs",
     "crates/urna-format/src/encoding/intpack.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/bm25/fusion.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/bm25/fusion.rs"
 kind = "rust-source"
 purpose = "Reciprocal-rank fusion helper"
-links = ["crates/urna-runtime/src/bm25/index.rs"]
+links = ["crates/urna-engine/src/bm25/index.rs"]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/bm25/index.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/bm25/index.rs"
 kind = "rust-source"
 purpose = "BM25 index build and search"
-links = ["crates/urna-runtime/src/bm25/tokenize.rs"]
+links = ["crates/urna-engine/src/bm25/tokenize.rs"]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/bm25/mod.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/bm25/mod.rs"
 kind = "rust-source"
 purpose = "BM25 module surface and payload contract"
 links = [
-    "crates/urna-runtime/src/bm25/index.rs",
-    "crates/urna-runtime/src/bm25/fusion.rs",
+    "crates/urna-engine/src/bm25/index.rs",
+    "crates/urna-engine/src/bm25/fusion.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/bm25/tests.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/bm25/tests.rs"
 kind = "rust-test"
 purpose = "BM25 unit coverage"
-links = ["crates/urna-runtime/src/bm25/index.rs"]
+links = ["crates/urna-engine/src/bm25/index.rs"]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/bm25/tokenize.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/bm25/tokenize.rs"
 kind = "rust-source"
 purpose = "Simple unicode-aware tokenizer"
-links = ["crates/urna-runtime/src/bm25/index.rs"]
+links = ["crates/urna-engine/src/bm25/index.rs"]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/graph/mod.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/graph/mod.rs"
 kind = "rust-source"
 purpose = "Chunk-to-chunk graph runtime surface (G1): CsrIndex reader + Traversal bounded-bfs, mirroring ANN; a candidate generator whose frontier feeds the same exact rerank"
 links = [
-    "crates/urna-runtime/src/graph/csr.rs",
-    "crates/urna-runtime/src/graph/traverse.rs",
+    "crates/urna-engine/src/graph/csr.rs",
+    "crates/urna-engine/src/graph/traverse.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/graph/csr.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/graph/csr.rs"
 kind = "rust-source"
 purpose = "CsrIndex::from_bytes parses the graph_adjacency (0x0C) payload off mmap (via urna-format parse_csr_parts) into flat offsets+neighbors; neighbors(node) is a contiguous slice with zero allocation; typed errors, never panics on a truncated mmap"
 links = [
     "crates/urna-format/src/sections/graph/adjacency.rs",
-    "crates/urna-runtime/src/mmap_file.rs",
+    "crates/urna-engine/src/mmap_file.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/graph/traverse.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/graph/traverse.rs"
 kind = "rust-source"
 purpose = "bounded_bfs over CsrIndex using a generational visited buffer (no per-query HashSet): pure integer candidate generation bounded by hops + max_frontier, deduped, seeds-first; never scores"
 links = [
-    "crates/urna-runtime/src/graph/csr.rs",
-    "crates/urna-runtime/src/search.rs",
+    "crates/urna-engine/src/graph/csr.rs",
+    "crates/urna-engine/src/search.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/error.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/error.rs"
 kind = "rust-source"
 purpose = "Runtime error surface"
 links = ["crates/urna-format/src/error.rs"]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/dtype.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/dtype.rs"
 kind = "rust-source"
 purpose = "Effective-dtype classification shared by rerank and spaces: maps a slab's on-disk encoding (f32/f16/int8/int4) to the RerankSourceKind disclosure so per-space corpora disclose stored precision honestly"
 links = [
-    "crates/urna-runtime/src/rerank.rs",
-    "crates/urna-runtime/src/spaces.rs",
+    "crates/urna-engine/src/rerank.rs",
+    "crates/urna-engine/src/spaces.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/inspect.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/inspect.rs"
 kind = "rust-source"
 purpose = "inspect surface: reports blob_refs/span-overlay presence, the space registry (names, dims, dtypes, per-space model_hash), and band occupancy, plus inspect_json + canonical_texts for the flagship; carved out of mmap_file.rs"
 links = [
-    "crates/urna-runtime/src/mmap_file.rs",
-    "crates/urna-runtime/src/spaces.rs",
-    "crates/urna-runtime/src/blobs.rs",
+    "crates/urna-engine/src/mmap_file.rs",
+    "crates/urna-engine/src/spaces.rs",
+    "crates/urna-engine/src/blobs.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/spaces.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/spaces.rs"
 kind = "rust-source"
 purpose = "Space registry runtime surface: parses the space_table (0x15) at open, resolves space name -> band slab + dtype + model_hash, backs search_space and the space_names/has_spaces metadata"
 links = [
     "crates/urna-format/src/sections/space_table.rs",
-    "crates/urna-runtime/src/mmap_file.rs",
-    "crates/urna-runtime/src/space_search.rs",
+    "crates/urna-engine/src/mmap_file.rs",
+    "crates/urna-engine/src/space_search.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/space_search.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/space_search.rs"
 kind = "rust-source"
 purpose = "Named-space search entry point: routes a query vector to one space's slab, enforces that space's model_hash gate in isolation (a text model never opens an image space), reranks with the same mandatory exact cosine"
 links = [
-    "crates/urna-runtime/src/spaces.rs",
-    "crates/urna-runtime/src/search.rs",
-    "crates/urna-runtime/src/rerank.rs",
+    "crates/urna-engine/src/spaces.rs",
+    "crates/urna-engine/src/search.rs",
+    "crates/urna-engine/src/rerank.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/mmap_cold.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/mmap_cold.rs"
 kind = "rust-source"
 purpose = "Cold-path mmap helpers for the media pillar: on-demand blob span reads that never materialize the container, carved out of mmap_file.rs"
 links = [
-    "crates/urna-runtime/src/mmap_file.rs",
-    "crates/urna-runtime/src/blobs.rs",
+    "crates/urna-engine/src/mmap_file.rs",
+    "crates/urna-engine/src/blobs.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/lib.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/lib.rs"
 kind = "rust-source"
 purpose = "SearchHit, SearchResult, the additive SearchExplain (route/candidate-counts/fusion_mode/recall_estimate) + RerankSourceKind (FullPrecision=real cosine vs StoredPrecision=real cosine at stored precision, the honesty backbone), and runtime re-exports"
 links = [
-    "crates/urna-runtime/src/mmap_file.rs",
-    "crates/urna-runtime/src/search.rs",
+    "crates/urna-engine/src/mmap_file.rs",
+    "crates/urna-engine/src/search.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/materialize.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/materialize.rs"
 kind = "rust-source"
 purpose = "PackedVectors store: keep int8/int4/float16 rows packed and decode one row at a time, removing the ANN f32 snapshot while keeping distances byte-identical"
 links = [
-    "crates/urna-runtime/src/ann/mod.rs",
-    "crates/urna-runtime/src/mmap_file.rs",
+    "crates/urna-engine/src/ann/mod.rs",
+    "crates/urna-engine/src/mmap_file.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/rerank.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/rerank.rs"
 kind = "rust-source"
 purpose = "Explicit rerank-source handle the exact rerank reads through (embeddings_fp 0x09 slab when present, else stored f32/f16/int8/int4 dtype slab via the SIMD kernels), plus FpSlab detection; int4 reranks at stored precision like int8, disclosed via dtype; per-space routing lives in spaces.rs / space_search.rs"
 links = [
-    "crates/urna-runtime/src/search.rs",
-    "crates/urna-runtime/src/mmap_file.rs",
-    "crates/urna-runtime/src/simd/mod.rs",
+    "crates/urna-engine/src/search.rs",
+    "crates/urna-engine/src/mmap_file.rs",
+    "crates/urna-engine/src/simd/mod.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/mmap_file.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/mmap_file.rs"
 kind = "rust-source"
 purpose = "Own mmap, decode metadata and optional indices at open (embeddings_fp 0x09 slab, the packed ANN vector store, graph_adjacency 0x0C behind graph_present, blob_refs 0x14 + blob_span_overlay 0x16 behind blobs_present, space_table 0x15 + the 0x20-0x2F space slabs behind supports_multimodal), inspect, and revalidate, assuming embeddings remain directly readable from the mapped file"
 links = [
     "crates/urna-format/src/reader/mod.rs",
-    "crates/urna-runtime/src/ann/mod.rs",
-    "crates/urna-runtime/src/bm25/mod.rs",
-    "crates/urna-runtime/src/graph/mod.rs",
-    "crates/urna-runtime/src/rerank.rs",
-    "crates/urna-runtime/src/blobs.rs",
-    "crates/urna-runtime/src/spaces.rs",
+    "crates/urna-engine/src/ann/mod.rs",
+    "crates/urna-engine/src/bm25/mod.rs",
+    "crates/urna-engine/src/graph/mod.rs",
+    "crates/urna-engine/src/rerank.rs",
+    "crates/urna-engine/src/blobs.rs",
+    "crates/urna-engine/src/spaces.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/search.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/search.rs"
 kind = "rust-source"
 purpose = "Exact, ANN, graph, and hybrid search, plus search_routed (the capability route ask, retrieve, search-text and UrnaFile.retrieve share: BM25 section + query text -> hybrid, HNSW section -> ann, else exact); every candidate-generating path (ann/graph/hybrid) ends in the single score_subset exact rerank so the returned score is real cosine (recall=NaN); search_graph seeds the exact top-ef then bounded-bfs-expands the union; builds the additive SearchExplain on all four paths (route, candidate counts, fusion_mode, recall_estimate, rerank_source from the effective dtype)"
 links = [
-    "crates/urna-runtime/src/mmap_file.rs",
-    "crates/urna-runtime/src/rerank.rs",
-    "crates/urna-runtime/src/graph/mod.rs",
-    "crates/urna-runtime/src/bm25/mod.rs",
+    "crates/urna-engine/src/mmap_file.rs",
+    "crates/urna-engine/src/rerank.rs",
+    "crates/urna-engine/src/graph/mod.rs",
+    "crates/urna-engine/src/bm25/mod.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/simd/avx2.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/simd/avx2.rs"
 kind = "rust-source"
 purpose = "x86_64 AVX2 kernels (f32/f16/int8 dot + fused int4 block-64 dequant+dot)"
-links = ["crates/urna-runtime/src/simd/mod.rs"]
+links = ["crates/urna-engine/src/simd/mod.rs"]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/simd/mod.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/simd/mod.rs"
 kind = "rust-source"
 purpose = "SIMD backend detection and dispatch (incl dot_f32_i4_blocked); the f16 NEON arm is gated behind cfg(neon_f16) with scalar fallback"
 links = [
-    "crates/urna-runtime/src/simd/avx2.rs",
-    "crates/urna-runtime/src/simd/neon.rs",
-    "crates/urna-runtime/src/simd/scalar.rs",
-    "crates/urna-runtime/build.rs",
+    "crates/urna-engine/src/simd/avx2.rs",
+    "crates/urna-engine/src/simd/neon.rs",
+    "crates/urna-engine/src/simd/scalar.rs",
+    "crates/urna-engine/build.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/simd/neon.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/simd/neon.rs"
 kind = "rust-source"
 purpose = "aarch64 NEON kernels (f32/f16/int8 dot + fused int4 block-64 dequant+dot; f16 gated behind cfg(neon_f16))"
 links = [
-    "crates/urna-runtime/src/simd/mod.rs",
-    "crates/urna-runtime/build.rs",
+    "crates/urna-engine/src/simd/mod.rs",
+    "crates/urna-engine/build.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/simd/scalar.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/simd/scalar.rs"
 kind = "rust-source"
 purpose = "Portable scalar kernels, incl the int4 per-group reference reduction the SIMD backends match bit-for-bit"
-links = ["crates/urna-runtime/src/simd/mod.rs"]
+links = ["crates/urna-engine/src/simd/mod.rs"]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/src/simd/tests.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/src/simd/tests.rs"
 kind = "rust-test"
 purpose = "SIMD parity tests, incl int4 bit-for-bit backend parity and reference-dequant-dot"
-links = ["crates/urna-runtime/src/simd/mod.rs"]
+links = ["crates/urna-engine/src/simd/mod.rs"]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/tests/blob_overlay_spans.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/tests/blob_overlay_spans.rs"
 kind = "rust-test"
 purpose = "Media read-path coverage: chunk_id -> blob span resolution off mmap, cold span reads, capability gating (no blob sections -> clean absence), malformed-overlay rejection"
 links = [
-    "crates/urna-runtime/src/blobs.rs",
-    "crates/urna-runtime/src/mmap_cold.rs",
+    "crates/urna-engine/src/blobs.rs",
+    "crates/urna-engine/src/mmap_cold.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/tests/fp16_topk_recall_vs_f32.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/tests/fp16_topk_recall_vs_f32.rs"
 kind = "rust-test"
 purpose = "float16 recall and drift regression"
-links = ["crates/urna-runtime/src/search.rs"]
+links = ["crates/urna-engine/src/search.rs"]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/tests/hnsw_recall.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/tests/hnsw_recall.rs"
 kind = "rust-test"
 purpose = "ANN recall regression"
-links = ["crates/urna-runtime/src/ann/mod.rs"]
+links = ["crates/urna-engine/src/ann/mod.rs"]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/tests/search_routed.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/tests/search_routed.rs"
 kind = "rust-test"
 purpose = "The capability route: a hybrid-preset-shaped file (HNSW + BM25, index_type \"hnsw\") takes the hybrid route with query text (BM25 candidates > 0) and the hnsw route without; a BM25-only file routes hybrid over the exact shortlist; plain files route hnsw or exact; scores stay the exact rerank value on every route"
-links = ["crates/urna-runtime/src/search.rs"]
+links = ["crates/urna-engine/src/search.rs"]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/tests/rerank_contract.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/tests/rerank_contract.rs"
 kind = "rust-test"
 purpose = "Honest-rerank gate: non-exact paths (ANN, hybrid, graph) return the exact-cosine score byte-for-byte and recall is NaN, parameterized over every search entry point; the fixture carries a 0x0C graph_adjacency section so search_graph exercises the real bfs path; also asserts SearchExplain is populated on all four paths (route/counts/fusion/recall_estimate) FullPrecision on the f32 fixture, and an int8 corpus with no 0x09 fp slab discloses StoredPrecision while the score stays byte-identical to the exact stored-precision rerank"
 links = [
-    "crates/urna-runtime/src/search.rs",
-    "crates/urna-runtime/src/rerank.rs",
-    "crates/urna-runtime/src/lib.rs",
+    "crates/urna-engine/src/search.rs",
+    "crates/urna-engine/src/rerank.rs",
+    "crates/urna-engine/src/lib.rs",
 ]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/tests/search_exact.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/tests/search_exact.rs"
 kind = "rust-test"
 purpose = "Exact-search integration coverage"
-links = ["crates/urna-runtime/src/search.rs"]
+links = ["crates/urna-engine/src/search.rs"]
 
-[[inventory.urna_runtime]]
-path = "crates/urna-runtime/tests/space_band_search.rs"
+[[inventory.urna_engine]]
+path = "crates/urna-engine/tests/space_band_search.rs"
 kind = "rust-test"
 purpose = "Named-space search coverage: search_space hits only the addressed band slab, per-space model_hash isolation (mismatched space gate fails loudly while the default space still answers), unknown-space typed errors, exact-cosine rerank parity inside a space"
 links = [
-    "crates/urna-runtime/src/space_search.rs",
-    "crates/urna-runtime/src/spaces.rs",
+    "crates/urna-engine/src/space_search.rs",
+    "crates/urna-engine/src/spaces.rs",
 ]
 
 [[inventory.data_docs_python_scripts_tests]]
@@ -2286,7 +2286,7 @@ links = [
     "python/tools/_model_bench_report.py",
     "python/forge/forge_manifest.py",
     "python/forge/model_registry.py",
-    "crates/urna-runtime/src/inspect.rs",
+    "crates/urna-engine/src/inspect.rs",
 ]
 
 [[inventory.data_docs_python_scripts_tests]]
@@ -2461,8 +2461,8 @@ kind = "security-doc"
 purpose = "Reporting channel, supported versions, security scope, the hardening notes (unsafe inventory, deny lints, fuzzing, the harness findings, release provenance), and the data-governance posture of a shipped .urna as a personal-data store (cleartext canonical text, right to erasure and rectification under LGPD / GDPR, provenance and build integrity as compliance assets, corpus licensing)"
 links = [
     "data/demo/Instructions.md",
-    "crates/urna-runtime/src/mmap_file.rs",
-    "crates/urna-runtime/src/simd/mod.rs",
+    "crates/urna-engine/src/mmap_file.rs",
+    "crates/urna-engine/src/simd/mod.rs",
 ]
 
 [[inventory.data_docs_python_scripts_tests]]
@@ -2971,7 +2971,7 @@ links = ["Cargo.toml", ".github/workflows/release.yml", "scripts/fetch_potion.sh
 [[inventory.distribution]]
 path = ".github/workflows/publish-crates.yml"
 kind = "ci-workflow"
-purpose = "Custom cargo-dist publish job: urna-format, urna-runtime, urna-cli to crates.io in dependency order after the GitHub release, skipping versions already published; needs the CARGO_REGISTRY_TOKEN repo secret"
+purpose = "Custom cargo-dist publish job: urna-format, urna-engine, urna-cli to crates.io in dependency order after the GitHub release, skipping versions already published; needs the CARGO_REGISTRY_TOKEN repo secret"
 links = [
     ".github/workflows/release.yml",
     "Cargo.toml",
@@ -3007,7 +3007,7 @@ links = [".github/workflows/release.yml", ".github/workflows/build-wheels.yml", 
 [[inventory.distribution]]
 path = "scripts/release_prepare.sh"
 kind = "shell-script"
-purpose = "Opens the release pull request (usage step 8): in a new worktree of origin/main on release-X.Y.Z, cargo-release (version pinned here) runs `version` (workspace version, urna-format and urna-runtime pins, lockfile) and `replace` (the dated changelog section, CITATION.cff's versioned fields); then the preflight, a refusal of any change outside those four files, a signed commit, an explicit push of that branch and gh pr create. Refuses a version not after the current one, an empty [Unreleased], another cargo-release; never tags or publishes"
+purpose = "Opens the release pull request (usage step 8): in a new worktree of origin/main on release-X.Y.Z, cargo-release (version pinned here) runs `version` (workspace version, urna-format and urna-engine pins, lockfile) and `replace` (the dated changelog section, CITATION.cff's versioned fields); then the preflight, a refusal of any change outside those four files, a signed commit, an explicit push of that branch and gh pr create. Refuses a version not after the current one, an empty [Unreleased], another cargo-release; never tags or publishes"
 links = ["release.toml", "crates/urna-cli/Cargo.toml", "scripts/release_preflight.py", "tests/test_release_prepare.py"]
 
 [[inventory.distribution]]
@@ -3060,7 +3060,7 @@ links = [
 [[inventory.distribution]]
 path = "scripts/release_preflight.py"
 kind = "python-source"
-purpose = "One version everywhere a release names it: the urna-format and urna-runtime pins, every crate inheriting the workspace version, the four crates in Cargo.lock, CITATION.cff (version, the versioned crates.io and release URLs, a date-released equal to the changelog's) and the changelog section; tree mode in ci.yml; tag mode (--tag) in tag-verify.yml runs the same checks on the files of the tag's commit (git show, never the working tree) and adds the tag name, main ancestry and the tag date"
+purpose = "One version everywhere a release names it: the urna-format and urna-engine pins, every crate inheriting the workspace version, the four crates in Cargo.lock, CITATION.cff (version, the versioned crates.io and release URLs, a date-released equal to the changelog's) and the changelog section; tree mode in ci.yml; tag mode (--tag) in tag-verify.yml runs the same checks on the files of the tag's commit (git show, never the working tree) and adds the tag name, main ancestry and the tag date"
 links = [".github/workflows/tag-verify.yml", ".github/workflows/ci.yml", "tests/test_release_preflight.py"]
 
 [[inventory.distribution]]
@@ -3188,7 +3188,7 @@ sequenceDiagram
     participant B as builder.py
     participant F as urna-format
     participant N as .urna file
-    participant R as urna-runtime
+    participant R as urna-engine
     participant E as embed_query.py
     participant Q as urna cli / api
     participant P as embed_query_potion.py

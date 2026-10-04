@@ -36,7 +36,7 @@ pub fn run(file: PathBuf) -> Result<()> {
     println!("supports_bm25:{}", view.manifest.capabilities.supports_bm25);
     println!(
         "simd_backend: {}",
-        urna_runtime::simd::detect_backend().name()
+        urna_engine::simd::detect_backend().name()
     );
     println!("sections:     {}", view.section_table.len());
     for entry in &view.section_table {

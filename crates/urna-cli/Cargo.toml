@@ -57,7 +57,7 @@ pre-release-replacements = [
 
 [dependencies]
 urna-format = { workspace = true }
-urna-runtime = { workspace = true }
+urna-engine = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
