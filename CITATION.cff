@@ -2,8 +2,8 @@ cff-version: "1.2.0"
 message: >-
   If you use Urna in your work, please cite the version you used with the
   metadata in this file.
-title: Urna
-type: software, database
+title: Urna.dev
+type: software
 version: "0.5.3"
 date-released: "2026-10-03"
 authors:
