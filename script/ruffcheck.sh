@@ -64,7 +64,7 @@ tests/test_mediagate.py
 tests/test_clispaces.py
 tests/test_askrouter.py
 tests/test_embedpack.py
-tests/test_bench_runner.py
+tests/test_benchmark.py
 tests/test_catalogue.py
 tests/test_modelpull.py
 script/embedpack.py

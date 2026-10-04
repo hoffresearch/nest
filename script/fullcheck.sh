@@ -164,8 +164,8 @@ ok "model install (5 cases)"
 
 # the benchmark rebuild builds beside the corpus and renames at the end, so
 # an interrupted gate never leaves data/measure without its corpora.
-step "python tests/test_bench_runner.py"
-"$PY" tests/test_bench_runner.py
+step "python tests/test_benchmark.py"
+"$PY" tests/test_benchmark.py
 ok "bench runner (4 cases)"
 
 # the version a release names agrees across the manifests, the lockfile,
