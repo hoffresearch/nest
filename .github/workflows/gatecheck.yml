@@ -2,7 +2,7 @@
 #
 # the release / setuptest / pypi workflows only run on tags and
 # releases, so until this file existed nothing ran `cargo test` on a pull
-# request. this is the gate `script/release_check.sh` runs locally, minus
+# request. this is the gate `script/fullcheck.sh` runs locally, minus
 # the LFS corpus measurement (no LFS budget in CI): fmt, clippy with the
 # workspace deny lints (`unwrap_used`, `undocumented_unsafe_blocks`), the
 # whole test suite on linux + macos (the aarch64 macos runner exercises the
@@ -278,7 +278,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: ruff (same file list as release_check.sh)
+      - name: ruff (same file list as fullcheck.sh)
         run: |
           python -m pip install ruff
           URNA_PYTHON=python sh script/ruff_check.sh

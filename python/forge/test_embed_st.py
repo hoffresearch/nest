@@ -2,7 +2,7 @@
 subprocess isolation (the jina+wemm dynamic-module collision is the reason
 the adapter owns a worker), dim/norm contracts, model_hash stability across
 constructions, and cross-modal sanity. Skips cleanly when the deps or the
-local snapshot are absent. NOT run by release_check.sh (loads a 2B model).
+local snapshot are absent. NOT run by fullcheck.sh (loads a 2B model).
 
 Run: .venv/bin/python python/forge/test_embed_st.py
 """
