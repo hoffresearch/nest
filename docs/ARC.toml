@@ -2354,7 +2354,7 @@ purpose = "install_model.py against a real 18 MB hub test model in a scratch HF_
 links = ["python/forge/install_model.py", "script/fullcheck.sh"]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_bench_runner.py"
+path = "tests/test_benchmark.py"
 kind = "python-test"
 purpose = "The benchmark rebuild never destroys the corpus it replaces: an existing corpus is replaced by a validated build, a failing build leaves it byte-for-byte with no temporary, a stale temporary is cleaned and a first build creates the corpus; in fullcheck.sh"
 links = ["python/tools/_bench_runner.py", "script/fullcheck.sh"]
