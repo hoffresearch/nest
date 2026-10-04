@@ -186,9 +186,7 @@ fn forge_python() -> Option<(String, PathBuf)> {
         .and_then(|p| p.parent())
         .map(PathBuf::from)?;
     if !potion_table_present(&root) {
-        eprintln!(
-            "the potion table is an lfs pointer: run `git lfs pull` or script/getpotion.sh"
-        );
+        eprintln!("the potion table is an lfs pointer: run `git lfs pull` or script/getpotion.sh");
         return None;
     }
     let mut candidates: Vec<String> = Vec::new();
