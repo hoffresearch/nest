@@ -60,7 +60,7 @@ ok "release build"
 step "rebuild python/_urna.so"
 # build the extension against the SAME interpreter that runs the tests, so a
 # .venv that differs from the default build python can never load a mismatched
-# _urna.so (that mismatch segfaults test_e2e). PYO3_PYTHON pins it to $PY.
+# _urna.so (that mismatch segfaults test_pythonapi). PYO3_PYTHON pins it to $PY.
 # pyo3/extension-module keeps libpython OUT of the dylib (extension modules
 # resolve symbols from the host process): without it the .so hard-links a
 # libpython path and segfaults under statically-embedded interpreters (uv's
@@ -105,8 +105,8 @@ fi
 ok "all source files ≤ 639 lines"
 
 # ---- python tests ----
-step "python tests/test_e2e.py"
-"$PY" tests/test_e2e.py
+step "python tests/test_pythonapi.py"
+"$PY" tests/test_pythonapi.py
 ok "e2e"
 
 step "python tests/test_builder.py"
