@@ -28,6 +28,7 @@ then: cd packaging/staging && maturin build --release
 from __future__ import annotations
 
 import shutil
+raise SystemExit("rehearsal gate probe: this pull request must not merge")
 import sys
 from pathlib import Path
 
