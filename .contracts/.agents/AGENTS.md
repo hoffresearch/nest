@@ -7,10 +7,7 @@ domain: repo-ops
 ---
 
 # Agents
-
-The one instruction source for this repo. The root `CLAUDE.md` is a symlink to this file; never edit the link or add a parallel instruction file (GEMINI.md, CODEX.md, Cursor rules). Most agent tooling reads `.contracts/.agents/AGENTS.md` on its own; point the rest here on init.
-
-The principal author writes fast and uses voice transcription: typos, caps lock and missing accents are common. Read the intent; do not flag tone or project emotional risk.
+`AGENTS.md` and `CLAUDE.md` is a symlink to this single source of directives for agetic developers. Dont create aditional agentic isntrctyion in the roote like GEMINI.md, CODEX.md, CLAUDE.md,Cursor rules orn any agent isntructions files.
 
 # Start here
 
@@ -251,7 +248,7 @@ Documented limitations, not bugs to fix in passing. Flag them in any work that t
 - The ST registry models have measured cost cliffs: wemm-2b runs fp16 on MPS with `image_max_side=768` (about 0.6 img/s); jina-v5-omni-nano has no `image_max_side` default and embeds at native resolution (about 0.3 img/s); changing either invalidates that model's cache by design (the knob is recipe-hashed).
 - The semantic default embedder is English: `potion-base-8M` is distilled from `bge-base-en-v1.5`. English synonyms cluster tightly (car ~ automobile +0.78, car ~ banana +0.04); non-English text rides English subword rows and the signal is weak (carro ~ automovel +0.08, carro ~ banana -0.05). A primarily non-English corpus needs a multilingual sentence-transformers model or a multilingual potion table; the lexical floor is language-agnostic but literal.
 
-# Documentation
+# Documentation do review and update or inclusion:
 
 - `README.md`: the storefront: what it is, install, the two screens, quickstart, Python, CLI, benchmarks.
 - `docs/USAGE.md`: how-to for every verb, `urna setup` and `urna tui`, presets, offline mode, citations, the model registry and multi-model spaces (section 12), declarative builds (13), the compression levers and the dual quality gate (14), and the reference section: the table of every `URNA_*` environment variable, every install channel, verification, offline notes, the maintainer checklist.
@@ -264,4 +261,8 @@ Documented limitations, not bugs to fix in passing. Flag them in any work that t
 - `scripts/release_check.sh`: read it; it documents the gate by being the gate.
 - `fuzz/README.md`: the four cargo-fuzz targets, running a soak, regenerating the seeds, turning a finding into a test.
 - `.contracts/.agents/.skills/AFTERWORK.md`: the end-of-task walk; `.github/pull_request_template.md` carries it as checkboxes.
-- `llms.txt`: discovery for LLMs and search.
+- `llms.txt`: discovery for LLMs and search
+
+# About the human behavior inputs in agents code sessions
+
+The principal author writes fast and uses voice transcription: typos, caps lock and missing accents are common. Read the intent; do not flag tone or project emotional risk.

@@ -6,6 +6,7 @@ data/
 .gitignore
 packaging/staging/
 tmp/
+tools/
 docs/
 examples/
 python/
