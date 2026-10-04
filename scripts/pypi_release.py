@@ -121,11 +121,14 @@ def plan_upload(
     stray = sorted(set(remote) - set(wheels))
     if stray:
         raise ReleaseError(f"{index} {version} carries files this release did not build: {stray}")
+    # every remote file is checked before anything is copied: a conflict on
+    # the last wheel leaves `out` untouched, not half filled.
+    clashes = [n for n, p in wheels.items() if n in remote and remote[n] != _sha256(p)]
+    if clashes:
+        raise ReleaseError(f"{index} already has {', '.join(clashes)} with another sha256")
     upload = []
     for name, path in wheels.items():
         if name in remote:
-            if remote[name] != _sha256(path):
-                raise ReleaseError(f"{index} already has {name} with another sha256")
             print(f"pypi-release: {name} already on {index}, same sha256, skipped")
             continue
         out.mkdir(parents=True, exist_ok=True)

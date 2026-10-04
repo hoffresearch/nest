@@ -2956,7 +2956,7 @@ links = [
 [[inventory.distribution]]
 path = ".github/workflows/pypi.yml"
 kind = "ci-workflow"
-purpose = "Top-level, dispatch only (trusted publishing does not take a reusable workflow): publishes the wheels with OIDC + PEP 740. index=pypi on a signed v* tag, from the release run whose host succeeded, taking the wheels and .sha256 from the GitHub release and verifying their attestations; index=testpypi on main, from a successful release-rehearsal run on a main commit, testpypi only. The upload skips wheels already there with the same sha256 and fails on another (scripts/pypi_release.py)"
+purpose = "Top-level, dispatch only (trusted publishing does not take a reusable workflow): publishes the wheels with OIDC + PEP 740. index=pypi on a signed v* tag, from the release run whose host succeeded, taking the wheels and .sha256 from the GitHub release and verifying each attestation against build-wheels.yml as signer, the tag's commit and ref; index=testpypi on main, from a successful release-rehearsal run on a main commit, testpypi only. The upload skips wheels already there with the same sha256 and fails on another (scripts/pypi_release.py)"
 links = [
     ".github/workflows/publish-pypi.yml",
     ".github/workflows/tag-verify.yml",
@@ -2977,13 +2977,13 @@ links = [
 [[inventory.distribution]]
 path = ".github/workflows/publish-pypi.yml"
 kind = "ci-workflow"
-purpose = "Custom cargo-dist publish job: dispatches pypi.yml on the release tag with this run as the source (actions: write), follows the run id the dispatch returns to completion within a deadline, cancels it on timeout, and fails when it fails, so the release is not announced"
+purpose = "Custom cargo-dist publish job: dispatches pypi.yml on the release tag with this run as the source (actions: write), follows the run id the dispatch returns (return_run_details: 200 with the id, not an empty 204) to completion within a deadline, cancels it on timeout, and fails when it fails, so the release is not announced"
 links = [".github/workflows/release.yml", ".github/workflows/pypi.yml"]
 
 [[inventory.distribution]]
 path = "scripts/pypi_release.py"
 kind = "python-source"
-purpose = "pypi.yml's checks: source (the run the index allows: the tag's release run with a successful host for pypi, a successful rehearsal on main for testpypi) and plan (each wheel matches its .sha256, the count and version, then the index JSON decides: same sha256 skipped, another fails, the rest uploaded)"
+purpose = "pypi.yml's checks: source (the run the index allows: the tag's release run with a successful host for pypi, a successful rehearsal on main for testpypi) and plan (each wheel matches its .sha256, the count and version, then the index JSON decides, every remote file checked before any copy: same sha256 skipped, another fails with nothing staged, the rest uploaded)"
 links = [".github/workflows/pypi.yml", "tests/test_pypi_release.py"]
 
 [[inventory.distribution]]

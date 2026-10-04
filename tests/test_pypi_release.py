@@ -14,7 +14,8 @@ with real sha256 sidecars:
   another version; a file the index has with another sha256, a file the
   index has that this release did not build;
 - edge case: a partial upload (two wheels already there, same sha256) plans
-  only the other two, and a complete one plans none.
+  only the other two, and a complete one plans none; a clash on the last
+  wheel copies nothing for upload.
 
 Run: python tests/test_pypi_release.py
 """
@@ -249,6 +250,21 @@ def test_what_the_index_already_has() -> None:
             json_base=f"{BASE}/clash",
             contains=f"already has {first} with another sha256",
         )
+        # a clash on the last wheel, the others new: nothing is copied at all.
+        last = sorted(names)[-1]
+        ROUTES[f"/clash-last/urna/{VERSION}/json"] = {
+            "urls": [{"filename": last, "digests": {"sha256": "0" * 64}}]
+        }
+        expect_error(
+            pypi.plan_upload,
+            "pypi",
+            src,
+            VERSION,
+            Path(tmp, "up5"),
+            json_base=f"{BASE}/clash-last",
+            contains=f"already has {last} with another sha256",
+        )
+        assert not Path(tmp, "up5").exists(), "a refused plan copied wheels for upload"
         stray = f"urna-{VERSION}.tar.gz"
         ROUTES[f"/stray/urna/{VERSION}/json"] = {
             "urls": [{"filename": stray, "digests": {"sha256": "1" * 64}}]
