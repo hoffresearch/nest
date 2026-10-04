@@ -126,6 +126,9 @@ def test_unknown_shapes_are_refused() -> None:
     bracket = copy.deepcopy(RELEASE)
     bracket["jobs"]["build-global-artifacts"]["env"]["NPM"] = "${{ secrets['NPM_TOKEN'] }}"
     cases.append((bracket, "reads secrets [\"secrets['NPM_TOKEN']"))
+    suffix = copy.deepcopy(RELEASE)
+    suffix["jobs"]["build-global-artifacts"]["env"]["X"] = "${{ secrets.GITHUB_TOKEN_EXTRA }}"
+    cases.append((suffix, "reads secrets ['secrets.GITHUB_TOKEN_EXTRA"))
     whole = copy.deepcopy(RELEASE)
     whole["jobs"]["plan"]["env"]["ALL"] = "${{ toJSON(secrets) }}"
     cases.append((whole, "reads secrets ['secrets)"))
