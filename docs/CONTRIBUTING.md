@@ -8,16 +8,16 @@ domain: contributing
 
 # Contributing
 
-`urna` is maintained by [Hoff Research](https://hoffresearch.com). Author: Brenner Cruvinel ([brenner@hoffresearch.com](mailto:brenner@hoffresearch.com)). All contributions are welcome.
+`urna` is maintained by [Hoff Research](https://hoffresearch.com). Author: Brenner Cruvinel ([brenner@hoffresearch.com](mailto:brenner@hoffresearch.com)). All contributions are welcome. Contributors and AI coding agents start from `.contracts/.ai/.agents/AGENTS.md`.
 
 ## How to contribute
 
 1. Fork the repo at https://github.com/hoffresearch/urna.
 2. Branch from `main`: `git checkout -b feature/short-description origin/main`.
 3. Keep each PR focused on one concern. Small is better.
-4. Add or update tests for the change. New behavior needs a new test. Write real tests against real artifacts (built .urna files, golden fixtures, real corpora), no mocks; cover the happy path, the error path, and one edge case.
+4. Validate the behavior the change affects. Reuse existing tests and add cases for new guarantees or regressions. Use real artifacts for file and installation behavior, and controlled service responses for failure and retry cases.
 5. If the change alters architecture, module boundaries, data flow, or doc locations, update `docs/ARC.toml` in the same PR. Keep it concise and pragmatic. Do not add a separate human architecture doc; `ARC.toml` is the machine map, the human reference, and the mermaid diagram all in one file. Record an architecture decision, or a lesson that must stay as reference, as an ADR under `docs/ADR/` (layout and categories in `docs/ADR/README.md`).
-6. For a code change, run `./scripts/release_check.sh` locally before pushing; a docs-only change skips it and says so in the PR. It is the gate (the Rust suite in release, the extension rebuilt, the Python suites, ruff, the regression gates against `data/measure/baseline.json`). `.github/workflows/ci.yml` covers the Rust side on Linux, macOS and Windows plus checks the local gate does not run (cargo-deny, cargo-semver-checks, the engine-only Clippy, the benches compiled, a cargo-fuzz smoke, the embedder payload staged under Python 3.10). Its Python job runs ruff, the model catalog check and the release suites that need no built extension; the suites that load `_urna.so` run only in the local gate, so run them locally. A pull request that touches a release input also runs the release rehearsal (`release-rehearsal.yml`), a required check.
+6. Run checks appropriate to the change and the required CI checks. Use `./scripts/release_check.sh` for format, runtime, performance or broad integration changes; it rebuilds the extension, runs Rust and Python tests, lint and the corpus regression measurements. Focused script or documentation changes can use targeted checks, with their scope explained in the PR; editorial changes do not repeat corpus measurements. `.github/workflows/ci.yml` covers the Rust side on Linux, macOS and Windows plus checks the local gate does not run (cargo-deny, cargo-semver-checks, the engine-only Clippy, the benches compiled, a cargo-fuzz smoke, the embedder payload staged under Python 3.10). Its Python job runs ruff, the model catalog check and the release suites that need no built extension; the suites that load `_urna.so` run only in the local gate, so run them locally. A pull request that touches a release input also runs the release rehearsal (`release-rehearsal.yml`), a required check.
 7. Commit with a clear message in plain English. No conventional commits prefix.
 8. Open a PR against `main`. The maintainer squash merges it; `main` requires verified (SSH-signed) commits, linear history and a passing `rehearsal` check (the release rehearsal, dispensed when the change touches no release input), so sign your commits (`git config commit.gpgsign true` with an SSH or GPG key registered on GitHub).
 
@@ -65,15 +65,13 @@ These conventions are not aesthetic preferences. They exist to keep the repo rea
 
 ### Agent instruction files
 
-- `.contracts/.agents/AGENTS.md` is the single instruction source for AI coding agents working in this repo: use/update/init only `.contracts/.agents/AGENTS.md` (the core global agent file).
-- Do not create per-tool instruction files (GEMINI.md, CODEX.md, cursor rules). The root `CLAUDE.md` is a symlink to that file, not a second source; most agentic tooling already reads `.contracts/.agents/AGENTS.md` by default, point the rest at it on init.
+`.contracts/.ai/.agents/AGENTS.md` is the shared instruction source. The repository keeps no `AGENTS.md`, `CLAUDE.md` or other per-tool file at the root: point your agent tooling at this file yourself.
+
+Before delivery, follow `.contracts/.ai/.agents/.skills/afterwork/AFTERWORK.md`. Its `specs.yaml` maps the files to review for each kind of change; update information that is stale and preserve files that are already correct.
 
 ### File hygiene
 
-Human working memory holds four plus or minus one chunks at once (Cowan, 2001). Neural networks behave better the same way. A file that does not fit the mental window forces internal context switching and raises bug rates. This is the same principle UI designers apply to information density.
-
-- **Hard limit: 639 lines per code file.** Above it, split along single-responsibility lines in the same PR.
-- Exempt: tests, data and generated files, lockfiles, JSON, YAML, TOML and vendored files.
+Organize changed code by responsibility and respect the line limit enforced by the current checks. CI checks Rust source under `crates/**/src/**`; the local gate also checks non-test Rust files under `crates/`. Documentation, generated files and data do not need splitting to meet that code limit. Keep refactoring relevant to the task and preserve behavior and test coverage.
 
 ## Code style
 
@@ -83,14 +81,14 @@ Rust:
 - `cargo clippy --workspace --all-targets -- -D warnings` is a hard gate. Suppress an individual lint with `#[allow(clippy::name)]` and a one-line justification, never globally.
 - Every `unsafe` block needs a `// SAFETY:` comment naming the invariant the caller is relying on.
 - Public items get a doc comment that explains the why, not the what. The name already says what.
-- File hygiene as above: 639 lines.
+- Keep modules focused and follow the file hygiene guidance above.
 
 Python:
 
 - Target `py312`, line length 100. Ruff config in `pyproject.toml`.
 - Lints: `E F W I B UP SIM`. Run `sh scripts/ruff_check.sh` (`URNA_PYTHON=.venv/bin/python` picks the interpreter): it checks and format-checks the one file list CI and `release_check.sh` share; a new Python module goes on that list.
 - Private helpers in `python/tools/` use the `_` prefix (e.g. `_baseline_decoder.py`).
-- File hygiene as above: 639 lines.
+- Keep modules focused and follow the file hygiene guidance above.
 
 Format and runtime invariants:
 
@@ -107,7 +105,7 @@ python tests/test_forge_spec.py               # the three that run by hand
 ./scripts/release_check.sh
 ```
 
-The Python tests are plain scripts (`pytest tests/` does not work) and need the built `_urna.so`. `release_check.sh` is the source of truth for the Python side; CI runs the Rust gates plus deny, semver and the Windows job on top of it, so a green local gate is necessary, not sufficient.
+The Python tests are plain scripts (`pytest tests/` does not run them). Suites that exercise the extension need a rebuilt `_urna.so`; release tooling tests have their own prerequisites. Read `release_check.sh` and the CI workflows for their coverage. Report skipped tests separately from passed tests and identify the tested commit.
 
 Two lints are denied workspace-wide and will fail the build: `clippy::unwrap_used` (tests are exempt; parse paths read fields through `urna_format::bytes`) and `clippy::undocumented_unsafe_blocks` (every `unsafe` block states its invariant in a `// SAFETY:` comment). A change to any section decoder or search path should also run the mutation harness, and a new codec gets an arm in `fuzz/fuzz_targets/section_decoders.rs`:
 
