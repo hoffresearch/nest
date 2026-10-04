@@ -2306,7 +2306,7 @@ links = [
 ]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_forge_spec.py"
+path = "tests/test_forgespec.py"
 kind = "python-test"
 purpose = "Spec errors name their key; the six media profiles incl retrieval-auto (quality deep-merge, explicit override wins, utility range errors); ${VAR} expansion (set builds, unset or empty names the key, bare $ survives, ~/ expands, rebuild-only under a moved data root stays L3); total ordering; fake-preset e2e (spaces, 3 output modes, citation consistency, dedup, L3 rebuild); provenance minimal (compact key + ordinal items, items_compact, frame_of_row, identical .urna file_hash to the standard build, readers refuse dropped fields, the UI bridge browses both alike); triad invalidation; torn-cache recompute; shared cache root (same rows in two output dirs hit one entry, a CRF change adds an entry, spec cache_dir beats URNA_CACHE_DIR, the same root via env still claims L3 with no cache path in the lock, no <out>/.cache, user cache untouched); a planted model_hash probe is corrected by the loaded model; a file as cache root is a SpecError naming the setting"
 links = ["python/forge/forge_pipeline.py"]

@@ -125,8 +125,8 @@ ok "image corpus pipeline (37 cases)"
 
 # declarative builds: spec validation, fake-preset e2e, triad cache, dedup,
 # output modes, L3 rebuild. no heavy ML deps; media legs skip without ffmpeg.
-step "python tests/test_forge_spec.py"
-"$PY" tests/test_forge_spec.py
+step "python tests/test_forgespec.py"
+"$PY" tests/test_forgespec.py
 ok "forge spec + pipeline"
 
 # dual quality gate + jxl round-trip; skips cleanly without ssimulacra2/cjxl.
