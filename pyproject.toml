@@ -7,7 +7,7 @@
 # imported directly by adding `python/` to `sys.path`.
 #
 # The PUBLISHED package is the `urna` wheel, a maturin project owned by
-# `packs/pyproject.toml` and staged by `script/stage_wheel.py` (see
+# `packs/pyproject.toml` and staged by `script/wheelprep.py` (see
 # the reference section of docs/USAGE.md). This root file stays the dev-tooling config: it exists
 # so `ruff` (and any other PEP 518 tool) finds a canonical config at the
 # workspace root.

@@ -5,7 +5,7 @@
 # (the first job here), stops the release before any channel publishes.
 #
 # one abi3 wheel per platform (cp312, matching pyo3 abi3-py312), built by
-# maturin from the staged project (script/stage_wheel.py). each wheel gets a
+# maturin from the staged project (script/wheelprep.py). each wheel gets a
 # `<wheel>.sha256` (`<hex> *<name>`, the archives' format) and a sigstore
 # build attestation. the upload is named `artifacts-wheel-*`, so the host job
 # attaches the wheels and their checksums to the github release; pypiindex.yml
@@ -56,7 +56,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: stage the wheel project
-        run: python script/stage_wheel.py
+        run: python script/wheelprep.py
       - name: build the abi3 wheel
         uses: PyO3/maturin-action@v1
         with:

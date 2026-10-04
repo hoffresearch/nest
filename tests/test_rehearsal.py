@@ -142,7 +142,7 @@ def test_what_needs_the_rehearsal() -> None:
         "python/forge/models/potion-base-8M/model.safetensors",
         "python/embed_query.py",
         "script/embedpack.py",
-        "script/stage_wheel.py",
+        "script/wheelprep.py",
         "python/urna_cli.py",
         "packs/pyproject.toml",
         "crates/urna-clitui/src/main.rs",

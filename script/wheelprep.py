@@ -21,7 +21,7 @@ the potion table (~30 MB) is bundled on purpose: the installed package must
 embed offline by construction, so no lazy fetch path exists. git-lfs pointer
 files are rejected; run `git lfs pull` before staging.
 
-run:  python script/stage_wheel.py
+run:  python script/wheelprep.py
 then: cd packs/staging && maturin build --release
 """
 
@@ -51,7 +51,7 @@ MODEL_DST = STAGING / "urna" / "models" / "potion-base-8M"
 
 
 def fail(msg: str) -> None:
-    print(f"stage_wheel: error: {msg}", file=sys.stderr)
+    print(f"wheelprep: error: {msg}", file=sys.stderr)
     raise SystemExit(1)
 
 

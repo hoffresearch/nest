@@ -1,6 +1,6 @@
 # maturin project for the official `urna` wheel (issue #75).
 #
-# script/stage_wheel.py copies this file VERBATIM into packs/staging/;
+# script/wheelprep.py copies this file VERBATIM into packs/staging/;
 # every relative path below resolves from staging/, not from packs/.
 # the dev flow is unchanged: `cargo build --release -p urna-bridge --features
 # pyo3/extension-module`, then copy target/release/lib_urna.dylib (macos) or
