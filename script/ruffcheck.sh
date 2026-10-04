@@ -35,7 +35,7 @@ python/tools/urna_search_image.py
 python/tools/urna_image_eval.py
 python/tools/_image_metrics.py
 python/tools/urna_image_sweep.py
-tests/test_search_text_model_hash.py
+tests/test_hashguard.py
 tests/test_imagepipe.py
 tests/test_mediablob.py
 tests/test_spaceband.py

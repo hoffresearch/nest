@@ -113,8 +113,8 @@ step "python tests/test_ingestion.py"
 "$PY" tests/test_ingestion.py
 ok "builder"
 
-step "python tests/test_search_text_model_hash.py"
-"$PY" tests/test_search_text_model_hash.py
+step "python tests/test_hashguard.py"
+"$PY" tests/test_hashguard.py
 ok "search-text model_hash gate (5 cases)"
 
 # builds its own dataset, so it needs no demo corpus; the compressed cases
