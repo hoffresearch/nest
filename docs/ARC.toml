@@ -14,7 +14,7 @@ system_view = [
     "urna-format is the frozen v1 container contract. It owns layout, manifest, reader, writer, canonical sections, hashes, and wire encodings. Embeddings stay raw float32, float16, int8, or int4 (fixed-stride quant only); zstd is reserved for non-embedding sections.",
     "urna-engine opens .urna files through mmap, validates queries, dispatches SIMD, and executes exact, ANN, graph, and hybrid search while reranking candidates with real cosine. That hot path is why embeddings are never zstd-compressed.",
     "urna-clitui is a thin clap surface over the runtime and format crates. It carries the twelve engine subcommands (inspect, validate, stats, media, search, search-text, search-ann, search-graph, search-space, benchmark, cite, doctor: file + vector in; only search-text and doctor spawn Python) and the three agent verbs (ask, retrieve, build: text or spec in, shell out to the offline Python embedder / forge), tagged [engine] / [agent] in --help. ask and retrieve are the agent-native flagship verbs layered over the engine (text query in, cited answer out; both embed the query offline with the default potion static table, validate the embedder's model_hash against the manifest exactly like search-text, and route by what the file carries through MmapUrnaFile::search_routed: hybrid when a BM25 section is present, hnsw when an HNSW section is present, exact otherwise; ask prints one cited answer (--disclose answer) or adds the rerank-source honesty line + route + candidate counts (--disclose explain); retrieve emits the agent-shaped JSON/JSONL answer-pack where each hit's score IS the exact-cosine rerank value). doctor is the post-install health check with typed exit codes (0 ok, 2 Python missing, 3 deps missing, 4 embedder missing, 5 potion table missing, 6 embedder run failed). Behind the default-on `tui` feature the CLI also carries the terminal UI in src/tui: `setup` (the interactive installer, exit codes 10 download, 11 checksum, 12 unpack, 13 Python env, 14 blocked, 15 a model install; --model installs catalog models) and `tui` (the corpus explorer; a bare `urna` on a terminal opens it, in a pipe it prints the help and exits 2). Verb-collapse, the urna dev namespace, and the urna-profile crate are deferred.",
-    "The distribution layer (issue #75) turns tags on main into installs: cargo-dist builds the CLI for five targets with SHA256 checksums, Sigstore keyless attestations on the five archives, one CycloneDX SBOM for the CLI package, a Homebrew tap formula (`urna`) and an npm package (`@urna/cli`), and publishes urna-format / urna-engine / urna-clitui (the CLI crate, binary `urna`) to crates.io; maturin builds the `urna` abi3 wheel with the potion table bundled (offline embedding after pip install); script/install.sh / install.ps1 are the one-liner installers (verify-before-write, --version, --uninstall); urna doctor validates the install offline and `urna setup` completes the channels that ship the bare binary (Homebrew, npm, crates.io); .github/workflows/setuptest.yml tests the INSTALLED product per platform after each release, including a job per package channel that waits for the exact version on its registry and ends in `urna setup --yes` + `urna doctor`; .github/workflows/runreport.yml summarizes every completed release run, failed or cancelled included. Three levels of evidence, not interchangeable: script/fullcheck.sh is the full local gate (no release build), rehearsal.yml builds the release on pull requests and publishes nothing, and only a tag exercises publishing, setuptest and the report.",
+    "The distribution layer (issue #75) turns tags on main into installs: cargo-dist builds the CLI for five targets with SHA256 checksums, Sigstore keyless attestations on the five archives, one CycloneDX SBOM for the CLI package, a Homebrew tap formula (`urna`) and an npm package (`@urna/cli`), and publishes urna-format / urna-engine / urna-clitui (the CLI crate, binary `urna`) to crates.io; maturin builds the `urna` abi3 wheel with the potion table bundled (offline embedding after pip install); script/installer.sh / installer.ps1 are the one-liner installers (verify-before-write, --version, --uninstall); urna doctor validates the install offline and `urna setup` completes the channels that ship the bare binary (Homebrew, npm, crates.io); .github/workflows/setuptest.yml tests the INSTALLED product per platform after each release, including a job per package channel that waits for the exact version on its registry and ends in `urna setup --yes` + `urna doctor`; .github/workflows/runreport.yml summarizes every completed release run, failed or cancelled included. Three levels of evidence, not interchangeable: script/fullcheck.sh is the full local gate (no release build), rehearsal.yml builds the release on pull requests and publishes nothing, and only a tag exercises publishing, setuptest and the report.",
     "urna-bridge is the PyO3 bridge. python/urna.py loads the compiled extension, python/builder.py orchestrates chunking and caching, and python/embed_query.py preserves model parity for search-text. The agent-native flagship is UrnaFile.retrieve(query, k, ...): a pre-embedded query in, cited spans out, whose score IS the exact rerank value, with tier-1 stored canonical text + hashes + citation_id + rerank-source marker.",
     "script/fullcheck.sh is the release gate: rebuilds the extension, runs Rust and Python suites, checks lint and format, measures presets, and compares against the committed baseline.",
     "crates/urna-ingest is the ingestion layer, a SEPARATE cargo workspace under crates/ that the root Cargo.toml excludes, so its (eventually heavy, possibly non-deterministic) deps never enter urna-format or urna-engine. This phase ships FORGE-0a: the frozen .fci canonical-intermediate schema only. It is not built by the sovereign release gate; it has its own cargo workspace.",
@@ -196,7 +196,7 @@ links = ["crates/urna-ingest/src/fci/mod.rs"]
 name = "distribution"
 role = "Install and release surface (issue #75): cargo-dist CLI releases (5 targets, checksums, Sigstore attestations, Homebrew tap, npm `@urna/cli`, crates.io publish), the maturin urna wheel staged by script/wheelprep.py (bundled potion table, abi3 cp312), the one-liner installers, urna doctor, the minimal Docker image, and the offline integration examples"
 entrypoints = [
-    "script/install.sh",
+    "script/installer.sh",
     "packs/pyproject.toml",
     "script/wheelprep.py",
     "script/embedpack.py",
@@ -2938,19 +2938,19 @@ links = [
 ]
 
 [[inventory.distribution]]
-path = "script/install.sh"
+path = "script/installer.sh"
 kind = "shell-script"
 purpose = "One-liner installer: platform detect, SHA256 verify-before-write, binary to ~/.local/bin, payload to the XDG data dir, --version/--uninstall"
 links = [
-    "script/install.ps1",
+    "script/installer.ps1",
     "script/embedpack.py",
 ]
 
 [[inventory.distribution]]
-path = "script/install.ps1"
+path = "script/installer.ps1"
 kind = "powershell-script"
-purpose = "Windows one-liner installer, mirrors install.sh"
-links = ["script/install.sh"]
+purpose = "Windows one-liner installer, mirrors installer.sh"
+links = ["script/installer.sh"]
 
 [[inventory.distribution]]
 path = ".github/workflows/release.yml"
@@ -3074,8 +3074,8 @@ path = ".github/workflows/setuptest.yml"
 kind = "ci-workflow"
 purpose = "Release gate, run inside the release once it is announced: `cli` installs the one-liner on 5 runner OSes (validate + doctor), `channels` installs the same binary through Homebrew, npm, bun, pnpm, yarn and binstall (11 legs, each ending in setup --yes + doctor + validate; the bun legs pass because the runners ship Node, which the npm launcher needs), `wheel` pip-installs the wheel on 4 and runs the uvx entry point"
 links = [
-    "script/install.sh",
-    "script/install.ps1",
+    "script/installer.sh",
+    "script/installer.ps1",
 ]
 
 [[inventory.distribution]]

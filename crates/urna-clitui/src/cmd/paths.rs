@@ -6,7 +6,7 @@
 //!
 //! order: `URNA_DATA_DIR` (the same override the one-liner installers
 //! take), `XDG_DATA_HOME`, `~/.local/share`, `%LOCALAPPDATA%` (where
-//! `install.ps1` lays the payload down), then `<exe>/../share` (a tarball
+//! `installer.ps1` lays the payload down), then `<exe>/../share` (a tarball
 //! unpacked next to its own `share/`).
 
 use std::path::PathBuf;
@@ -35,7 +35,7 @@ pub fn data_roots() -> Vec<PathBuf> {
 
 /// The root `urna setup` writes into: the first candidate that is not the
 /// exe-relative `share/` (a package manager owns that one). On windows the
-/// default is `%LOCALAPPDATA%`, matching `install.ps1`.
+/// default is `%LOCALAPPDATA%`, matching `installer.ps1`.
 #[cfg_attr(not(feature = "tui"), allow(dead_code))]
 pub fn install_root() -> Option<PathBuf> {
     let env = |k: &str| {
