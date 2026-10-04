@@ -74,6 +74,7 @@ scripts/pypi_release.py
 tests/test_pypi_release.py
 scripts/release_rehearsal.py
 tests/test_release_rehearsal.py
+tests/test_release_prepare.py
 "
 # shellcheck disable=SC2086
 "$PY" -m ruff check $TARGETS
