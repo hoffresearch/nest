@@ -92,14 +92,23 @@ else
     BASE="https://github.com/$REPO/releases/latest/download"
 fi
 
-ARCHIVE="urna-$TARGET.tar.xz"
 PAYLOAD="urna-embedder-payload.tar.gz"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+# the archive carries the cli package's name: urna-clitui-<target> since the
+# package rename, urna-<target> up to 0.5.3. try the new name, then the old
+# one, so the latest release and an older pinned version both install.
+ARCHIVE=""
+for STEM in "urna-clitui-$TARGET" "urna-$TARGET"; do
+    if curl -sSfL "$BASE/$STEM.tar.xz" -o "$TMP/$STEM.tar.xz" 2>/dev/null; then
+        ARCHIVE="$STEM.tar.xz"
+        break
+    fi
+done
+[ -n "$ARCHIVE" ] || die "download failed: $BASE/urna-clitui-$TARGET.tar.xz (nor urna-$TARGET.tar.xz)"
 say "urna-install: fetching $ARCHIVE + payload ($TARGET)"
-curl -sSfL "$BASE/$ARCHIVE" -o "$TMP/$ARCHIVE" || die "download failed: $BASE/$ARCHIVE"
 curl -sSfL "$BASE/$ARCHIVE.sha256" -o "$TMP/$ARCHIVE.sha256" || die "checksum download failed"
 curl -sSfL "$BASE/$PAYLOAD" -o "$TMP/$PAYLOAD" || die "download failed: $BASE/$PAYLOAD"
 curl -sSfL "$BASE/$PAYLOAD.sha256" -o "$TMP/$PAYLOAD.sha256" || die "checksum download failed"
@@ -125,7 +134,7 @@ say "urna-install: checksums verified"
 
 mkdir -p "$BIN_DIR" "$DATA_DIR"
 tar -xJf "$TMP/$ARCHIVE" -C "$TMP"
-cp "$TMP/urna-$TARGET/urna" "$BIN_DIR/urna"
+cp "$TMP/$STEM/urna" "$BIN_DIR/urna"
 chmod +x "$BIN_DIR/urna"
 tar -xzf "$TMP/$PAYLOAD" -C "$DATA_DIR"
 
