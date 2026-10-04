@@ -54,6 +54,9 @@ groups:
         rule: regenerar com python/tools/bench_competitors.py, nunca à mão.
       - path: docs/ARC.toml
         when: mudarem módulos, contratos, fluxos, arquitetura ou inventário de arquivos.
+      - path: docs/ADR/
+        when: houver uma decisão de arquitetura ou uma lição que precise continuar como referência.
+        rule: partir do TEMPLATE.md, na pasta da categoria, com numeração única; um ADR aceito é substituído, nunca apagado.
       - path: CITATION.cff
         when: mudar a versão publicada ou houver alteração explícita dos metadados de citação.
         rule: preservar suas escolhas atuais.
