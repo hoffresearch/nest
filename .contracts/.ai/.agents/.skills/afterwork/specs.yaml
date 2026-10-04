@@ -35,7 +35,7 @@ groups:
       - path: docs/USAGE.md
         when: mudarem comandos, opções, variáveis, instalação, modelos, builds ou operação das releases.
       - path: docs/CONTRIBUTING.md
-        when: mudarem setup de desenvolvimento, dependências, testes, CI ou processo de contribuição.
+        when: mudarem setup de desenvolvimento, dependências, testes, CI, convenção de nomes ou processo de contribuição.
       - path: docs/SECURITY.md
         when: mudarem garantias de segurança, proveniência, permissões, rede ou versões suportadas.
       - path: docs/CODE_OF_CONDUCT.md
