@@ -128,7 +128,7 @@ github-build-setup = "../buildprep.yml"
 build = [
     "sh",
     "-c",
-    "sh script/fetch_potion.sh && python3 script/embedpack.py target/dist-payload --tar target/urna-embedder-payload.tar.gz",
+    "sh script/getpotion.sh && python3 script/embedpack.py target/dist-payload --tar target/urna-embedder-payload.tar.gz",
 ]
 artifacts = [
     "target/urna-embedder-payload.tar.gz",
