@@ -322,7 +322,7 @@ path = [
     "crates/*",
     "python/_urna.so",
     "tests/test_pythonapi.py",
-    "tests/test_builder.py",
+    "tests/test_ingestion.py",
     "tests/test_search_text_model_hash.py",
     "script/ruffcheck.sh",
 ]
@@ -903,7 +903,7 @@ kind = "directory"
 purpose = "Python integration test scripts"
 links = [
     "tests/test_pythonapi.py",
-    "tests/test_builder.py",
+    "tests/test_ingestion.py",
     "tests/test_search_text_model_hash.py",
 ]
 
@@ -2840,12 +2840,12 @@ links = [
     "python/tools/measure_presets.py",
     "python/tools/compare_measure.py",
     "tests/test_pythonapi.py",
-    "tests/test_builder.py",
+    "tests/test_ingestion.py",
     "tests/test_search_text_model_hash.py",
 ]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_builder.py"
+path = "tests/test_ingestion.py"
 kind = "python-test"
 purpose = "Pipeline and cache regression coverage"
 links = ["python/builder.py"]
