@@ -14,6 +14,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-10-04
+
 ### Added
 
 - `script/releasepr.sh X.Y.Z` opens the release pull request. It works in a new worktree of `origin/main` on `release-X.Y.Z`, so the current checkout and its uncommitted files never enter it. cargo-release 1.1.6, pinned in the script, sets the workspace version, the `urna-format` and `urna-engine` pins and the lockfile, then moves `[Unreleased]` under a dated section and sets the five versioned fields of `CITATION.cff` (the rest of the file stays). The preflight runs on the result, a change outside those four files is refused, and the commit is signed; only that branch is pushed. The tag stays a separate step after the merge. `tests/test_releasepr.py` (4 cases) runs the real script with the real tool in a scratch repository and a throwaway signing key.
