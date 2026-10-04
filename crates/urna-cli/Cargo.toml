@@ -35,9 +35,8 @@ pkg-fmt = "zip"
 # homebrew formula `urna` (`brew tap hoffresearch/urna && brew install urna`); the binary
 # is `urna` in both.
 [package.metadata.dist]
-# dist does not pick up the LICENSE link next to this manifest; the release
-# archives and the npm package get the text from its source.
-include = ["../../docs/LICENSE"]
+# dist picks up the workspace-root LICENSE for the release archives and the
+# npm package; an explicit include would ship it twice.
 npm-package = "cli"
 formula = "urna"
 

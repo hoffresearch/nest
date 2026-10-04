@@ -47,7 +47,7 @@ groups:
         when: mudarem garantias de segurança, proveniência, permissões, rede ou versões suportadas.
       - path: docs/CODE_OF_CONDUCT.md
         when: mudarem regras de convivência, responsáveis ou canais de contato.
-      - path: docs/LICENSE
+      - path: LICENSE
         when: houver decisão explícita sobre licença ou titularidade.
       - path: docs/CHANGELOG
         when: houver mudança perceptível para usuários, operadores ou contribuidores.
@@ -95,19 +95,19 @@ groups:
         when: mudarem dependências, metadados ou configuração do crate de formato.
       - path: crates/urna-format/LICENSE
         when: mudar a localização da licença compartilhada.
-        rule: symlink para docs/LICENSE; preservar.
+        rule: symlink para LICENSE; preservar.
       - path: crates/urna-runtime/Cargo.toml
         when: mudarem dependências, benchmarks ou configuração do runtime.
       - path: crates/urna-runtime/LICENSE
         when: mudar a localização da licença compartilhada.
-        rule: symlink para docs/LICENSE; preservar.
+        rule: symlink para LICENSE; preservar.
       - path: crates/urna-runtime/build.rs
         when: mudarem detecção do compilador, suporte SIMD ou condições de compilação.
       - path: crates/urna-cli/Cargo.toml
         when: mudarem CLI, features, MSRV, canais de pacote ou substituições de release.
       - path: crates/urna-cli/LICENSE
         when: mudar a localização da licença compartilhada.
-        rule: symlink para docs/LICENSE; preservar.
+        rule: symlink para LICENSE; preservar.
       - path: crates/urna-python/Cargo.toml
         when: mudarem PyO3, compatibilidade Python, dependências ou configuração da extensão.
       - path: crates/urna-python/build.rs
