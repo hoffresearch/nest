@@ -44,7 +44,7 @@ jobs:
             # 0 published, 10 absent; a 429, a 5xx or no answer exits 1 after
             # retries and stops here instead of publishing over an outage.
             state=0
-            python3 script/release_channels.py crate --name "$crate" --version "$version" || state=$?
+            python3 script/chanprobe.py crate --name "$crate" --version "$version" || state=$?
             case "$state" in
               0) echo "$crate $version is already on crates.io, skipping" ;;
               10) cargo publish --locked -p "$crate" ;;

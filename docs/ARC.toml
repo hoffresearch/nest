@@ -2390,10 +2390,10 @@ purpose = "The checked-in rehearsal is what release.yml generates and its build 
 links = ["script/rehearsal.py"]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_release_channels.py"
+path = "tests/test_chanprobe.py"
 kind = "python-test"
-purpose = "release_channels.py against a local HTTP server standing in for the GitHub API and the registries: a propagating version waited for, a missing one failing at the deadline, the exact version only (0.5.30, a yanked line, no files), a full release reported released, a cancelled run with absent, unavailable and stale channels still summarized with exit 1, a tag on another commit, unavailable jobs, no pypiindex.yml run, non-JSON and unreadable answers never reported as success; in release_check.sh and gatecheck.yml"
-links = ["script/release_channels.py"]
+purpose = "chanprobe.py against a local HTTP server standing in for the GitHub API and the registries: a propagating version waited for, a missing one failing at the deadline, the exact version only (0.5.30, a yanked line, no files), a full release reported released, a cancelled run with absent, unavailable and stale channels still summarized with exit 1, a tag on another commit, unavailable jobs, no pypiindex.yml run, non-JSON and unreadable answers never reported as success; in release_check.sh and gatecheck.yml"
+links = ["script/chanprobe.py"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "tests/test_query_embedder_routing.py"
@@ -3026,13 +3026,13 @@ links = [".github/workflows/rehearsal.yml", "tests/test_rehearsal.py", "script/s
 path = ".github/workflows/runreport.yml"
 kind = "ci-workflow"
 purpose = "On workflow_run of Release (completed, any conclusion; tag pushes only): one summary per release named by the triggering run's id and head_sha (github.sha is main's there): the tag's commit, every job that did not succeed, the pypiindex.yml run of that commit, and what the GitHub release, crates.io, npm, Homebrew and PyPI serve; the summary is written before the job fails on anything missing"
-links = ["script/release_channels.py", ".github/workflows/release.yml"]
+links = ["script/chanprobe.py", ".github/workflows/release.yml"]
 
 [[inventory.distribution]]
-path = "script/release_channels.py"
+path = "script/chanprobe.py"
 kind = "python-source"
 purpose = "One probe per channel for one exact version (npm version document, crates.io sparse index without yanked lines, PyPI version JSON with files, the Homebrew formula, the GitHub release): wait (setuptest, bounded, before each registry leg) and report (runreport.yml)"
-links = [".github/workflows/setuptest.yml", ".github/workflows/runreport.yml", "tests/test_release_channels.py"]
+links = [".github/workflows/setuptest.yml", ".github/workflows/runreport.yml", "tests/test_chanprobe.py"]
 
 [[inventory.distribution]]
 path = ".github/workflows/pypiready.yml"
