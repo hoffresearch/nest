@@ -74,7 +74,8 @@ cargo release version "$version" --execute --no-confirm
 cargo release replace --execute --no-confirm
 python3 scripts/release_preflight.py
 
-changed="$(git diff --name-only | LC_ALL=C sort | tr '\n' ' ')"
+# untracked files count too: anything cargo-release created is a change.
+changed="$(git status --porcelain | awk '{print $2}' | LC_ALL=C sort | tr '\n' ' ')"
 [[ "$changed" == "${FILES[*]} " ]] || die "expected changes in exactly ${FILES[*]}, got: $changed"
 git add -- "${FILES[@]}"
 date="$(sed -n 's/^date-released: "\(.*\)"$/\1/p' CITATION.cff)"
@@ -89,4 +90,4 @@ fi
 git push --quiet origin "refs/heads/$branch:refs/heads/$branch"
 gh pr create --base main --head "$branch" --title "Release $version" --body "Prepares $version: the workspace version, the urna-format and urna-runtime pins, the lockfile, the changelog section dated $date and the versioned fields of \`CITATION.cff\`, by \`scripts/release_prepare.sh\` (cargo-release $CARGO_RELEASE_VERSION). The preflight passed on this tree.
 
-After CI and the required \`rehearsal\` check pass and this merges, the release is the signed tag on that merge commit, a separate step (\`docs/USAGE.md\`, maintainer checklist step 8). Its date must not be before $date."
+After CI and the required \`rehearsal\` check pass and this merges, the release is the signed tag on that merge commit, a separate step (\`docs/USAGE.md\`, maintainer checklist step 8). The tag's UTC day must not be before $date."
