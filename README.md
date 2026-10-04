@@ -26,7 +26,7 @@ cargo install urna-clitui
 ```
 
 ```sh
-curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/script/install.sh | sh
+curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/script/installer.sh | sh
 ```
 
 Then run setup once. It downloads the offline embedder, prepares a Python env and checks the install:

@@ -10,7 +10,7 @@ domain: usage
 
 `urna` is a single-file binary container for distributing semantic knowledge bases. One file: chunks, canonical text, byte-spans, embeddings, search contract, hashes. Copy it, share it, search it.
 
-This guide covers the commands you'll actually use: the agent verbs `ask`, `retrieve` and `build` (the front door; they shell out to the offline Python embedder or the forge), and the engine subcommands beneath them (validate, stats, inspect, media, search/search-ann/search-graph/search-space/search-text, benchmark, cite, doctor), which take a file and a vector; two of them run Python (`search-text`, for its sentence-transformers embedder, and `doctor`, which probes the Python env), the other ten never do. `urna --help` lists them in the same two groups. Getting the binary onto a machine (every install channel, verification, offline notes, the maintainer checklist) is the reference section at the end of this document; the short form is `curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/script/install.sh | sh` (or brew, npm, cargo) followed by `urna setup`, the interactive installer that completes every channel (section 16).
+This guide covers the commands you'll actually use: the agent verbs `ask`, `retrieve` and `build` (the front door; they shell out to the offline Python embedder or the forge), and the engine subcommands beneath them (validate, stats, inspect, media, search/search-ann/search-graph/search-space/search-text, benchmark, cite, doctor), which take a file and a vector; two of them run Python (`search-text`, for its sentence-transformers embedder, and `doctor`, which probes the Python env), the other ten never do. `urna --help` lists them in the same two groups. Getting the binary onto a machine (every install channel, verification, offline notes, the maintainer checklist) is the reference section at the end of this document; the short form is `curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/script/installer.sh | sh` (or brew, npm, cargo) followed by `urna setup`, the interactive installer that completes every channel (section 16).
 
 ## Quickstart
 
@@ -369,7 +369,7 @@ urna doctor
 
 The exit code is typed so installers and CI branch on codes, not text: `0` ok, `2` Python interpreter missing, `3` Python deps missing, `4` potion embedder script not found, `5` potion table missing or a git-lfs pointer, `6` embedder run failed. A scalar SIMD fallback prints a warning but still exits `0`. The embedder check opens no socket, so doctor itself stays offline-by-construction.
 
-The embedder script resolves in this order: the repo layout (`python/forge/embed_query_potion.py`, dev checkout), then `<root>/urna/forge/` for each data root in turn: `URNA_DATA_DIR`, `XDG_DATA_HOME`, `~/.local/share`, `%LOCALAPPDATA%` (where `install.ps1` and `urna setup` on Windows put it), `<exe>/../share` (tarball layouts). The interpreter resolves in this order: `URNA_PYTHON`, the venv `urna setup` builds (`<root>/urna/venv`), the nearest `.venv` walking up from the working directory, then `python3` on `PATH`.
+The embedder script resolves in this order: the repo layout (`python/forge/embed_query_potion.py`, dev checkout), then `<root>/urna/forge/` for each data root in turn: `URNA_DATA_DIR`, `XDG_DATA_HOME`, `~/.local/share`, `%LOCALAPPDATA%` (where `installer.ps1` and `urna setup` on Windows put it), `<exe>/../share` (tarball layouts). The interpreter resolves in this order: `URNA_PYTHON`, the venv `urna setup` builds (`<root>/urna/venv`), the nearest `.venv` walking up from the working directory, then `python3` on `PATH`.
 
 A failing doctor names its fix: every code except `6` prints `next: urna setup`, which lays down the payload and the Python env and then re-runs these checks (section 16).
 
@@ -530,7 +530,7 @@ Choosing a model is the consent to download it: the plan (or the flag) names the
 
 A failed model does not stop the next one. `--uninstall` leaves the Hugging Face cache alone: it is shared with every other tool that reads it.
 
-The binary links no network stack: setup downloads through the system `curl` (HTTPS only, no downgrade on redirect), the same tool `install.sh` uses, and `URNA_RELEASE_BASE` points it at a mirror or a `file://` directory for air-gapped machines.
+The binary links no network stack: setup downloads through the system `curl` (HTTPS only, no downgrade on redirect), the same tool `installer.sh` uses, and `URNA_RELEASE_BASE` points it at a mirror or a `file://` directory for air-gapped machines.
 
 The explorer opens a `.urna` and shows it: the manifest and the verdict of the same checks `urna validate` runs, the section table with a size bar per section, an ask tab that embeds offline through the same routed embedder and `model_hash` gate as `urna ask` and shows each hit's stored text, citation and source, and the doctor checks.
 
@@ -568,7 +568,7 @@ Every `URNA_*` variable read anywhere in the codebase (installers, CLI, forge, d
 
 | Variable | Scope | Default | What it does |
 |---|---|---|---|
-| `URNA_RELEASE_BASE` | Install, setup | GitHub release URL | URL prefix `install.sh` / `install.ps1` fetch the four release files from, and `urna setup` the payload from (`file://` works for air-gapped installs) |
+| `URNA_RELEASE_BASE` | Install, setup | GitHub release URL | URL prefix `installer.sh` / `installer.ps1` fetch the four release files from, and `urna setup` the payload from (`file://` works for air-gapped installs) |
 | `URNA_BIN_DIR` | Install | `~/.local/bin` (`~\.local\bin` on Windows) | Where the installer puts the `urna` binary |
 | `URNA_DATA_DIR` | Install, setup, runtime | `${XDG_DATA_HOME:-~/.local/share}` (`%LOCALAPPDATA%` on Windows) | Parent dir for the embedder payload and the `urna setup` venv; the CLI searches it first (section 11) |
 | `URNA_PYTHON` | Runtime, dev | The `urna setup` venv, else the nearest `.venv`, else `python3` | Python interpreter the CLI, `urna doctor`, and the dev scripts shell out to; must carry the forge deps (numpy, tokenizers). It wins over the setup venv, so setup reports it as blocking when it lacks the deps |
@@ -595,11 +595,11 @@ Every `URNA_*` variable read anywhere in the codebase (installers, CLI, forge, d
 <summary>One-liner (Linux, macOS)</summary>
 
 ```sh
-curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/script/install.sh | sh
+curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/script/installer.sh | sh
 urna setup
 ```
 
-`script/install.sh` (POSIX sh; needs `curl`, `tar`, and `sha256sum` or `shasum`):
+`script/installer.sh` (POSIX sh; needs `curl`, `tar`, and `sha256sum` or `shasum`):
 
 1. Detects the platform and maps it to a release target: `x86_64` / `aarch64` times `unknown-linux-musl` / `apple-darwin`.
 2. Downloads four files from the GitHub release: `urna-clitui-<target>.tar.xz` (`urna-<target>.tar.xz` for releases up to 0.5.3), its `.sha256`, `urna-embedder-payload.tar.gz`, its `.sha256`.
@@ -622,11 +622,11 @@ The Linux binaries are static musl, so they run on any distro and inside `scratc
 <summary>Windows</summary>
 
 ```powershell
-irm https://raw.githubusercontent.com/hoffresearch/urna/main/script/install.ps1 | iex
+irm https://raw.githubusercontent.com/hoffresearch/urna/main/script/installer.ps1 | iex
 urna setup
 ```
 
-`script/install.ps1` mirrors the shell installer: `-Version vX.Y.Z`, `-Uninstall`, the same `URNA_RELEASE_BASE` / `URNA_BIN_DIR` / `URNA_DATA_DIR` overrides. The binary goes to `~\.local\bin\urna.exe`, the payload to `%LOCALAPPDATA%\urna\forge\`. The payload is a `.tar.gz`; `tar` ships with Windows 10 1803+. The Windows archive is a `.zip`.
+`script/installer.ps1` mirrors the shell installer: `-Version vX.Y.Z`, `-Uninstall`, the same `URNA_RELEASE_BASE` / `URNA_BIN_DIR` / `URNA_DATA_DIR` overrides. The binary goes to `~\.local\bin\urna.exe`, the payload to `%LOCALAPPDATA%\urna\forge\`. The payload is a `.tar.gz`; `tar` ships with Windows 10 1803+. The Windows archive is a `.zip`.
 
 </details>
 
