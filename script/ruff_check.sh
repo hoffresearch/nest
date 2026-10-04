@@ -74,8 +74,8 @@ script/pypiindex.py
 tests/test_pypiindex.py
 script/rehearsal.py
 tests/test_rehearsal.py
-script/release_channels.py
-tests/test_release_channels.py
+script/chanprobe.py
+tests/test_chanprobe.py
 tests/test_release_prepare.py
 "
 # shellcheck disable=SC2086

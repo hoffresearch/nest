@@ -25,7 +25,7 @@ Endpoints (overridable for tests through the environment):
 - Homebrew: ``$RAW_GITHUB/hoffresearch/homebrew-urna/main/Formula/urna.rb``;
 - GitHub: ``$GITHUB_API_URL`` (release, run, jobs, tag ref), ``GH_TOKEN``.
 
-    python script/release_channels.py wait --channel npm --version 0.5.3
+    python script/chanprobe.py wait --channel npm --version 0.5.3
 """
 
 from __future__ import annotations
@@ -145,7 +145,7 @@ def crate_status(name: str, version: str, attempts: int = 5, delay: float = 5) -
         if status == 404:
             return ABSENT, f"{name} {version} is not on crates.io"
         why = f"crates.io answered {status or 'nothing'} for {name} {version}"
-        print(f"release-channels: {why} (attempt {attempt} of {attempts})", flush=True)
+        print(f"chanprobe: {why} (attempt {attempt} of {attempts})", flush=True)
         if attempt < attempts:
             time.sleep(delay)
             delay = min(delay * 2, 60)
@@ -156,7 +156,7 @@ def wait(channel: str, version: str, timeout: float, interval: float) -> tuple[b
     deadline, delay = time.monotonic() + timeout, interval
     while True:
         state = PROBES[channel](version)
-        print(f"release-channels: {channel} {version}: {state}", flush=True)
+        print(f"chanprobe: {channel} {version}: {state}", flush=True)
         if state.startswith(SERVED):
             return True, state
         if time.monotonic() + delay > deadline:
@@ -310,11 +310,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.cmd == "wait":
         ok, why = wait(args.channel, args.version.removeprefix("v"), args.timeout, args.interval)
-        print(f"release-channels: {why}", file=sys.stdout if ok else sys.stderr)
+        print(f"chanprobe: {why}", file=sys.stdout if ok else sys.stderr)
         return 0 if ok else 1
     if args.cmd == "crate":
         code, why = crate_status(args.name, args.version, args.attempts, args.delay)
-        print(f"release-channels: {why}", file=sys.stderr if code == 1 else sys.stdout)
+        print(f"chanprobe: {why}", file=sys.stderr if code == 1 else sys.stdout)
         return code
     try:
         ok, text = report(args.run, args.sha, args.tag, args.repo)

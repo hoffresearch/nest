@@ -144,7 +144,7 @@ jobs:
             binstall) channel=crates ;;
             *) channel=npm ;;
           esac
-          python script/release_channels.py wait --channel "$channel" --version "${TAG#v}" --timeout 900
+          python script/chanprobe.py wait --channel "$channel" --version "${TAG#v}" --timeout 900
       - name: install (homebrew)
         if: matrix.channel == 'homebrew'
         run: |
@@ -232,7 +232,7 @@ jobs:
         run: python -m pip install uv
       - name: wait for the exact version on pypi
         shell: bash
-        run: python script/release_channels.py wait --channel pypi --version "${TAG#v}" --timeout 900
+        run: python script/chanprobe.py wait --channel pypi --version "${TAG#v}" --timeout 900
       - name: pip install urna and validate
         shell: bash
         run: |

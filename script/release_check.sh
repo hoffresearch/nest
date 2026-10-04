@@ -188,8 +188,8 @@ ok "release rehearsal (7 cases)"
 
 # setuptest waits for the exact version on each registry, and the release
 # report names what every channel serves, a failed or cancelled run included.
-step "python tests/test_release_channels.py"
-"$PY" tests/test_release_channels.py
+step "python tests/test_chanprobe.py"
+"$PY" tests/test_chanprobe.py
 ok "release channels (8 cases)"
 
 # the release pull request is prepared by cargo-release in its own worktree,
