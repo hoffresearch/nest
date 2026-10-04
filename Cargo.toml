@@ -44,7 +44,7 @@ urna-engine = { path = "crates/urna-engine", version = "0.5.3" }
 # distribution backbone for the `urna` cli binary (issue #75): per-platform
 # tarballs + sha256 checksums + the homebrew tap formula, the npm package
 # and the crates.io publish, all driven from tags on main. the documented
-# one-liner installer is script/install.sh
+# one-liner installer is script/installer.sh
 # (it also lays down the offline embedder payload, which dist installers do
 # not model), so dist's own shell/powershell installers stay disabled.
 [workspace.metadata.dist]
