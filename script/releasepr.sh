@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# release_prepare.sh - open the pull request that prepares a release.
+# releasepr.sh - open the pull request that prepares a release.
 #
-#   script/release_prepare.sh X.Y.Z [--base REF] [--worktree DIR] [--no-push]
+#   script/releasepr.sh X.Y.Z [--base REF] [--worktree DIR] [--no-push]
 #
 # works in a new worktree of origin/main (never the current checkout) on the
 # branch release-X.Y.Z:
@@ -17,14 +17,14 @@
 # maintainer checklist step 8): nothing here tags, publishes or touches main.
 #
 # --base and --worktree pick another start and place; --no-push stops after
-# the signed commit (tests/test_release_prepare.py runs it that way).
+# the signed commit (tests/test_releasepr.py runs it that way).
 
 set -euo pipefail
 
 CARGO_RELEASE_VERSION=1.1.6
 FILES=(CITATION.cff Cargo.lock Cargo.toml docs/CHANGELOG)
 
-die() { echo "release-prepare: $*" >&2; exit 1; }
+die() { echo "releasepr: $*" >&2; exit 1; }
 
 version="" base=origin/main worktree="" push=1
 while [[ $# -gt 0 ]]; do
@@ -37,7 +37,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-  || die "usage: release_prepare.sh X.Y.Z [--base REF] [--worktree DIR] [--no-push]"
+  || die "usage: releasepr.sh X.Y.Z [--base REF] [--worktree DIR] [--no-push]"
 
 have="$(cargo release --version 2>/dev/null | awk '{print $2}' || true)"
 [[ "$have" == "$CARGO_RELEASE_VERSION" ]] \
@@ -81,13 +81,13 @@ git add -- "${FILES[@]}"
 date="$(sed -n 's/^date-released: "\(.*\)"$/\1/p' CITATION.cff)"
 git commit --quiet -S -m "Release $version" -m "The workspace version, the urna-format and urna-engine pins, the lockfile,
 the changelog section dated $date and the versioned fields of CITATION.cff,
-prepared by script/release_prepare.sh with cargo-release $CARGO_RELEASE_VERSION."
-echo "release-prepare: $branch at $(git rev-parse --short HEAD) in $worktree, release date $date (UTC)"
+prepared by script/releasepr.sh with cargo-release $CARGO_RELEASE_VERSION."
+echo "releasepr: $branch at $(git rev-parse --short HEAD) in $worktree, release date $date (UTC)"
 
 if [[ "$push" == 0 ]]; then
   exit 0
 fi
 git push --quiet origin "refs/heads/$branch:refs/heads/$branch"
-gh pr create --base main --head "$branch" --title "Release $version" --body "Prepares $version: the workspace version, the urna-format and urna-engine pins, the lockfile, the changelog section dated $date and the versioned fields of \`CITATION.cff\`, by \`script/release_prepare.sh\` (cargo-release $CARGO_RELEASE_VERSION). The preflight passed on this tree.
+gh pr create --base main --head "$branch" --title "Release $version" --body "Prepares $version: the workspace version, the urna-format and urna-engine pins, the lockfile, the changelog section dated $date and the versioned fields of \`CITATION.cff\`, by \`script/releasepr.sh\` (cargo-release $CARGO_RELEASE_VERSION). The preflight passed on this tree.
 
 After CI and the required \`rehearsal\` check pass and this merges, the release is the signed tag on that merge commit, a separate step (\`docs/USAGE.md\`, maintainer checklist step 8). The tag's UTC day must not be before $date."

@@ -76,7 +76,7 @@ script/rehearsal.py
 tests/test_rehearsal.py
 script/chanprobe.py
 tests/test_chanprobe.py
-tests/test_release_prepare.py
+tests/test_releasepr.py
 "
 # shellcheck disable=SC2086
 "$PY" -m ruff check $TARGETS

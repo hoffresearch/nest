@@ -40,7 +40,7 @@ pkg-fmt = "zip"
 npm-package = "cli"
 formula = "urna"
 
-# `cargo release replace` (script/release_prepare.sh): the changelog section
+# `cargo release replace` (script/releasepr.sh): the changelog section
 # and the versioned fields of CITATION.cff, which cites this crate. each runs
 # exactly once; the rest of CITATION.cff, its description included, stays.
 # {{date}} is cargo-release's UTC date; the tag check reads the tag's UTC day.
