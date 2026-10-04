@@ -48,7 +48,7 @@ Issues = "https://github.com/hoffresearch/urna/issues"
 urna = "urna._cli:main"
 
 [tool.maturin]
-manifest-path = "../../crates/urna-bridge/Cargo.toml"
+manifest-path = "../../crates/bridge/Cargo.toml"
 module-name = "urna._urna"
 python-source = "."
 features = ["pyo3/extension-module"]
