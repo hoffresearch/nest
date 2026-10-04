@@ -52,7 +52,7 @@ These conventions are not aesthetic preferences. They exist to keep the repo rea
 ### Naming
 
 - Directories and assets are **kebab-case English** (`data/`, `docs/`, `examples/`, `assets/images/`, dataset folders); Rust workspace conventions (`crates/`, `target/`) and language defaults (`python/`, `scripts/`, `tests/`) stay as their stacks expect.
-- The docs keep their upper-case names: `docs/USAGE.md`, `docs/BENCH.md`, `docs/SECURITY.md`, `docs/CONTRIBUTING.md`, `docs/CODE_OF_CONDUCT.md`, `docs/CHANGELOG`, `docs/LICENSE`, `docs/arc/ARC.toml`.
+- The docs keep their upper-case names: `docs/USAGE.md`, `docs/BENCH.md`, `docs/SECURITY.md`, `docs/CONTRIBUTING.md`, `docs/CODE_OF_CONDUCT.md`, `docs/CHANGELOG`, `docs/arc/ARC.toml`.
 - Source files follow the conventions of their language (`snake_case.rs`, `snake_case.py`).
 - When proposing renames or moves, list exact `mv` commands first, execute the move, fix every touched import, and run the test suite after.
 
@@ -131,4 +131,4 @@ This project follows [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). By participating 
 
 ## License
 
-Contributions are licensed under the [MIT license](LICENSE). Copyright vests in Hoff Research as the maintainer. MIT keeps your right to use, copy, modify, distribute, or sublicense your own copies of the resulting software intact.
+Contributions are licensed under the [MIT license](../LICENSE). Copyright vests in Hoff Research as the maintainer. MIT keeps your right to use, copy, modify, distribute, or sublicense your own copies of the resulting software intact.

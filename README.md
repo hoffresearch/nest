@@ -284,7 +284,7 @@ The crates are `urna-format` (the container), `urna-runtime` (search), `urna` (t
 
 ## License
 
-MIT, see [docs/LICENSE](https://github.com/hoffresearch/urna/blob/main/docs/LICENSE). [Hoff Research](https://hoffresearch.com)
+MIT, see [LICENSE](https://github.com/hoffresearch/urna/blob/main/LICENSE). [Hoff Research](https://hoffresearch.com)
 
 Made it simple, but significant (∂μfμν = jν)
 
