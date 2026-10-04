@@ -11,7 +11,7 @@ proves the one-gif demo path is sovereign and honest:
 run with the forge deps (numpy + tokenizers + the vendored potion table):
   .venv/bin/python python/forge/test_retrieve.py
 
-not run by release_check.sh (same as the other forge self-tests).
+not run by fullcheck.sh (same as the other forge self-tests).
 """
 
 from __future__ import annotations

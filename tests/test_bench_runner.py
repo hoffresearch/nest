@@ -1,6 +1,6 @@
 """Prove the benchmark rebuild never destroys the corpus it replaces.
 
-`measure_presets.py` (and through it `release_check.sh`) rebuilds
+`measure_presets.py` (and through it `fullcheck.sh`) rebuilds
 `data/measure/corpus_<preset>.urna` with `_bench_runner.build_variant`. it
 used to delete the file first and build in place, so an interrupted gate
 left the corpus gone. it now builds under a temporary name in the same

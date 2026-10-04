@@ -185,7 +185,7 @@ groups:
         when: mudarem registries, respostas, retries ou verificações do relatório.
       - path: script/pypiindex.py
         when: mudarem validação da origem, checksums ou recuperação de uploads parciais.
-      - path: script/release_check.sh
+      - path: script/fullcheck.sh
         when: mudarem suítes, pré-requisitos, critérios de execução ou resultados de aprovação, falha e dispensa do gate local.
       - path: script/ruff_check.sh
         when: surgir um módulo Python sujeito a lint ou mudar a execução do Ruff.
