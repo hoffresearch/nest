@@ -7,7 +7,7 @@ Tree mode (every pull request, ``gatecheck.yml``): the workspace version in
   (``cargo publish`` keeps the version and strips the path);
 - every crate under ``crates/`` inherits it (``version.workspace = true``),
   except one that is its own workspace (``crates/ingest``, excluded at the root);
-- ``Cargo.lock`` carries it for urna-clitui, urna-format, urna-engine, urna-bridge;
+- ``Cargo.lock`` carries it for urna, urna-format, urna-engine, urna-bridge;
 - ``CITATION.cff``: ``version``, the versioned ``repository-artifact`` and
   release URLs, and a ``date-released`` equal to the changelog's date;
 - ``docs/CHANGELOG`` has a ``## [X.Y.Z] - YYYY-MM-DD`` section.
@@ -39,8 +39,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PINNED = ("urna-format", "urna-engine")
-LOCKED = ("urna-clitui", "urna-format", "urna-engine", "urna-bridge")
-CRATES_URL = "https://crates.io/crates/urna-clitui/{v}"
+LOCKED = ("urna", "urna-format", "urna-engine", "urna-bridge")
+CRATES_URL = "https://crates.io/crates/urna/{v}"
 RELEASE_URL = "https://github.com/hoffresearch/urna/releases/tag/v{v}"
 RELEASE_DESCRIPTION = "Release of Urna version {v}."
 

@@ -113,7 +113,7 @@ def case_happy(repo: Path, signers: Path, tmp: Path):
     for pin, path in (("urna-format", "crates/format"), ("urna-engine", "crates/engine")):
         assert f'{pin} = {{ path = "{path}", version = "{new}" }}' in manifest, pin
     lock = (wt / "Cargo.lock").read_text()
-    for name in ("urna-clitui", "urna-format", "urna-engine", "urna-bridge"):
+    for name in ("urna", "urna-format", "urna-engine", "urna-bridge"):
         assert f'name = "{name}"\nversion = "{new}"' in lock, f"Cargo.lock {name}"
     log = (wt / "docs/CHANGELOG").read_text()
     assert f"last-updated: {today}\n" in log
@@ -122,7 +122,7 @@ def case_happy(repo: Path, signers: Path, tmp: Path):
     for line in (
         f'version: "{new}"',
         f'date-released: "{today}"',
-        f"repository-artifact: https://crates.io/crates/urna-clitui/{new}",
+        f"repository-artifact: https://crates.io/crates/urna/{new}",
         f"    value: https://github.com/hoffresearch/urna/releases/tag/v{new}",
         f"    description: Release of Urna version {new}.",
     ):

@@ -22,7 +22,7 @@ npm install -g @urna/cli
 bun, pnpm and yarn install the same package: `bun add -g @urna/cli`, `pnpm add -g @urna/cli`, `yarn global add @urna/cli`.
 
 ```sh
-cargo install urna-clitui
+cargo install urna
 ```
 
 ```sh

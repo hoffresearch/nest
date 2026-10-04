@@ -42,7 +42,7 @@ O projeto usa commits assinados e squash merge. Ao atualizar um PR empilhado, re
 
 - `crates/format`: formato binário, leitura, escrita e hashes.
 - `crates/engine`: mmap, índices, kernels e busca.
-- `crates/urna-clitui`: binário `urna`, comandos e interface de terminal.
+- `crates/clitui`: binário `urna`, comandos e interface de terminal.
 - `crates/bridge`: extensão PyO3 distribuída na wheel.
 - `python/`: API Python, construção dos corpora, embedders e catálogo de modelos.
 - `crates/ingest` (schema `.fci` do forge) e `fuzz/`: workspaces Cargo separados; o `Cargo.toml` da raiz exclui o primeiro e comandos no workspace principal não os cobrem.
@@ -93,7 +93,7 @@ O ensaio anterior à tag verifica empacotamento e artefatos, sem publicar ou rec
 
 ## Organização e escrita
 
-Organize o código por responsabilidade, com nomes claros e comentários que expliquem decisões. Crates, scripts, workflows, testes e pastas novos seguem o comprimento de nome da seção Naming do CONTRIBUTING (ADR-0001). O limite é de 639 linhas por arquivo de código, incluindo comentários e linhas em branco. Ao criar ou alterar um arquivo que ultrapasse esse limite, examine suas responsabilidades, dependências e consumidores e divida-o em módulos coesos. Preserve o comportamento, atualize imports e chamadas e valide os caminhos afetados.
+Organize o código por responsabilidade, com nomes claros e comentários que expliquem decisões. Crates, scripts, workflows, testes e pastas novos seguem o comprimento de nome da seção Naming do CONTRIBUTING (ADR-0002). O limite é de 639 linhas por arquivo de código, incluindo comentários e linhas em branco. Ao criar ou alterar um arquivo que ultrapasse esse limite, examine suas responsabilidades, dependências e consumidores e divida-o em módulos coesos. Preserve o comportamento, atualize imports e chamadas e valide os caminhos afetados.
 
 O limite não se aplica à documentação, a arquivos dedicados a testes e fixtures, nem a arquivos gerados, vendorizados, dados estruturados ou lockfiles, como JSON, JSONL, TOML, YAML, CSV e RON. Essas exceções não dispensam organização. Configurações e dados escritos dentro de um arquivo de código continuam sujeitos ao limite desse arquivo.
 

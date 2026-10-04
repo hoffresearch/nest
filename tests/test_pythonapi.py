@@ -1,6 +1,6 @@
 """end-to-end test of the Python (PyO3) path.
 
-the CLI binary is exhaustively tested in `crates/urna-clitui/tests/cli_e2e.rs`.
+the CLI binary is exhaustively tested in `crates/clitui/tests/cli_e2e.rs`.
 This file stays on a single Python entry point: PyO3 only. No subprocess
 shell-out - `urna validate / stats / search / cite / inspect` all have
 in-process equivalents through `urna.UrnaFile`.
