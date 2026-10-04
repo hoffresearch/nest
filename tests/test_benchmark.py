@@ -14,7 +14,7 @@ directory, validates, and renames over the old file only at the end:
   one of a run still building is kept, and a first build with no corpus
   yet creates it.
 
-Run: .venv/bin/python tests/test_bench_runner.py
+Run: .venv/bin/python tests/test_benchmark.py
 """
 
 import subprocess
