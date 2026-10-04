@@ -12,9 +12,10 @@ Tree mode (every pull request, ``ci.yml``): the workspace version in
 - ``docs/CHANGELOG`` has a ``## [X.Y.Z] - YYYY-MM-DD`` section.
 
 Tag mode (``--tag vX.Y.Z``, the release's ``tag-verify.yml`` after the
-signature check): the tree checks, plus the tag names that version, its
-commit is on the protected ``main`` and the release date is not after the
-day the tag was made (in the tagger's own timezone).
+signature check): the same checks on the files of the tag's own commit,
+read through git and never from the working tree, plus the tag names that
+commit's version, the commit is on the protected ``main`` and the release
+date is not after the day the tag was made (in the tagger's own timezone).
 
 Needs Python 3.11+ (tomllib); the jobs that run it are on ubuntu-24.04.
 
@@ -39,13 +40,48 @@ RELEASE_URL = "https://github.com/hoffresearch/urna/releases/tag/v{v}"
 RELEASE_DESCRIPTION = "Release of Urna version {v}."
 
 
-def _toml(path: Path) -> dict:
+def _toml(text: str) -> dict:
     try:
         import tomllib
     except ModuleNotFoundError:
         raise SystemExit("release-preflight: needs Python 3.11+ (tomllib)") from None
 
-    return tomllib.loads(path.read_text(encoding="utf-8"))
+    return tomllib.loads(text)
+
+
+def _git(root: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
+
+
+class Tree:
+    """The release files of the checkout, or of one commit (tag mode).
+
+    Tag mode reads every file from the tag's commit through git, never from
+    the working tree: a checkout that differs from the tag (a later fix, a
+    local edit) must not vouch for what the tag releases.
+    """
+
+    def __init__(self, root: Path, commit: str | None = None):
+        self.root, self.commit = root, commit
+
+    def read(self, rel: str) -> str:
+        if self.commit is None:
+            return (self.root / rel).read_text(encoding="utf-8")
+        shown = _git(self.root, "show", f"{self.commit}:{rel}")
+        if shown.returncode != 0:
+            raise FileNotFoundError(f"{rel} is not in {self.commit[:12]}")
+        return shown.stdout
+
+    def crate_manifests(self) -> list[str]:
+        if self.commit is None:
+            paths = (p.relative_to(self.root) for p in self.root.glob("crates/*/Cargo.toml"))
+            return sorted(p.as_posix() for p in paths)
+        listed = _git(self.root, "ls-tree", "-r", "--name-only", self.commit, "--", "crates")
+        return sorted(
+            rel
+            for rel in listed.stdout.splitlines()
+            if re.fullmatch(r"crates/[^/]+/Cargo\.toml", rel)
+        )
 
 
 def _cff_field(text: str, key: str) -> str | None:
@@ -62,39 +98,41 @@ def _iso_date(value: str | None) -> dt.date | None:
         return None
 
 
+def _version(tree: Tree) -> str:
+    return _toml(tree.read("Cargo.toml"))["workspace"]["package"]["version"]
+
+
 def workspace_version(root: Path) -> str:
-    return _toml(root / "Cargo.toml")["workspace"]["package"]["version"]
+    return _version(Tree(root))
 
 
-def release_date(root: Path, version: str) -> dt.date | None:
+def _release_date(tree: Tree, version: str) -> dt.date | None:
     """The date of the changelog section for `version`, or None."""
-    text = (root / "docs" / "CHANGELOG").read_text(encoding="utf-8")
     heading = rf"^## \[{re.escape(version)}\] - (\d{{4}}-\d{{2}}-\d{{2}})\s*$"
-    match = re.search(heading, text, re.M)
+    match = re.search(heading, tree.read("docs/CHANGELOG"), re.M)
     return _iso_date(match.group(1)) if match else None
 
 
-def _check_manifests(root: Path, v: str) -> list[str]:
+def _check_manifests(tree: Tree, v: str) -> list[str]:
     errors = []
-    deps = _toml(root / "Cargo.toml")["workspace"].get("dependencies", {})
+    deps = _toml(tree.read("Cargo.toml"))["workspace"].get("dependencies", {})
     for name in PINNED:
         pin = deps.get(name, {}).get("version") if isinstance(deps.get(name), dict) else None
         if pin != v:
             errors.append(f"Cargo.toml: [workspace.dependencies] {name} pins {pin!r}, not {v!r}")
-    for manifest in sorted((root / "crates").glob("*/Cargo.toml")):
-        version = _toml(manifest)["package"].get("version")
+    for rel in tree.crate_manifests():
+        version = _toml(tree.read(rel))["package"].get("version")
         if version != {"workspace": True} and version != v:
-            rel = manifest.relative_to(root)
             errors.append(f"{rel}: version {version!r} neither inherits nor equals {v!r}")
-    locked = {p["name"]: p["version"] for p in _toml(root / "Cargo.lock").get("package", [])}
+    locked = {p["name"]: p["version"] for p in _toml(tree.read("Cargo.lock")).get("package", [])}
     for name in LOCKED:
         if locked.get(name) != v:
             errors.append(f"Cargo.lock: {name} is {locked.get(name)!r}, not {v!r}")
     return errors
 
 
-def _check_citation(root: Path, v: str, released: dt.date | None) -> list[str]:
-    text = (root / "CITATION.cff").read_text(encoding="utf-8")
+def _check_citation(tree: Tree, v: str, released: dt.date | None) -> list[str]:
+    text = tree.read("CITATION.cff")
     want = {
         "version": v,
         "repository-artifact": CRATES_URL.format(v=v),
@@ -115,34 +153,41 @@ def _check_citation(root: Path, v: str, released: dt.date | None) -> list[str]:
     return errors
 
 
-def check_tree(root: Path = ROOT) -> list[str]:
-    """Every place a release names its version agrees; returns the errors."""
-    v = workspace_version(root)
-    released = release_date(root, v)
-    errors = _check_manifests(root, v)
+def _check(tree: Tree) -> list[str]:
+    v = _version(tree)
+    released = _release_date(tree, v)
+    errors = _check_manifests(tree, v)
     if released is None:
         errors.append(f"docs/CHANGELOG: no '## [{v}] - YYYY-MM-DD' section")
-    return errors + _check_citation(root, v, released)
+    return errors + _check_citation(tree, v, released)
 
 
-def _git(root: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
+def check_tree(root: Path = ROOT) -> list[str]:
+    """Every place the checkout names its version agrees; returns the errors."""
+    try:
+        return _check(Tree(root))
+    except FileNotFoundError as err:
+        return [f"missing release file: {err}"]
 
 
 def check_tag(tag: str, root: Path = ROOT, main_ref: str = "origin/main") -> list[str]:
-    """The tree checks plus the tag's name, its place on main and its date."""
-    errors = check_tree(root)
-    v = workspace_version(root)
-    if tag != f"v{v}":
-        errors.append(f"tag {tag} does not name the workspace version v{v}")
+    """The checks on the tag's own commit, plus its name, place on main and date."""
     commit = _git(root, "rev-parse", "--verify", "-q", f"refs/tags/{tag}^{{commit}}").stdout.strip()
     if not commit:
-        return errors + [f"tag {tag} does not exist"]
+        return [f"tag {tag} does not exist"]
+    tree = Tree(root, commit)
+    try:
+        errors = [f"{tag}: {e}" for e in _check(tree)]
+        v = _version(tree)
+        released = _release_date(tree, v)
+    except FileNotFoundError as err:
+        return [f"{tag}: missing release file: {err}"]
+    if tag != f"v{v}":
+        errors.append(f"tag {tag} does not name the version v{v} of its own commit")
     if _git(root, "merge-base", "--is-ancestor", commit, main_ref).returncode != 0:
         errors.append(f"tag {tag} points at {commit[:12]}, which is not on {main_ref}")
     fmt = "--format=%(taggerdate:short)"
     tagged = _iso_date(_git(root, "for-each-ref", fmt, f"refs/tags/{tag}").stdout.strip())
-    released = release_date(root, v)
     if tagged is None:
         errors.append(f"tag {tag} has no tagger date (a lightweight tag)")
     elif released is not None and released > tagged:
@@ -161,8 +206,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"release-preflight: {error}", file=sys.stderr)
     if errors:
         return 1
-    scope = f"tag {args.tag}" if args.tag else "tree"
-    print(f"release-preflight: {scope} ok, version {workspace_version(args.root)}")
+    scope = f"tag {args.tag} (its own commit)" if args.tag else "tree"
+    print(f"release-preflight: {scope} ok")
     return 0
 
 
