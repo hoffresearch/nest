@@ -293,7 +293,7 @@ jobs:
         run: |
           python script/preflight.py
           python tests/test_preflight.py
-          python tests/test_pypi_release.py
+          python tests/test_pypiindex.py
       - name: the release rehearsal is what release.yml builds
         # rehearsal.yml is generated from release.yml; a dist upgrade
         # or a hand edit that drifts fails here.
