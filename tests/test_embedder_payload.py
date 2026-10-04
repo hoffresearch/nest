@@ -1,6 +1,6 @@
 """Prove the staged embedder payload answers queries with no repo around it.
 
-`scripts/stage_embedder_payload.py` is what the release archives and
+`script/stage_embedder_payload.py` is what the release archives and
 `urna setup` lay down; an installed binary resolves both query embedders
 inside that tree (`urna/forge/embed_query_potion.py` for potion corpora,
 `urna/forge/embed_query_model.py` for registry models, `urna/embed_query.py`
@@ -34,7 +34,7 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-STAGE = REPO / "scripts" / "stage_embedder_payload.py"
+STAGE = REPO / "script" / "stage_embedder_payload.py"
 POTION = "minishlab/potion-base-8M/v1"
 
 EXPECTED_FILES = {
@@ -164,8 +164,8 @@ def test_stage_refuses_incomplete_tree(base: Path) -> None:
     import shutil
 
     fake_root = base / "fake-repo"
-    (fake_root / "scripts").mkdir(parents=True)
-    shutil.copyfile(STAGE, fake_root / "scripts" / STAGE.name)
+    (fake_root / "script").mkdir(parents=True)
+    shutil.copyfile(STAGE, fake_root / "script" / STAGE.name)
     shutil.copytree(
         REPO / "python" / "forge",
         fake_root / "python" / "forge",
@@ -175,7 +175,7 @@ def test_stage_refuses_incomplete_tree(base: Path) -> None:
         shutil.copyfile(REPO / "python" / top, fake_root / "python" / top)
     (fake_root / "python" / "forge" / "model_registry.py").unlink()
     r = subprocess.run(
-        [sys.executable, str(fake_root / "scripts" / STAGE.name), str(base / "half")],
+        [sys.executable, str(fake_root / "script" / STAGE.name), str(base / "half")],
         capture_output=True,
         text=True,
         check=False,
@@ -192,7 +192,7 @@ def test_stage_refuses_incomplete_tree(base: Path) -> None:
     )
     (fake_root / "python" / "forge" / "catalog.json").write_text('{"models": []}\n')
     r = subprocess.run(
-        [sys.executable, str(fake_root / "scripts" / STAGE.name), str(base / "stale")],
+        [sys.executable, str(fake_root / "script" / STAGE.name), str(base / "stale")],
         capture_output=True,
         text=True,
         check=False,

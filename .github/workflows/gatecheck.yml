@@ -1,0 +1,325 @@
+# continuous integration for the rust workspace and the python surface.
+#
+# the release / setuptest / pypi workflows only run on tags and
+# releases, so until this file existed nothing ran `cargo test` on a pull
+# request. this is the gate `script/release_check.sh` runs locally, minus
+# the LFS corpus measurement (no LFS budget in CI): fmt, clippy with the
+# workspace deny lints (`unwrap_used`, `undocumented_unsafe_blocks`), the
+# whole test suite on linux + macos (the aarch64 macos runner exercises the
+# NEON kernels, the x86_64 linux runner the AVX2 ones), the 639-line guard,
+# the deterministic mutation-fuzz harnesses at a higher iteration count,
+# a bounded coverage-guided fuzz smoke on nightly, cargo-deny (advisories,
+# licenses, bans, sources; policy in deny.toml) on the three cargo
+# workspaces, cargo-semver-checks on urna-format's public api against the
+# pull request's base commit, and (on the schedule or on demand) a
+# 30-minute-per-target fuzz soak whose corpus carries over between nights
+# plus urna-format's test suite under miri.
+
+name: gatecheck
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # nightly soak: every cargo-fuzz target for 30 minutes with the corpus
+  # carried over between nights. also on demand.
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: seconds per fuzz target for the soak job
+        required: false
+        default: "1800"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  rust:
+    name: rust ${{ matrix.os }}
+    if: github.event_name != 'schedule'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: toolchain
+        run: rustup toolchain install stable --profile minimal --component clippy,rustfmt && rustup default stable
+      - uses: Swatinem/rust-cache@v2
+      - name: fmt
+        run: cargo fmt --all --check
+      - name: clippy (workspace deny lints)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: clippy (engine-only cli, no terminal ui)
+        run: cargo clippy -p urna-clitui --no-default-features --all-targets -- -D warnings
+      - name: build
+        run: cargo build --workspace --all-targets
+      - name: test
+        run: cargo test --workspace
+      - name: benches compile (numbers are not a gate on shared runners)
+        run: cargo bench -p urna-engine --no-run
+      - name: mutation fuzz (deterministic, higher count)
+        env:
+          URNA_MUTATION_ITERS: "6000"
+        run: |
+          cargo test --release -p urna-format --test mutation_fuzz
+          URNA_MUTATION_ITERS=800 cargo test --release -p urna-engine --test mutation_fuzz
+      - name: 639-line guard (crates/**/src)
+        run: |
+          overlong="$(find crates -name '*.rs' -path '*/src/*' -not -path '*/tests/*' \
+            | xargs wc -l | awk '$1 > 639 {print}' | grep -v 'total$' || true)"
+          if [ -n "$overlong" ]; then echo "$overlong"; exit 1; fi
+      - name: crates/urna-ingest (separate workspace)
+        run: |
+          cargo fmt --manifest-path crates/urna-ingest/Cargo.toml --all --check
+          cargo clippy --manifest-path crates/urna-ingest/Cargo.toml --all-targets -- -D warnings
+          cargo test --manifest-path crates/urna-ingest/Cargo.toml
+
+  # the terminal ui (`urna setup`, `urna tui`) ships in the windows
+  # release archive too, and the rust job above never compiles for windows:
+  # this job is the only check of the crossterm/console path, the
+  # `Scripts\python.exe` venv layout and the `%LOCALAPPDATA%` data root
+  # before a tag. unit tests + the file:// setup end to end.
+  cli-windows:
+    name: cli windows (setup + tui)
+    if: github.event_name != 'schedule'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: toolchain
+        run: rustup toolchain install stable --profile minimal --component clippy && rustup default stable
+      - uses: Swatinem/rust-cache@v2
+      - name: clippy
+        run: cargo clippy -p urna-clitui --all-targets -- -D warnings
+      - name: test (unit + setup end to end)
+        run: cargo test -p urna-clitui --bins --test setup_e2e
+
+  fuzz:
+    name: cargo-fuzz smoke
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: nightly toolchain
+        run: rustup toolchain install nightly --profile minimal && rustup default nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - name: cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: seed corpora
+        run: |
+          cd fuzz
+          for t in urna-view section-decoders runtime-indexes mmap-open-search; do
+            mkdir -p corpus/$t
+            cp seeds/*.bin ../crates/urna-format/tests/fixtures/golden_v1_minimal.urna corpus/$t/
+          done
+      - name: run every target (bounded)
+        run: |
+          cd fuzz
+          for t in urna-view section-decoders runtime-indexes; do
+            cargo fuzz run $t -- -max_total_time=90 -max_len=65536
+          done
+          cargo fuzz run mmap-open-search -- -max_total_time=90 -max_len=65536 -rss_limit_mb=4096
+      - name: keep any crash artifact
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts
+          if-no-files-found: ignore
+
+  deny:
+    name: cargo deny
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: workspace (advisories, licenses, bans, sources)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories licenses bans sources
+      - name: crates/urna-ingest (separate workspace)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories licenses bans sources
+          manifest-path: crates/urna-ingest/Cargo.toml
+          # crates/urna-ingest carries no syn 2, so the workspace-wide skip in
+          # deny.toml goes unmatched there (one policy file, three workspaces).
+          command-arguments: -A unmatched-skip
+      - name: fuzz (separate workspace)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories licenses bans sources
+          manifest-path: fuzz/Cargo.toml
+  semver:
+    name: semver (urna-format public api)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # the baseline is a rev, not a published crate
+      - name: toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: Swatinem/rust-cache@v2
+      # a base commit without crates/urna-format has nothing to compare
+      # against (the nest -> urna rename); skip instead of failing.
+      - name: baseline has urna-format
+        id: baseline
+        run: |
+          if git cat-file -e "${{ github.event.pull_request.base.sha }}:crates/urna-format/Cargo.toml" 2>/dev/null; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::base commit has no crates/urna-format; semver check skipped"
+          fi
+      # the on-disk format is frozen; the rust api that reads it should say
+      # when it breaks. urna-format is not on crates.io, so the baseline is
+      # the pr's base commit rather than the last published version. in 0.x
+      # a minor bump is the major bump, which the tool understands.
+      - uses: obi1kenobi/cargo-semver-checks-action@v2
+        if: steps.baseline.outputs.present == 'true'
+        with:
+          package: urna-format
+          baseline-rev: ${{ github.event.pull_request.base.sha }}
+  fuzz-soak:
+    name: cargo-fuzz soak ${{ matrix.target }}
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [urna-view, section-decoders, runtime-indexes, mmap-open-search]
+    steps:
+      - uses: actions/checkout@v6
+      - name: nightly toolchain
+        run: rustup toolchain install nightly --profile minimal && rustup default nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - name: cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      # the corpus accumulates across nights: restore the newest one, seed
+      # only when nothing was restored, minimize before saving.
+      - name: restore corpus
+        uses: actions/cache@v6
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+      - name: seed corpus if empty
+        run: |
+          cd fuzz
+          mkdir -p corpus/${{ matrix.target }}
+          if [ -z "$(ls -A corpus/${{ matrix.target }})" ]; then
+            cp seeds/*.bin ../crates/urna-format/tests/fixtures/golden_v1_minimal.urna corpus/${{ matrix.target }}/
+          fi
+      - name: soak
+        run: |
+          cd fuzz
+          cargo fuzz run ${{ matrix.target }} -- \
+            -max_total_time=${{ inputs.seconds || 1800 }} -max_len=65536 -rss_limit_mb=4096
+      - name: minimize corpus
+        if: always()
+        run: cd fuzz && cargo fuzz cmin ${{ matrix.target }} || true
+      - name: keep any crash artifact
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-soak-artifacts-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}
+          if-no-files-found: ignore
+          retention-days: 30
+
+  miri:
+    name: miri (urna-format)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - name: nightly toolchain with miri
+        run: rustup toolchain install nightly --profile minimal --component miri && rustup default nightly
+      - uses: Swatinem/rust-cache@v2
+      - name: miri setup
+        run: cargo miri setup
+      # urna-format has zero `unsafe`; this turns "no undefined behaviour"
+      # from a claim into a run over its parsers and codecs. tree borrows:
+      # sha2 0.11's neon loader trips stacked borrows on aarch64 hosts (a
+      # dependency, not this crate). tests that call zstd (c code miri cannot
+      # run), the f16 conversions of `half` (inline asm on aarch64) and the
+      # fsst table build (too slow under an interpreter) are marked in the
+      # source with the reason; the mutation and property harnesses run
+      # natively in the rust job instead.
+      - name: urna-format under miri
+        env:
+          MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows
+        run: cargo miri test -p urna-format
+
+  python:
+    name: python
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # the rehearsal impact cases read real history
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: ruff (same file list as release_check.sh)
+        run: |
+          python -m pip install ruff
+          URNA_PYTHON=python sh script/ruff_check.sh
+      - name: the registry imports and the model catalog is current
+        # bare python, no ml deps: model_catalog imports the whole registry,
+        # so a preset that names a field ModelPreset lacks fails here, and a
+        # catalog.json the registry no longer produces fails too.
+        run: python python/forge/model_catalog.py --check
+      - name: the release version agrees everywhere a release names it
+        # pins, lockfile, CITATION.cff and the changelog section; the tag
+        # checks run in tagverify.yml when a release is cut.
+        run: |
+          python script/release_preflight.py
+          python tests/test_release_preflight.py
+          python tests/test_pypi_release.py
+      - name: the release rehearsal is what release.yml builds
+        # rehearsal.yml is generated from release.yml; a dist upgrade
+        # or a hand edit that drifts fails here.
+        run: |
+          python -m pip install pyyaml
+          python script/release_rehearsal.py generate --check
+          python tests/test_release_rehearsal.py
+      - name: the release waits for and reports the exact version
+        # against a local http server: the registry waits, the crates
+        # publisher's outage handling, the report of a failed release.
+        run: python tests/test_release_channels.py
+
+  payload-py310:
+    name: payload staged under python 3.10
+    if: github.event_name != 'schedule'
+    # the release's global job stages the payload with ubuntu-22.04's python3
+    # (3.10); the 0.5.2 tag failed there on a 3.11 import.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+      - name: stage and pack the payload, check its VERSION
+        run: |
+          set -eu
+          sh script/fetch_potion.sh
+          python script/stage_embedder_payload.py "$RUNNER_TEMP/payload" --tar "$RUNNER_TEMP/payload.tar.gz"
+          python -c "import sys, tarfile; v = tarfile.open(sys.argv[1]).extractfile('urna/VERSION').read().decode().strip(); print('payload VERSION', v)" "$RUNNER_TEMP/payload.tar.gz"

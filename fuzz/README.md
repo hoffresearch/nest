@@ -61,5 +61,5 @@ URNA_FUZZ_SEED_DIR=$PWD/fuzz/seeds cargo test -p urna-format --test mutation_fuz
 URNA_FUZZ_SEED_DIR=$PWD/fuzz/seeds cargo test -p urna-engine --test mutation_fuzz
 ```
 
-`ci.yml` runs every target for a short bounded time on each push (smoke,
+`gatecheck.yml` runs every target for a short bounded time on each push (smoke,
 not soak) with these seeds as the corpus.

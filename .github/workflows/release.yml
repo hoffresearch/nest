@@ -132,7 +132,7 @@ jobs:
             echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           fi
       - name: "fetch the potion table (embedder payload), verified against its lfs pointer"
-        run: "sh scripts/fetch_potion.sh"
+        run: "sh script/fetch_potion.sh"
         shell: "bash"
       - name: Install dist
         run: ${{ matrix.install_dist.run }}
@@ -178,11 +178,11 @@ jobs:
             ${{ steps.cargo-dist.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
 
-  custom-build-wheels:
+  custom-wheelmake:
     needs:
       - plan
     if: ${{ needs.plan.outputs.publishing == 'true' || fromJson(needs.plan.outputs.val).ci.github.pr_run_mode == 'upload' }}
-    uses: ./.github/workflows/build-wheels.yml
+    uses: ./.github/workflows/wheelmake.yml
     with:
       plan: ${{ needs.plan.outputs.val }}
     secrets: inherit
@@ -196,7 +196,7 @@ jobs:
     needs:
       - plan
       - build-local-artifacts
-      - custom-build-wheels
+      - custom-wheelmake
     runs-on: "ubuntu-22.04"
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -262,10 +262,10 @@ jobs:
     needs:
       - plan
       - build-local-artifacts
-      - custom-build-wheels
+      - custom-wheelmake
       - build-global-artifacts
     # Only run if we're "publishing", and only if plan, local and global didn't fail (skipped is fine)
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.publishing == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') && (needs.custom-build-wheels.result == 'skipped' || needs.custom-build-wheels.result == 'success') }}
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.publishing == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') && (needs.custom-wheelmake.result == 'skipped' || needs.custom-wheelmake.result == 'success') }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     runs-on: "ubuntu-22.04"
@@ -399,12 +399,12 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  custom-publish-crates:
+  custom-rustready:
     needs:
       - plan
       - host
     if: ${{ !fromJson(needs.plan.outputs.val).announcement_is_prerelease || fromJson(needs.plan.outputs.val).publish_prereleases }}
-    uses: ./.github/workflows/publish-crates.yml
+    uses: ./.github/workflows/rustready.yml
     with:
       plan: ${{ needs.plan.outputs.val }}
     secrets: inherit
@@ -413,12 +413,12 @@ jobs:
       "contents": "read"
       "id-token": "write"
 
-  custom-publish-pypi:
+  custom-pypiready:
     needs:
       - plan
       - host
     if: ${{ !fromJson(needs.plan.outputs.val).announcement_is_prerelease || fromJson(needs.plan.outputs.val).publish_prereleases }}
-    uses: ./.github/workflows/publish-pypi.yml
+    uses: ./.github/workflows/pypiready.yml
     with:
       plan: ${{ needs.plan.outputs.val }}
     secrets: inherit
@@ -433,12 +433,12 @@ jobs:
       - host
       - publish-homebrew-formula
       - publish-npm
-      - custom-publish-crates
-      - custom-publish-pypi
+      - custom-rustready
+      - custom-pypiready
     # use "always() && ..." to allow us to wait for all publish jobs while
     # still allowing individual publish jobs to skip themselves (for prereleases).
     # "host" however must run to completion, no skipping allowed!
-    if: ${{ always() && needs.host.result == 'success' && (needs.publish-homebrew-formula.result == 'skipped' || needs.publish-homebrew-formula.result == 'success') && (needs.publish-npm.result == 'skipped' || needs.publish-npm.result == 'success') && (needs.custom-publish-crates.result == 'skipped' || needs.custom-publish-crates.result == 'success') && (needs.custom-publish-pypi.result == 'skipped' || needs.custom-publish-pypi.result == 'success') }}
+    if: ${{ always() && needs.host.result == 'success' && (needs.publish-homebrew-formula.result == 'skipped' || needs.publish-homebrew-formula.result == 'success') && (needs.publish-npm.result == 'skipped' || needs.publish-npm.result == 'success') && (needs.custom-rustready.result == 'skipped' || needs.custom-rustready.result == 'success') && (needs.custom-pypiready.result == 'skipped' || needs.custom-pypiready.result == 'success') }}
     runs-on: "ubuntu-22.04"
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -448,11 +448,11 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
-  custom-install-test:
+  custom-setuptest:
     needs:
       - plan
       - announce
-    uses: ./.github/workflows/install-test.yml
+    uses: ./.github/workflows/setuptest.yml
     with:
       plan: ${{ needs.plan.outputs.val }}
     secrets: inherit

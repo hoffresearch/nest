@@ -1,4 +1,4 @@
-[![Urna: offline-first vector database, Rust and Python](https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-hoff-research-db-iage-thumb-git.png)](https://docs.urna.dev/)
+[![Urna: offline-first vector database, Rust and Python](https://raw.githubusercontent.com/hoffresearch/urna/main/assets/image/urna-hoff-research-db-iage-thumb-git.png)](https://docs.urna.dev/)
 
 # Urna
 
@@ -26,7 +26,7 @@ cargo install urna-clitui
 ```
 
 ```sh
-curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/scripts/install.sh | sh
+curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/script/install.sh | sh
 ```
 
 Then run setup once. It downloads the offline embedder, prepares a Python env and checks the install:
@@ -47,7 +47,7 @@ Windows, Docker, `cargo binstall` and how to verify a download are in the [insta
 
 `urna setup` shows the plan before it writes anything and ends on the doctor checks. A corpus built with a heavier model, like the pt-BR MiniLM, needs that model on the machine: `urna setup --model minilm-multilingual` installs it (or `m` on the plan screen), and the ask tab of `urna tui` offers the same install when a query needs it. Nothing is downloaded until you say so.
 
-<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-setup.png" alt="urna setup: the verify step with every doctor check passing" width="100%">
+<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/assets/image/urna-setup.png" alt="urna setup: the verify step with every doctor check passing" width="100%">
 
 `urna tui` opens a corpus, validates it, and lets you ask it questions. Each hit shows its score, the stored text and its citation.
 
@@ -55,30 +55,30 @@ Windows, Docker, `cargo binstall` and how to verify a download are in the [insta
 urna tui my_corpus.urna
 ```
 
-<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/assets/images/urna-tui.png" alt="urna tui: the ask tab with scored hits and the cited text of the selected one" width="100%">
+<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/assets/image/urna-tui.png" alt="urna tui: the ask tab with scored hits and the cited text of the selected one" width="100%">
 
 ## Quickstart
 
-`examples/quickstart/` has twelve short paragraphs and the spec that builds them. From a checkout:
+`demos/quickstart/` has twelve short paragraphs and the spec that builds them. From a checkout:
 
 ```sh
-urna build --spec examples/quickstart/corpus.toml
+urna build --spec demos/quickstart/corpus.toml
 ```
 
 ```sh
-urna ask examples/quickstart/out/quickstart.urna "can I use this offline" -k 1
+urna ask demos/quickstart/out/quickstart.urna "can I use this offline" -k 1
 ```
 
 ```sh
-urna retrieve examples/quickstart/out/quickstart.urna "how do citations work" -k 2 --format jsonl
+urna retrieve demos/quickstart/out/quickstart.urna "how do citations work" -k 2 --format jsonl
 ```
 
 ```sh
-urna cite examples/quickstart/out/quickstart.urna 'urna://sha256:1147b256.../sha256:b5dfeb09...'
+urna cite demos/quickstart/out/quickstart.urna 'urna://sha256:1147b256.../sha256:b5dfeb09...'
 ```
 
 ```sh
-urna validate examples/quickstart/out/quickstart.urna
+urna validate demos/quickstart/out/quickstart.urna
 ```
 
 `ask` prints the answer with its citation, `retrieve` prints JSON for another program, `cite` turns a citation back into the stored text, and `validate` checks every hash. To build from your own rows, see [usage section 13](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
@@ -135,7 +135,7 @@ urna.build(
 )
 ```
 
-`python examples/quickstart/quickstart.py` runs the whole loop, build to cited hits, with no network.
+`python demos/quickstart/quickstart.py` runs the whole loop, build to cited hits, with no network.
 
 </details>
 
