@@ -11,7 +11,8 @@
 #   preflight (tag-verify.yml); `source_run` is the release.yml run of that
 #   tag whose host job succeeded; the wheels and their .sha256 come from the
 #   github release that host made, and each wheel's build attestation is
-#   verified. the files pypi gets are the release's files.
+#   verified against the signer workflow (build-wheels.yml), the tag's commit
+#   and the tag's ref. the files pypi gets are the release's files.
 # - testpypi: dispatched on main, to prove the publisher before a release.
 #   `source_run` is a successful release-rehearsal.yml run on a commit of
 #   main; the wheels and checksums come from that run's artifacts (the
@@ -99,8 +100,12 @@ jobs:
         run: |
           set -eu
           gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" -D dist -p '*.whl' -p '*.whl.sha256'
+          # built by build-wheels.yml from this tag's commit and ref, not just
+          # somewhere in this repository.
           for wheel in dist/*.whl; do
-            gh attestation verify "$wheel" --repo "$GITHUB_REPOSITORY"
+            gh attestation verify "$wheel" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/build-wheels.yml" \
+              --source-digest "$(git rev-parse HEAD)" --source-ref "$GITHUB_REF"
           done
       - name: the wheels and checksums of the rehearsal run (testpypi)
         if: inputs.index == 'testpypi'

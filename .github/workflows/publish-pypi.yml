@@ -5,8 +5,9 @@
 # it uploads nothing. pypi trusted publishing matches the publisher on
 # `job_workflow_ref` and does not support a reusable workflow there, so this
 # job dispatches the top-level pypi.yml on the release tag, with this run as
-# the wheels' source, and follows that one run (the dispatch answers with its
-# id) until it finishes or the deadline passes. a failed, cancelled or
+# the wheels' source, and follows that one run (the dispatch, asked with
+# return_run_details, answers with its id) until it finishes or the deadline
+# passes. a failed, cancelled or
 # timed-out pypi run fails this job, so the release is not announced and the
 # install tests do not start. the GITHUB_TOKEN may dispatch workflows (the
 # documented exception to "events from the token start no runs"); the
@@ -43,11 +44,15 @@ jobs:
       - name: dispatch and follow the run
         run: |
           set -eu
+          # return_run_details asks for 200 with the run id; without it the
+          # api answers 204 with no body and the run could not be followed.
           run_id=$(gh api -X POST "repos/$GITHUB_REPOSITORY/actions/workflows/pypi.yml/dispatches" \
             -f ref="$TAG" -f "inputs[index]=pypi" -f "inputs[source_run]=$GITHUB_RUN_ID" \
-            --jq '.workflow_run_id')
+            -F return_run_details=true --jq '.workflow_run_id')
           case "$run_id" in
-            ''|null|*[!0-9]*) echo "::error::the dispatch did not answer with a run id"; exit 1 ;;
+            ''|null|*[!0-9]*)
+              echo "::error::the dispatch answered without a run id; a pypi.yml run may have started: check its runs before rerunning"
+              exit 1 ;;
           esac
           url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$run_id"
           echo "pypi run: $url"
