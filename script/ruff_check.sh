@@ -70,8 +70,8 @@ tests/test_model_install.py
 script/stage_embedder_payload.py
 script/preflight.py
 tests/test_preflight.py
-script/pypi_release.py
-tests/test_pypi_release.py
+script/pypiindex.py
+tests/test_pypiindex.py
 script/rehearsal.py
 tests/test_rehearsal.py
 script/release_channels.py
