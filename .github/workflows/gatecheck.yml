@@ -122,7 +122,7 @@ jobs:
           cd fuzz
           for t in urna-view section-decoders runtime-indexes mmap-open-search; do
             mkdir -p corpus/$t
-            cp seeds/*.bin ../crates/urna-format/tests/fixtures/golden_v1_minimal.urna corpus/$t/
+            cp seeds/*.bin ../crates/format/tests/fixtures/golden_v1_minimal.urna corpus/$t/
           done
       - name: run every target (bounded)
         run: |
@@ -172,16 +172,16 @@ jobs:
       - name: toolchain
         run: rustup toolchain install stable --profile minimal && rustup default stable
       - uses: Swatinem/rust-cache@v2
-      # a base commit without crates/urna-format has nothing to compare
+      # a base commit without crates/format has nothing to compare
       # against (the nest -> urna rename); skip instead of failing.
       - name: baseline has urna-format
         id: baseline
         run: |
-          if git cat-file -e "${{ github.event.pull_request.base.sha }}:crates/urna-format/Cargo.toml" 2>/dev/null; then
+          if git cat-file -e "${{ github.event.pull_request.base.sha }}:crates/format/Cargo.toml" 2>/dev/null; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::base commit has no crates/urna-format; semver check skipped"
+            echo "::notice::base commit has no crates/format; semver check skipped"
           fi
       # the on-disk format is frozen; the rust api that reads it should say
       # when it breaks. urna-format is not on crates.io, so the baseline is
@@ -223,7 +223,7 @@ jobs:
           cd fuzz
           mkdir -p corpus/${{ matrix.target }}
           if [ -z "$(ls -A corpus/${{ matrix.target }})" ]; then
-            cp seeds/*.bin ../crates/urna-format/tests/fixtures/golden_v1_minimal.urna corpus/${{ matrix.target }}/
+            cp seeds/*.bin ../crates/format/tests/fixtures/golden_v1_minimal.urna corpus/${{ matrix.target }}/
           fi
       - name: soak
         run: |

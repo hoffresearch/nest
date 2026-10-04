@@ -38,7 +38,7 @@ half = { version = "2", features = ["bytemuck"] }
 bytemuck = { version = "1", features = ["derive"] }
 # path for the workspace, version for crates.io: `cargo publish` strips the
 # path and keeps the version, so both move with every release bump.
-urna-format = { path = "crates/urna-format", version = "0.5.3" }
+urna-format = { path = "crates/format", version = "0.5.3" }
 urna-engine = { path = "crates/urna-engine", version = "0.5.3" }
 
 # distribution backbone for the `urna` cli binary (issue #75): per-platform
