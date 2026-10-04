@@ -61,6 +61,19 @@ def _get(url: str, token: bool = False) -> tuple[int, str]:
         return 0, str(err)
 
 
+def _load(body: str):
+    """The JSON in a body, or None when it is not JSON: never a guess."""
+    try:
+        return json.loads(body) if body else None
+    except ValueError:
+        return None
+
+
+def _doc(status: int, body: str) -> dict:
+    doc = _load(body) if status == 200 else None
+    return doc if isinstance(doc, dict) else {}
+
+
 def _state(status: int, ok: bool, what: str) -> str:
     if status == 200 and ok:
         return SERVED
@@ -73,20 +86,23 @@ def probe_npm(version: str) -> str:
     status, body = _get(
         f"{_env('NPM_REGISTRY', 'https://registry.npmjs.org')}/@urna%2fcli/{version}"
     )
-    doc = json.loads(body) if status == 200 and body else {}
+    doc = _doc(status, body)
     return _state(status, doc.get("version") == version, f"npm has no @urna/cli {version}")
 
 
 def probe_crates(version: str) -> str:
     status, body = _get(f"{_env('CRATES_INDEX', 'https://index.crates.io')}/ur/na/urna")
-    lines = [json.loads(ln) for ln in body.splitlines() if ln.strip()] if status == 200 else []
-    ok = any(ln.get("vers") == version and not ln.get("yanked") for ln in lines)
+    lines = [_load(ln) for ln in body.splitlines()] if status == 200 else []
+    ok = any(
+        isinstance(ln, dict) and ln.get("vers") == version and ln.get("yanked") is False
+        for ln in lines
+    )
     return _state(status, ok, f"the index has no unyanked urna {version}")
 
 
 def probe_pypi(version: str) -> str:
     status, body = _get(f"{_env('PYPI_URL', 'https://pypi.org')}/pypi/urna/{version}/json")
-    doc = json.loads(body) if status == 200 and body else {}
+    doc = _doc(status, body)
     files = doc.get("urls") or []
     ok = doc.get("info", {}).get("version") == version and bool(files)
     state = _state(status, ok, f"pypi has no urna {version} files")
@@ -104,7 +120,7 @@ def probe_homebrew(version: str) -> str:
 def probe_github(version: str, repo: str) -> str:
     api = _env("GITHUB_API_URL", "https://api.github.com")
     status, body = _get(f"{api}/repos/{repo}/releases/tags/v{version}", token=True)
-    assets = json.loads(body).get("assets", []) if status == 200 and body else []
+    assets = _doc(status, body).get("assets") or []
     state = _state(status, bool(assets), f"no release v{version}")
     return f"{SERVED} ({len(assets)} assets)" if state == SERVED else state
 
@@ -149,22 +165,31 @@ def wait(channel: str, version: str, timeout: float, interval: float) -> tuple[b
         delay = min(delay * 2, 60)
 
 
-def _json(url: str, token: bool = False) -> dict:
+def _json(url: str, token: bool = False) -> tuple[int, dict]:
     status, body = _get(url, token)
-    return json.loads(body) if status == 200 and body else {}
+    return status, _doc(status, body)
+
+
+def _unavailable(status: int) -> str:
+    return f"unavailable (HTTP {status or 'no answer'})"
 
 
 def wheels_and_attestations(version: str, repo: str) -> tuple[list[str], list[str]]:
     """(summary lines, problems): the release's wheels against PyPI's, and an
     attestation for every archive and wheel on the release (by digest)."""
     api = _env("GITHUB_API_URL", "https://api.github.com")
-    assets = _json(f"{api}/repos/{repo}/releases/tags/v{version}", token=True).get("assets", [])
-    digest = {a["name"]: str(a.get("digest") or "").removeprefix("sha256:") for a in assets}
-    pypi = _json(f"{_env('PYPI_URL', 'https://pypi.org')}/pypi/urna/{version}/json")
-    on_pypi = {f["filename"]: f["digests"]["sha256"] for f in pypi.get("urls", [])}
-    on_release = {n: d for n, d in digest.items() if n.endswith(".whl")}
     lines, problems = [], []
-    if not on_release:
+    status, release = _json(f"{api}/repos/{repo}/releases/tags/v{version}", token=True)
+    if status != 200:
+        return lines, [f"the GitHub release v{version} is {_unavailable(status)}"]
+    assets = release.get("assets") or []
+    digest = {a["name"]: str(a.get("digest") or "").removeprefix("sha256:") for a in assets}
+    status, pypi = _json(f"{_env('PYPI_URL', 'https://pypi.org')}/pypi/urna/{version}/json")
+    on_pypi = {f["filename"]: f["digests"]["sha256"] for f in pypi.get("urls") or []}
+    on_release = {n: d for n, d in digest.items() if n.endswith(".whl")}
+    if status not in (200, 404):
+        problems.append(f"PyPI's urna {version} files are {_unavailable(status)}")
+    elif not on_release:
         problems.append("the GitHub release carries no wheels")
     elif on_release != on_pypi:
         differ = sorted(
@@ -173,18 +198,24 @@ def wheels_and_attestations(version: str, repo: str) -> tuple[list[str], list[st
         problems.append(f"PyPI and the GitHub release differ on {differ}")
     else:
         lines.append(f"Wheels: PyPI and the GitHub release carry the same {len(on_release)} files")
-    signed = [n for n in digest if n.endswith((".tar.xz", ".zip", ".whl"))]
-    missing = [
-        n
-        for n in sorted(signed)
-        if not digest[n]
-        or not _json(f"{api}/repos/{repo}/attestations/sha256:{digest[n]}", token=True).get(
-            "attestations"
-        )
-    ]
+    signed = sorted(n for n in digest if n.endswith((".tar.xz", ".zip", ".whl")))
+    missing, unknown = [], []
+    for name in signed:
+        if not digest[name]:
+            missing.append(name)
+            continue
+        status, found = _json(f"{api}/repos/{repo}/attestations/sha256:{digest[name]}", True)
+        if status not in (200, 404):
+            unknown.append(name)
+        elif not found.get("attestations"):
+            missing.append(name)
+    if not signed:
+        problems.append("the GitHub release carries no archives or wheels")
     if missing:
         problems.append(f"no attestation for {missing}")
-    elif signed:
+    if unknown:
+        problems.append(f"the attestations of {unknown} are unavailable")
+    if signed and not missing and not unknown:
         lines.append(
             f"Attestations: every archive and wheel on the release has one ({len(signed)})"
         )
@@ -192,11 +223,9 @@ def wheels_and_attestations(version: str, repo: str) -> tuple[list[str], list[st
 
 
 def _tag_commit(api: str, repo: str, tag: str) -> str | None:
-    status, body = _get(f"{api}/repos/{repo}/git/ref/tags/{tag}", token=True)
-    obj = json.loads(body).get("object", {}) if status == 200 and body else {}
+    obj = _json(f"{api}/repos/{repo}/git/ref/tags/{tag}", True)[1].get("object") or {}
     if obj.get("type") == "tag":  # annotated: one more hop to the commit
-        status, body = _get(f"{api}/repos/{repo}/git/tags/{obj.get('sha')}", token=True)
-        obj = json.loads(body).get("object", {}) if status == 200 and body else {}
+        obj = _json(f"{api}/repos/{repo}/git/tags/{obj.get('sha')}", True)[1].get("object") or {}
     return obj.get("sha")
 
 
@@ -205,9 +234,10 @@ def report(run_id: str, sha: str, tag: str, repo: str) -> tuple[bool, str]:
     api = _env("GITHUB_API_URL", "https://api.github.com")
     version = tag.removeprefix("v")
     problems: list[str] = []
-    status, body = _get(f"{api}/repos/{repo}/actions/runs/{run_id}", token=True)
-    run = json.loads(body) if status == 200 and body else {}
-    conclusion = run.get("conclusion") or f"unknown (HTTP {status})"
+    status, run = _json(f"{api}/repos/{repo}/actions/runs/{run_id}", True)
+    conclusion = run.get("conclusion") or (
+        run.get("status") if status == 200 else _unavailable(status)
+    )
     if conclusion != "success":
         problems.append(f"the release run ended {conclusion}")
     lines = [f"## Release {tag}", "", f"Release run {run_id}: **{conclusion}** at `{sha[:12]}`", ""]
@@ -218,17 +248,26 @@ def report(run_id: str, sha: str, tag: str, repo: str) -> tuple[bool, str]:
         f"Tag {tag} -> `{(commit or 'missing')[:12]}`"
         + ("" if commit == sha else " (not this run)")
     )
-    status, body = _get(f"{api}/repos/{repo}/actions/runs/{run_id}/jobs?per_page=100", token=True)
-    jobs = json.loads(body).get("jobs", []) if status == 200 and body else []
-    off = [j for j in jobs if j.get("conclusion") not in ("success",)]
+    status, found = _json(f"{api}/repos/{repo}/actions/runs/{run_id}/jobs?per_page=100", True)
+    jobs = found.get("jobs") or []
+    off = [j for j in jobs if j.get("conclusion") != "success"]
+    if status != 200 or not jobs:
+        problems.append(
+            f"the run's jobs are {_unavailable(status) if status != 200 else 'missing'}"
+        )
     lines += ["", f"Jobs: {len(jobs) - len(off)} of {len(jobs)} succeeded"]
     lines += [f"- {j.get('name')}: {j.get('conclusion') or j.get('status')}" for j in off]
-    status, body = _get(
-        f"{api}/repos/{repo}/actions/workflows/pypi.yml/runs?head_sha={sha}", token=True
-    )
-    pypi_runs = json.loads(body).get("workflow_runs", []) if status == 200 and body else []
-    pypi_run = pypi_runs[0] if pypi_runs else {}
-    pypi_state = pypi_run.get("conclusion") or pypi_run.get("status") or "no run for this commit"
+    url = f"{api}/repos/{repo}/actions/workflows/pypi.yml/runs?head_sha={sha}"
+    status, found = _json(url, True)
+    pypi_runs = found.get("workflow_runs") or []
+    if status != 200:
+        pypi_state = _unavailable(status)
+    elif not pypi_runs:
+        pypi_state = "no run for this commit"
+    else:
+        pypi_state = pypi_runs[0].get("conclusion") or pypi_runs[0].get("status") or "unknown"
+    if pypi_state != "success":
+        problems.append(f"pypi.yml: {pypi_state}")
     lines.append(f"pypi.yml: {pypi_state}")
     channels = {
         "GitHub release": probe_github(version, repo),
@@ -277,7 +316,12 @@ def main(argv: list[str] | None = None) -> int:
         code, why = crate_status(args.name, args.version, args.attempts, args.delay)
         print(f"release-channels: {why}", file=sys.stderr if code == 1 else sys.stdout)
         return code
-    ok, text = report(args.run, args.sha, args.tag, args.repo)
+    try:
+        ok, text = report(args.run, args.sha, args.tag, args.repo)
+    except Exception as err:  # noqa: BLE001 (the summary must survive any answer)
+        ok = False
+        text = f"## Release {args.tag}\n\nRelease run {args.run} at `{args.sha[:12]}`: "
+        text += f"the report could not finish ({type(err).__name__}: {err}).\n"
     print(text)
     if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(summary, "a", encoding="utf-8") as fh:

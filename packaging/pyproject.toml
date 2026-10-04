@@ -2,8 +2,10 @@
 #
 # scripts/stage_wheel.py copies this file VERBATIM into packaging/staging/;
 # every relative path below resolves from staging/, not from packaging/.
-# the dev flow (cargo build + cp into python/_urna.so) is unchanged; this
-# file only feeds the published package.
+# the dev flow is unchanged: `cargo build --release -p urna-python --features
+# pyo3/extension-module`, then copy target/release/lib_urna.dylib (macos) or
+# lib_urna.so (linux) to python/_urna.so; this file only feeds the published
+# package.
 
 [build-system]
 requires = ["maturin>=1.4,<2.0"]

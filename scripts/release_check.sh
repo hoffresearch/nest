@@ -190,7 +190,7 @@ ok "release rehearsal (7 cases)"
 # report names what every channel serves, a failed or cancelled run included.
 step "python tests/test_release_channels.py"
 "$PY" tests/test_release_channels.py
-ok "release channels (7 cases)"
+ok "release channels (8 cases)"
 
 # ---- ruff (best-effort) ----
 # the file list lives in scripts/ruff_check.sh so ci.yml and this gate stay

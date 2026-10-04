@@ -85,13 +85,14 @@ post-announce-jobs = ["./install-test"]
 # build-wheels attests its wheels (id-token + attestations); publish-pypi
 # dispatches pypi.yml and reads its run (actions: write).
 github-custom-job-permissions = { "publish-crates" = { contents = "read", id-token = "write" }, "install-test" = { contents = "read" }, "build-wheels" = { contents = "read", id-token = "write", attestations = "write" }, "publish-pypi" = { contents = "read", actions = "write" } }
-# sigstore keyless provenance for every release artifact, verifiable with
-# `gh attestation verify` (issue #75).
+# sigstore keyless provenance for the five binary archives, verifiable with
+# `gh attestation verify` (issue #75); the global job's artifacts (payload,
+# sbom, formula, npm package) carry none, and build-wheels.yml attests the
+# wheels itself.
 github-attestations = true
-# supply chain: a cyclonedx sbom per release artifact,
-# uploaded next to it and covered by the same attestations; binaries built
-# with cargo-auditable so `cargo audit bin urna` can read the dependency
-# tree out of the executable.
+# supply chain: one cyclonedx sbom for the cli package (urna.cdx.xml, not
+# attested); binaries built with cargo-auditable so `cargo audit bin urna`
+# can read the dependency tree out of the executable.
 cargo-cyclonedx = true
 cargo-auditable = true
 # the tag check (signature + scripts/release_preflight.py, tag-verify.yml)

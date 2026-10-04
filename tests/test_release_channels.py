@@ -14,7 +14,10 @@ crates.io sparse index, PyPI and the Homebrew tap:
   the report exits 1 with the summary already written; a tag that points at
   another commit is named;
 - edge case: the exact version only: npm serving 0.5.30, an index whose only
-  0.5.3 line is yanked, and a PyPI version without files are not served.
+  0.5.3 line is yanked, and a PyPI version without files are not served; an
+  API that does not answer, answers non-JSON or lists no pypi.yml run is
+  reported as unavailable or absent, never as success, and an answer the
+  report cannot read still leaves a summary and exit 1.
 
 Run: python tests/test_release_channels.py
 """
@@ -264,6 +267,41 @@ def test_a_tag_on_another_commit_is_named() -> None:
     ok, text = ch.report("7", SHA, f"v{V}", "o/r")
     assert not ok and f"tag v{V} points at {'b' * 40}, not the run's {SHA[:12]}" in text, text
     print("error (a tag that points at another commit than the run's): OK")
+
+
+def test_missing_answers_are_never_success() -> None:
+    released()
+    ROUTES["/api/repos/o/r/actions/runs/7/jobs?per_page=100"] = (500, "")
+    ROUTES[f"/api/repos/o/r/actions/workflows/pypi.yml/runs?head_sha={SHA}"] = {"workflow_runs": []}
+    ROUTES[f"/npm/@urna%2fcli/{V}"] = "<html>not json</html>"
+    ROUTES[f"/api/repos/o/r/attestations/sha256:{ARCHIVES['urna-linux.tar.xz']}"] = (502, "")
+    ok, text = ch.report("7", SHA, f"v{V}", "o/r")
+    assert not ok, text
+    for want in [
+        "the run's jobs are unavailable (HTTP 500)",
+        "- pypi.yml: no run for this commit",
+        "| npm | absent",
+        "the attestations of ['urna-linux.tar.xz'] are unavailable",
+    ]:
+        assert want in text, (want, text)
+    ROUTES[f"/api/repos/o/r/releases/tags/v{V}"] = (503, "")
+    ROUTES["/api/repos/o/r/actions/runs/7"] = (502, "")
+    ok, text = ch.report("7", SHA, f"v{V}", "o/r")
+    assert not ok and "**unavailable (HTTP 502)**" in text, text
+    assert f"the GitHub release v{V} is unavailable (HTTP 503)" in text, text
+    # an answer the report cannot read still ends in a written summary and exit 1.
+    released()
+    ROUTES[f"/api/repos/o/r/releases/tags/v{V}"] = {"assets": [{"digest": "sha256:00"}]}
+    with tempfile.TemporaryDirectory() as tmp:
+        summary = Path(tmp, "summary.md")
+        os.environ["GITHUB_STEP_SUMMARY"] = str(summary)
+        try:
+            args = ["report", "--run", "7", "--sha", SHA, "--tag", f"v{V}", "--repo", "o/r"]
+            assert ch.main(args) == 1
+        finally:
+            os.environ.pop("GITHUB_STEP_SUMMARY")
+        assert "the report could not finish (KeyError" in summary.read_text(encoding="utf-8")
+    print("error (unavailable jobs, no pypi run, non-JSON, unreadable answers: never success): OK")
 
 
 def main() -> int:
