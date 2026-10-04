@@ -138,8 +138,8 @@ step "python tests/test_clispaces.py"
 "$PY" tests/test_clispaces.py
 ok "cli space verbs (8 cases)"
 
-step "python tests/test_query_embedder_routing.py"
-"$PY" tests/test_query_embedder_routing.py
+step "python tests/test_askrouter.py"
+"$PY" tests/test_askrouter.py
 ok "query embedder routing (10 cases; 7 to 10 need sentence-transformers, URNA_ST_PYTHON)"
 
 # the release payload, staged and run from outside the checkout: both query
