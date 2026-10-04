@@ -1,0 +1,71 @@
+# the pypi leg of the release. a reusable workflow: cargo-dist calls it as a
+# custom publish job (`publish-jobs` in Cargo.toml) once the host job has
+# built and released everything, wheels included.
+#
+# it uploads nothing. pypi trusted publishing matches the publisher on
+# `job_workflow_ref` and does not support a reusable workflow there, so this
+# job dispatches the top-level pypi.yml on the release tag, with this run as
+# the wheels' source, and follows that one run (the dispatch answers with its
+# id) until it finishes or the deadline passes. a failed, cancelled or
+# timed-out pypi run fails this job, so the release is not announced and the
+# install tests do not start. the GITHUB_TOKEN may dispatch workflows (the
+# documented exception to "events from the token start no runs"); the
+# dispatch needs `actions: write`, granted in github-custom-job-permissions.
+#
+# rerunning this job after a failure dispatches pypi.yml again; its upload
+# skips the wheels pypi already has with the same sha256.
+
+name: publish-pypi
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    name: dispatch pypi.yml and wait for it
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    permissions:
+      contents: read
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+      DEADLINE_SECONDS: "3600"
+    steps:
+      - name: dispatch and follow the run
+        run: |
+          set -eu
+          run_id=$(gh api -X POST "repos/$GITHUB_REPOSITORY/actions/workflows/pypi.yml/dispatches" \
+            -f ref="$TAG" -f "inputs[index]=pypi" -f "inputs[source_run]=$GITHUB_RUN_ID" \
+            --jq '.workflow_run_id')
+          case "$run_id" in
+            ''|null|*[!0-9]*) echo "::error::the dispatch did not answer with a run id"; exit 1 ;;
+          esac
+          url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$run_id"
+          echo "pypi run: $url"
+          echo "pypi run: $url" >> "$GITHUB_STEP_SUMMARY"
+          start=$SECONDS
+          while :; do
+            state=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq '.status + " " + (.conclusion // "")')
+            if [ "${state%% *}" = completed ]; then
+              conclusion=${state#* }
+              [ "$conclusion" = success ] && { echo "pypi run succeeded"; exit 0; }
+              echo "::error::the pypi run ended $conclusion: $url"
+              exit 1
+            fi
+            if [ $((SECONDS - start)) -ge "$DEADLINE_SECONDS" ]; then
+              # cancelled, so it cannot publish after the release gave up on it.
+              gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/cancel" >/dev/null || true
+              echo "::error::the pypi run did not finish within ${DEADLINE_SECONDS}s, cancelled: $url"
+              exit 1
+            fi
+            sleep 20
+          done

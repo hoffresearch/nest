@@ -174,6 +174,12 @@ step "python tests/test_release_preflight.py"
 "$PY" tests/test_release_preflight.py
 ok "release preflight (6 cases)"
 
+# the pypi upload takes the release's wheels from the run its index allows,
+# and a rerun uploads only what the index does not have yet.
+step "python tests/test_pypi_release.py"
+"$PY" tests/test_pypi_release.py
+ok "pypi release (5 cases)"
+
 # ---- ruff (best-effort) ----
 # the file list lives in scripts/ruff_check.sh so ci.yml and this gate stay
 # in lockstep; ruff missing from $PY is a skip here, a failure in ci.

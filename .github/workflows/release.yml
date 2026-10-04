@@ -87,17 +87,12 @@ jobs:
           name: artifacts-plan-dist-manifest
           path: plan-dist-manifest.json
 
-  custom-tag-verify:
-    uses: ./.github/workflows/tag-verify.yml
-    secrets: inherit
-
   # Build and packages all the platform-specific things
   build-local-artifacts:
     name: build-local-artifacts (${{ join(matrix.targets, ', ') }})
     # Let the initial task tell us to not run (currently very blunt)
     needs:
       - plan
-      - custom-tag-verify
     if: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix.include != null && (needs.plan.outputs.publishing == 'true' || fromJson(needs.plan.outputs.val).ci.github.pr_run_mode == 'upload') }}
     strategy:
       fail-fast: false
@@ -183,11 +178,25 @@ jobs:
             ${{ steps.cargo-dist.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
 
+  custom-build-wheels:
+    needs:
+      - plan
+    if: ${{ needs.plan.outputs.publishing == 'true' || fromJson(needs.plan.outputs.val).ci.github.pr_run_mode == 'upload' }}
+    uses: ./.github/workflows/build-wheels.yml
+    with:
+      plan: ${{ needs.plan.outputs.val }}
+    secrets: inherit
+    permissions:
+      "attestations": "write"
+      "contents": "read"
+      "id-token": "write"
+
   # Build and package all the platform-agnostic(ish) things
   build-global-artifacts:
     needs:
       - plan
       - build-local-artifacts
+      - custom-build-wheels
     runs-on: "ubuntu-22.04"
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -253,9 +262,10 @@ jobs:
     needs:
       - plan
       - build-local-artifacts
+      - custom-build-wheels
       - build-global-artifacts
     # Only run if we're "publishing", and only if plan, local and global didn't fail (skipped is fine)
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.publishing == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') }}
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.publishing == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') && (needs.custom-build-wheels.result == 'skipped' || needs.custom-build-wheels.result == 'success') }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     runs-on: "ubuntu-22.04"
@@ -403,6 +413,20 @@ jobs:
       "contents": "read"
       "id-token": "write"
 
+  custom-publish-pypi:
+    needs:
+      - plan
+      - host
+    if: ${{ !fromJson(needs.plan.outputs.val).announcement_is_prerelease || fromJson(needs.plan.outputs.val).publish_prereleases }}
+    uses: ./.github/workflows/publish-pypi.yml
+    with:
+      plan: ${{ needs.plan.outputs.val }}
+    secrets: inherit
+    # publish jobs get escalated permissions
+    permissions:
+      "actions": "write"
+      "contents": "read"
+
   announce:
     needs:
       - plan
@@ -410,10 +434,11 @@ jobs:
       - publish-homebrew-formula
       - publish-npm
       - custom-publish-crates
+      - custom-publish-pypi
     # use "always() && ..." to allow us to wait for all publish jobs while
     # still allowing individual publish jobs to skip themselves (for prereleases).
     # "host" however must run to completion, no skipping allowed!
-    if: ${{ always() && needs.host.result == 'success' && (needs.publish-homebrew-formula.result == 'skipped' || needs.publish-homebrew-formula.result == 'success') && (needs.publish-npm.result == 'skipped' || needs.publish-npm.result == 'success') && (needs.custom-publish-crates.result == 'skipped' || needs.custom-publish-crates.result == 'success') }}
+    if: ${{ always() && needs.host.result == 'success' && (needs.publish-homebrew-formula.result == 'skipped' || needs.publish-homebrew-formula.result == 'success') && (needs.publish-npm.result == 'skipped' || needs.publish-npm.result == 'success') && (needs.custom-publish-crates.result == 'skipped' || needs.custom-publish-crates.result == 'success') && (needs.custom-publish-pypi.result == 'skipped' || needs.custom-publish-pypi.result == 'success') }}
     runs-on: "ubuntu-22.04"
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
