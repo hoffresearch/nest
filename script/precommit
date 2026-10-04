@@ -9,7 +9,7 @@
 # sanctioned public corpora below - catching a `git add -f` that bypasses gitignore.
 #
 # Install once per clone (it lives outside .git/hooks so it is version-tracked).
-# Copy it in rather than `core.hooksPath scripts`, which would DISABLE the git-lfs
+# Copy it in rather than `core.hooksPath script`, which would DISABLE the git-lfs
 # hooks (LFS uses post-commit/pre-push, not pre-commit, so the two coexist):
 #   cp script/precommit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 #
