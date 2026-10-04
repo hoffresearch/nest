@@ -171,7 +171,7 @@ def test_tags_that_do_not_fit_are_refused() -> None:
 
 
 def test_the_tag_day_is_the_utc_day() -> None:
-    # release_prepare.sh dates the release in UTC. prepared and tagged the same
+    # releasepr.sh dates the release in UTC. prepared and tagged the same
     # evening in Brasilia (22:30 at -03:00 is 01:30 UTC the next day), the
     # release carries the next day's date; read in the tagger's timezone the
     # tag was dated the day before and was refused.

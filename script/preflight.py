@@ -17,7 +17,7 @@ signature check): the same checks on the files of the tag's own commit,
 read through git and never from the working tree, plus the tag names that
 commit's version, the commit is on the protected ``main`` and the release
 date is not after the day the tag was made. Both days are UTC days: the
-release date comes from cargo-release (``script/release_prepare.sh``), which
+release date comes from cargo-release (``script/releasepr.sh``), which
 dates in UTC, so a tag made at 22:30 in Brasilia (01:30 UTC the next day) the
 evening a release was prepared fits it, and a release dated after the tag's
 UTC day is still refused.

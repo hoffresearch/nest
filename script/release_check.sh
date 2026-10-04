@@ -195,8 +195,8 @@ ok "release channels (8 cases)"
 # the release pull request is prepared by cargo-release in its own worktree,
 # signed, and touches only the version, the lockfile, the changelog and
 # CITATION.cff; skips without the pinned cargo-release.
-step "python tests/test_release_prepare.py"
-"$PY" tests/test_release_prepare.py
+step "python tests/test_releasepr.py"
+"$PY" tests/test_releasepr.py
 ok "release prepare (4 cases)"
 
 # ---- ruff (best-effort) ----
@@ -223,4 +223,4 @@ ok "regression gates"
 printf '\n\033[1;32m== release check passed ==\033[0m\n'
 printf '  baseline: %s\n' "$BASELINE"
 printf '  post:     %s\n' "$OUT"
-printf '  next:     script/release_prepare.sh X.Y.Z (docs/USAGE.md, maintainer checklist step 8)\n'
+printf '  next:     script/releasepr.sh X.Y.Z (docs/USAGE.md, maintainer checklist step 8)\n'

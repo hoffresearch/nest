@@ -175,7 +175,7 @@ groups:
 
   - name: script
     files:
-      - path: script/release_prepare.sh
+      - path: script/releasepr.sh
         when: mudar a preparação de versão, worktree, assinatura, push ou abertura do PR.
       - path: script/preflight.py
         when: mudarem campos de versão, metadados ou critérios de origem da release.
