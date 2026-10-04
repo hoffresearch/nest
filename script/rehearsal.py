@@ -302,7 +302,7 @@ def release_inputs() -> tuple[set[str], tuple[str, ...]]:
         "README.md",
         "LICENSE",
         ".github/buildprep.yml",
-        "script/fetch_potion.sh",
+        "script/getpotion.sh",
         "script/embedpack.py",
         "script/wheelprep.py",
         "script/rehearsal.py",

@@ -193,7 +193,7 @@ groups:
         when: mudarem arquivos distribuídos, modelos ou o processo de staging do payload.
       - path: script/wheelprep.py
         when: mudarem arquivos distribuídos, modelos ou o processo de staging da wheel.
-      - path: script/fetch_potion.sh
+      - path: script/getpotion.sh
         when: mudar a revisão aprovada, origem ou identidade da tabela Potion.
       - path: script/install.sh
         when: mudarem instalação Unix, arquivos baixados, checksums ou destinos.
@@ -233,7 +233,7 @@ groups:
         rule: manter coerência com os pesos e o fingerprint.
       - path: python/forge/models/potion-base-8M/model.safetensors
         when: houver substituição aprovada dos pesos e atualização da identidade do modelo.
-        rule: manter no LFS; a release o obtém por script/fetch_potion.sh, na revisão fixada e conferido pelo sha256 do ponteiro LFS, então a revisão do script muda na mesma alteração.
+        rule: manter no LFS; a release o obtém por script/getpotion.sh, na revisão fixada e conferido pelo sha256 do ponteiro LFS, então a revisão do script muda na mesma alteração.
       - path: python/forge/models/potion-base-8M/modules.json
         when: houver substituição aprovada da estrutura do modelo.
       - path: python/forge/models/potion-base-8M/special_tokens_map.json

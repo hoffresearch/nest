@@ -2929,7 +2929,7 @@ purpose = "Stage + tar the offline embedder payload for release artifacts and in
 links = ["crates/urna-clitui/src/cmd/embed_gate.rs", "tests/test_embedpack.py"]
 
 [[inventory.distribution]]
-path = "script/fetch_potion.sh"
+path = "script/getpotion.sh"
 kind = "shell-script"
 purpose = "Fetch the vendored potion table from its upstream (minishlab/potion-base-8M at the pinned revision) and accept it only when its SHA256 is the oid in the checked-out LFS pointer; the release and wheel jobs use it instead of git-lfs"
 links = [
@@ -2965,8 +2965,8 @@ links = [
 [[inventory.distribution]]
 path = ".github/buildprep.yml"
 kind = "ci-steps"
-purpose = "cargo-dist github-build-setup steps injected into the release build jobs: fetch the potion table through script/fetch_potion.sh, verified against its LFS pointer"
-links = ["Cargo.toml", ".github/workflows/release.yml", "script/fetch_potion.sh"]
+purpose = "cargo-dist github-build-setup steps injected into the release build jobs: fetch the potion table through script/getpotion.sh, verified against its LFS pointer"
+links = ["Cargo.toml", ".github/workflows/release.yml", "script/getpotion.sh"]
 
 [[inventory.distribution]]
 path = ".github/workflows/rustready.yml"
