@@ -1,5 +1,8 @@
 [workspace]
 members = ["crates/*"]
+# crates/urna-ingest is its own workspace (forge ingestion deps stay out of the
+# sovereign crates); it shares the directory, not the lockfile or the build.
+exclude = ["crates/urna-ingest"]
 resolver = "3"
 
 [workspace.package]

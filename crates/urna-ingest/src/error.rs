@@ -1,4 +1,4 @@
-//! Typed errors for forge-core. Never panic in library code.
+//! Typed errors for urna-ingest. Never panic in library code.
 
 use thiserror::Error;
 
