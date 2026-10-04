@@ -56,14 +56,14 @@ jobs:
         if: runner.os != 'Windows'
         env:
           URNA_RELEASE_BASE: https://github.com/hoffresearch/urna/releases/download/${{ env.TAG }}
-        run: sh script/install.sh
+        run: sh script/installer.sh
 
       - name: install urna from the release (windows)
         if: runner.os == 'Windows'
         shell: pwsh
         env:
           URNA_RELEASE_BASE: https://github.com/hoffresearch/urna/releases/download/${{ env.TAG }}
-        run: ./script/install.ps1
+        run: ./script/installer.ps1
 
       - name: validate the golden fixture (unix)
         if: runner.os != 'Windows'

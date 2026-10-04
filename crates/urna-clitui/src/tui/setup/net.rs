@@ -1,6 +1,6 @@
 //! Downloads through the system `curl`: the binary links no network stack,
 //! so the only socket `urna setup` ever opens belongs to a curl child
-//! process, the same tool `install.sh` uses. bytes are hashed while they
+//! process, the same tool `installer.sh` uses. bytes are hashed while they
 //! stream, so the sha256 check costs no second read.
 //!
 //! `URNA_RELEASE_BASE` points at another artifact server (a mirror, or a
