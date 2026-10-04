@@ -2879,7 +2879,7 @@ links = [
 ]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_offline_guard.py"
+path = "tests/test_nonetwork.py"
 kind = "python-test"
 purpose = "The offline guard: blocked sockets stay blocked across build and query paths"
 links = ["python/urna.py"]
