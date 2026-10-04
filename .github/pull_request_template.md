@@ -10,7 +10,7 @@ tick what the change touched; leave the rest. the full walk is `.contracts/.agen
 - [ ] `docs/ARC.toml`: architecture, contracts, inventory, dated `summary` note
 - [ ] `.contracts/.agents/AGENTS.md`: commands, gotchas, known gaps, layout
 - [ ] tests: happy path, error path, edge case, real artifacts
-- [ ] user-visible: `README.md`, `llms.txt`, `docs/USAGE.md`, `examples/`, `assets/images/`
+- [ ] user-visible: `README.md`, `docs/USAGE.md`, `examples/`, `assets/images/`
 - [ ] format or decoders: roundtrip + `negative_*.rs`, fuzz arm, baselines, `docs/BENCH.md`
 - [ ] python, packaging, release: `scripts/ruff_check.sh`, pyproject files, dist config, `install-test.yml`
 - [ ] security and data: `docs/SECURITY.md`, `scripts/pre-commit`, `.gitattributes`

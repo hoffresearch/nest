@@ -37,8 +37,6 @@ groups:
     files:
       - path: README.md
         when: mudarem instalação, funcionalidades, API, exemplos principais ou resultados apresentados.
-      - path: llms.txt
-        when: mudarem páginas, caminhos, funcionalidades ou resumos públicos.
       - path: docs/USAGE.md
         when: mudarem comandos, opções, variáveis, instalação, modelos, builds ou operação das releases.
       - path: docs/CONTRIBUTING.md
