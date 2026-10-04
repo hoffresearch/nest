@@ -41,6 +41,21 @@ include = ["../../docs/LICENSE"]
 npm-package = "cli"
 formula = "urna"
 
+# `cargo release replace` (scripts/release_prepare.sh): the changelog section
+# and the versioned fields of CITATION.cff, which cites this crate. each runs
+# exactly once; the rest of CITATION.cff, its description included, stays.
+# {{date}} is cargo-release's UTC date; the tag check reads the tag's UTC day.
+[package.metadata.release]
+pre-release-replacements = [
+  { file = "../../docs/CHANGELOG", search = "^## \\[Unreleased\\]$", replace = "## [Unreleased]\n\n## [{{version}}] - {{date}}", exactly = 1 },
+  { file = "../../docs/CHANGELOG", search = "^last-updated: .*$", replace = "last-updated: {{date}}", exactly = 1 },
+  { file = "../../CITATION.cff", search = "^version: .*$", replace = "version: \"{{version}}\"", exactly = 1 },
+  { file = "../../CITATION.cff", search = "^date-released: .*$", replace = "date-released: \"{{date}}\"", exactly = 1 },
+  { file = "../../CITATION.cff", search = "^repository-artifact: https://crates\\.io/crates/urna/.*$", replace = "repository-artifact: https://crates.io/crates/urna/{{version}}", exactly = 1 },
+  { file = "../../CITATION.cff", search = "^( +value: https://github\\.com/hoffresearch/urna/releases/tag/v).*$", replace = "${1}{{version}}", exactly = 1 },
+  { file = "../../CITATION.cff", search = "^( +description: Release of Urna version ).*$", replace = "${1}{{version}}.", exactly = 1 },
+]
+
 [dependencies]
 urna-format = { workspace = true }
 urna-runtime = { workspace = true }
