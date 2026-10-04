@@ -18,7 +18,7 @@ set -eu
 # Explicit allow-list: the only tracked data artifacts permitted. These are
 # public, non-PHI benchmark/demo/fixture files. Anything else (any new .urna,
 # any cohort_*, any sidecar, anything under pairs/) is blocked.
-ALLOW='^(data/corpus_next\.v1\.urna|crates/urna-format/tests/fixtures/golden_v1_minimal\.urna)$'
+ALLOW='^(data/corpus_next\.v1\.urna|crates/format/tests/fixtures/golden_v1_minimal\.urna)$'
 
 staged=$(git diff --cached --name-only --diff-filter=ACM)
 [ -n "$staged" ] || exit 0

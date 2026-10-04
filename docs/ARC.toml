@@ -62,10 +62,10 @@ risks = [
 [[layers]]
 name = "urna-format"
 role = "Frozen v1 binary format, manifest, reader, writer, encodings, and hashes"
-entrypoints = ["crates/urna-format/src/lib.rs"]
+entrypoints = ["crates/format/src/lib.rs"]
 links = [
-    "crates/urna-format/src/reader/mod.rs",
-    "crates/urna-format/src/writer/mod.rs",
+    "crates/format/src/reader/mod.rs",
+    "crates/format/src/writer/mod.rs",
 ]
 
 [[layers]]
@@ -77,7 +77,7 @@ entrypoints = [
     "crates/urna-engine/src/search.rs",
 ]
 links = [
-    "crates/urna-format/src/lib.rs",
+    "crates/format/src/lib.rs",
     "crates/urna-engine/src/simd/mod.rs",
     "crates/urna-engine/src/graph/mod.rs",
 ]
@@ -281,7 +281,7 @@ summary = "UrnaFile.retrieve(qvec, k): route by manifest capability, run search,
 name = "runtime-open-and-search"
 entry = "crates/urna-engine/src/mmap_file.rs"
 path = [
-    "crates/urna-format/src/reader/mod.rs",
+    "crates/format/src/reader/mod.rs",
     "crates/urna-engine/src/search.rs",
     "crates/urna-engine/src/simd/mod.rs",
 ]
@@ -334,7 +334,7 @@ entry = ".github/workflows/gatecheck.yml"
 path = [
     "Cargo.toml",
     "clippy.toml",
-    "crates/urna-format/tests/mutation_fuzz.rs",
+    "crates/format/tests/mutation_fuzz.rs",
     "crates/urna-engine/tests/mutation_fuzz.rs",
     "fuzz/Cargo.toml",
     "script/ruffcheck.sh",
@@ -344,11 +344,11 @@ summary = "On every push and pull request: fmt, Clippy with the workspace deny l
 
 [[flows]]
 name = "mutation-fuzz"
-entry = "crates/urna-format/tests/mutation_fuzz.rs"
+entry = "crates/format/tests/mutation_fuzz.rs"
 path = [
-    "crates/urna-format/tests/common/mutation.rs",
-    "crates/urna-format/src/reader/parse.rs",
-    "crates/urna-format/src/reader/decode.rs",
+    "crates/format/tests/common/mutation.rs",
+    "crates/format/src/reader/parse.rs",
+    "crates/format/src/reader/decode.rs",
     "crates/urna-engine/tests/mutation_fuzz.rs",
     "crates/urna-engine/src/mmap_file.rs",
     "fuzz/fuzz_targets/urna_view.rs",
@@ -428,7 +428,7 @@ path = "Cargo.toml"
 kind = "workspace-manifest"
 purpose = "Workspace members, edition, resolver, rust-version 1.85 (the MSRV of urna-format, urna-engine and urna-bridge; crates/urna-clitui pins its own 1.88), and shared dependencies"
 links = [
-    "crates/urna-format/Cargo.toml",
+    "crates/format/Cargo.toml",
     "crates/urna-engine/Cargo.toml",
     "crates/urna-clitui/Cargo.toml",
     "crates/urna-bridge/Cargo.toml",
@@ -501,41 +501,41 @@ links = [
 ]
 
 [[inventory.root]]
-path = "crates/urna-format/src/bytes.rs"
+path = "crates/format/src/bytes.rs"
 kind = "rust-source"
 purpose = "Typed little-endian field readers (le_u32, le_u64, le_f32, array32) returning UnexpectedEof: the replacement for every try_into().unwrap() on a parse path"
-links = ["crates/urna-format/src/error.rs"]
+links = ["crates/format/src/error.rs"]
 
 [[inventory.root]]
-path = "crates/urna-format/src/encoding/tests.rs"
+path = "crates/format/src/encoding/tests.rs"
 kind = "rust-test"
 purpose = "Unit tests for the encoding dispatch, carved out of encoding/mod.rs"
-links = ["crates/urna-format/src/encoding/mod.rs"]
+links = ["crates/format/src/encoding/mod.rs"]
 
 [[inventory.root]]
-path = "crates/urna-format/tests/mutation_fuzz.rs"
+path = "crates/format/tests/mutation_fuzz.rs"
 kind = "rust-test"
 purpose = "Deterministic mutation fuzz over the reader and every section decoder, four dtype/text-encoding fixtures with every optional section; URNA_MUTATION_ITERS scales it, URNA_FUZZ_SEED_DIR dumps the fixtures as cargo-fuzz seeds"
 links = [
-    "crates/urna-format/tests/common/mutation.rs",
-    "crates/urna-format/src/reader/parse.rs",
+    "crates/format/tests/common/mutation.rs",
+    "crates/format/src/reader/parse.rs",
 ]
 
 [[inventory.root]]
-path = "crates/urna-format/tests/common/mutation.rs"
+path = "crates/format/tests/common/mutation.rs"
 kind = "rust-test"
 purpose = "The mutation engine: seeded xorshift RNG, libfuzzer-style mutation step, and reseal (recompute header checksum, section checksums, footer hash) so corruption reaches the decoders; duplicated in urna-engine/tests/common"
 links = [
-    "crates/urna-format/src/layout/header.rs",
-    "crates/urna-format/src/layout/section_entry.rs",
-    "crates/urna-format/src/layout/footer.rs",
+    "crates/format/src/layout/header.rs",
+    "crates/format/src/layout/section_entry.rs",
+    "crates/format/src/layout/footer.rs",
 ]
 
 [[inventory.root]]
-path = "crates/urna-format/tests/negative_header_overflow.rs"
+path = "crates/format/tests/negative_header_overflow.rs"
 kind = "rust-test"
 purpose = "Regression: a header whose n * dim overflows is a typed rejection, never an arithmetic panic or a wrapped size match (first mutation-fuzz finding)"
-links = ["crates/urna-format/src/encoding/mod.rs"]
+links = ["crates/format/src/encoding/mod.rs"]
 
 [[inventory.root]]
 path = "crates/urna-engine/src/order.rs"
@@ -562,7 +562,7 @@ kind = "rust-test"
 purpose = "Regression: a NaN lane in a multimodal band is rejected at open (validate_slab_values) instead of reaching the sort (second mutation-fuzz finding)"
 links = [
     "crates/urna-engine/src/spaces.rs",
-    "crates/urna-format/src/reader/validate.rs",
+    "crates/format/src/reader/validate.rs",
 ]
 
 [[inventory.root]]
@@ -648,7 +648,7 @@ path = "crates"
 kind = "directory"
 purpose = "Workspace crate root"
 links = [
-    "crates/urna-format",
+    "crates/format",
     "crates/urna-engine",
     "crates/urna-clitui",
     "crates/urna-bridge",
@@ -711,77 +711,77 @@ links = [
 ]
 
 [[inventory.workspace]]
-path = "crates/urna-format"
+path = "crates/format"
 kind = "crate-dir"
 purpose = "Format crate"
-links = ["crates/urna-format/src/lib.rs"]
+links = ["crates/format/src/lib.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-format/examples"
+path = "crates/format/examples"
 kind = "directory"
 purpose = "Format maintenance examples"
-links = ["crates/urna-format/examples/regen_golden.rs"]
+links = ["crates/format/examples/regen_golden.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-format/src"
+path = "crates/format/src"
 kind = "directory"
 purpose = "Format source root"
 links = [
-    "crates/urna-format/src/lib.rs",
-    "crates/urna-format/src/writer",
-    "crates/urna-format/src/reader",
+    "crates/format/src/lib.rs",
+    "crates/format/src/writer",
+    "crates/format/src/reader",
 ]
 
 [[inventory.workspace]]
-path = "crates/urna-format/src/encoding"
+path = "crates/format/src/encoding"
 kind = "directory"
 purpose = "Wire encoding helpers"
-links = ["crates/urna-format/src/encoding/mod.rs"]
+links = ["crates/format/src/encoding/mod.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-format/src/layout"
+path = "crates/format/src/layout"
 kind = "directory"
 purpose = "On-disk structs and constants"
-links = ["crates/urna-format/src/layout/mod.rs"]
+links = ["crates/format/src/layout/mod.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-format/src/manifest"
+path = "crates/format/src/manifest"
 kind = "directory"
 purpose = "Manifest schema and validation"
-links = ["crates/urna-format/src/manifest/mod.rs"]
+links = ["crates/format/src/manifest/mod.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-format/src/reader"
+path = "crates/format/src/reader"
 kind = "directory"
 purpose = "Zero-copy reader and validator"
-links = ["crates/urna-format/src/reader/mod.rs"]
+links = ["crates/format/src/reader/mod.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-format/src/sections"
+path = "crates/format/src/sections"
 kind = "directory"
 purpose = "Section codecs for canonical payloads"
-links = ["crates/urna-format/src/sections/mod.rs"]
+links = ["crates/format/src/sections/mod.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-format/src/writer"
+path = "crates/format/src/writer"
 kind = "directory"
 purpose = "Deterministic builder internals"
-links = ["crates/urna-format/src/writer/mod.rs"]
+links = ["crates/format/src/writer/mod.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-format/tests"
+path = "crates/format/tests"
 kind = "directory"
 purpose = "Format regression tests"
 links = [
-    "crates/urna-format/tests/golden.rs",
-    "crates/urna-format/tests/roundtrip.rs",
+    "crates/format/tests/golden.rs",
+    "crates/format/tests/roundtrip.rs",
 ]
 
 [[inventory.workspace]]
-path = "crates/urna-format/tests/fixtures"
+path = "crates/format/tests/fixtures"
 kind = "directory"
 purpose = "Golden fixture storage"
-links = ["crates/urna-format/tests/golden.rs"]
+links = ["crates/format/tests/golden.rs"]
 
 [[inventory.workspace]]
 path = "crates/urna-bridge"
@@ -1003,7 +1003,7 @@ kind = "rust-source"
 purpose = "The agent-shaped `retrieve` verb: JSON/JSONL answer-pack of cited spans where score IS the exact rerank value + tier-1 stored canonical text + verifying hashes + citation_id + rerank_source; owns canonical_texts() shared with ask"
 links = [
     "crates/urna-clitui/src/cmd/util.rs",
-    "crates/urna-format/src/sections/canonical.rs",
+    "crates/format/src/sections/canonical.rs",
 ]
 
 [[inventory.urna_clitui]]
@@ -1020,8 +1020,8 @@ path = "crates/urna-clitui/src/cmd/cite.rs"
 kind = "rust-source"
 purpose = "Resolve citation ids into text and spans"
 links = [
-    "crates/urna-format/src/reader/mod.rs",
-    "crates/urna-format/src/sections/chunk_ids.rs",
+    "crates/format/src/reader/mod.rs",
+    "crates/format/src/sections/chunk_ids.rs",
 ]
 
 [[inventory.urna_clitui]]
@@ -1069,7 +1069,7 @@ path = "crates/urna-clitui/src/cmd/stats.rs"
 kind = "rust-source"
 purpose = "stats command for size, dim (plus mrl_dim/full_dim when matryoshka-truncated), dtype, sections, hashes, and SIMD backend"
 links = [
-    "crates/urna-format/src/reader/mod.rs",
+    "crates/format/src/reader/mod.rs",
     "crates/urna-engine/src/simd/mod.rs",
 ]
 
@@ -1092,7 +1092,7 @@ links = ["crates/urna-engine/src/lib.rs"]
 path = "crates/urna-clitui/src/cmd/validate.rs"
 kind = "rust-source"
 purpose = "Full integrity validation command"
-links = ["crates/urna-format/src/reader/mod.rs"]
+links = ["crates/format/src/reader/mod.rs"]
 
 [[inventory.urna_clitui]]
 path = "crates/urna-clitui/src/cmd/doctor.rs"
@@ -1146,37 +1146,37 @@ purpose = "Integration coverage for the compiled CLI, incl the flagship verbs (a
 links = ["crates/urna-clitui/src/main.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/Cargo.toml"
+path = "crates/format/Cargo.toml"
 kind = "rust-manifest"
 purpose = "Format crate manifest"
 links = ["Cargo.toml"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/LICENSE"
+path = "crates/format/LICENSE"
 kind = "symlink"
 purpose = "Link to the root LICENSE; cargo package copies its content, so the published crate carries the MIT text"
 links = ["LICENSE"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/examples/regen_golden.rs"
+path = "crates/format/examples/regen_golden.rs"
 kind = "rust-example"
 purpose = "Regenerate the byte-frozen golden fixture"
-links = ["crates/urna-format/tests/golden.rs"]
+links = ["crates/format/tests/golden.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/chunk.rs"
+path = "crates/format/src/chunk.rs"
 kind = "rust-source"
 purpose = "ChunkInput, chunk_id, and per-chunk validation"
-links = ["crates/urna-format/src/error.rs"]
+links = ["crates/format/src/error.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/encoding/float16.rs"
+path = "crates/format/src/encoding/float16.rs"
 kind = "rust-source"
 purpose = "float16 encode and decode helpers"
-links = ["crates/urna-format/src/encoding/mod.rs"]
+links = ["crates/format/src/encoding/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/encoding/int4.rs"
+path = "crates/format/src/encoding/int4.rs"
 kind = "rust-source"
 purpose = "int4 block-64 codec (encoding id 7): per-64-dim-group f16 absmax scales + packed 4-bit signed codes; the first sub-int8 size lever (~1.9x over int8, ~7.5x over f32), stored-precision, scored straight off mmap by the fused dequant+dot kernel, never zstd/dedup/shuffle"
 links = [
@@ -1185,514 +1185,514 @@ links = [
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/encoding/int8.rs"
+path = "crates/format/src/encoding/int8.rs"
 kind = "rust-source"
 purpose = "int8 quantization and parsed embedding views"
 links = ["crates/urna-engine/src/search.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/encoding/intpack.rs"
+path = "crates/format/src/encoding/intpack.rs"
 kind = "rust-source"
 purpose = "Shared integer bitpacking primitive (encoding id 4): per-128-block frame-of-reference, O(1) IntpackReader::get, never panics on truncated input; reused by HNSW/BM25 codecs, the chunk_ids/spans repackers, and the txt_streams offset table"
 links = [
-    "crates/urna-format/src/sections/mod.rs",
-    "crates/urna-format/src/encoding/txt_streams.rs",
+    "crates/format/src/sections/mod.rs",
+    "crates/format/src/encoding/txt_streams.rs",
     "crates/urna-engine/src/ann/codec/mod.rs",
     "crates/urna-engine/src/bm25/codec.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/encoding/txt_streams.rs"
+path = "crates/format/src/encoding/txt_streams.rs"
 kind = "rust-source"
 purpose = "Per-chunk independent canonical-text streams (encoding id 10): re-layouts the chunks_canonical (0x02) compressed form into N independent zstd streams + an intpack offset table (O(1) single-chunk seek via TxtStreams). Decode rebuilds the raw chunks_canonical payload BYTE-IDENTICALLY so content_hash and citations are unchanged; typed errors (never panics). Owns the shared container helpers (write_container/build_canonical/malformed) reused by the dict(V2)/fsst(V3) variants. The named prerequisite layout for the dict(5)/fsst(9) text levers and the O(1) single-chunk reopen"
 links = [
-    "crates/urna-format/src/encoding/intpack.rs",
-    "crates/urna-format/src/encoding/zstd_codec.rs",
-    "crates/urna-format/src/sections/canonical.rs",
+    "crates/format/src/encoding/intpack.rs",
+    "crates/format/src/encoding/zstd_codec.rs",
+    "crates/format/src/sections/canonical.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/encoding/zstd_dict.rs"
+path = "crates/format/src/encoding/zstd_dict.rs"
 kind = "rust-source"
 purpose = "Trained-dictionary zstd over per-chunk canonical streams (encoding id 5, TXT_STREAMS_V2): train_dict trains ONE deterministic shared dict (zstd from_continuous over SORTED unique texts, pinned zstd, cap proportionate to corpus up to ~112 KiB); encode/decode re-frame each per-chunk stream against it via EncoderDictionary/DecoderDictionary, reusing the txt_streams offset table. Dict blob lives in SECTION_DICTIONARY (0x0A, content_hash-excluded); decodes BYTE-IDENTICALLY to raw, typed errors (never panics)"
 links = [
-    "crates/urna-format/src/encoding/txt_streams.rs",
-    "crates/urna-format/src/writer/text_codec.rs",
-    "crates/urna-format/src/reader/decode.rs",
+    "crates/format/src/encoding/txt_streams.rs",
+    "crates/format/src/writer/text_codec.rs",
+    "crates/format/src/reader/decode.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/encoding/fsst.rs"
+path = "crates/format/src/encoding/fsst.rs"
 kind = "rust-source"
 purpose = "Clean-room fsst text codec (encoding id 9, TXT_STREAMS_V3): a deterministic 255-entry static symbol table (1-8 byte substrings to 1-byte codes, 0xFF escape) built from a frequency pass and embedded in the payload (self-contained, no external section). Per-chunk frames keep O(1) single-string decode; best for short streams. Decodes BYTE-IDENTICALLY to raw, typed errors (never panics)"
 links = [
-    "crates/urna-format/src/encoding/txt_streams.rs",
-    "crates/urna-format/src/writer/text_codec.rs",
+    "crates/format/src/encoding/txt_streams.rs",
+    "crates/format/src/writer/text_codec.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/encoding/dedup.rs"
+path = "crates/format/src/encoding/dedup.rs"
 kind = "rust-source"
 purpose = "Content-hash dedup of canonical texts BEFORE zstd (the Nix/IPFS order rule): a build-time first-seen pass on DECOMPRESSED texts producing a unique pool + a u32 back-reference array (intpack) stored in SECTION_DEDUP_MAP (0x0B, content_hash-excluded). expand re-expands through the back-refs to the exact original ordered bytes before content_hash; typed errors (never panics)"
 links = [
-    "crates/urna-format/src/encoding/intpack.rs",
-    "crates/urna-format/src/writer/text_codec.rs",
-    "crates/urna-format/src/reader/decode.rs",
+    "crates/format/src/encoding/intpack.rs",
+    "crates/format/src/writer/text_codec.rs",
+    "crates/format/src/reader/decode.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/encoding/mod.rs"
+path = "crates/format/src/encoding/mod.rs"
 kind = "rust-source"
 purpose = "Context-free wire-codec registry (decode_payload dispatch, incl intpack id 4, txt_streams id 10, fsst id 9 -> content_hash-preserving repacks, int4 id 7 -> borrowed-as-canonical embeddings) + decode_payload_with_dict for the dict variant (id 5, needs section 0x0A) + cost-driven encode_smallest encoder + encoding exports (dict/fsst/dedup) + expected_embeddings_size (incl int4)"
 links = [
-    "crates/urna-format/src/encoding/float16.rs",
-    "crates/urna-format/src/encoding/int8.rs",
-    "crates/urna-format/src/encoding/int4.rs",
-    "crates/urna-format/src/encoding/intpack.rs",
-    "crates/urna-format/src/encoding/txt_streams.rs",
-    "crates/urna-format/src/encoding/zstd_dict.rs",
-    "crates/urna-format/src/encoding/fsst.rs",
-    "crates/urna-format/src/encoding/dedup.rs",
-    "crates/urna-format/src/encoding/zstd_codec.rs",
+    "crates/format/src/encoding/float16.rs",
+    "crates/format/src/encoding/int8.rs",
+    "crates/format/src/encoding/int4.rs",
+    "crates/format/src/encoding/intpack.rs",
+    "crates/format/src/encoding/txt_streams.rs",
+    "crates/format/src/encoding/zstd_dict.rs",
+    "crates/format/src/encoding/fsst.rs",
+    "crates/format/src/encoding/dedup.rs",
+    "crates/format/src/encoding/zstd_codec.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/encoding/zstd_codec.rs"
+path = "crates/format/src/encoding/zstd_codec.rs"
 kind = "rust-source"
 purpose = "zstd compression helpers for non-embedding text sections"
-links = ["crates/urna-format/src/reader/decode.rs"]
+links = ["crates/format/src/reader/decode.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/error.rs"
+path = "crates/format/src/error.rs"
 kind = "rust-source"
 purpose = "Typed format and validation errors"
 links = []
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/layout/footer.rs"
+path = "crates/format/src/layout/footer.rs"
 kind = "rust-source"
 purpose = "Footer struct and file-hash trailer"
-links = ["crates/urna-format/src/layout/mod.rs"]
+links = ["crates/format/src/layout/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/layout/header.rs"
+path = "crates/format/src/layout/header.rs"
 kind = "rust-source"
 purpose = "Header struct and checksum layout"
-links = ["crates/urna-format/src/layout/mod.rs"]
+links = ["crates/format/src/layout/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/layout/mod.rs"
+path = "crates/format/src/layout/mod.rs"
 kind = "rust-source"
 purpose = "Format constants, section ids (incl the now-emitted dictionary 0x0A + dedup_map 0x0B aux sections, the active graph_adjacency 0x0C, the ACTIVE blob_refs 0x14 / space_table 0x15 / blob_span_overlay 0x16 / blob_data 0x17 in OPTIONAL_SECTIONS, the ACTIVE per-space embedding band 0x20-0x2F, the still-reserved 0x11-0x13 and 0x30-0x3F ANN band), wire encoding ids (4-10: intpack/zstd_dict/frontcode/int4/rabitq/fsst/txt_streams; 5/9/10 implemented, 6/8 reserved), and layout re-exports. CANONICAL_SECTIONS (content_hash) stays the canonical six, so 0x0C/0x14/0x15/0x16/band never move a citation. Unit tests carved out to layout/tests.rs"
 links = [
-    "crates/urna-format/src/layout/header.rs",
-    "crates/urna-format/src/layout/footer.rs",
-    "crates/urna-format/src/layout/section_entry.rs",
-    "crates/urna-format/src/layout/tests.rs",
+    "crates/format/src/layout/header.rs",
+    "crates/format/src/layout/footer.rs",
+    "crates/format/src/layout/section_entry.rs",
+    "crates/format/src/layout/tests.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/layout/tests.rs"
+path = "crates/format/src/layout/tests.rs"
 kind = "rust-source"
 purpose = "Layout unit tests carved out of mod.rs: id disjointness, band math (space id -> 0x20+slot section id), and reserved-band guards"
-links = ["crates/urna-format/src/layout/mod.rs"]
+links = ["crates/format/src/layout/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/layout/section_entry.rs"
+path = "crates/format/src/layout/section_entry.rs"
 kind = "rust-source"
 purpose = "Section-table entry layout and section naming"
-links = ["crates/urna-format/src/layout/mod.rs"]
+links = ["crates/format/src/layout/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/lib.rs"
+path = "crates/format/src/lib.rs"
 kind = "rust-source"
 purpose = "Public format API surface"
 links = [
-    "crates/urna-format/src/reader/mod.rs",
-    "crates/urna-format/src/writer/mod.rs",
+    "crates/format/src/reader/mod.rs",
+    "crates/format/src/writer/mod.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/manifest/canonical.rs"
+path = "crates/format/src/manifest/canonical.rs"
 kind = "rust-source"
 purpose = "Canonical JSON serialization for deterministic manifest bytes"
-links = ["crates/urna-format/src/manifest/mod.rs"]
+links = ["crates/format/src/manifest/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/manifest/mod.rs"
+path = "crates/format/src/manifest/mod.rs"
 kind = "rust-source"
 purpose = "Manifest data model, Capabilities + additive CapabilitiesExt (graph_present is now set by the graph_adjacency builder method, the first live ext flag), the additive matryoshka disclosure pair (mrl_dim/full_dim, Option<u32>, omitted when unset), and the new-fields-are-Option-only additivity rule"
-links = ["crates/urna-format/src/manifest/validate.rs"]
+links = ["crates/format/src/manifest/validate.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/manifest/validate.rs"
+path = "crates/format/src/manifest/validate.rs"
 kind = "rust-source"
 purpose = "Manifest schema and invariant checks, incl matryoshka consistency (0 < mrl_dim == embedding_dim <= full_dim, both-or-neither, int4 needs mrl_dim %64==0)"
-links = ["crates/urna-format/src/error.rs"]
+links = ["crates/format/src/error.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/reader/decode.rs"
+path = "crates/format/src/reader/decode.rs"
 kind = "rust-source"
 purpose = "Decoded section access by encoding; file_hash (whole file) and content_hash (decoded canonical six, excluding the manifest so additive manifest fields never move a citation). Special-cases chunks_canonical: threads the dict (0x0A) for dict-framed payloads and re-expands the dedup map (0x0B) BEFORE content_hash so decoded bytes are byte-identical to a plain build"
-links = ["crates/urna-format/src/encoding/mod.rs"]
+links = ["crates/format/src/encoding/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/reader/mod.rs"
+path = "crates/format/src/reader/mod.rs"
 kind = "rust-source"
 purpose = "UrnaView zero-copy reader surface"
 links = [
-    "crates/urna-format/src/reader/parse.rs",
-    "crates/urna-format/src/reader/validate.rs",
+    "crates/format/src/reader/parse.rs",
+    "crates/format/src/reader/validate.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/reader/parse.rs"
+path = "crates/format/src/reader/parse.rs"
 kind = "rust-source"
 purpose = "Header, footer, and section-table parsing"
-links = ["crates/urna-format/src/layout/mod.rs"]
+links = ["crates/format/src/layout/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/reader/validate.rs"
+path = "crates/format/src/reader/validate.rs"
 kind = "rust-source"
 purpose = "Checksums, bounds, required sections, and embedding validation, including the rule that embeddings cannot use zstd; non-embedding sections accept raw, zstd, intpack, txt_streams, zstd_dict, or fsst"
 links = [
-    "crates/urna-format/src/error.rs",
-    "crates/urna-format/src/manifest/validate.rs",
+    "crates/format/src/error.rs",
+    "crates/format/src/manifest/validate.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/sections/blob/mod.rs"
+path = "crates/format/src/sections/blob/mod.rs"
 kind = "rust-source"
 purpose = "Blob codec surface: shared media payload framing and exports for the media pillar; all optional, content_hash-excluded, never on the embedding hot path"
 links = [
-    "crates/urna-format/src/sections/blob/refs.rs",
-    "crates/urna-format/src/sections/blob/span_overlay.rs",
+    "crates/format/src/sections/blob/refs.rs",
+    "crates/format/src/sections/blob/span_overlay.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/sections/blob/refs.rs"
+path = "crates/format/src/sections/blob/refs.rs"
 kind = "rust-source"
 purpose = "blob_refs codec for SECTION_BLOB_REFS (0x14, payload version 1): content-addressed media directory (codec id, container bytes, per-blob digest) referenced by chunk-level spans; canonical sort = byte-identical builds; typed errors, never panics; excluded from content_hash"
 links = [
-    "crates/urna-format/src/sections/blob/mod.rs",
+    "crates/format/src/sections/blob/mod.rs",
     "crates/urna-engine/src/blobs.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/sections/blob/span_overlay.rs"
+path = "crates/format/src/sections/blob/span_overlay.rs"
 kind = "rust-source"
 purpose = "blob_span_overlay codec for SECTION_BLOB_SPAN_OVERLAY (0x16, payload version 1): chunk_id -> (blob_idx, byte span) so a text chunk carries the exact media span it was embedded from; canonical sort, decodes byte-identically, excluded from content_hash"
 links = [
-    "crates/urna-format/src/sections/blob/mod.rs",
+    "crates/format/src/sections/blob/mod.rs",
     "crates/urna-engine/src/blobs.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/sections/canonical.rs"
+path = "crates/format/src/sections/canonical.rs"
 kind = "rust-source"
 purpose = "chunks_canonical raw encode/decode (length-prefixed UTF-8); the byte-identical target the txt_streams repack rebuilds, plus canonical decoded payload handling for content_hash"
 links = [
-    "crates/urna-format/src/sections/mod.rs",
-    "crates/urna-format/src/encoding/txt_streams.rs",
+    "crates/format/src/sections/mod.rs",
+    "crates/format/src/encoding/txt_streams.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/sections/chunk_ids.rs"
+path = "crates/format/src/sections/chunk_ids.rs"
 kind = "rust-source"
 purpose = "Chunk id section codec; raw ASCII plus an intpack repack (32 raw digest bytes) that decodes byte-identically so content_hash is unchanged"
-links = ["crates/urna-format/src/chunk.rs"]
+links = ["crates/format/src/chunk.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/sections/codec.rs"
+path = "crates/format/src/sections/codec.rs"
 kind = "rust-source"
 purpose = "Shared section payload framing helpers"
-links = ["crates/urna-format/src/sections/mod.rs"]
+links = ["crates/format/src/sections/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/sections/contract.rs"
+path = "crates/format/src/sections/contract.rs"
 kind = "rust-source"
 purpose = "Search contract codec and cross-check helpers"
-links = ["crates/urna-format/src/manifest/mod.rs"]
+links = ["crates/format/src/manifest/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/sections/graph/mod.rs"
+path = "crates/format/src/sections/graph/mod.rs"
 kind = "rust-source"
 purpose = "Graph section codec surface (G1 ships adjacency; G2 adds the entity/property-graph sections); all optional, excluded from content_hash, never on the embedding hot path"
-links = ["crates/urna-format/src/sections/graph/adjacency.rs"]
+links = ["crates/format/src/sections/graph/adjacency.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/sections/graph/adjacency.rs"
+path = "crates/format/src/sections/graph/adjacency.rs"
 kind = "rust-source"
 purpose = "Chunk-to-chunk CSR adjacency codec for SECTION_GRAPH_ADJACENCY (0x0C, GRAPH_ADJACENCY_PAYLOAD_VERSION=1): intpack offsets + delta-gapped (per src,edge_type run) neighbor ids + falkordb-iso edge-type column in a raw self-describing payload; canonical (src,edge_type,dst) sort = byte-identical builds; typed errors, never panics; excluded from content_hash"
 links = [
-    "crates/urna-format/src/encoding/intpack.rs",
+    "crates/format/src/encoding/intpack.rs",
     "crates/urna-engine/src/graph/csr.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/sections/mod.rs"
+path = "crates/format/src/sections/mod.rs"
 kind = "rust-source"
 purpose = "Section exports, common types, intpack repack-kind constants, the decode_intpack_repack dispatch, and the decode_txt_streams dispatch (parallel) for the chunks_canonical per-chunk-streams repack"
 links = [
-    "crates/urna-format/src/sections/chunk_ids.rs",
-    "crates/urna-format/src/sections/spans.rs",
-    "crates/urna-format/src/sections/canonical.rs",
-    "crates/urna-format/src/encoding/txt_streams.rs",
+    "crates/format/src/sections/chunk_ids.rs",
+    "crates/format/src/sections/spans.rs",
+    "crates/format/src/sections/canonical.rs",
+    "crates/format/src/encoding/txt_streams.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/sections/provenance.rs"
+path = "crates/format/src/sections/provenance.rs"
 kind = "rust-source"
 purpose = "Provenance section codec"
-links = ["crates/urna-format/src/sections/codec.rs"]
+links = ["crates/format/src/sections/codec.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/sections/space_table.rs"
+path = "crates/format/src/sections/space_table.rs"
 kind = "rust-source"
 purpose = "space_table codec for SECTION_SPACE_TABLE (0x15, payload version 1): the named-space registry (name, embedding_dim, dtype, per-space model_hash) gating multimodal corpora; a space's slab lives at the derived 0x20-0x2F band id so each space keeps its own model_hash gate; typed errors, never panics; excluded from content_hash"
 links = [
-    "crates/urna-format/src/sections/mod.rs",
+    "crates/format/src/sections/mod.rs",
     "crates/urna-engine/src/spaces.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/sections/spans.rs"
+path = "crates/format/src/sections/spans.rs"
 kind = "rust-source"
 purpose = "Source span section codec; raw plus an intpack repack (deduped URI pool + bitpacked offsets) that decodes byte-identically so content_hash is unchanged"
 links = [
-    "crates/urna-format/src/sections/codec.rs",
-    "crates/urna-format/src/encoding/intpack.rs",
+    "crates/format/src/sections/codec.rs",
+    "crates/format/src/encoding/intpack.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/writer/build.rs"
+path = "crates/format/src/writer/build.rs"
 kind = "rust-source"
 purpose = "Final byte assembly and deterministic file layout, keeping embeddings out of zstd so the runtime can mmap them directly; under a compressed (zstd-text) preset it repacks chunk_ids/spans with intpack and delegates chunks_canonical to writer/text_codec.rs (raw-text presets and the golden stay byte-identical)"
 links = [
-    "crates/urna-format/src/writer/payload.rs",
-    "crates/urna-format/src/writer/text_codec.rs",
+    "crates/format/src/writer/payload.rs",
+    "crates/format/src/writer/text_codec.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/writer/text_codec.rs"
+path = "crates/format/src/writer/text_codec.rs"
 kind = "rust-source"
 purpose = "The chunks_canonical text-codec chooser (compressed presets only): takes the SMALLEST of single-frame zstd, txt_streams cold, txt_streams+trained-dict (emits 0x0A), txt_streams+fsst, and dedup+zstd (emits 0x0B). Single-frame zstd is always in the race so the build never regresses, and every candidate decodes BYTE-IDENTICALLY to raw so content_hash is unchanged"
 links = [
-    "crates/urna-format/src/encoding/zstd_dict.rs",
-    "crates/urna-format/src/encoding/fsst.rs",
-    "crates/urna-format/src/encoding/dedup.rs",
-    "crates/urna-format/src/encoding/txt_streams.rs",
+    "crates/format/src/encoding/zstd_dict.rs",
+    "crates/format/src/encoding/fsst.rs",
+    "crates/format/src/encoding/dedup.rs",
+    "crates/format/src/encoding/txt_streams.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/writer/encoding_choice.rs"
+path = "crates/format/src/writer/encoding_choice.rs"
 kind = "rust-source"
 purpose = "Encoding enums and reproducible timestamp constant"
-links = ["crates/urna-format/src/writer/mod.rs"]
+links = ["crates/format/src/writer/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/writer/mod.rs"
+path = "crates/format/src/writer/mod.rs"
 kind = "rust-source"
 purpose = "UrnaFileBuilder surface and manifest mutation rules (incl the graph_adjacency(payload) builder method that sets capabilities_ext.graph_present)"
-links = ["crates/urna-format/src/writer/build.rs"]
+links = ["crates/format/src/writer/build.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/writer/payload.rs"
+path = "crates/format/src/writer/payload.rs"
 kind = "rust-source"
 purpose = "Section payload generation and alignment, with zstd only for non-embedding payloads"
-links = ["crates/urna-format/src/sections/mod.rs"]
+links = ["crates/format/src/sections/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/src/writer/tests.rs"
+path = "crates/format/src/writer/tests.rs"
 kind = "rust-test"
 purpose = "Writer unit coverage"
-links = ["crates/urna-format/src/writer/mod.rs"]
+links = ["crates/format/src/writer/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/dual_integrity.rs"
+path = "crates/format/tests/dual_integrity.rs"
 kind = "rust-test"
 purpose = "Physical hash and logical content_hash integrity tests"
-links = ["crates/urna-format/src/reader/mod.rs"]
+links = ["crates/format/src/reader/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/golden.rs"
+path = "crates/format/tests/golden.rs"
 kind = "rust-test"
 purpose = "Byte-frozen minimal fixture checks"
-links = ["crates/urna-format/examples/regen_golden.rs"]
+links = ["crates/format/examples/regen_golden.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/int4_roundtrip.rs"
+path = "crates/format/tests/int4_roundtrip.rs"
 kind = "rust-test"
 purpose = "int4 codec round-trip + unit coverage (pack/unpack, quantize clamping, the section view, decode_payload borrow, typed malformed-payload rejection); relocated out of src so the codec file holds the codec alone"
-links = ["crates/urna-format/src/encoding/int4.rs"]
+links = ["crates/format/src/encoding/int4.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/int8_roundtrip.rs"
+path = "crates/format/tests/int8_roundtrip.rs"
 kind = "rust-test"
 purpose = "int8 codec positive round-trip coverage relocated out of encoding/mod.rs so the wire-codec registry holds the registry alone"
-links = ["crates/urna-format/src/encoding/int8.rs"]
+links = ["crates/format/src/encoding/int8.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/codec_roundtrip_prop.rs"
+path = "crates/format/tests/codec_roundtrip_prop.rs"
 kind = "rust-test"
 purpose = "proptest properties for every section codec: decode(encode(x)) is the raw payload byte for byte (intpack, txt_streams, fsst, zstd_dict, dedup), float16/int8/int4 reconstruct within their quantization step and size exactly, every encoder is byte-stable across two calls"
-links = ["crates/urna-format/src/encoding/mod.rs"]
+links = ["crates/format/src/encoding/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/negative_int4.rs"
+path = "crates/format/tests/negative_int4.rs"
 kind = "rust-test"
 purpose = "Rejects malformed int4 files: bad version/scale_kind, NaN/Inf group scales, truncation, and dim-not-multiple-of-64 at the section level"
-links = ["crates/urna-format/src/encoding/int4.rs"]
+links = ["crates/format/src/encoding/int4.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/negative_fp16.rs"
+path = "crates/format/tests/negative_fp16.rs"
 kind = "rust-test"
 purpose = "Invalid float16 rejection coverage"
-links = ["crates/urna-format/src/encoding/float16.rs"]
+links = ["crates/format/src/encoding/float16.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/negative_int8.rs"
+path = "crates/format/tests/negative_int8.rs"
 kind = "rust-test"
 purpose = "Invalid int8 rejection coverage"
-links = ["crates/urna-format/src/encoding/int8.rs"]
+links = ["crates/format/src/encoding/int8.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/negative_zstd.rs"
+path = "crates/format/tests/negative_zstd.rs"
 kind = "rust-test"
 purpose = "Illegal zstd use rejection coverage"
-links = ["crates/urna-format/src/encoding/zstd_codec.rs"]
+links = ["crates/format/src/encoding/zstd_codec.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/txt_streams_roundtrip.rs"
+path = "crates/format/tests/txt_streams_roundtrip.rs"
 kind = "rust-test"
 purpose = "txt_streams (id 10) positive coverage: encode -> decode_payload and sections-level decode_txt_streams rebuild bytes BYTE-IDENTICAL to encode_chunks_canonical (the content_hash invariant) over empty/single/many/multibyte-utf8 corpora, plus O(1) offset-table seek and deterministic re-encode"
-links = ["crates/urna-format/src/encoding/txt_streams.rs"]
+links = ["crates/format/src/encoding/txt_streams.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/negative_txt_streams.rs"
+path = "crates/format/tests/negative_txt_streams.rs"
 kind = "rust-test"
 purpose = "Rejects malformed txt_streams payloads (empty, bad kind byte, truncated count/offset-table/stream, oversized claimed count, corrupted zstd) with a typed UrnaError, NEVER a panic; exhaustive prefix-truncation fuzz"
-links = ["crates/urna-format/src/encoding/txt_streams.rs"]
+links = ["crates/format/src/encoding/txt_streams.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/zstd_dict_roundtrip.rs"
+path = "crates/format/tests/zstd_dict_roundtrip.rs"
 kind = "rust-test"
 purpose = "zstd_dict (id 5) positive coverage: train a deterministic dict over sorted samples, encode -> decode byte-identical to raw, same sorted samples give a byte-identical dict, wrong-dict decode errors cleanly, train declines on a tiny corpus"
-links = ["crates/urna-format/src/encoding/zstd_dict.rs"]
+links = ["crates/format/src/encoding/zstd_dict.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/negative_zstd_dict.rs"
+path = "crates/format/tests/negative_zstd_dict.rs"
 kind = "rust-test"
 purpose = "Rejects a truncated dict-framed payload, a missing dict (decode_payload_with_dict None), an oversized/garbage dict, and a bad kind byte with a typed UrnaError, NEVER a panic; exhaustive prefix-truncation fuzz"
-links = ["crates/urna-format/src/encoding/zstd_dict.rs"]
+links = ["crates/format/src/encoding/zstd_dict.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/fsst_roundtrip.rs"
+path = "crates/format/tests/fsst_roundtrip.rs"
 kind = "rust-test"
 purpose = "fsst (id 9) positive coverage: deterministic table build, byte-identical decode over empty/single/many/multibyte-utf8 pt-BR + the escape path, two builds identical"
-links = ["crates/urna-format/src/encoding/fsst.rs"]
+links = ["crates/format/src/encoding/fsst.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/negative_fsst.rs"
+path = "crates/format/tests/negative_fsst.rs"
 kind = "rust-test"
 purpose = "Rejects a bad kind byte, truncated codes, a corrupted table region with a typed UrnaError, NEVER a panic; exhaustive prefix-truncation fuzz"
-links = ["crates/urna-format/src/encoding/fsst.rs"]
+links = ["crates/format/src/encoding/fsst.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/dedup_roundtrip.rs"
+path = "crates/format/tests/dedup_roundtrip.rs"
 kind = "rust-test"
 purpose = "Dedup codec coverage: first-seen pass + map round-trip + expand rebuild byte-identical over all-unique/all-duplicate/mixed/empty/multibyte corpora; a repeated corpus collapses to one unique entry"
-links = ["crates/urna-format/src/encoding/dedup.rs"]
+links = ["crates/format/src/encoding/dedup.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/dedup_order_invariant.rs"
+path = "crates/format/tests/dedup_order_invariant.rs"
 kind = "rust-test"
 purpose = "The Nix order guardrail: dedup-before-zstd beats zstd-alone on a far-apart-repeats corpus (beyond a single zstd window), and dedup keys on the decompressed text"
-links = ["crates/urna-format/src/encoding/dedup.rs"]
+links = ["crates/format/src/encoding/dedup.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/content_hash_dict_fsst_dedup.rs"
+path = "crates/format/tests/content_hash_dict_fsst_dedup.rs"
 kind = "rust-test"
 purpose = "A deduped file shares content_hash with its raw twin (citations stable), and the dict/fsst/dedup codecs each preserve the content_hash preimage (decode byte-identical to raw chunks_canonical)"
 links = [
-    "crates/urna-format/src/writer/text_codec.rs",
-    "crates/urna-format/src/reader/decode.rs",
+    "crates/format/src/writer/text_codec.rs",
+    "crates/format/src/reader/decode.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/reserved_ids.rs"
+path = "crates/format/tests/reserved_ids.rs"
 kind = "rust-test"
 purpose = "Additive section-id bands are disjoint, excluded from content_hash, and only shipped features resolve via section_name: graph_adjacency 0x0C, blob_refs 0x14, space_table 0x15, blob_span_overlay 0x16, and the 0x20-0x2F space band resolve; 0x11-0x13 and 0x30-0x3F stay reserved"
-links = ["crates/urna-format/src/layout/mod.rs"]
+links = ["crates/format/src/layout/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/blob_refs_roundtrip.rs"
+path = "crates/format/tests/blob_refs_roundtrip.rs"
 kind = "rust-test"
 purpose = "blob_refs (0x14) + blob_span_overlay (0x16) positive coverage: round-trip over empty/single/many corpora, byte-identical re-encode, content_hash equal WITH vs WITHOUT the media sections (citations stable)"
 links = [
-    "crates/urna-format/src/sections/blob/refs.rs",
-    "crates/urna-format/src/sections/blob/span_overlay.rs",
+    "crates/format/src/sections/blob/refs.rs",
+    "crates/format/src/sections/blob/span_overlay.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/negative_blob_refs.rs"
+path = "crates/format/tests/negative_blob_refs.rs"
 kind = "rust-test"
 purpose = "Rejects malformed blob_refs/span_overlay payloads (bad version, truncated header/directory, out-of-range blob index, unsorted spans, tampered digests) with a typed UrnaError, NEVER a panic; exhaustive prefix-truncation fuzz"
-links = ["crates/urna-format/src/sections/blob/refs.rs"]
+links = ["crates/format/src/sections/blob/refs.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/space_table_roundtrip.rs"
+path = "crates/format/tests/space_table_roundtrip.rs"
 kind = "rust-test"
 purpose = "space_table (0x15) + 0x20-0x2F band positive coverage: registry round-trip, per-space slab decode at the derived band id, byte-identical re-encode, content_hash equal WITH vs WITHOUT the space sections"
-links = ["crates/urna-format/src/sections/space_table.rs"]
+links = ["crates/format/src/sections/space_table.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/negative_space_table.rs"
+path = "crates/format/tests/negative_space_table.rs"
 kind = "rust-test"
 purpose = "Rejects malformed space_table payloads (bad version, duplicate names, dim/dtype mismatch vs the band slab, truncated registry, unknown space id) with a typed UrnaError, NEVER a panic; exhaustive prefix-truncation fuzz"
-links = ["crates/urna-format/src/sections/space_table.rs"]
+links = ["crates/format/src/sections/space_table.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/graph_adjacency_roundtrip.rs"
+path = "crates/format/tests/graph_adjacency_roundtrip.rs"
 kind = "rust-test"
 purpose = "graph_adjacency (0x0C) positive coverage: decode(encode)==canonical edges over empty/single/many/iso/mixed corpora, byte-identical re-encode, contiguous neighbor slice, and content_hash equal WITH vs WITHOUT the 0x0C section (citations stable)"
-links = ["crates/urna-format/src/sections/graph/adjacency.rs"]
+links = ["crates/format/src/sections/graph/adjacency.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/negative_graph_adjacency.rs"
+path = "crates/format/tests/negative_graph_adjacency.rs"
 kind = "rust-test"
 purpose = "Rejects malformed graph_adjacency payloads (bad version, oversized n_nodes, truncated header/columns, dropped tail, tampered offsets/degree) with a typed UrnaError, NEVER a panic; exhaustive prefix-truncation fuzz"
-links = ["crates/urna-format/src/sections/graph/adjacency.rs"]
+links = ["crates/format/src/sections/graph/adjacency.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/manifest_additivity.rs"
+path = "crates/format/tests/manifest_additivity.rs"
 kind = "rust-test"
 purpose = "Manifest additivity guard: unset optional fields omitted (byte-identical), byte-identical round-trip, unknown future fields survive via extra, capabilities_ext additive"
-links = ["crates/urna-format/src/manifest/mod.rs"]
+links = ["crates/format/src/manifest/mod.rs"]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/roundtrip.rs"
+path = "crates/format/tests/roundtrip.rs"
 kind = "rust-test"
 purpose = "Roundtrip coverage across encoding variants"
 links = [
-    "crates/urna-format/src/writer/mod.rs",
-    "crates/urna-format/src/reader/mod.rs",
+    "crates/format/src/writer/mod.rs",
+    "crates/format/src/reader/mod.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/mrl_truncate.rs"
+path = "crates/format/tests/mrl_truncate.rs"
 kind = "rust-test"
 purpose = "Matryoshka truncate-then-renormalize roundtrip: stored embeddings == manual prefix-slice + l2-renorm byte-for-byte, two builds at the same mrl_dim byte-identical, truncated content_hash differs from full-dim"
 links = [
     "crates/urna-bridge/src/build_fn.rs",
-    "crates/urna-format/src/manifest/mod.rs",
+    "crates/format/src/manifest/mod.rs",
 ]
 
 [[inventory.urna_format]]
-path = "crates/urna-format/tests/v01_compat.rs"
+path = "crates/format/tests/v01_compat.rs"
 kind = "rust-test"
 purpose = "v0.1 compatibility coverage"
-links = ["crates/urna-format/src/reader/mod.rs"]
+links = ["crates/format/src/reader/mod.rs"]
 
 [[inventory.urna_bridge]]
 path = "crates/urna-bridge/Cargo.toml"
@@ -1711,7 +1711,7 @@ path = "crates/urna-bridge/src/build_fn.rs"
 kind = "rust-source"
 purpose = "Python build() bridge plus preset resolution (exact/compressed/tiny/nano/hybrid; nano = zstd text / int4 / HNSW, requires embedding_dim divisible by 64), build-time matryoshka prefix truncation (mrl_dim kwarg), optional index creation, the with_graph/graph_top_m kwargs that emit the G1 graph_adjacency (0x0C) CSR (NEXT_CHUNK + top-m SEMANTIC from the HNSW level-0 graph, default off), and the F4b/F4c kwargs blob_refs, chunk_blob_spans, and spaces (named-space multimodal corpora)"
 links = [
-    "crates/urna-format/src/writer/mod.rs",
+    "crates/format/src/writer/mod.rs",
     "crates/urna-engine/src/ann/mod.rs",
     "crates/urna-engine/src/bm25/mod.rs",
     "crates/urna-bridge/src/build_spaces.rs",
@@ -1724,8 +1724,8 @@ kind = "rust-source"
 purpose = "build() input helpers split out of build_fn.rs: parse_chunks (PyList of dicts -> Vec<ChunkInput>), truncate_renormalize (matryoshka prefix slice + l2-renorm before quant/hnsw), build_graph_payload (G1: NEXT_CHUNK + top-m SEMANTIC edges from the HNSW level-0 graph, canonically sorted), and parse_blob_refs / parse_chunk_blob_spans for the media pillar"
 links = [
     "crates/urna-bridge/src/build_fn.rs",
-    "crates/urna-format/src/sections/graph/adjacency.rs",
-    "crates/urna-format/src/sections/blob/refs.rs",
+    "crates/format/src/sections/graph/adjacency.rs",
+    "crates/format/src/sections/blob/refs.rs",
 ]
 
 [[inventory.urna_bridge]]
@@ -1734,7 +1734,7 @@ kind = "rust-source"
 purpose = "Manifest assembly for build(): capabilities (incl blobs_present when blob sections are emitted and supports_multimodal when a space_table is present) and the additive manifest fields, split out of build_fn.rs"
 links = [
     "crates/urna-bridge/src/build_fn.rs",
-    "crates/urna-format/src/manifest/mod.rs",
+    "crates/format/src/manifest/mod.rs",
 ]
 
 [[inventory.urna_bridge]]
@@ -1743,14 +1743,14 @@ kind = "rust-source"
 purpose = "Named-space build path: validates the spaces kwarg (name, dim, dtype, per-space model_hash), emits the space_table (0x15) plus one embeddings slab per space at the derived 0x20-0x2F band id, deterministic per-space builds"
 links = [
     "crates/urna-bridge/src/build_fn.rs",
-    "crates/urna-format/src/sections/space_table.rs",
+    "crates/format/src/sections/space_table.rs",
 ]
 
 [[inventory.urna_bridge]]
 path = "crates/urna-bridge/src/chunk_id_fn.rs"
 kind = "rust-source"
 purpose = "Python chunk_id helper"
-links = ["crates/urna-format/src/chunk.rs"]
+links = ["crates/format/src/chunk.rs"]
 
 [[inventory.urna_bridge]]
 path = "crates/urna-bridge/src/lib.rs"
@@ -1788,7 +1788,7 @@ kind = "rust-manifest"
 purpose = "Runtime crate manifest"
 links = [
     "Cargo.toml",
-    "crates/urna-format/Cargo.toml",
+    "crates/format/Cargo.toml",
 ]
 
 [[inventory.urna_engine]]
@@ -1818,7 +1818,7 @@ kind = "rust-source"
 purpose = "HNSW payload codec; v2 bitpacks the level/count/neighbour-id columns with intpack (order-preserving, recall unchanged), reader still accepts v1"
 links = [
     "crates/urna-engine/src/ann/mod.rs",
-    "crates/urna-format/src/encoding/intpack.rs",
+    "crates/format/src/encoding/intpack.rs",
 ]
 
 [[inventory.urna_engine]]
@@ -1856,8 +1856,8 @@ path = "crates/urna-engine/src/blobs.rs"
 kind = "rust-source"
 purpose = "Media blob read path: opens blob_refs (0x14) + blob_span_overlay (0x16) off mmap behind the blobs_present capability, resolves chunk_id -> (blob, span), serves cold span bytes without touching the embedding hot path"
 links = [
-    "crates/urna-format/src/sections/blob/refs.rs",
-    "crates/urna-format/src/sections/blob/span_overlay.rs",
+    "crates/format/src/sections/blob/refs.rs",
+    "crates/format/src/sections/blob/span_overlay.rs",
     "crates/urna-engine/src/mmap_file.rs",
 ]
 
@@ -1867,7 +1867,7 @@ kind = "rust-source"
 purpose = "BM25 payload codec; v2 delta-gaps the sorted doc ids and bitpacks gaps/tfs/doc-lengths with intpack (scores unchanged), reader still accepts v1"
 links = [
     "crates/urna-engine/src/bm25/mod.rs",
-    "crates/urna-format/src/encoding/intpack.rs",
+    "crates/format/src/encoding/intpack.rs",
 ]
 
 [[inventory.urna_engine]]
@@ -1917,7 +1917,7 @@ path = "crates/urna-engine/src/graph/csr.rs"
 kind = "rust-source"
 purpose = "CsrIndex::from_bytes parses the graph_adjacency (0x0C) payload off mmap (via urna-format parse_csr_parts) into flat offsets+neighbors; neighbors(node) is a contiguous slice with zero allocation; typed errors, never panics on a truncated mmap"
 links = [
-    "crates/urna-format/src/sections/graph/adjacency.rs",
+    "crates/format/src/sections/graph/adjacency.rs",
     "crates/urna-engine/src/mmap_file.rs",
 ]
 
@@ -1934,7 +1934,7 @@ links = [
 path = "crates/urna-engine/src/error.rs"
 kind = "rust-source"
 purpose = "Runtime error surface"
-links = ["crates/urna-format/src/error.rs"]
+links = ["crates/format/src/error.rs"]
 
 [[inventory.urna_engine]]
 path = "crates/urna-engine/src/dtype.rs"
@@ -1960,7 +1960,7 @@ path = "crates/urna-engine/src/spaces.rs"
 kind = "rust-source"
 purpose = "Space registry runtime surface: parses the space_table (0x15) at open, resolves space name -> band slab + dtype + model_hash, backs search_space and the space_names/has_spaces metadata"
 links = [
-    "crates/urna-format/src/sections/space_table.rs",
+    "crates/format/src/sections/space_table.rs",
     "crates/urna-engine/src/mmap_file.rs",
     "crates/urna-engine/src/space_search.rs",
 ]
@@ -2017,7 +2017,7 @@ path = "crates/urna-engine/src/mmap_file.rs"
 kind = "rust-source"
 purpose = "Own mmap, decode metadata and optional indices at open (embeddings_fp 0x09 slab, the packed ANN vector store, graph_adjacency 0x0C behind graph_present, blob_refs 0x14 + blob_span_overlay 0x16 behind blobs_present, space_table 0x15 + the 0x20-0x2F space slabs behind supports_multimodal), inspect, and revalidate, assuming embeddings remain directly readable from the mapped file"
 links = [
-    "crates/urna-format/src/reader/mod.rs",
+    "crates/format/src/reader/mod.rs",
     "crates/urna-engine/src/ann/mod.rs",
     "crates/urna-engine/src/bm25/mod.rs",
     "crates/urna-engine/src/graph/mod.rs",

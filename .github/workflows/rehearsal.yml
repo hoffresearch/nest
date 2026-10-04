@@ -234,7 +234,7 @@ jobs:
       run: |
         printf '%s' "$PLAN" > plan.json
         python3 script/rehearsal.py assets --dir dist --plan plan.json \
-          --golden crates/urna-format/tests/fixtures/golden_v1_minimal.urna
+          --golden crates/format/tests/fixtures/golden_v1_minimal.urna
   rehearsal:
     name: rehearsal
     needs:
