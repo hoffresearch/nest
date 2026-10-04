@@ -79,7 +79,7 @@ def test_checkout_passes() -> None:
 
 def test_each_drift_is_named() -> None:
     other = bump(VERSION)
-    pin = f'"crates/urna-engine", version = "{VERSION}"'
+    pin = f'"crates/engine", version = "{VERSION}"'
     cases = [
         ("Cargo.toml", pin, pin.replace(VERSION, other), "urna-engine pins"),
         (

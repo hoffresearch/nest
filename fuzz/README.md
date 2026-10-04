@@ -16,7 +16,7 @@ out-of-bounds read.
 
 The deterministic twins of these targets run on stable under plain `cargo
 test` (`crates/format/tests/mutation_fuzz.rs`,
-`crates/urna-engine/tests/mutation_fuzz.rs`), so every CI run already
+`crates/engine/tests/mutation_fuzz.rs`), so every CI run already
 executes a few thousand mutations; this directory is the long soak.
 
 ## Targets
