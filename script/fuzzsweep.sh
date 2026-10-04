@@ -22,7 +22,7 @@ cd "$ROOT/fuzz"
 for t in $TARGETS; do
     mkdir -p "corpus/$t"
     if [ -z "$(ls -A "corpus/$t")" ]; then
-        cp seeds/*.bin ../crates/urna-format/tests/fixtures/golden_v1_minimal.urna "corpus/$t/"
+        cp seeds/*.bin ../crates/format/tests/fixtures/golden_v1_minimal.urna "corpus/$t/"
     fi
     echo "fuzz-soak: $t for ${SECONDS_PER_TARGET}s"
     cargo +nightly fuzz run "$t" -- \

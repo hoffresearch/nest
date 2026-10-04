@@ -93,7 +93,7 @@ Python:
 
 Format and runtime invariants:
 
-The format is frozen at v1. Any byte-level change either fits inside v1 (unused section IDs and encoding IDs are reserved and additive; the IDs already written are listed in the agents contract and named in `crates/urna-format/src/layout/mod.rs`) or bumps `URNA_FORMAT_VERSION` and ships as v2.
+The format is frozen at v1. Any byte-level change either fits inside v1 (unused section IDs and encoding IDs are reserved and additive; the IDs already written are listed in the agents contract and named in `crates/format/src/layout/mod.rs`) or bumps `URNA_FORMAT_VERSION` and ships as v2.
 
 ## Tests
 

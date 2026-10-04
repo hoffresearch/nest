@@ -40,7 +40,7 @@ O projeto usa commits assinados e squash merge. Ao atualizar um PR empilhado, re
 
 ## Principais responsabilidades da aplicação
 
-- `crates/urna-format`: formato binário, leitura, escrita e hashes.
+- `crates/format`: formato binário, leitura, escrita e hashes.
 - `crates/urna-engine`: mmap, índices, kernels e busca.
 - `crates/urna-clitui`: binário `urna`, comandos e interface de terminal.
 - `crates/urna-bridge`: extensão PyO3 distribuída na wheel.
@@ -52,7 +52,7 @@ Os manifests definem as versões e os requisitos das ferramentas. Consulte-os ao
 
 ## Cuidados técnicos essenciais
 
-- Antes de alterar layout, codecs ou identificadores, confira o contrato no ARC e as definições em `crates/urna-format/src/layout/`. Teste leitura, escrita e rejeição de entradas inválidas; mudanças em decoders também pedem os testes de mutação e fuzzing pertinentes.
+- Antes de alterar layout, codecs ou identificadores, confira o contrato no ARC e as definições em `crates/format/src/layout/`. Teste leitura, escrita e rejeição de entradas inválidas; mudanças em decoders também pedem os testes de mutação e fuzzing pertinentes.
 - Trate dados externos com limites e aritmética checados, erros tipados e comprimentos validados em release. Documente o invariante de cada `unsafe`. Use os leitores de bytes e a ordenação de scores compartilhados, evitando duplicar essas verificações.
 - Mantenha a identidade dos modelos: dimensão compatível não basta. Na API Python, informe `expected_model_hash` ao consultar com um embedder conhecido e `query_text` quando a busca precisar do texto original. Presets, snapshots, tokenizer e arquivos baixados participam dessa identidade.
 - Preserve as garantias offline. O runtime não abre sockets, o binário não incorpora uma pilha de rede e o setup baixa arquivos pelo `curl` do sistema. Downloads de modelos e execução de código remoto seguem os consentimentos existentes.

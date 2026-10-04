@@ -87,9 +87,9 @@ groups:
 
   - name: crates
     files:
-      - path: crates/urna-format/Cargo.toml
+      - path: crates/format/Cargo.toml
         when: mudarem dependências, metadados ou configuração do crate de formato.
-      - path: crates/urna-format/LICENSE
+      - path: crates/format/LICENSE
         when: mudar a localização da licença compartilhada.
         rule: symlink para LICENSE; preservar.
       - path: crates/urna-engine/Cargo.toml
@@ -126,9 +126,9 @@ groups:
 
   - name: testes e fixtures
     files:
-      - path: crates/urna-format/tests/
+      - path: crates/format/tests/
         when: mudar uma seção, um codec ou um caminho do reader (um roundtrip e um negative_*.rs).
-      - path: crates/urna-format/tests/fixtures/golden_v1_minimal.urna
+      - path: crates/format/tests/fixtures/golden_v1_minimal.urna
         when: uma mudança no formato precisar comprovar compatibilidade com arquivos existentes.
         rule: preservar os bytes da fixture v1; atualizar testes ou acrescentar fixtures conforme o contrato, sem regenerá-la apenas para fazer um teste passar.
       - path: crates/urna-engine/tests/

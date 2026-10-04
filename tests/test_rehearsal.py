@@ -270,7 +270,7 @@ def test_a_real_binary_against_the_golden_fixture() -> None:
     if not binary.is_file():
         print("binary case skipped: no target/release/urna (cargo build --release)")
         return
-    golden = REPO / "crates/urna-format/tests/fixtures/golden_v1_minimal.urna"
+    golden = REPO / "crates/format/tests/fixtures/golden_v1_minimal.urna"
     with tempfile.TemporaryDirectory() as tmp:
         d = Path(tmp)
         with tarfile.open(d / "urna-clitui-host.tar.xz", "w:xz") as tar:
