@@ -16,7 +16,7 @@ domain: contributing
 2. Branch from `main`: `git checkout -b feature/short-description origin/main`.
 3. Keep each PR focused on one concern. Small is better.
 4. Add or update tests for the change. New behavior needs a new test. Write real tests against real artifacts (built .urna files, golden fixtures, real corpora), no mocks; cover the happy path, the error path, and one edge case.
-5. If the change alters architecture, module boundaries, data flow, or doc locations, update `docs/arc/ARC.toml` in the same PR. Keep it concise and pragmatic. Do not add a separate human architecture doc; `ARC.toml` is the machine map, the human reference, and the mermaid diagram all in one file.
+5. If the change alters architecture, module boundaries, data flow, or doc locations, update `docs/ARC.toml` in the same PR. Keep it concise and pragmatic. Do not add a separate human architecture doc; `ARC.toml` is the machine map, the human reference, and the mermaid diagram all in one file.
 6. For a code change, run `./scripts/release_check.sh` locally before pushing; a docs-only change skips it and says so in the PR. It is the gate (the Rust suite in release, the extension rebuilt, the Python suites, ruff, the regression gates against `data/measure/baseline.json`). `.github/workflows/ci.yml` covers the Rust side on Linux, macOS and Windows plus checks the local gate does not run (cargo-deny, cargo-semver-checks, the engine-only Clippy, the benches compiled, a cargo-fuzz smoke, the embedder payload staged under Python 3.10). Its Python job runs ruff, the model catalog check and the release suites that need no built extension; the suites that load `_urna.so` run only in the local gate, so run them locally. A pull request that touches a release input also runs the release rehearsal (`release-rehearsal.yml`), a required check.
 7. Commit with a clear message in plain English. No conventional commits prefix.
 8. Open a PR against `main`. The maintainer squash merges it; `main` requires verified (SSH-signed) commits, linear history and a passing `rehearsal` check (the release rehearsal, dispensed when the change touches no release input), so sign your commits (`git config commit.gpgsign true` with an SSH or GPG key registered on GitHub).
@@ -52,7 +52,7 @@ These conventions are not aesthetic preferences. They exist to keep the repo rea
 ### Naming
 
 - Directories and assets are **kebab-case English** (`data/`, `docs/`, `examples/`, `assets/images/`, dataset folders); Rust workspace conventions (`crates/`, `target/`) and language defaults (`python/`, `scripts/`, `tests/`) stay as their stacks expect.
-- The docs keep their upper-case names: `docs/USAGE.md`, `docs/BENCH.md`, `docs/SECURITY.md`, `docs/CONTRIBUTING.md`, `docs/CODE_OF_CONDUCT.md`, `docs/CHANGELOG`, `docs/arc/ARC.toml`.
+- The docs keep their upper-case names: `docs/USAGE.md`, `docs/BENCH.md`, `docs/SECURITY.md`, `docs/CONTRIBUTING.md`, `docs/CODE_OF_CONDUCT.md`, `docs/CHANGELOG`, `docs/ARC.toml`.
 - Source files follow the conventions of their language (`snake_case.rs`, `snake_case.py`).
 - When proposing renames or moves, list exact `mv` commands first, execute the move, fix every touched import, and run the test suite after.
 
@@ -121,7 +121,7 @@ cargo +nightly fuzz run urna-view -- -max_total_time=600      # needs cargo-fuzz
 
 - Bugs and feature requests: [GitHub issues](https://github.com/hoffresearch/urna/issues).
 - Security vulns: do not open a public issue. Use the private advisory form (<https://github.com/hoffresearch/urna/security/advisories/new>) or email [brenner@hoffresearch.com](mailto:brenner@hoffresearch.com). Target ack within 72 hours.
-- Questions about the format: open a discussion, or read `docs/arc/ARC.toml`.
+- Questions about the format: open a discussion, or read `docs/ARC.toml`.
 
 Bug reports should include the `.urna` `file_hash` and `content_hash` (from `urna stats <file>`), the runtime `simd_backend` (also in `urna stats`), the exact CLI or Python invocation, and the error output.
 
