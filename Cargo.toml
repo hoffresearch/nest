@@ -105,9 +105,10 @@ cargo-auditable = true
 # still reach the release and the publish jobs. a failed wheelmake call
 # is a failure, which the host condition does refuse.
 
-# build only the packages that ship (the `urna-clitui` crate, binary `urna`). without it dist compiles the
-# whole workspace per target, and urna-bridge's cdylib cannot be built for
-# the musl targets, which failed the first 0.5.0 tag on both linux builds.
+# build only the packages that ship (the `urna-clitui` crate, binary `urna`).
+# without it dist compiles the whole workspace per target, and urna-bridge's
+# cdylib cannot be built for the musl targets, which failed the first 0.5.0
+# tag on both linux builds.
 precise-builds = true
 # no source.tar.gz: dist builds it with git archive, which smudges every
 # lfs file (the demo corpora) and fails while the lfs budget is exhausted.
