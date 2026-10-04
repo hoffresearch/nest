@@ -68,8 +68,13 @@ app = Flask(__name__)
 @app.post("/ask")
 def ask():
     body = request.get_json(force=True)
-    qvec = emb.embed_texts([body["query"]])[0]
-    hits = db.retrieve(qvec, int(body.get("k", 3)))
+    query = body["query"]
+    qvec = emb.embed_texts([query])[0]
+    # the corpus must be built with this embedder: a corpus from another
+    # model is refused (ValueError) instead of returning wrong hits.
+    hits = db.retrieve(
+        qvec, int(body.get("k", 3)), expected_model_hash=emb.model_hash(), query_text=query
+    )
     return jsonify(
         hits=[
             {

@@ -301,6 +301,10 @@ jobs:
           python -m pip install pyyaml
           python scripts/release_rehearsal.py generate --check
           python tests/test_release_rehearsal.py
+      - name: the release waits for and reports the exact version
+        # against a local http server: the registry waits, the crates
+        # publisher's outage handling, the report of a failed release.
+        run: python tests/test_release_channels.py
 
   payload-py310:
     name: payload staged under python 3.10

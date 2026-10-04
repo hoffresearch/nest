@@ -19,7 +19,7 @@ domain: contributing
 5. If the change alters architecture, module boundaries, data flow, or doc locations, update `docs/arc/ARC.toml` in the same PR. Keep it concise and pragmatic. Do not add a separate human architecture doc; `ARC.toml` is the machine map, the human reference, and the mermaid diagram all in one file.
 6. For a code change, run `./scripts/release_check.sh` locally before pushing; a docs-only change skips it and says so in the PR. It is the gate (the Rust suite in release, the extension rebuilt, the Python suites, ruff, the regression gates against `data/measure/baseline.json`). `.github/workflows/ci.yml` covers the Rust side on Linux, macOS and Windows plus checks the local gate does not run (cargo-deny, cargo-semver-checks, the engine-only Clippy, the benches compiled, a cargo-fuzz smoke); it runs ruff but not the Python suites, so run them locally.
 7. Commit with a clear message in plain English. No conventional commits prefix.
-8. Open a PR against `main`. The maintainer squash merges it; `main` requires verified (SSH-signed) commits and linear history, so sign your commits (`git config commit.gpgsign true` with an SSH or GPG key registered on GitHub).
+8. Open a PR against `main`. The maintainer squash merges it; `main` requires verified (SSH-signed) commits, linear history and a passing `rehearsal` check (the release rehearsal, dispensed when the change touches no release input), so sign your commits (`git config commit.gpgsign true` with an SSH or GPG key registered on GitHub).
 
 ## Setup
 

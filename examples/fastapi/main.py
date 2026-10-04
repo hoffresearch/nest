@@ -84,7 +84,11 @@ class Ask(BaseModel):
 @app.post("/ask")
 def ask(req: Ask):
     qvec = emb.embed_texts([req.query])[0]
-    hits = app.state.db.retrieve(qvec, req.k)
+    # the corpus must be built with this embedder: a corpus from another
+    # model is refused (ValueError) instead of returning wrong hits.
+    hits = app.state.db.retrieve(
+        qvec, req.k, expected_model_hash=emb.model_hash(), query_text=req.query
+    )
     return {
         "hits": [
             {
