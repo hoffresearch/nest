@@ -119,8 +119,8 @@ ok "search-text model_hash gate (5 cases)"
 
 # builds its own dataset, so it needs no demo corpus; the compressed cases
 # skip themselves when ffmpeg/libsvtav1 is absent.
-step "python tests/test_image_corpus.py"
-"$PY" tests/test_image_corpus.py
+step "python tests/test_imagepipe.py"
+"$PY" tests/test_imagepipe.py
 ok "image corpus pipeline (37 cases)"
 
 # declarative builds: spec validation, fake-preset e2e, triad cache, dedup,
