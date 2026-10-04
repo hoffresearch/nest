@@ -74,6 +74,8 @@ jobs:
           URNA_PYTHON: python
         run: |
           export PATH="$HOME/.local/bin:$PATH"
+          # the installed binary is the tagged version, exactly.
+          test "$(urna --version)" = "urna ${TAG#v}"
           urna validate "$GITHUB_WORKSPACE/crates/urna-format/tests/fixtures/golden_v1_minimal.urna"
           urna doctor
 
@@ -83,10 +85,18 @@ jobs:
         working-directory: ${{ runner.temp }}
         env:
           URNA_PYTHON: python
+        # pwsh reports only the last command's exit code, so each native
+        # command is checked on its own: a failed validate is not hidden by a
+        # passing doctor.
         run: |
           $env:PATH = "$HOME\.local\bin;$env:PATH"
+          $expected = "urna $($env:TAG.TrimStart('v'))"
+          $shown = (urna --version | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $shown -ne $expected) { Write-Error "urna --version: '$shown' (exit $LASTEXITCODE), expected '$expected'"; exit 1 }
           urna validate "$env:GITHUB_WORKSPACE\crates\urna-format\tests\fixtures\golden_v1_minimal.urna"
+          if ($LASTEXITCODE -ne 0) { Write-Error "urna validate exited $LASTEXITCODE"; exit $LASTEXITCODE }
           urna doctor
+          if ($LASTEXITCODE -ne 0) { Write-Error "urna doctor exited $LASTEXITCODE"; exit $LASTEXITCODE }
 
   channels:
     name: ${{ matrix.channel }} ${{ matrix.os }}
@@ -124,6 +134,17 @@ jobs:
         with:
           node-version: "22"
 
+      - name: wait for the exact version on the registry
+        # a registry can serve a new version minutes after the publish job
+        # ends (npm answered ETARGET on 0.5.3); wait for it, bounded, so a
+        # leg fails only when the version really is not there.
+        if: matrix.channel != 'homebrew'
+        run: |
+          case "${{ matrix.channel }}" in
+            binstall) channel=crates ;;
+            *) channel=npm ;;
+          esac
+          python scripts/release_channels.py wait --channel "$channel" --version "${TAG#v}" --timeout 900
       - name: install (homebrew)
         if: matrix.channel == 'homebrew'
         run: |
@@ -170,7 +191,8 @@ jobs:
       - name: the bare binary reports what is missing
         working-directory: ${{ runner.temp }}
         run: |
-          urna --version
+          # every channel, homebrew included, installed the tagged version.
+          test "$(urna --version)" = "urna ${TAG#v}"
           urna doctor && exit 1 || echo "doctor fails before setup, as it should (exit $?)"
       - name: urna setup completes the install
         working-directory: ${{ runner.temp }}
@@ -208,14 +230,13 @@ jobs:
           python-version: "3.12"
       - name: install uv
         run: python -m pip install uv
+      - name: wait for the exact version on pypi
+        shell: bash
+        run: python scripts/release_channels.py wait --channel pypi --version "${TAG#v}" --timeout 900
       - name: pip install urna and validate
         shell: bash
         run: |
-          # the release announces once pypi.yml uploaded; the index can lag.
-          for i in $(seq 1 20); do
-            python -m pip install "urna==${TAG#v}" && break
-            sleep 30
-          done
+          python -m pip install "urna==${TAG#v}"
           python -c "import importlib.metadata as m, sys; v = m.version('urna'); assert v == sys.argv[1], v" "${TAG#v}"
           python -c "import urna; assert urna.potion_model_path(), 'potion table must be bundled'"
           python -c "import urna; urna.open('crates/urna-format/tests/fixtures/golden_v1_minimal.urna').validate(); print('validate ok')"
