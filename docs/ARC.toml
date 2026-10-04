@@ -2318,7 +2318,7 @@ purpose = "Visual and drift legs reject independently; the utility leg passes on
 links = ["python/forge/quality_gate.py"]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_cli_space.py"
+path = "tests/test_clispaces.py"
 kind = "python-test"
 purpose = "Release-binary space surface: search-space happy + typed errors, stats spaces block, inspect --json spaces[], benchmark --space, no-spaces degradation"
 links = ["crates/urna-clitui/src/cmd/search_space.rs"]
