@@ -1,0 +1,203 @@
+"""Prove scripts/release_prepare.sh prepares a release and nothing else.
+
+every case runs the real script, with the pinned cargo-release, in a scratch
+repository built from this checkout's tracked files (git-lfs files left out,
+no release step reads them) and signs with a throwaway ssh key. the script
+runs with --no-push, so nothing leaves the machine:
+
+- happy path: the next patch version lands in the workspace version, both
+  pins, the four crates of Cargo.lock, a dated changelog section that holds
+  what [Unreleased] held, and the five versioned CITATION.cff fields; every
+  other CITATION.cff line is unchanged; the preflight passes; one signed
+  commit on release-X.Y.Z in its own worktree touches exactly those four
+  files; the base branch, the checkout and the tags do not move;
+- error path: the current version, a malformed version and a cargo-release
+  other than the pinned one are refused before any branch or worktree exists;
+- edge case: an [Unreleased] section with no entries is refused.
+
+skips when the pinned cargo-release is not installed (the script names the
+install command).
+
+Run: python tests/test_release_prepare.py
+"""
+
+import datetime as dt
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+SCRIPT = "scripts/release_prepare.sh"
+PINNED = re.search(r"^CARGO_RELEASE_VERSION=(\S+)$", (REPO / SCRIPT).read_text(), re.M).group(1)
+FILES = ["CITATION.cff", "Cargo.lock", "Cargo.toml", "docs/CHANGELOG"]
+CITED = ("version:", "date-released:", "repository-artifact:", "    value:", "    description:")
+
+
+def run(args, cwd, env=None, check=True):
+    proc = subprocess.run(args, cwd=cwd, env=env, capture_output=True, text=True)
+    if check and proc.returncode != 0:
+        raise AssertionError(f"{args} failed ({proc.returncode}):\n{proc.stdout}\n{proc.stderr}")
+    return proc
+
+
+def git(cwd, *args, check=True):
+    return run(["git", *args], cwd, check=check)
+
+
+def scratch(tmp: Path) -> tuple[Path, Path]:
+    """A repository holding this checkout's tracked files, plus a signing key."""
+    repo = tmp / "repo"
+    listed = run(["git", "ls-files", "-z"], REPO).stdout.split("\0")
+    lfs = set(run(["git", "lfs", "ls-files", "-n"], REPO, check=False).stdout.split())
+    for rel in filter(None, listed):
+        src = REPO / rel
+        if rel in lfs or not src.is_file() or src.is_symlink() and not src.exists():
+            continue
+        dst = repo / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst, follow_symlinks=False)
+    key = tmp / "key"
+    run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "t@t", "-f", str(key)], tmp)
+    signers = tmp / "allowed_signers"
+    signers.write_text(f"t@t {(tmp / 'key.pub').read_text().strip()}\n")
+    git(tmp, "init", "-q", "-b", "main", str(repo))
+    for k, v in [
+        ("user.name", "t"),
+        ("user.email", "t@t"),
+        ("gpg.format", "ssh"),
+        ("user.signingkey", str(key)),
+        ("gpg.ssh.allowedSignersFile", str(signers)),
+        ("commit.gpgsign", "false"),
+    ]:
+        git(repo, "config", k, v)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "base")
+    return repo, signers
+
+
+def workspace_version(repo: Path) -> str:
+    text = (repo / "Cargo.toml").read_text()
+    return re.search(r'^\[workspace\.package\]\n(?:.*\n)*?version = "([^"]+)"', text, re.M).group(1)
+
+
+def prepare(repo: Path, version: str, worktree: Path, env=None):
+    args = ["bash", SCRIPT, version, "--base", "main", "--worktree", str(worktree), "--no-push"]
+    return run(args, repo, env=env, check=False)
+
+
+def untouched(repo: Path, branch: str, worktree: Path):
+    assert git(repo, "branch", "--list", branch).stdout.strip() == "", f"{branch} was created"
+    assert not worktree.exists(), f"{worktree} was created"
+    assert git(repo, "status", "--porcelain").stdout == "", "the checkout changed"
+
+
+def case_happy(repo: Path, signers: Path, tmp: Path):
+    old = workspace_version(repo)
+    major, minor, patch = map(int, old.split("."))
+    new = f"{major}.{minor}.{patch + 1}"
+    base = git(repo, "rev-parse", "main").stdout.strip()
+    unreleased = (repo / "docs/CHANGELOG").read_text().split("## [Unreleased]\n", 1)[1]
+    unreleased = unreleased.split("\n## [", 1)[0]
+    cff_before = (repo / "CITATION.cff").read_text().splitlines()
+    wt = tmp / "wt-happy"
+    proc = prepare(repo, new, wt)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    today = dt.datetime.now(dt.UTC).date().isoformat()
+
+    assert workspace_version(wt) == new
+    manifest = (wt / "Cargo.toml").read_text()
+    for pin in ("urna-format", "urna-runtime"):
+        assert f'{pin} = {{ path = "crates/{pin}", version = "{new}" }}' in manifest, pin
+    lock = (wt / "Cargo.lock").read_text()
+    for name in ("urna", "urna-format", "urna-runtime", "urna-python"):
+        assert f'name = "{name}"\nversion = "{new}"' in lock, f"Cargo.lock {name}"
+    log = (wt / "docs/CHANGELOG").read_text()
+    assert f"last-updated: {today}\n" in log
+    assert f"## [Unreleased]\n\n## [{new}] - {today}\n{unreleased}\n## [{old}]" in log, "changelog"
+    cff = (wt / "CITATION.cff").read_text()
+    for line in (
+        f'version: "{new}"',
+        f'date-released: "{today}"',
+        f"repository-artifact: https://crates.io/crates/urna/{new}",
+        f"    value: https://github.com/hoffresearch/urna/releases/tag/v{new}",
+        f"    description: Release of Urna version {new}.",
+    ):
+        assert line in cff.splitlines(), line
+    rest = [ln for ln in cff.splitlines() if not ln.startswith(CITED)]
+    assert rest == [ln for ln in cff_before if not ln.startswith(CITED)], "CITATION.cff moved"
+
+    assert git(wt, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip() == f"release-{new}"
+    assert git(wt, "rev-list", "--count", f"{base}..HEAD").stdout.strip() == "1"
+    shown = git(wt, "log", "-1", "--format=%G?%n%s").stdout.split("\n")
+    assert shown[:2] == ["G", f"Release {new}"], shown
+    names = git(wt, "diff", "--name-only", f"{base}..HEAD").stdout.split()
+    assert sorted(names) == FILES, names
+    assert git(wt, "status", "--porcelain").stdout == "", "left uncommitted changes"
+    run([sys.executable, "scripts/release_preflight.py"], wt)
+    assert git(repo, "rev-parse", "main").stdout.strip() == base, "main moved"
+    assert git(repo, "tag", "--list").stdout == "", "a tag was created"
+    assert git(repo, "status", "--porcelain").stdout == "", "the checkout changed"
+    print(f"case 1 (prepare {old} -> {new}, signed, four files, preflight ok): OK")
+    return new
+
+
+def case_refused(repo: Path, tmp: Path):
+    old = workspace_version(repo)
+    for version, why in [(old, "is not after"), ("0.6", "usage:")]:
+        wt = tmp / f"wt-{version}"
+        proc = prepare(repo, version, wt)
+        assert proc.returncode != 0 and why in proc.stderr, proc.stderr
+        untouched(repo, f"release-{version}", wt)
+    print("case 2 (the current and a malformed version refused, nothing created): OK")
+
+
+def case_wrong_tool(repo: Path, tmp: Path):
+    shim = tmp / "shim"
+    shim.mkdir()
+    real = shutil.which("cargo")
+    (shim / "cargo").write_text(
+        f'#!/bin/sh\nif [ "$1 $2" = "release --version" ]; then echo "cargo-release 0.0.1"; '
+        f'else exec "{real}" "$@"; fi\n'
+    )
+    (shim / "cargo").chmod(0o755)
+    env = dict(os.environ, PATH=f"{shim}:{os.environ['PATH']}")
+    wt = tmp / "wt-tool"
+    proc = prepare(repo, "99.0.0", wt, env=env)
+    assert proc.returncode != 0 and f"needs cargo-release {PINNED}, found 0.0.1" in proc.stderr
+    untouched(repo, "release-99.0.0", wt)
+    print("case 3 (another cargo-release refused, the install command named): OK")
+
+
+def case_empty_unreleased(repo: Path, tmp: Path):
+    log = repo / "docs/CHANGELOG"
+    head, rest = log.read_text().split("## [Unreleased]\n", 1)
+    log.write_text(head + "## [Unreleased]\n\n## [" + rest.split("\n## [", 1)[1])
+    git(repo, "commit", "-q", "-am", "an empty unreleased section")
+    wt = tmp / "wt-empty"
+    proc = prepare(repo, "99.0.0", wt)
+    assert proc.returncode != 0 and "nothing under [Unreleased]" in proc.stderr, proc.stderr
+    untouched(repo, "release-99.0.0", wt)
+    print("case 4 (an empty [Unreleased] refused): OK")
+
+
+def main():
+    found = run(["cargo", "release", "--version"], REPO, check=False).stdout.split()
+    if found[1:2] != [PINNED]:
+        print(f"release prepare: skipped, cargo-release {PINNED} is not installed")
+        return
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        repo, signers = scratch(tmp)
+        case_happy(repo, signers, tmp)
+        case_refused(repo, tmp)
+        case_wrong_tool(repo, tmp)
+        case_empty_unreleased(repo, tmp)
+    print("release prepare: 4 cases passed")
+
+
+if __name__ == "__main__":
+    main()

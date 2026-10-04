@@ -15,7 +15,11 @@ Tag mode (``--tag vX.Y.Z``, the release's ``tag-verify.yml`` after the
 signature check): the same checks on the files of the tag's own commit,
 read through git and never from the working tree, plus the tag names that
 commit's version, the commit is on the protected ``main`` and the release
-date is not after the day the tag was made (in the tagger's own timezone).
+date is not after the day the tag was made. Both days are UTC days: the
+release date comes from cargo-release (``scripts/release_prepare.sh``), which
+dates in UTC, so a tag made at 22:30 in Brasilia (01:30 UTC the next day) the
+evening a release was prepared fits it, and a release dated after the tag's
+UTC day is still refused.
 
 Needs Python 3.11+ (tomllib); the jobs that run it are on ubuntu-24.04.
 
@@ -186,8 +190,9 @@ def check_tag(tag: str, root: Path = ROOT, main_ref: str = "origin/main") -> lis
         errors.append(f"tag {tag} does not name the version v{v} of its own commit")
     if _git(root, "merge-base", "--is-ancestor", commit, main_ref).returncode != 0:
         errors.append(f"tag {tag} points at {commit[:12]}, which is not on {main_ref}")
-    fmt = "--format=%(taggerdate:short)"
-    tagged = _iso_date(_git(root, "for-each-ref", fmt, f"refs/tags/{tag}").stdout.strip())
+    fmt = "--format=%(taggerdate:unix)"
+    stamp = _git(root, "for-each-ref", fmt, f"refs/tags/{tag}").stdout.strip()
+    tagged = dt.datetime.fromtimestamp(int(stamp), dt.UTC).date() if stamp.isdigit() else None
     if tagged is None:
         errors.append(f"tag {tag} has no tagger date (a lightweight tag)")
     elif released is not None and released > tagged:
