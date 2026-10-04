@@ -2384,10 +2384,10 @@ purpose = "release_prepare.sh with the pinned cargo-release in a scratch repo of
 links = ["script/release_prepare.sh"]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_release_rehearsal.py"
+path = "tests/test_rehearsal.py"
 kind = "python-test"
 purpose = "The checked-in rehearsal is what release.yml generates and its build jobs carry the release's steps, runners and matrix; it has no write permission, secret, attestation or publish job; unknown shapes are refused; what needs the rehearsal and what does not (with real history when present); the artifact checks on a synthetic set in dist's format; a real binary on the golden fixture and a flipped byte; the verdict for dispensed, green, failed, cancelled and skipped; in release_check.sh and gatecheck.yml"
-links = ["script/release_rehearsal.py"]
+links = ["script/rehearsal.py"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "tests/test_release_channels.py"
@@ -2980,7 +2980,7 @@ links = [
 [[inventory.distribution]]
 path = ".github/workflows/pypiindex.yml"
 kind = "ci-workflow"
-purpose = "Top-level, dispatch only (trusted publishing does not take a reusable workflow): publishes the wheels with OIDC + PEP 740. index=pypi on a signed v* tag, from the release run whose host succeeded, taking the wheels and .sha256 from the GitHub release and verifying each attestation against wheelmake.yml as signer, the tag's commit and ref; index=testpypi on main, from a successful release-rehearsal run on a main commit, testpypi only. The upload skips wheels already there with the same sha256 and fails on another (script/pypi_release.py)"
+purpose = "Top-level, dispatch only (trusted publishing does not take a reusable workflow): publishes the wheels with OIDC + PEP 740. index=pypi on a signed v* tag, from the release run whose host succeeded, taking the wheels and .sha256 from the GitHub release and verifying each attestation against wheelmake.yml as signer, the tag's commit and ref; index=testpypi on main, from a successful rehearsal run on a main commit, testpypi only. The upload skips wheels already there with the same sha256 and fails on another (script/pypi_release.py)"
 links = [
     ".github/workflows/pypiready.yml",
     ".github/workflows/tagverify.yml",
@@ -3001,8 +3001,8 @@ links = [
 [[inventory.distribution]]
 path = ".github/workflows/rehearsal.yml"
 kind = "ci-workflow"
-purpose = "Generated from release.yml by script/release_rehearsal.py (never hand-edited): the release's plan, five archive builds, wheels and global job on pull requests and pushes to main, with the host and publish jobs dropped, contents: read, no secret but the run's token and no attestation; impact decides whether a release input changed, assets checks the artifacts, the payload VERSION and the Linux binary against the golden fixture, and the rehearsal job is the required check (dispensed passes; a needed build failed, cancelled or skipped fails)"
-links = [".github/workflows/release.yml", ".github/workflows/wheelmake.yml", "script/release_rehearsal.py"]
+purpose = "Generated from release.yml by script/rehearsal.py (never hand-edited): the release's plan, five archive builds, wheels and global job on pull requests and pushes to main, with the host and publish jobs dropped, contents: read, no secret but the run's token and no attestation; impact decides whether a release input changed, assets checks the artifacts, the payload VERSION and the Linux binary against the golden fixture, and the rehearsal job is the required check (dispensed passes; a needed build failed, cancelled or skipped fails)"
+links = [".github/workflows/release.yml", ".github/workflows/wheelmake.yml", "script/rehearsal.py"]
 
 [[inventory.distribution]]
 path = "script/release_prepare.sh"
@@ -3017,10 +3017,10 @@ purpose = "cargo-release workspace config for release_prepare.sh: release-* bran
 links = ["script/release_prepare.sh"]
 
 [[inventory.distribution]]
-path = "script/release_rehearsal.py"
+path = "script/rehearsal.py"
 kind = "python-source"
 purpose = "generate [--check]: the strict release.yml -> rehearsal.yml transformation, refusing an unknown job, condition, plan command, top-level key or a kept job reading a secret; impact: the release inputs (crates, manifests, packaging, staging scripts, the payload and wheel sources read from the stage scripts, the model dirs, README, LICENSE, the release workflows); assets: every planned artifact, the four wheels and their .sha256, every checksum and sha256.sum, the payload VERSION, the Linux binary on the golden fixture; verdict: the required check"
-links = [".github/workflows/rehearsal.yml", "tests/test_release_rehearsal.py", "script/stage_embedder_payload.py", "script/stage_wheel.py"]
+links = [".github/workflows/rehearsal.yml", "tests/test_rehearsal.py", "script/stage_embedder_payload.py", "script/stage_wheel.py"]
 
 [[inventory.distribution]]
 path = ".github/workflows/runreport.yml"
