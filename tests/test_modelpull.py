@@ -22,7 +22,7 @@ one; they skip, by name, only when huggingface.co does not answer.
   file (reconstructed and transferred bytes) print monotonic lines capped
   at the file's size.
 
-Run: .venv/bin/python tests/test_model_install.py
+Run: .venv/bin/python tests/test_modelpull.py
 """
 
 import json

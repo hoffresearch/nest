@@ -66,7 +66,7 @@ tests/test_query_embedder_routing.py
 tests/test_embedpack.py
 tests/test_bench_runner.py
 tests/test_catalogue.py
-tests/test_model_install.py
+tests/test_modelpull.py
 script/embedpack.py
 script/preflight.py
 tests/test_preflight.py
