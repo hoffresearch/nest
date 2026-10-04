@@ -4,7 +4,7 @@
 #
 #   cargo clippy --workspace --all-targets -- -D warnings
 #
-# The `-D warnings` flag is what release_check.sh enforces: every
+# The `-D warnings` flag is what fullcheck.sh enforces: every
 # clippy lint is treated as a hard error. New lints from clippy
 # upgrades will block the gate until reviewed.
 

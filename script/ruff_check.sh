@@ -1,7 +1,7 @@
 #!/bin/sh
 # script/ruff_check.sh -- ruff lint + format check on the python files we own.
 #
-# ONE list, used by script/release_check.sh (best-effort, skipped when ruff
+# ONE list, used by script/fullcheck.sh (best-effort, skipped when ruff
 # is not importable) and by .github/workflows/gatecheck.yml (mandatory). files not
 # on the list are legacy / vendored / generated and are tracked separately;
 # when you touch a python module, add it here and make it clean.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# release_check.sh - full release verification pipeline.
+# fullcheck.sh - full release verification pipeline.
 #
 # Runs every CI gate end-to-end:
 #   1. cargo build (release), then the PyO3 extension (.so) the tests load
@@ -18,7 +18,7 @@
 #   URNA_QUERIES   - measure_presets query count (default: 100)
 #   URNA_K         - measure_presets top-k (default: 10)
 #   URNA_PYTHON    - python interpreter (default: ./.venv/bin/python if present, else python3)
-#   URNA_OUT       - where to write the post-run JSON (default: /tmp/release_check_post.json)
+#   URNA_OUT       - where to write the post-run JSON (default: /tmp/fullcheck_post.json)
 
 set -euo pipefail
 
@@ -29,7 +29,7 @@ ROOT="$(pwd)"
 BASELINE="${URNA_BASELINE:-data/measure/baseline.json}"
 QUERIES="${URNA_QUERIES:-100}"
 K="${URNA_K:-10}"
-OUT="${URNA_OUT:-/tmp/release_check_post.json}"
+OUT="${URNA_OUT:-/tmp/fullcheck_post.json}"
 
 if [[ -n "${URNA_PYTHON:-}" ]]; then
   PY="$URNA_PYTHON"
