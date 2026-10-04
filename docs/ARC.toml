@@ -194,11 +194,11 @@ links = ["crates/urna-ingest/src/fci/mod.rs"]
 
 [[layers]]
 name = "distribution"
-role = "Install and release surface (issue #75): cargo-dist CLI releases (5 targets, checksums, Sigstore attestations, Homebrew tap, npm `@urna/cli`, crates.io publish), the maturin urna wheel staged by script/stage_wheel.py (bundled potion table, abi3 cp312), the one-liner installers, urna doctor, the minimal Docker image, and the offline integration examples"
+role = "Install and release surface (issue #75): cargo-dist CLI releases (5 targets, checksums, Sigstore attestations, Homebrew tap, npm `@urna/cli`, crates.io publish), the maturin urna wheel staged by script/wheelprep.py (bundled potion table, abi3 cp312), the one-liner installers, urna doctor, the minimal Docker image, and the offline integration examples"
 entrypoints = [
     "script/install.sh",
     "packs/pyproject.toml",
-    "script/stage_wheel.py",
+    "script/wheelprep.py",
     "script/embedpack.py",
 ]
 links = [
@@ -2906,15 +2906,15 @@ links = [
 [[inventory.distribution]]
 path = "packs/pyproject.toml"
 kind = "python-packaging"
-purpose = "maturin project for the urna wheel; staged verbatim into packs/staging/ by script/stage_wheel.py"
+purpose = "maturin project for the urna wheel; staged verbatim into packs/staging/ by script/wheelprep.py"
 links = [
-    "script/stage_wheel.py",
+    "script/wheelprep.py",
     "python/urna.py",
     "python/urna_cli.py",
 ]
 
 [[inventory.distribution]]
-path = "script/stage_wheel.py"
+path = "script/wheelprep.py"
 kind = "python-source"
 purpose = "Stage the wheel project (urna package + bundled potion table + CLI shim) under packs/staging/"
 links = [
@@ -2995,7 +2995,7 @@ links = [
     ".github/workflows/release.yml",
     ".github/workflows/tagverify.yml",
     "packs/pyproject.toml",
-    "script/stage_wheel.py",
+    "script/wheelprep.py",
 ]
 
 [[inventory.distribution]]
@@ -3020,7 +3020,7 @@ links = ["script/releasepr.sh"]
 path = "script/rehearsal.py"
 kind = "python-source"
 purpose = "generate [--check]: the strict release.yml -> rehearsal.yml transformation, refusing an unknown job, condition, plan command, top-level key or a kept job reading a secret; impact: the release inputs (crates, manifests, packaging, staging scripts, the payload and wheel sources read from the stage scripts, the model dirs, README, LICENSE, the release workflows); assets: every planned artifact, the four wheels and their .sha256, every checksum and sha256.sum, the payload VERSION, the Linux binary on the golden fixture; verdict: the required check"
-links = [".github/workflows/rehearsal.yml", "tests/test_rehearsal.py", "script/embedpack.py", "script/stage_wheel.py"]
+links = [".github/workflows/rehearsal.yml", "tests/test_rehearsal.py", "script/embedpack.py", "script/wheelprep.py"]
 
 [[inventory.distribution]]
 path = ".github/workflows/runreport.yml"

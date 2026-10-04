@@ -191,7 +191,7 @@ groups:
         when: surgir um módulo Python sujeito a lint ou mudar a execução do Ruff.
       - path: script/embedpack.py
         when: mudarem arquivos distribuídos, modelos ou o processo de staging do payload.
-      - path: script/stage_wheel.py
+      - path: script/wheelprep.py
         when: mudarem arquivos distribuídos, modelos ou o processo de staging da wheel.
       - path: script/fetch_potion.sh
         when: mudar a revisão aprovada, origem ou identidade da tabela Potion.

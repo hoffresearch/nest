@@ -642,7 +642,7 @@ One `cp312-abi3` wheel per platform: Linux x86_64, Linux aarch64, macOS universa
 
 The console entry point `urna` installed by the wheel is the read-only subset (`validate`, `inspect`, `stats`, `search`) over the library API, which is what makes `uvx --from urna urna ...` work. The full CLI (`ask`, `retrieve`, `build`, `doctor`, `media`, the ANN/graph/space searches) is the Rust binary from the one-liner, Windows, Homebrew and binstall items.
 
-The wheel is staged by `script/stage_wheel.py` into `packs/staging/` (gitignored) from `packs/pyproject.toml`, and built by maturin in `wheelmake.yml` inside the release run; `pypiindex.yml` publishes those same files. The dev flow (`cargo build` + copy the `.so`) is unchanged and does not install a package.
+The wheel is staged by `script/wheelprep.py` into `packs/staging/` (gitignored) from `packs/pyproject.toml`, and built by maturin in `wheelmake.yml` inside the release run; `pypiindex.yml` publishes those same files. The dev flow (`cargo build` + copy the `.so`) is unchanged and does not install a package.
 
 </details>
 
