@@ -324,7 +324,7 @@ path = [
     "tests/test_e2e.py",
     "tests/test_builder.py",
     "tests/test_search_text_model_hash.py",
-    "script/ruff_check.sh",
+    "script/ruffcheck.sh",
 ]
 summary = "Build, test, lint, rebuild the extension, run Python suites, and compare preset metrics against the baseline"
 
@@ -337,7 +337,7 @@ path = [
     "crates/urna-format/tests/mutation_fuzz.rs",
     "crates/urna-engine/tests/mutation_fuzz.rs",
     "fuzz/Cargo.toml",
-    "script/ruff_check.sh",
+    "script/ruffcheck.sh",
     "crates/urna-ingest/Cargo.toml",
 ]
 summary = "On every push and pull request: fmt, Clippy with the workspace deny lints, build + test on Ubuntu (AVX2) and macOS (NEON), the mutation-fuzz harnesses at a higher iteration count, the 639-line guard, crates/urna-ingest's gate, ruff over the shared file list, and a bounded cargo-fuzz smoke on nightly"
@@ -470,15 +470,15 @@ links = ["Cargo.toml", "crates/urna-ingest/Cargo.toml", "fuzz/Cargo.toml"]
 [[inventory.root]]
 path = ".github/workflows/gatecheck.yml"
 kind = "ci-workflow"
-purpose = "The pull-request gate: fmt, Clippy with the deny lints, build + test on Ubuntu and macOS, mutation-fuzz harnesses, 639-line guard, crates/urna-ingest gate, ruff via script/ruff_check.sh, cargo-fuzz smoke on nightly; nightly: fuzz soak, Miri on urna-format"
+purpose = "The pull-request gate: fmt, Clippy with the deny lints, build + test on Ubuntu and macOS, mutation-fuzz harnesses, 639-line guard, crates/urna-ingest gate, ruff via script/ruffcheck.sh, cargo-fuzz smoke on nightly; nightly: fuzz soak, Miri on urna-format"
 links = [
     "script/fullcheck.sh",
-    "script/ruff_check.sh",
+    "script/ruffcheck.sh",
     "fuzz/Cargo.toml",
 ]
 
 [[inventory.root]]
-path = "script/ruff_check.sh"
+path = "script/ruffcheck.sh"
 kind = "shell-script"
 purpose = "The ONE list of Python files ruff checks and format-checks, shared by fullcheck.sh and gatecheck.yml"
 links = [

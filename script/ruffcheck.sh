@@ -1,12 +1,12 @@
 #!/bin/sh
-# script/ruff_check.sh -- ruff lint + format check on the python files we own.
+# script/ruffcheck.sh -- ruff lint + format check on the python files we own.
 #
 # ONE list, used by script/fullcheck.sh (best-effort, skipped when ruff
 # is not importable) and by .github/workflows/gatecheck.yml (mandatory). files not
 # on the list are legacy / vendored / generated and are tracked separately;
 # when you touch a python module, add it here and make it clean.
 #
-#   URNA_PYTHON=.venv/bin/python sh script/ruff_check.sh
+#   URNA_PYTHON=.venv/bin/python sh script/ruffcheck.sh
 set -eu
 cd "$(dirname "$0")/.."
 PY="${URNA_PYTHON:-python3}"
