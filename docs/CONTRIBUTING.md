@@ -52,7 +52,7 @@ These conventions are not aesthetic preferences. They exist to keep the repo rea
 ### Naming
 
 - Directories and assets are **kebab-case English** (`data/`, `docs/`, `examples/`, `assets/images/`, dataset folders); Rust workspace conventions (`crates/`, `target/`) and language defaults (`python/`, `scripts/`, `tests/`) stay as their stacks expect.
-- The docs keep their upper-case names: `docs/USAGE.md`, `docs/BENCH.md`, `docs/SECURITY.md`, `docs/CONTRIBUTING.md`, `docs/CODE_OF_CONDUCT.md`, `docs/CHANGELOG`, `docs/LICENSE`, `docs/ARC.toml`, `docs/ADR/`.
+- The docs keep their upper-case names: `docs/USAGE.md`, `docs/BENCH.md`, `docs/SECURITY.md`, `docs/CONTRIBUTING.md`, `docs/CODE_OF_CONDUCT.md`, `docs/CHANGELOG`, `docs/LICENSE`, `docs/ARC.toml`, `docs/ADR/` and its category folders (`docs/ADR/RETRIEVAL/`).
 - Source files follow the conventions of their language (`snake_case.rs`, `snake_case.py`).
 - When proposing renames or moves, list exact `mv` commands first, execute the move, fix every touched import, and run the test suite after.
 

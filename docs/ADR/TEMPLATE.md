@@ -3,7 +3,7 @@ id: ADR-NNNN
 title: <Decision title>
 kind: decision # decision | lesson
 status: proposed # proposed | accepted | rejected | deprecated | superseded
-category: <category> # architecture | format | compression | data | search | performance | reliability | models | interfaces | security | release | workflow
+category: <category> # STRUCTURE | CONTAINER | INTERFACE | EMBEDDERS | MODELSZOO | PACKAGING | RETRIEVAL | SAFEGUARD | WORKFLOWS | DATASTORE | OPTIMIZER | STABILITY | ENCODINGS
 date: YYYY-MM-DD
 last-updated: YYYY-MM-DD
 tags: []

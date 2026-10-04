@@ -2437,7 +2437,7 @@ links = [
 [[inventory.data_docs_python_scripts_tests]]
 path = "docs/ADR"
 kind = "directory"
-purpose = "Architecture decision records and reference lessons, one folder per category (architecture, format, compression, data, search, performance, reliability, models, interfaces, security, release, workflow); records are numbered across the tree and carry a YAML header for search"
+purpose = "Architecture decision records and reference lessons, one folder per category (STRUCTURE, CONTAINER, INTERFACE, EMBEDDERS, MODELSZOO, PACKAGING, RETRIEVAL, SAFEGUARD, WORKFLOWS, DATASTORE, OPTIMIZER, STABILITY, ENCODINGS); records are numbered across the tree and carry a YAML header for search"
 links = [
     "docs/ADR/README.md",
     "docs/ADR/TEMPLATE.md",
