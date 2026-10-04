@@ -114,10 +114,10 @@ def test_each_drift_is_named() -> None:
 def test_a_drift_only_in_the_lockfile() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = copy_tree(Path(tmp))
-        lock = f'name = "urna-python"\nversion = "{VERSION}"'
+        lock = f'name = "urna-bridge"\nversion = "{VERSION}"'
         edit(root, "Cargo.lock", lock, lock.replace(VERSION, bump(VERSION)))
         errors = preflight.check_tree(root)
-        assert errors == [f"Cargo.lock: urna-python is {bump(VERSION)!r}, not {VERSION!r}"], errors
+        assert errors == [f"Cargo.lock: urna-bridge is {bump(VERSION)!r}, not {VERSION!r}"], errors
 
 
 def test_a_tag_on_main_passes() -> None:

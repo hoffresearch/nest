@@ -1,6 +1,6 @@
 """Python entry point for the .urna binary format.
 
-Loads the PyO3 extension `_urna` (built from the `urna-python` Rust crate)
+Loads the PyO3 extension `_urna` (built from the `urna-bridge` Rust crate)
 and re-exports a stable surface:
 
   - urna.open(path)                     -> UrnaFile
@@ -58,7 +58,7 @@ def _load_extension():
             return mod
     raise ImportError(
         "Cannot find _urna extension. Run "
-        "`cargo build --release -p urna-python && "
+        "`cargo build --release -p urna-bridge && "
         "cp target/release/lib_urna.dylib python/_urna.so` "
         "from the repo root."
     )

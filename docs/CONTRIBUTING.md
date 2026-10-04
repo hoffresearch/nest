@@ -33,7 +33,7 @@ cargo build --release --workspace
 # the python extension is a separate build: `pyo3/extension-module` keeps
 # libpython out of the cdylib (without it the .so segfaults under uv's
 # standalone interpreters)
-cargo build --release -p urna-python --features pyo3/extension-module
+cargo build --release -p urna-bridge --features pyo3/extension-module
 cp target/release/lib_urna.dylib python/_urna.so   # macOS
 cp target/release/lib_urna.so   python/_urna.so    # linux
 

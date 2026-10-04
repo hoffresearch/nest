@@ -2,7 +2,7 @@
 #
 # scripts/stage_wheel.py copies this file VERBATIM into packaging/staging/;
 # every relative path below resolves from staging/, not from packaging/.
-# the dev flow is unchanged: `cargo build --release -p urna-python --features
+# the dev flow is unchanged: `cargo build --release -p urna-bridge --features
 # pyo3/extension-module`, then copy target/release/lib_urna.dylib (macos) or
 # lib_urna.so (linux) to python/_urna.so; this file only feeds the published
 # package.
@@ -48,7 +48,7 @@ Issues = "https://github.com/hoffresearch/urna/issues"
 urna = "urna._cli:main"
 
 [tool.maturin]
-manifest-path = "../../crates/urna-python/Cargo.toml"
+manifest-path = "../../crates/urna-bridge/Cargo.toml"
 module-name = "urna._urna"
 python-source = "."
 features = ["pyo3/extension-module"]
