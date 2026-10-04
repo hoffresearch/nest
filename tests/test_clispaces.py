@@ -2,7 +2,7 @@
 and typed errors, the stats spaces block, inspect --json spaces[], and
 benchmark --space. Corpus built via urna.build spaces= (as test_space_bridge).
 
-Run: .venv/bin/python tests/test_cli_space.py  (needs target/release/urna)
+Run: .venv/bin/python tests/test_clispaces.py  (needs target/release/urna)
 """
 
 import json
