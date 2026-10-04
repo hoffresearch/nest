@@ -65,7 +65,7 @@ tests/test_clispaces.py
 tests/test_query_embedder_routing.py
 tests/test_embedpack.py
 tests/test_bench_runner.py
-tests/test_model_catalog.py
+tests/test_catalogue.py
 tests/test_model_install.py
 script/embedpack.py
 script/preflight.py
