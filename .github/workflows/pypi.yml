@@ -1,87 +1,132 @@
-# pypi release for the `urna` wheel (issue #75).
+# publish the `urna` wheels to pypi (or testpypi) with OIDC trusted
+# publishing and pep 740 attestations. a top-level workflow on purpose: pypi
+# matches the publisher on `job_workflow_ref`, and its docs do not support a
+# reusable workflow as the publisher, which every cargo-dist custom job is.
+# so the release run's publish-pypi job (publish-pypi.yml) dispatches this
+# workflow on the tag and waits for this run; nothing here builds.
 #
-# one abi3 wheel per platform (cp312, matching pyo3 abi3-py312), built by
-# maturin from the staged project (scripts/stage_wheel.py), published with
-# OIDC trusted publishing + pep 740 attestations. the one exception is the
-# bootstrap: while the `pypi` environment carries a PYPI_API_TOKEN secret,
-# the action publishes with it and skips the attestations (a trusted
-# publisher can only be added once the project exists). deleting the secret
-# switches back to OIDC with no workflow change: an empty password is what
-# selects trusted publishing. the
-# manual cargo+cp build stays the dev path; this workflow only feeds the
-# published package.
+# two paths, chosen by `index`, never mixed:
 #
-# trigger: pushing a v* tag on main (same tag that drives the dist release);
-# the tag's signature is verified first (tag-verify.yml).
-# prerequisite (one-time, external): the `pypi` environment, plus either the
-# trusted publisher entry on PyPI or the bootstrap token; see the maintainer
-# checklist in docs/USAGE.md.
+# - pypi: dispatched on a tag ref. the tag is signed and passes the
+#   preflight (tag-verify.yml); `source_run` is the release.yml run of that
+#   tag whose host job succeeded; the wheels and their .sha256 come from the
+#   github release that host made, and each wheel's build attestation is
+#   verified against the signer workflow (build-wheels.yml), the tag's commit
+#   and the tag's ref. the files pypi gets are the release's files.
+# - testpypi: dispatched on main, to prove the publisher before a release.
+#   `source_run` is a successful release-rehearsal.yml run on a commit of
+#   main; the wheels and checksums come from that run's artifacts (the
+#   rehearsal makes no attestations). this path can only reach testpypi.
+#
+# the upload is idempotent (scripts/pypi_release.py plan): a wheel the
+# index already has with the same sha256 is skipped, one with another
+# sha256 fails, the rest are uploaded, so a rerun after a partial upload
+# finishes it. a manual dispatch goes through the same checks.
+#
+# prerequisite (one-time, external): a trusted publisher on pypi and on
+# testpypi for this file (`pypi.yml`) with the environment of the same name
+# as the index; see the maintainer checklist in docs/USAGE.md.
 
 name: pypi
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      index:
+        description: where to publish (pypi from a tag, testpypi from main)
+        required: true
+        type: choice
+        options: [pypi, testpypi]
+      source_run:
+        description: the run that built the wheels (release.yml for pypi, release-rehearsal.yml for testpypi)
+        required: true
+        type: string
 
 permissions:
   contents: read
 
+concurrency:
+  group: pypi-${{ inputs.index }}
+  cancel-in-progress: false
+
 jobs:
+  ref:
+    name: the ref fits the index
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          INDEX: ${{ inputs.index }}
+        run: |
+          set -eu
+          case "$INDEX:$GITHUB_REF_TYPE:$GITHUB_REF_NAME" in
+            pypi:tag:v*) ;;
+            testpypi:branch:main) ;;
+            *) echo "::error::$INDEX publishes from a v* tag (pypi) or from main (testpypi), not $GITHUB_REF_TYPE $GITHUB_REF_NAME"; exit 1 ;;
+          esac
+
   tag-verify:
-    name: tag signature
-    if: github.event_name == 'push'
+    name: tag signature and preflight
+    needs: [ref]
+    if: inputs.index == 'pypi'
     uses: ./.github/workflows/tag-verify.yml
 
-  wheels:
-    name: wheel ${{ matrix.target }}
-    needs: [tag-verify]
-    if: always() && (needs.tag-verify.result == 'success' || needs.tag-verify.result == 'skipped')
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { os: ubuntu-24.04, target: x86_64-unknown-linux-gnu }
-          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
-          - { os: macos-latest, target: universal2-apple-darwin }
-          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+  publish:
+    name: publish urna to ${{ inputs.index }}
+    needs: [ref, tag-verify]
+    if: always() && needs.ref.result == 'success' && (needs.tag-verify.result == 'success' || (inputs.index == 'testpypi' && needs.tag-verify.result == 'skipped'))
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.index }}
+    permissions:
+      contents: read
+      actions: read # the source run and its artifacts
+      attestations: read
+      id-token: write # trusted publishing + pep 740 attestations
+    env:
+      GH_TOKEN: ${{ github.token }}
+      INDEX: ${{ inputs.index }}
+      SOURCE_RUN: ${{ inputs.source_run }}
     steps:
       - uses: actions/checkout@v6
-      - name: fetch the potion table the wheel bundles (verified against its lfs pointer)
-        shell: bash
-        run: sh scripts/fetch_potion.sh
-      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
-      - name: stage the wheel project
-        run: python scripts/stage_wheel.py
-      - name: build the abi3 wheel
-        uses: PyO3/maturin-action@v1
+          fetch-depth: 0
+          persist-credentials: false
+      - name: the source run is the one this index allows
+        run: python3 scripts/pypi_release.py source --index "$INDEX" --run "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --sha "$(git rev-parse HEAD)"
+      - name: version
+        id: version
+        run: echo "version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')" >> "$GITHUB_OUTPUT"
+      - name: the wheels and checksums of the github release (pypi)
+        if: inputs.index == 'pypi'
+        run: |
+          set -eu
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" -D dist -p '*.whl' -p '*.whl.sha256'
+          # built by build-wheels.yml from this tag's commit and ref, not just
+          # somewhere in this repository.
+          for wheel in dist/*.whl; do
+            gh attestation verify "$wheel" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/build-wheels.yml" \
+              --source-digest "$(git rev-parse HEAD)" --source-ref "$GITHUB_REF"
+          done
+      - name: the wheels and checksums of the rehearsal run (testpypi)
+        if: inputs.index == 'testpypi'
+        uses: actions/download-artifact@v8
         with:
-          working-directory: packaging/staging
-          target: ${{ matrix.target }}
-          args: --release --out ../../dist-wheels
-      - uses: actions/upload-artifact@v7
-        with:
-          name: wheel-${{ matrix.target }}
-          path: dist-wheels/*.whl
-
-  publish:
-    name: publish urna to pypi
-    needs: [wheels]
-    runs-on: ubuntu-24.04
-    environment: pypi
-    permissions:
-      id-token: write # trusted publishing + pep 740 attestations
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: wheel-*
+          pattern: artifacts-wheel-*
           path: dist
           merge-multiple: true
-      - name: publish
+          run-id: ${{ inputs.source_run }}
+          github-token: ${{ github.token }}
+      - name: which wheels the index still needs (same sha256 skipped, another fails)
+        id: plan
+        run: python3 scripts/pypi_release.py plan --index "$INDEX" --dir dist --version "${{ steps.version.outputs.version }}" --out upload
+      - name: publish to pypi
+        if: inputs.index == 'pypi' && steps.plan.outputs.upload != '0'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          # empty (secret unset) = OIDC trusted publishing + attestations.
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: upload/
+      - name: publish to testpypi
+        if: inputs.index == 'testpypi' && steps.plan.outputs.upload != '0'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: upload/
+          repository-url: https://test.pypi.org/legacy/

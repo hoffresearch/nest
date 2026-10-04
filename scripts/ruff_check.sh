@@ -70,6 +70,8 @@ tests/test_model_install.py
 scripts/stage_embedder_payload.py
 scripts/release_preflight.py
 tests/test_release_preflight.py
+scripts/pypi_release.py
+tests/test_pypi_release.py
 "
 # shellcheck disable=SC2086
 "$PY" -m ruff check $TARGETS

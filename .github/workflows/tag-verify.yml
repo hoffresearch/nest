@@ -1,8 +1,8 @@
-# verify the release tag's signature. a reusable
-# workflow: cargo-dist calls it in the plan phase (`plan-jobs` in
-# Cargo.toml), pypi.yml calls it before building wheels. an unsigned tag,
-# or one signed by a key not listed in .github/allowed_signers, fails the
-# release before anything is built or uploaded. after the signature,
+# verify the release tag's signature. a reusable workflow: build-wheels.yml
+# calls it as its first job inside the release run (a failure there stops
+# the host job, see the plan-jobs note in Cargo.toml), and pypi.yml calls it
+# before a pypi upload. an unsigned tag, or one signed by a key not listed
+# in .github/allowed_signers, fails the release before anything is uploaded. after the signature,
 # scripts/release_preflight.py checks the tag names the workspace version,
 # its commit is on main (fetch-depth 0 brings origin/main) and every file a
 # release versions agrees (pins, lockfile, CITATION.cff, changelog).
