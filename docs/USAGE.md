@@ -700,11 +700,11 @@ cargo install urna      # compile from crates.io
 <summary>Docker</summary>
 
 ```sh
-docker build --platform=linux/amd64 -f docker/Dockerfile -t urna .
+docker build --platform=linux/amd64 -t urna .
 docker run --rm -v "$PWD/data:/data:ro" urna validate /data/corpus_next.v1.urna
 ```
 
-`docker/Dockerfile` builds the static musl binary in a throwaway toolchain stage and copies it into `scratch`: no shell, no package manager, no network at runtime. The corpus arrives as a mounted volume, so the same image serves air-gapped hosts. On Apple silicon build the aarch64 variant natively (`--build-arg TARGET=aarch64-unknown-linux-musl`); QEMU user emulation crashes rustc mid-build. The binary is the engine-only CLI, built with `--locked` (the dependency versions of `Cargo.lock`) and `--no-default-features` (no terminal UI, so no `setup` or `tui`), from a toolchain image pinned by tag and digest. The image has no Python, so `ask`, `retrieve`, `build`, `search-text` and `doctor`'s embed check do not run inside it; the other engine verbs (file + vector in) do.
+The root `Dockerfile` builds the static musl binary in a throwaway toolchain stage and copies it into `scratch`: no shell, no package manager, no network at runtime. The corpus arrives as a mounted volume, so the same image serves air-gapped hosts. On Apple silicon build the aarch64 variant natively (`--build-arg TARGET=aarch64-unknown-linux-musl`); QEMU user emulation crashes rustc mid-build. The binary is the engine-only CLI, built with `--locked` (the dependency versions of `Cargo.lock`) and `--no-default-features` (no terminal UI, so no `setup` or `tui`), from a toolchain image pinned by tag and digest. The image has no Python, so `ask`, `retrieve`, `build`, `search-text` and `doctor`'s embed check do not run inside it; the other engine verbs (file + vector in) do.
 
 </details>
 

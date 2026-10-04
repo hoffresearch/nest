@@ -86,7 +86,7 @@ groups:
         when: mudarem os arquivos tratados por LFS ou as regras de normalização.
       - path: .dockerignore
         when: mudar o conteúdo necessário no contexto de build Docker.
-      - path: docker/Dockerfile
+      - path: Dockerfile
         when: mudarem toolchain, alvo, dependências ou conteúdo da imagem.
 
   - name: crates
