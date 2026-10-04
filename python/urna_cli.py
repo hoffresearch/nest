@@ -4,7 +4,7 @@
 the python package alone. this is a THIN read-only shim over the library
 api: validate / inspect / stats / search. the full verb set (ask, retrieve,
 search-text, benchmark, cite, doctor) lives in the rust `urna` binary,
-installed by scripts/install.sh.
+installed by script/install.sh.
 
 dev repo usage:  python3 python/urna_cli.py validate data/corpus_next.v1.urna
 installed usage: urna validate corpus.urna
@@ -65,7 +65,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         prog="urna",
         description="read-only urna verbs from the urna wheel; "
-        "the full cli is the rust binary (scripts/install.sh)",
+        "the full cli is the rust binary (script/install.sh)",
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 

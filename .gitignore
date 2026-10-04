@@ -71,8 +71,8 @@ data/demo/*
 !data/demo/Instructions.md
 .env
 
-# wheel staging (scripts/stage_wheel.py output)
-packaging/staging/
+# wheel staging (script/stage_wheel.py output)
+packs/staging/
 # mtg corpus artifacts (the benchmark lives in its own repository)
 data/mtg/
 
@@ -90,6 +90,6 @@ fuzz/coverage/
 docs/hardening-plan.md
 TMP/
 
-# quickstart build output (examples/quickstart/corpus.toml)
-examples/quickstart/out/
+# quickstart build output (demos/quickstart/corpus.toml)
+demos/quickstart/out/
 tools/

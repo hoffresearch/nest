@@ -4,14 +4,14 @@ target/
 data/
 .git/
 .gitignore
-packaging/staging/
+packs/staging/
 tmp/
 tools/
 docs/
-examples/
+demos/
 python/
 crates/urna-ingest/
-scripts/
+script/
 tests/
 *.md
 .env

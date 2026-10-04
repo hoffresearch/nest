@@ -12,7 +12,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::cmd::paths;
 
-/// the same floors as `packaging/pyproject.toml` (`urna[embed]`).
+/// the same floors as `packs/pyproject.toml` (`urna[embed]`).
 pub const DEPS: [&str; 2] = ["numpy>=1.26", "tokenizers>=0.20"];
 
 #[derive(Clone, Debug)]

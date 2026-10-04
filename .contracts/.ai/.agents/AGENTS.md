@@ -46,7 +46,7 @@ O projeto usa commits assinados e squash merge. Ao atualizar um PR empilhado, re
 - `crates/urna-bridge`: extensão PyO3 distribuída na wheel.
 - `python/`: API Python, construção dos corpora, embedders e catálogo de modelos.
 - `crates/urna-ingest` (schema `.fci` do forge) e `fuzz/`: workspaces Cargo separados; o `Cargo.toml` da raiz exclui o primeiro e comandos no workspace principal não os cobrem.
-- `packaging/`, `scripts/` e `.github/`: empacotamento, instalação, validação e releases.
+- `packs/`, `script/` e `.github/`: empacotamento, instalação, validação e releases.
 
 Os manifests definem as versões e os requisitos das ferramentas. Consulte-os ao mudar dependências, features ou compatibilidade; o crate da CLI pode ter um MSRV diferente do restante do workspace.
 
@@ -69,9 +69,9 @@ Escolha verificações que exercitem o comportamento alterado e cumpram os check
 | Mudança | Verificação pertinente |
 | --- | --- |
 | Rust | Testes dos crates afetados, `cargo fmt --all --check` e Clippy; confira também `--no-default-features` ao tocar na CLI |
-| Python | Scripts `tests/test_*.py` e testes próximos ao módulo, mais `sh scripts/ruff_check.sh` |
+| Python | Scripts `tests/test_*.py` e testes próximos ao módulo, mais `sh script/ruff_check.sh` |
 | `crates/urna-ingest/` ou `fuzz/` | Comandos no manifesto próprio, conforme CONTRIBUTING e `fuzz/README.md` |
-| Formato, busca, desempenho ou integração ampla | `./scripts/release_check.sh`, incluindo a medição quando aplicável |
+| Formato, busca, desempenho ou integração ampla | `./script/release_check.sh`, incluindo a medição quando aplicável |
 | Empacotamento e distribuição | Testes dos scripts afetados, coerência dos workflows gerados e ensaio de empacotamento |
 | Documentação, links ou comentários | Conferência de caminhos, exemplos e sintaxe afetados; sem repetir a medição de corpora |
 
@@ -83,9 +83,9 @@ Registre o que passou, falhou ou foi pulado e em qual commit. Um teste dispensad
 
 ## Empacotamento e release
 
-`packaging/pyproject.toml` é a fonte da wheel; `packaging/staging/` é gerado. Para mudar a configuração do cargo-dist, rode `dist generate` e depois `python scripts/release_rehearsal.py generate`. Edite as fontes dos geradores e confira os arquivos resultantes.
+`packs/pyproject.toml` é a fonte da wheel; `packs/staging/` é gerado. Para mudar a configuração do cargo-dist, rode `dist generate` e depois `python script/release_rehearsal.py generate`. Edite as fontes dos geradores e confira os arquivos resultantes.
 
-A preparação local usa `scripts/release_prepare.sh X.Y.Z`, com cargo-release fixado, worktree isolada e PR assinado. Tag e publicação são etapas separadas. Preserve os metadados de citação escolhidos pelo mantenedor ao atualizar os campos versionados.
+A preparação local usa `script/release_prepare.sh X.Y.Z`, com cargo-release fixado, worktree isolada e PR assinado. Tag e publicação são etapas separadas. Preserve os metadados de citação escolhidos pelo mantenedor ao atualizar os campos versionados.
 
 A release constrói binários, payload e wheels antes de publicar. O PyPI recebe as mesmas wheels por um workflow de topo despachado pela release. Os testes de instalação esperam a versão exata; o relatório acompanha também execuções com falha. O USAGE contém os comandos, requisitos de origem, autenticação e recuperação de uploads parciais.
 
@@ -109,6 +109,6 @@ Atualize a explicação atual no documento responsável. Registre o motivo e o h
 - Testes de instalação devem usar diretórios isolados e um binário fora de `target/`, para não encontrar acidentalmente o payload, o Python ou os modelos da máquina.
 - Atualize `python/forge/catalog.json` pelo gerador ao mudar o registry e confira `python python/forge/model_catalog.py --check`. Resolva snapshots pelas revisões fixadas e preserve a lista de arquivos usada no fingerprint.
 - Ao tocar em SIMD ou Miri, confira os requisitos do compilador em `build.rs` e as limitações documentadas nos testes. Mudanças nesses caminhos precisam manter o fallback compatível.
-- Mantenha arquivos de dados e pesos nos destinos e políticas de LFS existentes. O hook `scripts/pre-commit` verifica os dados preparados para commit; a release obtém a tabela Potion pelo script com hash fixado.
+- Mantenha arquivos de dados e pesos nos destinos e políticas de LFS existentes. O hook `script/pre-commit` verifica os dados preparados para commit; a release obtém a tabela Potion pelo script com hash fixado.
 
 Antes de concluir, faça a [revisão final](.skills/afterwork/AFTERWORK.md). Entregue o resultado, as evidências e as limitações relevantes. Se depender do desenvolvedor humano, indique a ação indispensável de forma direta.

@@ -17,7 +17,7 @@ domain: contributing
 3. Keep each PR focused on one concern. Small is better.
 4. Validate the behavior the change affects. Reuse existing tests and add cases for new guarantees or regressions. Use real artifacts for file and installation behavior, and controlled service responses for failure and retry cases.
 5. If the change alters architecture, module boundaries, data flow, or doc locations, update `docs/ARC.toml` in the same PR. Keep it concise and pragmatic. Do not add a separate human architecture doc; `ARC.toml` is the machine map, the human reference, and the mermaid diagram all in one file. Record an architecture decision, or a lesson that must stay as reference, as an ADR under `docs/ADR/` (layout and categories in `docs/ADR/README.md`).
-6. Run checks appropriate to the change and the required CI checks. Use `./scripts/release_check.sh` for format, runtime, performance or broad integration changes; it rebuilds the extension, runs Rust and Python tests, lint and the corpus regression measurements. Focused script or documentation changes can use targeted checks, with their scope explained in the PR; editorial changes do not repeat corpus measurements. `.github/workflows/ci.yml` covers the Rust side on Linux, macOS and Windows plus checks the local gate does not run (cargo-deny, cargo-semver-checks, the engine-only Clippy, the benches compiled, a cargo-fuzz smoke, the embedder payload staged under Python 3.10). Its Python job runs ruff, the model catalog check and the release suites that need no built extension; the suites that load `_urna.so` run only in the local gate, so run them locally. A pull request that touches a release input also runs the release rehearsal (`release-rehearsal.yml`), a required check.
+6. Run checks appropriate to the change and the required CI checks. Use `./script/release_check.sh` for format, runtime, performance or broad integration changes; it rebuilds the extension, runs Rust and Python tests, lint and the corpus regression measurements. Focused script or documentation changes can use targeted checks, with their scope explained in the PR; editorial changes do not repeat corpus measurements. `.github/workflows/gatecheck.yml` covers the Rust side on Linux, macOS and Windows plus checks the local gate does not run (cargo-deny, cargo-semver-checks, the engine-only Clippy, the benches compiled, a cargo-fuzz smoke, the embedder payload staged under Python 3.10). Its Python job runs ruff, the model catalog check and the release suites that need no built extension; the suites that load `_urna.so` run only in the local gate, so run them locally. A pull request that touches a release input also runs the release rehearsal (`rehearsal.yml`), a required check.
 7. Commit with a clear message in plain English. No conventional commits prefix.
 8. Open a PR against `main`. The maintainer squash merges it; `main` requires verified (SSH-signed) commits, linear history and a passing `rehearsal` check (the release rehearsal, dispensed when the change touches no release input), so sign your commits (`git config commit.gpgsign true` with an SSH or GPG key registered on GitHub).
 
@@ -51,7 +51,7 @@ These conventions are not aesthetic preferences. They exist to keep the repo rea
 
 ### Naming
 
-- Directories and assets are **kebab-case English** (`data/`, `docs/`, `examples/`, `assets/images/`, dataset folders); Rust workspace conventions (`crates/`, `target/`) and language defaults (`python/`, `scripts/`, `tests/`) stay as their stacks expect.
+- Directories and assets are **kebab-case English** (`data/`, `docs/`, `demos/`, `assets/image/`, dataset folders); Rust workspace conventions (`crates/`, `target/`) and language defaults (`python/`, `script/`, `tests/`) stay as their stacks expect.
 - The docs keep their upper-case names: `docs/USAGE.md`, `docs/BENCH.md`, `docs/SECURITY.md`, `docs/CONTRIBUTING.md`, `docs/CODE_OF_CONDUCT.md`, `docs/CHANGELOG`, `docs/ARC.toml`, `docs/ADR/` and its category folders (`docs/ADR/RETRIEVAL/`).
 - Source files follow the conventions of their language (`snake_case.rs`, `snake_case.py`).
 - When proposing renames or moves, list exact `mv` commands first, execute the move, fix every touched import, and run the test suite after.
@@ -86,7 +86,7 @@ Rust:
 Python:
 
 - Target `py312`, line length 100. Ruff config in `pyproject.toml`.
-- Lints: `E F W I B UP SIM`. Run `sh scripts/ruff_check.sh` (`URNA_PYTHON=.venv/bin/python` picks the interpreter): it checks and format-checks the one file list CI and `release_check.sh` share; a new Python module goes on that list.
+- Lints: `E F W I B UP SIM`. Run `sh script/ruff_check.sh` (`URNA_PYTHON=.venv/bin/python` picks the interpreter): it checks and format-checks the one file list CI and `release_check.sh` share; a new Python module goes on that list.
 - Private helpers in `python/tools/` use the `_` prefix (e.g. `_baseline_decoder.py`).
 - Keep modules focused and follow the file hygiene guidance above.
 
@@ -102,7 +102,7 @@ python tests/test_e2e.py                      # the python suites, in the order
 python tests/test_builder.py                  # release_check.sh runs them; that
 python tests/test_search_text_model_hash.py   # script is the list, AGENTS.md names
 python tests/test_forge_spec.py               # the three that run by hand
-./scripts/release_check.sh
+./script/release_check.sh
 ```
 
 The Python tests are plain scripts (`pytest tests/` does not run them). Suites that exercise the extension need a rebuilt `_urna.so`; release tooling tests have their own prerequisites. Read `release_check.sh` and the CI workflows for their coverage. Report skipped tests separately from passed tests and identify the tested commit.

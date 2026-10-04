@@ -1,4 +1,4 @@
-# cargo-release, at the version scripts/release_prepare.sh pins, prepares a
+# cargo-release, at the version script/release_prepare.sh pins, prepares a
 # release pull request and nothing else: the script runs `cargo release
 # version` (the workspace version, the urna-format and urna-engine pins, the
 # lockfile) and `cargo release replace` (the list in crates/urna-clitui/Cargo.toml),

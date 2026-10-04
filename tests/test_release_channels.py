@@ -1,7 +1,7 @@
 """Prove the channel probes wait for the exact version and the report survives a failure.
 
-`scripts/release_channels.py` is what install-test waits with and what
-release-report.yml summarizes a release with. This suite serves controlled
+`script/release_channels.py` is what setuptest waits with and what
+runreport.yml summarizes a release with. This suite serves controlled
 answers from a local HTTP server standing in for the GitHub API, npm, the
 crates.io sparse index, PyPI and the Homebrew tap:
 
@@ -15,7 +15,7 @@ crates.io sparse index, PyPI and the Homebrew tap:
   another commit is named;
 - edge case: the exact version only: npm serving 0.5.30, an index whose only
   0.5.3 line is yanked, and a PyPI version without files are not served; an
-  API that does not answer, answers non-JSON or lists no pypi.yml run is
+  API that does not answer, answers non-JSON or lists no pypiindex.yml run is
   reported as unavailable or absent, never as success, and an answer the
   report cannot read still leaves a summary and exit 1.
 
@@ -32,7 +32,7 @@ import threading
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("channels", REPO / "scripts" / "release_channels.py")
+spec = importlib.util.spec_from_file_location("channels", REPO / "script" / "release_channels.py")
 ch = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ch)
 
@@ -120,7 +120,7 @@ def released(version: str = V) -> None:
             },
             f"/api/repos/o/r/git/ref/tags/v{version}": {"object": {"type": "tag", "sha": "t" * 40}},
             f"/api/repos/o/r/git/tags/{'t' * 40}": {"object": {"type": "commit", "sha": SHA}},
-            f"/api/repos/o/r/actions/workflows/pypi.yml/runs?head_sha={SHA}": {
+            f"/api/repos/o/r/actions/workflows/pypiindex.yml/runs?head_sha={SHA}": {
                 "workflow_runs": [{"conclusion": "success"}]
             },
             **{
@@ -209,7 +209,7 @@ def test_a_full_release_reports_released() -> None:
     for want in [
         "**success**",
         "Jobs: 2 of 2 succeeded",
-        "pypi.yml: success",
+        "pypiindex.yml: success",
         "| npm | served |",
         "| PyPI | served (4 files) |",
         "| GitHub release | served (6 assets) |",
@@ -227,7 +227,7 @@ def test_a_failed_release_is_still_reported() -> None:
     ROUTES["/api/repos/o/r/actions/runs/7/jobs?per_page=100"] = {
         "jobs": [
             {"name": "host", "conclusion": "success"},
-            {"name": "custom-publish-pypi", "conclusion": "cancelled"},
+            {"name": "custom-pypiready", "conclusion": "cancelled"},
             {"name": "announce", "conclusion": "skipped"},
         ]
     }
@@ -247,7 +247,7 @@ def test_a_failed_release_is_still_reported() -> None:
         text = summary.read_text(encoding="utf-8")
     for want in [
         "**cancelled**",
-        "- custom-publish-pypi: cancelled",
+        "- custom-pypiready: cancelled",
         "- announce: skipped",
         "| npm | absent",
         "| crates.io | unavailable (HTTP 500) |",
@@ -272,14 +272,15 @@ def test_a_tag_on_another_commit_is_named() -> None:
 def test_missing_answers_are_never_success() -> None:
     released()
     ROUTES["/api/repos/o/r/actions/runs/7/jobs?per_page=100"] = (500, "")
-    ROUTES[f"/api/repos/o/r/actions/workflows/pypi.yml/runs?head_sha={SHA}"] = {"workflow_runs": []}
+    runs = f"/api/repos/o/r/actions/workflows/pypiindex.yml/runs?head_sha={SHA}"
+    ROUTES[runs] = {"workflow_runs": []}
     ROUTES[f"/npm/@urna%2fcli/{V}"] = "<html>not json</html>"
     ROUTES[f"/api/repos/o/r/attestations/sha256:{ARCHIVES['urna-clitui-linux.tar.xz']}"] = (502, "")
     ok, text = ch.report("7", SHA, f"v{V}", "o/r")
     assert not ok, text
     for want in [
         "the run's jobs are unavailable (HTTP 500)",
-        "- pypi.yml: no run for this commit",
+        "- pypiindex.yml: no run for this commit",
         "| npm | absent",
         "the attestations of ['urna-clitui-linux.tar.xz'] are unavailable",
     ]:

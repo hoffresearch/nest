@@ -1,6 +1,6 @@
 """Prove the release rehearsal is the release's build, publishes nothing, and judges right.
 
-`scripts/release_rehearsal.py` generates `.github/workflows/release-rehearsal.yml`
+`script/release_rehearsal.py` generates `.github/workflows/rehearsal.yml`
 from the `release.yml` dist writes, decides whether a change needs it, checks
 the artifacts a release would upload and gives the required check's verdict:
 
@@ -36,9 +36,7 @@ from pathlib import Path
 import yaml
 
 REPO = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location(
-    "rehearsal", REPO / "scripts" / "release_rehearsal.py"
-)
+spec = importlib.util.spec_from_file_location("rehearsal", REPO / "script" / "release_rehearsal.py")
 rh = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rh)
 
@@ -69,7 +67,7 @@ def test_the_rehearsal_is_the_release_build() -> None:
             "build-local-artifacts"
         ].get(key), key
     assert ours["jobs"]["build-global-artifacts"] == RELEASE["jobs"]["build-global-artifacts"]
-    assert ours["jobs"]["custom-build-wheels"]["uses"] == "./.github/workflows/build-wheels.yml"
+    assert ours["jobs"]["custom-wheelmake"]["uses"] == "./.github/workflows/wheelmake.yml"
     print("happy (the build jobs are the release's: steps, runners, matrix, wheels): OK")
 
 
@@ -87,9 +85,7 @@ def test_the_rehearsal_publishes_nothing() -> None:
     assert "secrets." not in text.replace("secrets.GITHUB_TOKEN", "")
     # the wheels workflow asks for nothing itself, so the read-only caller holds,
     # and it attests only on the release's tag push.
-    wheels = yaml.safe_load(
-        (REPO / ".github/workflows/build-wheels.yml").read_text(encoding="utf-8")
-    )
+    wheels = yaml.safe_load((REPO / ".github/workflows/wheelmake.yml").read_text(encoding="utf-8"))
     assert "permissions" not in wheels and all(
         "permissions" not in j for j in wheels["jobs"].values()
     )
@@ -145,15 +141,15 @@ def test_what_needs_the_rehearsal() -> None:
         "python/forge/catalog.json",
         "python/forge/models/potion-base-8M/model.safetensors",
         "python/embed_query.py",
-        "scripts/stage_embedder_payload.py",
-        "scripts/stage_wheel.py",
+        "script/stage_embedder_payload.py",
+        "script/stage_wheel.py",
         "python/urna_cli.py",
-        "packaging/pyproject.toml",
+        "packs/pyproject.toml",
         "crates/urna-clitui/src/main.rs",
         "Cargo.lock",
         "README.md",
         "LICENSE",
-        ".github/workflows/build-wheels.yml",
+        ".github/workflows/wheelmake.yml",
     ]
     for path in needs:
         assert rh.touches_release([path]) == [path], path
@@ -161,7 +157,7 @@ def test_what_needs_the_rehearsal() -> None:
         "docs/USAGE.md",
         "tests/test_e2e.py",
         "crates/urna-ingest/src/lib.rs",
-        ".github/workflows/install-test.yml",
+        ".github/workflows/setuptest.yml",
     ]:
         assert rh.touches_release([path]) == [], path
     assert rh.changed("0" * 40, "HEAD") is None and rh.changed("", "HEAD") is None
@@ -292,7 +288,7 @@ def test_a_real_binary_against_the_golden_fixture() -> None:
         errors = rh.check_binary(d, "host", broken, VERSION)
         assert errors and "validate broken.urna exited" in errors[0], errors
         assert rh.check_binary(d, "other-target", golden, VERSION) == [
-            "no urna-other-target archive"
+            "no urna-clitui-other-target archive"
         ]
         # the exact version: a binary saying 0.5.3 is not 0.5 (nor 0.5.30 not 0.5.3).
         prefix = VERSION.rsplit(".", 1)[0]
@@ -320,7 +316,7 @@ def test_the_required_check() -> None:
     assert ok and "dispensed" in why
     for job, result in [
         ("build-global-artifacts", "skipped"),
-        ("custom-build-wheels", "cancelled"),
+        ("custom-wheelmake", "cancelled"),
         ("assets", "failure"),
         ("plan", "skipped"),
     ]:
