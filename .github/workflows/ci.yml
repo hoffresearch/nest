@@ -285,3 +285,9 @@ jobs:
         # so a preset that names a field ModelPreset lacks fails here, and a
         # catalog.json the registry no longer produces fails too.
         run: python python/forge/model_catalog.py --check
+      - name: the release version agrees everywhere a release names it
+        # pins, lockfile, CITATION.cff and the changelog section; the tag
+        # checks run in tag-verify.yml when a release is cut.
+        run: |
+          python scripts/release_preflight.py
+          python tests/test_release_preflight.py

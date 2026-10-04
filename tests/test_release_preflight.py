@@ -1,0 +1,168 @@
+"""Prove the release preflight agrees with the tree and refuses every drift.
+
+`scripts/release_preflight.py` runs on every pull request (tree mode) and
+on the release tag after its signature check (tag mode). this suite runs it
+against the real checkout, then against temp copies of the files a release
+names (the manifests, the lockfile, CITATION.cff, the changelog), one field
+changed per case, and against throwaway git repos for the tag checks:
+
+- happy path: the checkout passes; an annotated tag on main naming the
+  workspace version passes;
+- error path: a moved workspace pin, a crate that stops inheriting, a stale
+  lockfile entry, each versioned CITATION field, a date the changelog does
+  not carry, a missing changelog section; a tag naming another version, on
+  a commit off main, dated before the release, or lightweight;
+- edge case: a pin that drifts only in Cargo.lock (the manifests agree).
+
+Run: python tests/test_release_preflight.py
+"""
+
+import importlib.util
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+SCRIPT = REPO / "scripts" / "release_preflight.py"
+spec = importlib.util.spec_from_file_location("release_preflight", SCRIPT)
+preflight = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(preflight)
+
+FILES = ["Cargo.toml", "Cargo.lock", "CITATION.cff", "docs/CHANGELOG"]
+VERSION = preflight.workspace_version(REPO)
+GIT = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
+GIT += ["-c", "tag.gpgsign=false"]
+
+
+def copy_tree(dst: Path) -> Path:
+    for rel in FILES + [str(p.relative_to(REPO)) for p in REPO.glob("crates/*/Cargo.toml")]:
+        (dst / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(REPO / rel, dst / rel)
+    return dst
+
+
+def edit(root: Path, rel: str, old: str, new: str, count: int = 1) -> None:
+    path = root / rel
+    text = path.read_text(encoding="utf-8")
+    assert old in text, f"{rel} lost {old!r}; update this test"
+    path.write_text(text.replace(old, new, count), encoding="utf-8")
+
+
+def git_repo(root: Path, tag_date: str | None = None) -> None:
+    def run(*args, env=None):
+        subprocess.run(GIT + list(args), cwd=root, check=True, capture_output=True, env=env)
+
+    run("init", "-q", "-b", "main")
+    run("add", "-A")
+    run("commit", "-q", "-m", "release")
+    run("update-ref", "refs/remotes/origin/main", "HEAD")
+    env = dict(os.environ, GIT_COMMITTER_DATE=tag_date) if tag_date else None
+    run("tag", "-a", f"v{VERSION}", "-m", f"v{VERSION}", env=env)
+
+
+def bump(v: str) -> str:
+    major, minor, patch = v.split(".")
+    return f"{major}.{minor}.{int(patch) + 1}"
+
+
+def test_checkout_passes() -> None:
+    assert preflight.check_tree(REPO) == [], preflight.check_tree(REPO)
+    assert preflight.main([]) == 0
+
+
+def test_each_drift_is_named() -> None:
+    other = bump(VERSION)
+    pin = f'"crates/urna-runtime", version = "{VERSION}"'
+    cases = [
+        ("Cargo.toml", pin, pin.replace(VERSION, other), "urna-runtime pins"),
+        (
+            "crates/urna-cli/Cargo.toml",
+            "version.workspace = true",
+            f'version = "{other}"',
+            "inherits",
+        ),
+        ("CITATION.cff", f'version: "{VERSION}"', f'version: "{other}"', "CITATION.cff: version"),
+        ("CITATION.cff", f"crates/urna/{VERSION}", f"crates/urna/{other}", "repository-artifact"),
+        ("CITATION.cff", f"tag/v{VERSION}", f"tag/v{other}", "CITATION.cff: value"),
+        ("CITATION.cff", f"version {VERSION}.", f"version {other}.", "CITATION.cff: description"),
+        ("docs/CHANGELOG", f"## [{VERSION}] - ", f"## [{VERSION}] ", "no '## ["),
+    ]
+    for rel, old, new, expected in cases:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = copy_tree(Path(tmp))
+            edit(root, rel, old, new)
+            errors = preflight.check_tree(root)
+            assert any(expected in e for e in errors), (rel, expected, errors)
+            assert preflight.main(["--root", str(root)]) == 1
+    # the citation date has to be the changelog's, whatever day it is today.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_tree(Path(tmp))
+        cff = (root / "CITATION.cff").read_text(encoding="utf-8")
+        cff = re.sub(r'date-released: "[^"]+"', 'date-released: "2001-01-01"', cff)
+        (root / "CITATION.cff").write_text(cff, encoding="utf-8")
+        errors = preflight.check_tree(root)
+        assert any("differs from the changelog" in e for e in errors), errors
+
+
+def test_a_drift_only_in_the_lockfile() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_tree(Path(tmp))
+        lock = f'name = "urna-python"\nversion = "{VERSION}"'
+        edit(root, "Cargo.lock", lock, lock.replace(VERSION, bump(VERSION)))
+        errors = preflight.check_tree(root)
+        assert errors == [f"Cargo.lock: urna-python is {bump(VERSION)!r}, not {VERSION!r}"], errors
+
+
+def test_a_tag_on_main_passes() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_tree(Path(tmp))
+        git_repo(root)
+        assert preflight.check_tag(f"v{VERSION}", root) == []
+
+
+def test_tags_that_do_not_fit_are_refused() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_tree(Path(tmp))
+        git_repo(root)
+        errors = preflight.check_tag(f"v{bump(VERSION)}", root)
+        assert any("does not name the workspace version" in e for e in errors), errors
+        # a commit main never received: the tag moves there, main stays put.
+        subprocess.run(GIT + ["commit", "-q", "--allow-empty", "-m", "side"], cwd=root, check=True)
+        subprocess.run(
+            GIT + ["tag", "-f", "-a", f"v{VERSION}", "-m", "x"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        )
+        errors = preflight.check_tag(f"v{VERSION}", root)
+        assert any("which is not on origin/main" in e for e in errors), errors
+        subprocess.run(
+            GIT + ["tag", "-f", f"v{VERSION}", "origin/main"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        )
+        errors = preflight.check_tag(f"v{VERSION}", root)
+        assert errors == [f"tag v{VERSION} has no tagger date (a lightweight tag)"], errors
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_tree(Path(tmp))
+        git_repo(root, tag_date="2001-01-01T12:00:00+00:00")
+        errors = preflight.check_tag(f"v{VERSION}", root)
+        assert any("is after the tag date 2001-01-01" in e for e in errors), errors
+
+
+def main() -> int:
+    tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
+    for test in tests:
+        test()
+        print(f"ok  {test.__name__}")
+    print(f"release preflight: {len(tests)} cases passed")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

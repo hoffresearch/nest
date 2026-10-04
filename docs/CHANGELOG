@@ -14,13 +14,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-### Fixed
+### Added
 
-- The model install's progress lines could go back (17.55 MB, then 16.54 MB of the same file), which failed `tests/test_model_install.py` inside the gate. Over xet, `huggingface_hub` drives two bars per file with the progress class it is given, the reconstructed bytes and the fewer transferred (compressed) bytes, each from zero, and each instance printed its own count. The instances now share what was shown, so the lines never go back, and a count is capped at the file's size. A new no-network case drives both bars and reproduces the old 16.54 MB line.
+- `scripts/release_preflight.py`: the version a release names agrees everywhere before anything is built. On every pull request (`ci.yml`) it checks the `urna-format` and `urna-runtime` pins, every crate inheriting the workspace version, the four crates in `Cargo.lock`, `CITATION.cff` (`version`, the versioned crates.io and release URLs, and a `date-released` equal to the changelog's date, not today's) and the changelog section. On a release tag, `tag-verify.yml` runs it after the signature check and adds the tag name, the commit's place on `main` and that the release date is not after the tag. Until now these were hand checks in step 8 of the maintainer checklist. `tests/test_release_preflight.py` (5 cases, the thirteenth gate suite) drifts one field per case and checks tags in throwaway repos.
 
 ### Changed
 
 - Usage's release verification names what v0.5.3 carries (checked on the release: the five archives with `LICENSE` and a `.sha256`, the payload's `VERSION`, `sha256.sum`, the Sigstore attestation of an archive bound to `refs/tags/v0.5.3` and `7a417e1e`), and PyPI 0.5.0 to 0.5.3 without PEP 740 provenance. Item 11 of the maintainer checklist gains two lessons of the 0.5.2 and 0.5.3 tags: rehearse the global job in the runner's image before tagging, and rerun install-test's npm legs once the registry serves the version.
+
+### Fixed
+
+- The model install's progress lines could go back (17.55 MB, then 16.54 MB of the same file), which failed `tests/test_model_install.py` inside the gate. Over xet, `huggingface_hub` drives two bars per file with the progress class it is given, the reconstructed bytes and the fewer transferred (compressed) bytes, each from zero, and each instance printed its own count. The instances now share what was shown, so the lines never go back, and a count is capped at the file's size. A new no-network case drives both bars and reproduces the old 16.54 MB line.
 
 ## [0.5.3] - 2026-10-03
 
