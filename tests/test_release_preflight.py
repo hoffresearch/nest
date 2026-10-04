@@ -7,11 +7,14 @@ names (the manifests, the lockfile, CITATION.cff, the changelog), one field
 changed per case, and against throwaway git repos for the tag checks:
 
 - happy path: the checkout passes; an annotated tag on main naming the
-  workspace version passes;
+  version of its own commit passes, even when the checkout is broken;
 - error path: a moved workspace pin, a crate that stops inheriting, a stale
   lockfile entry, each versioned CITATION field, a date the changelog does
   not carry, a missing changelog section; a tag naming another version, on
-  a commit off main, dated before the release, or lightweight;
+  a commit off main, dated before the release, or lightweight; a tag whose
+  commit has a stale CITATION while main and the checkout carry the fix
+  (tag mode reads the tag's commit, not the working tree); a release file
+  missing from the tag's commit;
 - edge case: a pin that drifts only in Cargo.lock (the manifests agree).
 
 Run: python tests/test_release_preflight.py
@@ -128,8 +131,15 @@ def test_tags_that_do_not_fit_are_refused() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = copy_tree(Path(tmp))
         git_repo(root)
+        assert preflight.check_tag(f"v{bump(VERSION)}", root) == [
+            f"tag v{bump(VERSION)} does not exist"
+        ]
+        run = ["tag", "-a", f"v{bump(VERSION)}", "-m", "x", "HEAD"]
+        subprocess.run(GIT + run, cwd=root, check=True, capture_output=True)
         errors = preflight.check_tag(f"v{bump(VERSION)}", root)
-        assert any("does not name the workspace version" in e for e in errors), errors
+        assert any(
+            f"does not name the version v{VERSION} of its own commit" in e for e in errors
+        ), errors
         # a commit main never received: the tag moves there, main stays put.
         subprocess.run(GIT + ["commit", "-q", "--allow-empty", "-m", "side"], cwd=root, check=True)
         subprocess.run(
@@ -153,6 +163,45 @@ def test_tags_that_do_not_fit_are_refused() -> None:
         git_repo(root, tag_date="2001-01-01T12:00:00+00:00")
         errors = preflight.check_tag(f"v{VERSION}", root)
         assert any("is after the tag date 2001-01-01" in e for e in errors), errors
+
+
+def test_the_tag_commit_is_what_is_checked() -> None:
+    # the tag points at a commit with a stale CITATION; main and the checkout
+    # carry the fix afterwards. the files of the tag's commit decide.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_tree(Path(tmp))
+        edit(root, "CITATION.cff", f'version: "{VERSION}"', 'version: "0.0.1"')
+        git_repo(root)
+        edit(root, "CITATION.cff", 'version: "0.0.1"', f'version: "{VERSION}"')
+        subprocess.run(GIT + ["commit", "-q", "-am", "fix"], cwd=root, check=True)
+        subprocess.run(
+            GIT + ["update-ref", "refs/remotes/origin/main", "HEAD"], cwd=root, check=True
+        )
+        assert preflight.check_tree(root) == []
+        errors = preflight.check_tag(f"v{VERSION}", root)
+        assert errors == [f"v{VERSION}: CITATION.cff: version is '0.0.1', not {VERSION!r}"], errors
+        assert preflight.main(["--root", str(root), "--tag", f"v{VERSION}"]) == 1
+    # the other way round: a broken checkout does not fail a sound tag.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_tree(Path(tmp))
+        git_repo(root)
+        edit(
+            root,
+            "Cargo.lock",
+            f'name = "urna"\nversion = "{VERSION}"',
+            'name = "urna"\nversion = "0.0.1"',
+        )
+        assert preflight.check_tree(root) != []
+        assert preflight.check_tag(f"v{VERSION}", root) == []
+    # a release file the tag's commit does not carry is named, not a traceback.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_tree(Path(tmp))
+        (root / "CITATION.cff").unlink()
+        git_repo(root)
+        errors = preflight.check_tag(f"v{VERSION}", root)
+        assert errors[0].startswith(f"v{VERSION}: missing release file: CITATION.cff is not in"), (
+            errors
+        )
 
 
 def main() -> int:

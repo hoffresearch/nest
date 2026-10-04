@@ -2377,7 +2377,7 @@ links = ["scripts/stage_embedder_payload.py", "python/forge/embed_query_model.py
 [[inventory.data_docs_python_scripts_tests]]
 path = "tests/test_release_preflight.py"
 kind = "python-test"
-purpose = "The release preflight against the checkout and against temp copies with one field drifted per case (a workspace pin, a crate not inheriting, a lockfile entry, each versioned CITATION field, the citation date, the changelog section), and the tag checks in throwaway repos (another version, off main, dated before the release, lightweight); in release_check.sh and ci.yml"
+purpose = "The release preflight against the checkout and against temp copies with one field drifted per case (a workspace pin, a crate not inheriting, a lockfile entry, each versioned CITATION field, the citation date, the changelog section), and the tag checks in throwaway repos (another version, off main, dated before the release, lightweight, a stale CITATION on the tag's commit while the checkout carries the fix, a release file missing from the commit); in release_check.sh and ci.yml"
 links = ["scripts/release_preflight.py"]
 
 [[inventory.data_docs_python_scripts_tests]]
@@ -2970,7 +2970,7 @@ links = [
 [[inventory.distribution]]
 path = "scripts/release_preflight.py"
 kind = "python-source"
-purpose = "One version everywhere a release names it: the urna-format and urna-runtime pins, every crate inheriting the workspace version, the four crates in Cargo.lock, CITATION.cff (version, the versioned crates.io and release URLs, a date-released equal to the changelog's) and the changelog section; tree mode in ci.yml, tag mode (--tag) in tag-verify.yml adds the tag name, main ancestry and the tag date"
+purpose = "One version everywhere a release names it: the urna-format and urna-runtime pins, every crate inheriting the workspace version, the four crates in Cargo.lock, CITATION.cff (version, the versioned crates.io and release URLs, a date-released equal to the changelog's) and the changelog section; tree mode in ci.yml; tag mode (--tag) in tag-verify.yml runs the same checks on the files of the tag's commit (git show, never the working tree) and adds the tag name, main ancestry and the tag date"
 links = [".github/workflows/tag-verify.yml", ".github/workflows/ci.yml", "tests/test_release_preflight.py"]
 
 [[inventory.distribution]]
