@@ -111,11 +111,11 @@ links = [
 [[layers]]
 name = "urna-bridge"
 role = "PyO3 bridge that exposes build, chunk_id, UrnaFile search APIs, the agent-native UrnaFile.retrieve (cited spans whose score IS the exact rerank value + tier-1 text + rerank_source marker), chunk_ids() (identity in file order, the stable hit-matching key under any media ordering), and blob_bytes(i) (one inlined 0x17 blob off the mmap, no whole-store export) to Python"
-entrypoints = ["crates/urna-bridge/src/lib.rs"]
+entrypoints = ["crates/bridge/src/lib.rs"]
 links = [
-    "crates/urna-bridge/src/build_fn.rs",
-    "crates/urna-bridge/src/urna_file.rs",
-    "crates/urna-bridge/src/retrieve_fn.rs",
+    "crates/bridge/src/build_fn.rs",
+    "crates/bridge/src/urna_file.rs",
+    "crates/bridge/src/retrieve_fn.rs",
 ]
 
 [[layers]]
@@ -127,7 +127,7 @@ entrypoints = [
     "python/embed_query.py",
 ]
 links = [
-    "crates/urna-bridge/src/build_fn.rs",
+    "crates/bridge/src/build_fn.rs",
     "script/fullcheck.sh",
 ]
 
@@ -154,8 +154,8 @@ entrypoints = [
 ]
 links = [
     "python/builder.py",
-    "crates/urna-bridge/src/build_fn.rs",
-    "crates/urna-bridge/src/build_spaces.rs",
+    "crates/bridge/src/build_fn.rs",
+    "crates/bridge/src/build_spaces.rs",
     "tests/test_imagepipe.py",
     "tests/test_mediablob.py",
     "tests/test_spaceband.py",
@@ -268,7 +268,7 @@ summary = "The agent-native flagship: embed_gate::embed_and_search embeds the qu
 
 [[flows]]
 name = "python-retrieve"
-entry = "crates/urna-bridge/src/retrieve_fn.rs"
+entry = "crates/bridge/src/retrieve_fn.rs"
 path = [
     "python/forge/retrieve.py",
     "python/forge/embed_potion.py",
@@ -310,7 +310,7 @@ path = [
     "python/forge/quality_gate.py",
     "python/forge/quality_utility.py",
     "python/forge/image_backends.py",
-    "crates/urna-bridge/src/build_fn.rs",
+    "crates/bridge/src/build_fn.rs",
 ]
 summary = "Load + validate the TOML spec (unknown keys and non-total order_by are typed errors), load rows with per-item input_hash, dedup identical images, encode media (crf=auto dual gate: stratified ssimulacra2 floors AND embedding-drift floor; tune/speed/fps/jxl levers), embed each selected model once (flock'd caches content-addressed by the triad under `${XDG_CACHE_HOME:-~/.cache}/urna`, shared across specs; ST models in isolated worker processes), slice validated MRL dims into named spaces, emit single and/or per-model files from the same vectors with atomic commit, and write manifest v1 + build.lock.json"
 
@@ -431,7 +431,7 @@ links = [
     "crates/format/Cargo.toml",
     "crates/urna-engine/Cargo.toml",
     "crates/urna-clitui/Cargo.toml",
-    "crates/urna-bridge/Cargo.toml",
+    "crates/bridge/Cargo.toml",
 ]
 
 [[inventory.root]]
@@ -593,10 +593,10 @@ purpose = "Regression: BM25 postings with doc ids beyond n_docs, non-finite para
 links = ["crates/urna-engine/src/bm25/codec.rs"]
 
 [[inventory.root]]
-path = "crates/urna-bridge/src/search_hit.rs"
+path = "crates/bridge/src/search_hit.rs"
 kind = "rust-source"
 purpose = "SearchHitPy, the Python-visible hit (carved out of urna_file.rs)"
-links = ["crates/urna-bridge/src/urna_file.rs"]
+links = ["crates/bridge/src/urna_file.rs"]
 
 [[inventory.root]]
 path = "python/tools/bench_competitors.py"
@@ -651,7 +651,7 @@ links = [
     "crates/format",
     "crates/urna-engine",
     "crates/urna-clitui",
-    "crates/urna-bridge",
+    "crates/bridge",
 ]
 
 [[inventory.workspace]]
@@ -784,18 +784,18 @@ purpose = "Golden fixture storage"
 links = ["crates/format/tests/golden.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-bridge"
+path = "crates/bridge"
 kind = "crate-dir"
 purpose = "PyO3 binding crate"
-links = ["crates/urna-bridge/src/lib.rs"]
+links = ["crates/bridge/src/lib.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-bridge/src"
+path = "crates/bridge/src"
 kind = "directory"
 purpose = "Binding source root"
 links = [
-    "crates/urna-bridge/src/build_fn.rs",
-    "crates/urna-bridge/src/urna_file.rs",
+    "crates/bridge/src/build_fn.rs",
+    "crates/bridge/src/urna_file.rs",
 ]
 
 [[inventory.workspace]]
@@ -1684,7 +1684,7 @@ path = "crates/format/tests/mrl_truncate.rs"
 kind = "rust-test"
 purpose = "Matryoshka truncate-then-renormalize roundtrip: stored embeddings == manual prefix-slice + l2-renorm byte-for-byte, two builds at the same mrl_dim byte-identical, truncated content_hash differs from full-dim"
 links = [
-    "crates/urna-bridge/src/build_fn.rs",
+    "crates/bridge/src/build_fn.rs",
     "crates/format/src/manifest/mod.rs",
 ]
 
@@ -1695,86 +1695,86 @@ purpose = "v0.1 compatibility coverage"
 links = ["crates/format/src/reader/mod.rs"]
 
 [[inventory.urna_bridge]]
-path = "crates/urna-bridge/Cargo.toml"
+path = "crates/bridge/Cargo.toml"
 kind = "rust-manifest"
 purpose = "Binding crate manifest"
 links = ["Cargo.toml"]
 
 [[inventory.urna_bridge]]
-path = "crates/urna-bridge/build.rs"
+path = "crates/bridge/build.rs"
 kind = "rust-build-script"
 purpose = "PyO3 cfg and macOS linker setup"
 links = []
 
 [[inventory.urna_bridge]]
-path = "crates/urna-bridge/src/build_fn.rs"
+path = "crates/bridge/src/build_fn.rs"
 kind = "rust-source"
 purpose = "Python build() bridge plus preset resolution (exact/compressed/tiny/nano/hybrid; nano = zstd text / int4 / HNSW, requires embedding_dim divisible by 64), build-time matryoshka prefix truncation (mrl_dim kwarg), optional index creation, the with_graph/graph_top_m kwargs that emit the G1 graph_adjacency (0x0C) CSR (NEXT_CHUNK + top-m SEMANTIC from the HNSW level-0 graph, default off), and the F4b/F4c kwargs blob_refs, chunk_blob_spans, and spaces (named-space multimodal corpora)"
 links = [
     "crates/format/src/writer/mod.rs",
     "crates/urna-engine/src/ann/mod.rs",
     "crates/urna-engine/src/bm25/mod.rs",
-    "crates/urna-bridge/src/build_spaces.rs",
-    "crates/urna-bridge/src/build_manifest.rs",
+    "crates/bridge/src/build_spaces.rs",
+    "crates/bridge/src/build_manifest.rs",
 ]
 
 [[inventory.urna_bridge]]
-path = "crates/urna-bridge/src/build_inputs.rs"
+path = "crates/bridge/src/build_inputs.rs"
 kind = "rust-source"
 purpose = "build() input helpers split out of build_fn.rs: parse_chunks (PyList of dicts -> Vec<ChunkInput>), truncate_renormalize (matryoshka prefix slice + l2-renorm before quant/hnsw), build_graph_payload (G1: NEXT_CHUNK + top-m SEMANTIC edges from the HNSW level-0 graph, canonically sorted), and parse_blob_refs / parse_chunk_blob_spans for the media pillar"
 links = [
-    "crates/urna-bridge/src/build_fn.rs",
+    "crates/bridge/src/build_fn.rs",
     "crates/format/src/sections/graph/adjacency.rs",
     "crates/format/src/sections/blob/refs.rs",
 ]
 
 [[inventory.urna_bridge]]
-path = "crates/urna-bridge/src/build_manifest.rs"
+path = "crates/bridge/src/build_manifest.rs"
 kind = "rust-source"
 purpose = "Manifest assembly for build(): capabilities (incl blobs_present when blob sections are emitted and supports_multimodal when a space_table is present) and the additive manifest fields, split out of build_fn.rs"
 links = [
-    "crates/urna-bridge/src/build_fn.rs",
+    "crates/bridge/src/build_fn.rs",
     "crates/format/src/manifest/mod.rs",
 ]
 
 [[inventory.urna_bridge]]
-path = "crates/urna-bridge/src/build_spaces.rs"
+path = "crates/bridge/src/build_spaces.rs"
 kind = "rust-source"
 purpose = "Named-space build path: validates the spaces kwarg (name, dim, dtype, per-space model_hash), emits the space_table (0x15) plus one embeddings slab per space at the derived 0x20-0x2F band id, deterministic per-space builds"
 links = [
-    "crates/urna-bridge/src/build_fn.rs",
+    "crates/bridge/src/build_fn.rs",
     "crates/format/src/sections/space_table.rs",
 ]
 
 [[inventory.urna_bridge]]
-path = "crates/urna-bridge/src/chunk_id_fn.rs"
+path = "crates/bridge/src/chunk_id_fn.rs"
 kind = "rust-source"
 purpose = "Python chunk_id helper"
 links = ["crates/format/src/chunk.rs"]
 
 [[inventory.urna_bridge]]
-path = "crates/urna-bridge/src/lib.rs"
+path = "crates/bridge/src/lib.rs"
 kind = "rust-source"
 purpose = "_urna module registration (UrnaFile, SearchHitPy, RetrieveHitPy, build, chunk_id)"
 links = [
-    "crates/urna-bridge/src/build_fn.rs",
-    "crates/urna-bridge/src/urna_file.rs",
-    "crates/urna-bridge/src/retrieve_fn.rs",
+    "crates/bridge/src/build_fn.rs",
+    "crates/bridge/src/urna_file.rs",
+    "crates/bridge/src/retrieve_fn.rs",
 ]
 
 [[inventory.urna_bridge]]
-path = "crates/urna-bridge/src/urna_file.rs"
+path = "crates/bridge/src/urna_file.rs"
 kind = "rust-source"
 purpose = "PyO3 wrapper over MmapUrnaFile (search/search_ann/search_graph/search_hybrid, search_space for named spaces, the agent-native retrieve, has_ann/has_bm25/has_graph/has_blobs/blob_refs/has_spaces/space_names, inspect, validate)"
 links = [
     "crates/urna-engine/src/mmap_file.rs",
     "crates/urna-engine/src/search.rs",
     "crates/urna-engine/src/space_search.rs",
-    "crates/urna-bridge/src/retrieve_fn.rs",
+    "crates/bridge/src/retrieve_fn.rs",
 ]
 
 [[inventory.urna_bridge]]
-path = "crates/urna-bridge/src/retrieve_fn.rs"
+path = "crates/bridge/src/retrieve_fn.rs"
 kind = "rust-source"
 purpose = "The agent-native flagship: RetrieveHitPy (cited span + tier-1 text + rerank_source marker) and retrieve() (route by capability, search, attach tier-1 canonical text per chunk_id); score IS the exact rerank value, typed errors -> PyValueError, never panic"
 links = [
@@ -2203,7 +2203,7 @@ links = [
     "python/forge/forge_recipe.py",
     "python/forge/forge_media_stage.py",
     "python/forge/forge_manifest.py",
-    "crates/urna-bridge/src/build_fn.rs",
+    "crates/bridge/src/build_fn.rs",
 ]
 
 [[inventory.data_docs_python_script_tests]]
@@ -2300,7 +2300,7 @@ path = "python/tools/urna_ui_bridge.py"
 kind = "python-tool"
 purpose = "JSON bridge for frontends: browse (paginated manifest items, full or compact, the frame derived by forge_manifest.frame_resolver, media resolved to internal blob URI + shard-local frame by SHA256 segment matching), search (exact/ann/hybrid/graph/named spaces, hits enriched and matched by chunk_id), blob (extract ONE inlined 0x17 blob); registry embedding behind the URNA_ALLOW_REMOTE_CODE opt-in"
 links = [
-    "crates/urna-bridge/src/urna_file.rs",
+    "crates/bridge/src/urna_file.rs",
     "python/forge/forge_manifest.py",
     "python/forge/model_registry.py",
 ]
@@ -2495,7 +2495,7 @@ links = [
 path = "python/_urna.so"
 kind = "binary-artifact"
 purpose = "Compiled PyO3 extension"
-links = ["crates/urna-bridge/src/lib.rs"]
+links = ["crates/bridge/src/lib.rs"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "python/builder.py"
@@ -2503,7 +2503,7 @@ kind = "python-source"
 purpose = "Chunk, cache, build, and validate pipeline (BuildConfig now carries with_graph/graph_top_m/drop_overlap for G1; drop_overlap implies with_graph)"
 links = [
     "python/urna.py",
-    "crates/urna-bridge/src/build_fn.rs",
+    "crates/bridge/src/build_fn.rs",
     "python/graph_context.py",
 ]
 
@@ -2660,8 +2660,8 @@ purpose = "build_corpus for image corpora (moved out of the CLI in F5): items ->
 links = [
     "python/forge/image_encode.py",
     "python/forge/image_items.py",
-    "crates/urna-bridge/src/build_fn.rs",
-    "crates/urna-bridge/src/build_spaces.rs",
+    "crates/bridge/src/build_fn.rs",
+    "crates/bridge/src/build_spaces.rs",
 ]
 
 [[inventory.data_docs_python_script_tests]]
@@ -2725,7 +2725,7 @@ kind = "python-source"
 purpose = "Offline potion-embed + UrnaFile.retrieve convenience and the one-gif flagship demo driver over demo_corpus: build_demo (byte-identical offline build), retrieve (potion embed -> UrnaFile.retrieve), main (ask a question, print the cited answer + a urna:// citation that round-trips)"
 links = [
     "python/forge/embed_potion.py",
-    "crates/urna-bridge/src/retrieve_fn.rs",
+    "crates/bridge/src/retrieve_fn.rs",
     "python/forge/demo_corpus",
 ]
 
@@ -2740,7 +2740,7 @@ path = "python/urna.py"
 kind = "python-source"
 purpose = "Dynamic loader and stable Python API (re-exports UrnaFile, SearchHit, RetrieveHit, open, build, chunk_id; documents UrnaFile.retrieve)"
 links = [
-    "crates/urna-bridge/src/lib.rs",
+    "crates/bridge/src/lib.rs",
     "python/_urna.so",
 ]
 
@@ -2777,7 +2777,7 @@ kind = "python-source"
 purpose = "Image-space search CLI: --query-text / --letterbox-query embedding and search_space against a multimodal .urna"
 links = [
     "python/forge/embed_image.py",
-    "crates/urna-bridge/src/urna_file.rs",
+    "crates/bridge/src/urna_file.rs",
 ]
 
 [[inventory.data_docs_python_script_tests]]
@@ -2861,8 +2861,8 @@ path = "tests/test_mediablob.py"
 kind = "python-test"
 purpose = "PyO3 bridge coverage for the media pillar: build with blob_refs + chunk_blob_spans, has_blobs / blob_refs getters, span read-back, content_hash parity with the blob-free twin"
 links = [
-    "crates/urna-bridge/src/build_fn.rs",
-    "crates/urna-bridge/src/urna_file.rs",
+    "crates/bridge/src/build_fn.rs",
+    "crates/bridge/src/urna_file.rs",
 ]
 
 [[inventory.data_docs_python_script_tests]]
@@ -2870,8 +2870,8 @@ path = "tests/test_spaceband.py"
 kind = "python-test"
 purpose = "PyO3 bridge coverage for named spaces: spaces kwarg build, has_spaces / space_names, search_space hits, per-space model_hash isolation"
 links = [
-    "crates/urna-bridge/src/build_spaces.rs",
-    "crates/urna-bridge/src/urna_file.rs",
+    "crates/bridge/src/build_spaces.rs",
+    "crates/bridge/src/urna_file.rs",
 ]
 
 [[inventory.data_docs_python_script_tests]]
@@ -2896,8 +2896,8 @@ kind = "python-test"
 purpose = "PyO3 end-to-end coverage, incl the flagship-is-a-lie guard: UrnaFile.retrieve(q, k) score equals UrnaFile.search(q, k) byte-for-byte and each hit carries tier-1 text + a well-formed urna:// citation; and the capability route: retrieve(query_text=...) on a BM25 file brings the word match (a chunk at cosine -1) into the exact rerank, on a hybrid preset file (index_type hnsw) too"
 links = [
     "python/urna.py",
-    "crates/urna-bridge/src/urna_file.rs",
-    "crates/urna-bridge/src/retrieve_fn.rs",
+    "crates/bridge/src/urna_file.rs",
+    "crates/bridge/src/retrieve_fn.rs",
 ]
 
 [[inventory.data_docs_python_script_tests]]

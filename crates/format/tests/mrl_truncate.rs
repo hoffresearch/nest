@@ -1,6 +1,6 @@
 //! Matryoshka truncate-then-renormalize roundtrip (WO EMB-matryoshka).
 //!
-//! The python builder (crates/urna-bridge/src/build_fn.rs) does the prefix
+//! The python builder (crates/bridge/src/build_fn.rs) does the prefix
 //! slice + L2-renorm before handing chunks to UrnaFileBuilder. These tests
 //! mirror that pure deterministic op at the format level: a file whose chunks
 //! were truncated+renormalized stores EXACTLY the renormalized prefix bytes

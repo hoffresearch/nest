@@ -43,7 +43,7 @@ O projeto usa commits assinados e squash merge. Ao atualizar um PR empilhado, re
 - `crates/format`: formato binário, leitura, escrita e hashes.
 - `crates/urna-engine`: mmap, índices, kernels e busca.
 - `crates/urna-clitui`: binário `urna`, comandos e interface de terminal.
-- `crates/urna-bridge`: extensão PyO3 distribuída na wheel.
+- `crates/bridge`: extensão PyO3 distribuída na wheel.
 - `python/`: API Python, construção dos corpora, embedders e catálogo de modelos.
 - `crates/ingest` (schema `.fci` do forge) e `fuzz/`: workspaces Cargo separados; o `Cargo.toml` da raiz exclui o primeiro e comandos no workspace principal não os cobrem.
 - `packs/`, `script/` e `.github/`: empacotamento, instalação, validação e releases.
