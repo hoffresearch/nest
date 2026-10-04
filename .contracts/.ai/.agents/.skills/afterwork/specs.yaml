@@ -169,7 +169,7 @@ groups:
         when: mudarem canais, plataformas ou verificações do produto instalado.
       - path: .github/workflows/rehearsal.yml
         when: mudar a release ou seu gerador.
-        rule: regenerar com python script/release_rehearsal.py generate, nunca à mão.
+        rule: regenerar com python script/rehearsal.py generate, nunca à mão.
       - path: .github/workflows/runreport.yml
         when: mudarem eventos, permissões, identificação da execução ou relato de canais indisponíveis e publicações parciais.
 
@@ -179,7 +179,7 @@ groups:
         when: mudar a preparação de versão, worktree, assinatura, push ou abertura do PR.
       - path: script/release_preflight.py
         when: mudarem campos de versão, metadados ou critérios de origem da release.
-      - path: script/release_rehearsal.py
+      - path: script/rehearsal.py
         when: mudarem estrutura gerada, entradas distribuídas, classificação de impacto ou validação dos artefatos.
       - path: script/release_channels.py
         when: mudarem registries, respostas, retries ou verificações do relatório.

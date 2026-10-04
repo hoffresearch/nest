@@ -83,7 +83,7 @@ Registre o que passou, falhou ou foi pulado e em qual commit. Um teste dispensad
 
 ## Empacotamento e release
 
-`packs/pyproject.toml` é a fonte da wheel; `packs/staging/` é gerado. Para mudar a configuração do cargo-dist, rode `dist generate` e depois `python script/release_rehearsal.py generate`. Edite as fontes dos geradores e confira os arquivos resultantes.
+`packs/pyproject.toml` é a fonte da wheel; `packs/staging/` é gerado. Para mudar a configuração do cargo-dist, rode `dist generate` e depois `python script/rehearsal.py generate`. Edite as fontes dos geradores e confira os arquivos resultantes.
 
 A preparação local usa `script/release_prepare.sh X.Y.Z`, com cargo-release fixado, worktree isolada e PR assinado. Tag e publicação são etapas separadas. Preserve os metadados de citação escolhidos pelo mantenedor ao atualizar os campos versionados.
 

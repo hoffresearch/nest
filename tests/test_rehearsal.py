@@ -1,6 +1,6 @@
 """Prove the release rehearsal is the release's build, publishes nothing, and judges right.
 
-`script/release_rehearsal.py` generates `.github/workflows/rehearsal.yml`
+`script/rehearsal.py` generates `.github/workflows/rehearsal.yml`
 from the `release.yml` dist writes, decides whether a change needs it, checks
 the artifacts a release would upload and gives the required check's verdict:
 
@@ -19,7 +19,7 @@ the artifacts a release would upload and gives the required check's verdict:
   the generated workflow has no write permission, no secret but the run's own
   token, no attestation step and none of the jobs that host or publish.
 
-Run: python tests/test_release_rehearsal.py
+Run: python tests/test_rehearsal.py
 """
 
 import copy
@@ -36,7 +36,7 @@ from pathlib import Path
 import yaml
 
 REPO = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("rehearsal", REPO / "script" / "release_rehearsal.py")
+spec = importlib.util.spec_from_file_location("rehearsal", REPO / "script" / "rehearsal.py")
 rh = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rh)
 
