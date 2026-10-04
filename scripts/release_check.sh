@@ -186,6 +186,12 @@ step "python tests/test_release_rehearsal.py"
 "$PY" tests/test_release_rehearsal.py
 ok "release rehearsal (7 cases)"
 
+# install-test waits for the exact version on each registry, and the release
+# report names what every channel serves, a failed or cancelled run included.
+step "python tests/test_release_channels.py"
+"$PY" tests/test_release_channels.py
+ok "release channels (8 cases)"
+
 # the release pull request is prepared by cargo-release in its own worktree,
 # signed, and touches only the version, the lockfile, the changelog and
 # CITATION.cff; skips without the pinned cargo-release.
