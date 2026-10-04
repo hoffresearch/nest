@@ -15,7 +15,7 @@ system_view = [
     "urna-engine opens .urna files through mmap, validates queries, dispatches SIMD, and executes exact, ANN, graph, and hybrid search while reranking candidates with real cosine. That hot path is why embeddings are never zstd-compressed.",
     "urna-cli is a thin clap surface over the runtime and format crates. It carries the twelve engine subcommands (inspect, validate, stats, media, search, search-text, search-ann, search-graph, search-space, benchmark, cite, doctor: file + vector in; only search-text and doctor spawn Python) and the three agent verbs (ask, retrieve, build: text or spec in, shell out to the offline Python embedder / forge), tagged [engine] / [agent] in --help. ask and retrieve are the agent-native flagship verbs layered over the engine (text query in, cited answer out; both embed the query offline with the default potion static table, validate the embedder's model_hash against the manifest exactly like search-text, and route by what the file carries through MmapUrnaFile::search_routed: hybrid when a BM25 section is present, hnsw when an HNSW section is present, exact otherwise; ask prints one cited answer (--disclose answer) or adds the rerank-source honesty line + route + candidate counts (--disclose explain); retrieve emits the agent-shaped JSON/JSONL answer-pack where each hit's score IS the exact-cosine rerank value). doctor is the post-install health check with typed exit codes (0 ok, 2 Python missing, 3 deps missing, 4 embedder missing, 5 potion table missing, 6 embedder run failed). Behind the default-on `tui` feature the CLI also carries the terminal UI in src/tui: `setup` (the interactive installer, exit codes 10 download, 11 checksum, 12 unpack, 13 Python env, 14 blocked, 15 a model install; --model installs catalog models) and `tui` (the corpus explorer; a bare `urna` on a terminal opens it, in a pipe it prints the help and exits 2). Verb-collapse, the urna dev namespace, and the urna-profile crate are deferred.",
     "The distribution layer (issue #75) turns tags on main into installs: cargo-dist builds the CLI for five targets with SHA256 checksums, Sigstore keyless attestations on the five archives, one CycloneDX SBOM for the CLI package, a Homebrew tap formula (`urna`) and an npm package (`@urna/cli`), and publishes urna-format / urna-engine / urna (the CLI crate) to crates.io; maturin builds the `urna` abi3 wheel with the potion table bundled (offline embedding after pip install); scripts/install.sh / install.ps1 are the one-liner installers (verify-before-write, --version, --uninstall); urna doctor validates the install offline and `urna setup` completes the channels that ship the bare binary (Homebrew, npm, crates.io); .github/workflows/install-test.yml tests the INSTALLED product per platform after each release, including a job per package channel that waits for the exact version on its registry and ends in `urna setup --yes` + `urna doctor`; .github/workflows/release-report.yml summarizes every completed release run, failed or cancelled included. Three levels of evidence, not interchangeable: scripts/release_check.sh is the full local gate (no release build), release-rehearsal.yml builds the release on pull requests and publishes nothing, and only a tag exercises publishing, install-test and the report.",
-    "urna-python is the PyO3 bridge. python/urna.py loads the compiled extension, python/builder.py orchestrates chunking and caching, and python/embed_query.py preserves model parity for search-text. The agent-native flagship is UrnaFile.retrieve(query, k, ...): a pre-embedded query in, cited spans out, whose score IS the exact rerank value, with tier-1 stored canonical text + hashes + citation_id + rerank-source marker.",
+    "urna-bridge is the PyO3 bridge. python/urna.py loads the compiled extension, python/builder.py orchestrates chunking and caching, and python/embed_query.py preserves model parity for search-text. The agent-native flagship is UrnaFile.retrieve(query, k, ...): a pre-embedded query in, cited spans out, whose score IS the exact rerank value, with tier-1 stored canonical text + hashes + citation_id + rerank-source marker.",
     "scripts/release_check.sh is the release gate: rebuilds the extension, runs Rust and Python suites, checks lint and format, measures presets, and compares against the committed baseline.",
     "crates/urna-ingest is the ingestion layer, a SEPARATE cargo workspace under crates/ that the root Cargo.toml excludes, so its (eventually heavy, possibly non-deterministic) deps never enter urna-format or urna-engine. This phase ships FORGE-0a: the frozen .fci canonical-intermediate schema only. It is not built by the sovereign release gate; it has its own cargo workspace.",
     "python/forge is the forge Python surface. Its build-side default is an offline semantic static embedder (python/forge/embed_potion.py): a vendored model2vec/potion-base-8M table (MIT, dim 256, ~30MB via git-lfs), numpy + tokenizers only, no torch, no network round-trip; it self-fingerprints to a SHA256 model_hash recorded in provenance. The #04 lexical bag-of-words (python/forge/embed_default.py) stays as the stdlib-only zero-dependency floor/fallback.",
@@ -53,7 +53,7 @@ quality = [
 risks = [
     "docs/ARC.toml is the single architecture reference (narrative, contract, quality, risks, inventory, and the Mermaid diagram, merged 2026-09-18 from the former arc.yaml + arc.mmd + arc.schema.json) and must be updated in the same change as any edit to boundaries, data flow, module layout, or runtime contract. There is no separate human-prose architecture doc.",
     "BM25 tokenization is intentionally simple and documented as weak for CJK, Thai, and Lao.",
-    "python/_urna.so must be rebuilt after Rust changes that touch urna-format, urna-engine, or urna-python.",
+    "python/_urna.so must be rebuilt after Rust changes that touch urna-format, urna-engine, or urna-bridge.",
     "crates/urna-ingest is a separate cargo workspace, excluded from the sovereign one by the root Cargo.toml, and must stay that way: its (eventually heavy) ingestion deps must never enter the sovereign workspace, and it is not built by the sovereign release gate, so it carries its own cargo build/test/fmt/clippy.",
 ]
 
@@ -109,13 +109,13 @@ links = [
 ]
 
 [[layers]]
-name = "urna-python"
+name = "urna-bridge"
 role = "PyO3 bridge that exposes build, chunk_id, UrnaFile search APIs, the agent-native UrnaFile.retrieve (cited spans whose score IS the exact rerank value + tier-1 text + rerank_source marker), chunk_ids() (identity in file order, the stable hit-matching key under any media ordering), and blob_bytes(i) (one inlined 0x17 blob off the mmap, no whole-store export) to Python"
-entrypoints = ["crates/urna-python/src/lib.rs"]
+entrypoints = ["crates/urna-bridge/src/lib.rs"]
 links = [
-    "crates/urna-python/src/build_fn.rs",
-    "crates/urna-python/src/urna_file.rs",
-    "crates/urna-python/src/retrieve_fn.rs",
+    "crates/urna-bridge/src/build_fn.rs",
+    "crates/urna-bridge/src/urna_file.rs",
+    "crates/urna-bridge/src/retrieve_fn.rs",
 ]
 
 [[layers]]
@@ -127,7 +127,7 @@ entrypoints = [
     "python/embed_query.py",
 ]
 links = [
-    "crates/urna-python/src/build_fn.rs",
+    "crates/urna-bridge/src/build_fn.rs",
     "scripts/release_check.sh",
 ]
 
@@ -154,8 +154,8 @@ entrypoints = [
 ]
 links = [
     "python/builder.py",
-    "crates/urna-python/src/build_fn.rs",
-    "crates/urna-python/src/build_spaces.rs",
+    "crates/urna-bridge/src/build_fn.rs",
+    "crates/urna-bridge/src/build_spaces.rs",
     "tests/test_image_corpus.py",
     "tests/test_blob_bridge.py",
     "tests/test_space_bridge.py",
@@ -268,7 +268,7 @@ summary = "The agent-native flagship: embed_gate::embed_and_search embeds the qu
 
 [[flows]]
 name = "python-retrieve"
-entry = "crates/urna-python/src/retrieve_fn.rs"
+entry = "crates/urna-bridge/src/retrieve_fn.rs"
 path = [
     "python/forge/retrieve.py",
     "python/forge/embed_potion.py",
@@ -310,7 +310,7 @@ path = [
     "python/forge/quality_gate.py",
     "python/forge/quality_utility.py",
     "python/forge/image_backends.py",
-    "crates/urna-python/src/build_fn.rs",
+    "crates/urna-bridge/src/build_fn.rs",
 ]
 summary = "Load + validate the TOML spec (unknown keys and non-total order_by are typed errors), load rows with per-item input_hash, dedup identical images, encode media (crf=auto dual gate: stratified ssimulacra2 floors AND embedding-drift floor; tune/speed/fps/jxl levers), embed each selected model once (flock'd caches content-addressed by the triad under `${XDG_CACHE_HOME:-~/.cache}/urna`, shared across specs; ST models in isolated worker processes), slice validated MRL dims into named spaces, emit single and/or per-model files from the same vectors with atomic commit, and write manifest v1 + build.lock.json"
 
@@ -426,12 +426,12 @@ links = ["Cargo.toml"]
 [[inventory.root]]
 path = "Cargo.toml"
 kind = "workspace-manifest"
-purpose = "Workspace members, edition, resolver, rust-version 1.85 (the MSRV of urna-format, urna-engine and urna-python; crates/urna-cli pins its own 1.88), and shared dependencies"
+purpose = "Workspace members, edition, resolver, rust-version 1.85 (the MSRV of urna-format, urna-engine and urna-bridge; crates/urna-cli pins its own 1.88), and shared dependencies"
 links = [
     "crates/urna-format/Cargo.toml",
     "crates/urna-engine/Cargo.toml",
     "crates/urna-cli/Cargo.toml",
-    "crates/urna-python/Cargo.toml",
+    "crates/urna-bridge/Cargo.toml",
 ]
 
 [[inventory.root]]
@@ -593,10 +593,10 @@ purpose = "Regression: BM25 postings with doc ids beyond n_docs, non-finite para
 links = ["crates/urna-engine/src/bm25/codec.rs"]
 
 [[inventory.root]]
-path = "crates/urna-python/src/search_hit.rs"
+path = "crates/urna-bridge/src/search_hit.rs"
 kind = "rust-source"
 purpose = "SearchHitPy, the Python-visible hit (carved out of urna_file.rs)"
-links = ["crates/urna-python/src/urna_file.rs"]
+links = ["crates/urna-bridge/src/urna_file.rs"]
 
 [[inventory.root]]
 path = "python/tools/bench_competitors.py"
@@ -651,7 +651,7 @@ links = [
     "crates/urna-format",
     "crates/urna-engine",
     "crates/urna-cli",
-    "crates/urna-python",
+    "crates/urna-bridge",
 ]
 
 [[inventory.workspace]]
@@ -784,18 +784,18 @@ purpose = "Golden fixture storage"
 links = ["crates/urna-format/tests/golden.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-python"
+path = "crates/urna-bridge"
 kind = "crate-dir"
 purpose = "PyO3 binding crate"
-links = ["crates/urna-python/src/lib.rs"]
+links = ["crates/urna-bridge/src/lib.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-python/src"
+path = "crates/urna-bridge/src"
 kind = "directory"
 purpose = "Binding source root"
 links = [
-    "crates/urna-python/src/build_fn.rs",
-    "crates/urna-python/src/urna_file.rs",
+    "crates/urna-bridge/src/build_fn.rs",
+    "crates/urna-bridge/src/urna_file.rs",
 ]
 
 [[inventory.workspace]]
@@ -1684,7 +1684,7 @@ path = "crates/urna-format/tests/mrl_truncate.rs"
 kind = "rust-test"
 purpose = "Matryoshka truncate-then-renormalize roundtrip: stored embeddings == manual prefix-slice + l2-renorm byte-for-byte, two builds at the same mrl_dim byte-identical, truncated content_hash differs from full-dim"
 links = [
-    "crates/urna-python/src/build_fn.rs",
+    "crates/urna-bridge/src/build_fn.rs",
     "crates/urna-format/src/manifest/mod.rs",
 ]
 
@@ -1694,87 +1694,87 @@ kind = "rust-test"
 purpose = "v0.1 compatibility coverage"
 links = ["crates/urna-format/src/reader/mod.rs"]
 
-[[inventory.urna_python]]
-path = "crates/urna-python/Cargo.toml"
+[[inventory.urna_bridge]]
+path = "crates/urna-bridge/Cargo.toml"
 kind = "rust-manifest"
 purpose = "Binding crate manifest"
 links = ["Cargo.toml"]
 
-[[inventory.urna_python]]
-path = "crates/urna-python/build.rs"
+[[inventory.urna_bridge]]
+path = "crates/urna-bridge/build.rs"
 kind = "rust-build-script"
 purpose = "PyO3 cfg and macOS linker setup"
 links = []
 
-[[inventory.urna_python]]
-path = "crates/urna-python/src/build_fn.rs"
+[[inventory.urna_bridge]]
+path = "crates/urna-bridge/src/build_fn.rs"
 kind = "rust-source"
 purpose = "Python build() bridge plus preset resolution (exact/compressed/tiny/nano/hybrid; nano = zstd text / int4 / HNSW, requires embedding_dim divisible by 64), build-time matryoshka prefix truncation (mrl_dim kwarg), optional index creation, the with_graph/graph_top_m kwargs that emit the G1 graph_adjacency (0x0C) CSR (NEXT_CHUNK + top-m SEMANTIC from the HNSW level-0 graph, default off), and the F4b/F4c kwargs blob_refs, chunk_blob_spans, and spaces (named-space multimodal corpora)"
 links = [
     "crates/urna-format/src/writer/mod.rs",
     "crates/urna-engine/src/ann/mod.rs",
     "crates/urna-engine/src/bm25/mod.rs",
-    "crates/urna-python/src/build_spaces.rs",
-    "crates/urna-python/src/build_manifest.rs",
+    "crates/urna-bridge/src/build_spaces.rs",
+    "crates/urna-bridge/src/build_manifest.rs",
 ]
 
-[[inventory.urna_python]]
-path = "crates/urna-python/src/build_inputs.rs"
+[[inventory.urna_bridge]]
+path = "crates/urna-bridge/src/build_inputs.rs"
 kind = "rust-source"
 purpose = "build() input helpers split out of build_fn.rs: parse_chunks (PyList of dicts -> Vec<ChunkInput>), truncate_renormalize (matryoshka prefix slice + l2-renorm before quant/hnsw), build_graph_payload (G1: NEXT_CHUNK + top-m SEMANTIC edges from the HNSW level-0 graph, canonically sorted), and parse_blob_refs / parse_chunk_blob_spans for the media pillar"
 links = [
-    "crates/urna-python/src/build_fn.rs",
+    "crates/urna-bridge/src/build_fn.rs",
     "crates/urna-format/src/sections/graph/adjacency.rs",
     "crates/urna-format/src/sections/blob/refs.rs",
 ]
 
-[[inventory.urna_python]]
-path = "crates/urna-python/src/build_manifest.rs"
+[[inventory.urna_bridge]]
+path = "crates/urna-bridge/src/build_manifest.rs"
 kind = "rust-source"
 purpose = "Manifest assembly for build(): capabilities (incl blobs_present when blob sections are emitted and supports_multimodal when a space_table is present) and the additive manifest fields, split out of build_fn.rs"
 links = [
-    "crates/urna-python/src/build_fn.rs",
+    "crates/urna-bridge/src/build_fn.rs",
     "crates/urna-format/src/manifest/mod.rs",
 ]
 
-[[inventory.urna_python]]
-path = "crates/urna-python/src/build_spaces.rs"
+[[inventory.urna_bridge]]
+path = "crates/urna-bridge/src/build_spaces.rs"
 kind = "rust-source"
 purpose = "Named-space build path: validates the spaces kwarg (name, dim, dtype, per-space model_hash), emits the space_table (0x15) plus one embeddings slab per space at the derived 0x20-0x2F band id, deterministic per-space builds"
 links = [
-    "crates/urna-python/src/build_fn.rs",
+    "crates/urna-bridge/src/build_fn.rs",
     "crates/urna-format/src/sections/space_table.rs",
 ]
 
-[[inventory.urna_python]]
-path = "crates/urna-python/src/chunk_id_fn.rs"
+[[inventory.urna_bridge]]
+path = "crates/urna-bridge/src/chunk_id_fn.rs"
 kind = "rust-source"
 purpose = "Python chunk_id helper"
 links = ["crates/urna-format/src/chunk.rs"]
 
-[[inventory.urna_python]]
-path = "crates/urna-python/src/lib.rs"
+[[inventory.urna_bridge]]
+path = "crates/urna-bridge/src/lib.rs"
 kind = "rust-source"
 purpose = "_urna module registration (UrnaFile, SearchHitPy, RetrieveHitPy, build, chunk_id)"
 links = [
-    "crates/urna-python/src/build_fn.rs",
-    "crates/urna-python/src/urna_file.rs",
-    "crates/urna-python/src/retrieve_fn.rs",
+    "crates/urna-bridge/src/build_fn.rs",
+    "crates/urna-bridge/src/urna_file.rs",
+    "crates/urna-bridge/src/retrieve_fn.rs",
 ]
 
-[[inventory.urna_python]]
-path = "crates/urna-python/src/urna_file.rs"
+[[inventory.urna_bridge]]
+path = "crates/urna-bridge/src/urna_file.rs"
 kind = "rust-source"
 purpose = "PyO3 wrapper over MmapUrnaFile (search/search_ann/search_graph/search_hybrid, search_space for named spaces, the agent-native retrieve, has_ann/has_bm25/has_graph/has_blobs/blob_refs/has_spaces/space_names, inspect, validate)"
 links = [
     "crates/urna-engine/src/mmap_file.rs",
     "crates/urna-engine/src/search.rs",
     "crates/urna-engine/src/space_search.rs",
-    "crates/urna-python/src/retrieve_fn.rs",
+    "crates/urna-bridge/src/retrieve_fn.rs",
 ]
 
-[[inventory.urna_python]]
-path = "crates/urna-python/src/retrieve_fn.rs"
+[[inventory.urna_bridge]]
+path = "crates/urna-bridge/src/retrieve_fn.rs"
 kind = "rust-source"
 purpose = "The agent-native flagship: RetrieveHitPy (cited span + tier-1 text + rerank_source marker) and retrieve() (route by capability, search, attach tier-1 canonical text per chunk_id); score IS the exact rerank value, typed errors -> PyValueError, never panic"
 links = [
@@ -2203,7 +2203,7 @@ links = [
     "python/forge/forge_recipe.py",
     "python/forge/forge_media_stage.py",
     "python/forge/forge_manifest.py",
-    "crates/urna-python/src/build_fn.rs",
+    "crates/urna-bridge/src/build_fn.rs",
 ]
 
 [[inventory.data_docs_python_scripts_tests]]
@@ -2300,7 +2300,7 @@ path = "python/tools/urna_ui_bridge.py"
 kind = "python-tool"
 purpose = "JSON bridge for frontends: browse (paginated manifest items, full or compact, the frame derived by forge_manifest.frame_resolver, media resolved to internal blob URI + shard-local frame by SHA256 segment matching), search (exact/ann/hybrid/graph/named spaces, hits enriched and matched by chunk_id), blob (extract ONE inlined 0x17 blob); registry embedding behind the URNA_ALLOW_REMOTE_CODE opt-in"
 links = [
-    "crates/urna-python/src/urna_file.rs",
+    "crates/urna-bridge/src/urna_file.rs",
     "python/forge/forge_manifest.py",
     "python/forge/model_registry.py",
 ]
@@ -2495,7 +2495,7 @@ links = [
 path = "python/_urna.so"
 kind = "binary-artifact"
 purpose = "Compiled PyO3 extension"
-links = ["crates/urna-python/src/lib.rs"]
+links = ["crates/urna-bridge/src/lib.rs"]
 
 [[inventory.data_docs_python_scripts_tests]]
 path = "python/builder.py"
@@ -2503,7 +2503,7 @@ kind = "python-source"
 purpose = "Chunk, cache, build, and validate pipeline (BuildConfig now carries with_graph/graph_top_m/drop_overlap for G1; drop_overlap implies with_graph)"
 links = [
     "python/urna.py",
-    "crates/urna-python/src/build_fn.rs",
+    "crates/urna-bridge/src/build_fn.rs",
     "python/graph_context.py",
 ]
 
@@ -2660,8 +2660,8 @@ purpose = "build_corpus for image corpora (moved out of the CLI in F5): items ->
 links = [
     "python/forge/image_encode.py",
     "python/forge/image_items.py",
-    "crates/urna-python/src/build_fn.rs",
-    "crates/urna-python/src/build_spaces.rs",
+    "crates/urna-bridge/src/build_fn.rs",
+    "crates/urna-bridge/src/build_spaces.rs",
 ]
 
 [[inventory.data_docs_python_scripts_tests]]
@@ -2725,7 +2725,7 @@ kind = "python-source"
 purpose = "Offline potion-embed + UrnaFile.retrieve convenience and the one-gif flagship demo driver over demo_corpus: build_demo (byte-identical offline build), retrieve (potion embed -> UrnaFile.retrieve), main (ask a question, print the cited answer + a urna:// citation that round-trips)"
 links = [
     "python/forge/embed_potion.py",
-    "crates/urna-python/src/retrieve_fn.rs",
+    "crates/urna-bridge/src/retrieve_fn.rs",
     "python/forge/demo_corpus",
 ]
 
@@ -2740,7 +2740,7 @@ path = "python/urna.py"
 kind = "python-source"
 purpose = "Dynamic loader and stable Python API (re-exports UrnaFile, SearchHit, RetrieveHit, open, build, chunk_id; documents UrnaFile.retrieve)"
 links = [
-    "crates/urna-python/src/lib.rs",
+    "crates/urna-bridge/src/lib.rs",
     "python/_urna.so",
 ]
 
@@ -2777,7 +2777,7 @@ kind = "python-source"
 purpose = "Image-space search CLI: --query-text / --letterbox-query embedding and search_space against a multimodal .urna"
 links = [
     "python/forge/embed_image.py",
-    "crates/urna-python/src/urna_file.rs",
+    "crates/urna-bridge/src/urna_file.rs",
 ]
 
 [[inventory.data_docs_python_scripts_tests]]
@@ -2855,8 +2855,8 @@ path = "tests/test_blob_bridge.py"
 kind = "python-test"
 purpose = "PyO3 bridge coverage for the media pillar: build with blob_refs + chunk_blob_spans, has_blobs / blob_refs getters, span read-back, content_hash parity with the blob-free twin"
 links = [
-    "crates/urna-python/src/build_fn.rs",
-    "crates/urna-python/src/urna_file.rs",
+    "crates/urna-bridge/src/build_fn.rs",
+    "crates/urna-bridge/src/urna_file.rs",
 ]
 
 [[inventory.data_docs_python_scripts_tests]]
@@ -2864,8 +2864,8 @@ path = "tests/test_space_bridge.py"
 kind = "python-test"
 purpose = "PyO3 bridge coverage for named spaces: spaces kwarg build, has_spaces / space_names, search_space hits, per-space model_hash isolation"
 links = [
-    "crates/urna-python/src/build_spaces.rs",
-    "crates/urna-python/src/urna_file.rs",
+    "crates/urna-bridge/src/build_spaces.rs",
+    "crates/urna-bridge/src/urna_file.rs",
 ]
 
 [[inventory.data_docs_python_scripts_tests]]
@@ -2890,8 +2890,8 @@ kind = "python-test"
 purpose = "PyO3 end-to-end coverage, incl the flagship-is-a-lie guard: UrnaFile.retrieve(q, k) score equals UrnaFile.search(q, k) byte-for-byte and each hit carries tier-1 text + a well-formed urna:// citation; and the capability route: retrieve(query_text=...) on a BM25 file brings the word match (a chunk at cosine -1) into the exact rerank, on a hybrid preset file (index_type hnsw) too"
 links = [
     "python/urna.py",
-    "crates/urna-python/src/urna_file.rs",
-    "crates/urna-python/src/retrieve_fn.rs",
+    "crates/urna-bridge/src/urna_file.rs",
+    "crates/urna-bridge/src/retrieve_fn.rs",
 ]
 
 [[inventory.data_docs_python_scripts_tests]]

@@ -113,7 +113,7 @@ def case_happy(repo: Path, signers: Path, tmp: Path):
     for pin in ("urna-format", "urna-engine"):
         assert f'{pin} = {{ path = "crates/{pin}", version = "{new}" }}' in manifest, pin
     lock = (wt / "Cargo.lock").read_text()
-    for name in ("urna", "urna-format", "urna-engine", "urna-python"):
+    for name in ("urna", "urna-format", "urna-engine", "urna-bridge"):
         assert f'name = "{name}"\nversion = "{new}"' in lock, f"Cargo.lock {name}"
     log = (wt / "docs/CHANGELOG").read_text()
     assert f"last-updated: {today}\n" in log

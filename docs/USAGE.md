@@ -692,7 +692,7 @@ cargo binstall urna     # prebuilt binary from the github release
 cargo install urna      # compile from crates.io
 ```
 
-`urna-format`, `urna-engine` and `urna` (the CLI crate, in `crates/urna-cli/`) are published to crates.io on every release by `.github/workflows/publish-crates.yml`, in that order; `urna-python` ships as the wheel and is not a crate. A Rust project that reads or writes `.urna` files depends on `urna-format` (container) and `urna-engine` (search); `urna-engine` replaces `urna-runtime`, whose last version is 0.5.3. `[package.metadata.binstall]` in `crates/urna-cli/Cargo.toml` maps the crate to the cargo-dist archive names (`.tar.xz`, `.zip` on Windows), so binstall downloads the released binary instead of compiling. Either way the binary comes alone: `urna setup` completes it. To build the unreleased tree instead: `cargo install --git https://github.com/hoffresearch/urna urna`.
+`urna-format`, `urna-engine` and `urna` (the CLI crate, in `crates/urna-cli/`) are published to crates.io on every release by `.github/workflows/publish-crates.yml`, in that order; `urna-bridge` ships as the wheel and is not a crate. A Rust project that reads or writes `.urna` files depends on `urna-format` (container) and `urna-engine` (search); `urna-engine` replaces `urna-runtime`, whose last version is 0.5.3. `[package.metadata.binstall]` in `crates/urna-cli/Cargo.toml` maps the crate to the cargo-dist archive names (`.tar.xz`, `.zip` on Windows), so binstall downloads the released binary instead of compiling. Either way the binary comes alone: `urna setup` completes it. To build the unreleased tree instead: `cargo install --git https://github.com/hoffresearch/urna urna`.
 
 </details>
 
@@ -713,7 +713,7 @@ The root `Dockerfile` builds the static musl binary in a throwaway toolchain sta
 
 ```sh
 cargo build --release --workspace
-cargo build --release -p urna-python --features pyo3/extension-module
+cargo build --release -p urna-bridge --features pyo3/extension-module
 cp target/release/lib_urna.dylib python/_urna.so   # macos (.so on linux)
 ```
 
@@ -775,7 +775,7 @@ The release workflows assume external state that a fresh org does not have. As o
 9. **Release signers**: `.github/allowed_signers` lists the keys allowed to sign release tags (one line per principal). A new maintainer key is a pull request that appends a line there; the verify step reads the file from the tagged commit.
 10. **Changing the dist config**: after editing `[workspace.metadata.dist]` run `dist generate`, then `python scripts/release_rehearsal.py generate`, and commit both regenerated workflows; never hand-edit either. `pr-run-mode = "plan"` keeps `release.yml` on the plan step for pull requests; the real build runs in the rehearsal (step 12). When the generator refuses a `release.yml` it does not know (a dist upgrade changed a job, a condition or a step), teach `scripts/release_rehearsal.py` the new shape in the same pull request.
 11. **What the 0.5.0 tag taught** (five runs before it shipped):
-    - No release job may smudge git-lfs: the repository can run out of LFS budget, and then every checkout that pulls LFS fails. The potion table comes from `scripts/fetch_potion.sh` (in the per-target setup and inside the payload build, because dist's global job does not run `github-build-setup`), `precise-builds = true` keeps dist from building `urna-python`'s cdylib for musl, and `source-tarball = false` keeps dist's `git archive` from smudging the demo corpora.
+    - No release job may smudge git-lfs: the repository can run out of LFS budget, and then every checkout that pulls LFS fails. The potion table comes from `scripts/fetch_potion.sh` (in the per-target setup and inside the payload build, because dist's global job does not run `github-build-setup`), `precise-builds = true` keeps dist from building `urna-bridge`'s cdylib for musl, and `source-tarball = false` keeps dist's `git archive` from smudging the demo corpora.
     - Rehearse before tagging: the rehearsal workflow does it on every pull request that touches a release input (step 12). By hand, `dist plan`, then `dist build --artifacts=global` (it needs `cargo install cargo-auditable`) from a checkout where the table is a pointer. `git checkout -- <file>` re-smudges from the local LFS cache, so write the pointer with `git cat-file blob HEAD:<path> > <path>`.
     - Moving a tag is safe only while nothing irreversible went out (a crates.io version is permanent, PyPI refuses a second upload of a version). Confirm the fix is on `main` (`gh pr view N --json state` says `MERGED` and `origin/main` moved), chain with `&&`, then `git push origin :refs/tags/vX.Y.Z && git tag -d vX.Y.Z && git tag -s vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.
     - PyPI publishes only from inside the release run: it published 0.5.0 and 0.5.2 on its own run while the binary release failed. `publish-pypi` dispatches `pypi.yml` once every build passed and the host released them. A PyPI-only failure is finished by rerunning the failed `publish-pypi` job: the upload skips a wheel PyPI already has with the same sha256 and refuses one with another, so a partial upload completes and never overwrites. `pypi.yml` by hand takes `index=pypi` only on a `v*` tag with the release run as `source_run`.

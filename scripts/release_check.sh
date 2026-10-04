@@ -56,7 +56,7 @@ ok "release build"
 # before cargo test: the cli e2e tests (cli_e2e.rs) build their demo corpus
 # through python/urna.py, so a fresh checkout without python/_urna.so failed
 # there before reaching this step. the copy is what the tests load; a later
-# cargo build of urna-python without the feature does not touch it.
+# cargo build of urna-bridge without the feature does not touch it.
 step "rebuild python/_urna.so"
 # build the extension against the SAME interpreter that runs the tests, so a
 # .venv that differs from the default build python can never load a mismatched
@@ -66,7 +66,7 @@ step "rebuild python/_urna.so"
 # libpython path and segfaults under statically-embedded interpreters (uv's
 # python-build-standalone) by loading a second runtime. maturin builds the
 # published wheel the same way.
-PYO3_PYTHON="$PY" cargo build --release -p urna-python \
+PYO3_PYTHON="$PY" cargo build --release -p urna-bridge \
   --features pyo3/extension-module >/dev/null
 case "$(uname)" in
   Darwin) cp target/release/lib_urna.dylib python/_urna.so ;;

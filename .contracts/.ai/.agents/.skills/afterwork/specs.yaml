@@ -104,9 +104,9 @@ groups:
       - path: crates/urna-cli/LICENSE
         when: mudar a localização da licença compartilhada.
         rule: symlink para LICENSE; preservar.
-      - path: crates/urna-python/Cargo.toml
+      - path: crates/urna-bridge/Cargo.toml
         when: mudarem PyO3, compatibilidade Python, dependências ou configuração da extensão.
-      - path: crates/urna-python/build.rs
+      - path: crates/urna-bridge/build.rs
         when: mudarem configuração ou flags de ligação da extensão Python.
 
   - name: crates/urna-ingest e fuzz
