@@ -106,7 +106,7 @@ cargo-auditable = true
 # is a failure, which the host condition does refuse.
 
 # build only the packages that ship (the `urna` cli crate). without it dist compiles the
-# whole workspace per target, and urna-python's cdylib cannot be built for
+# whole workspace per target, and urna-bridge's cdylib cannot be built for
 # the musl targets, which failed the first 0.5.0 tag on both linux builds.
 precise-builds = true
 # no source.tar.gz: dist builds it with git archive, which smudges every

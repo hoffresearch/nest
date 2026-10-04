@@ -1,7 +1,7 @@
 # Python tooling configuration.
 #
 # The DEV flow does NOT install a Python package: the PyO3 extension is
-# built by `cargo build --release -p urna-python --features
+# built by `cargo build --release -p urna-bridge --features
 # pyo3/extension-module` and copied into `python/_urna.so` (the feature
 # keeps libpython out of the cdylib). The Python source under `python/` and `tests/` is
 # imported directly by adding `python/` to `sys.path`.
