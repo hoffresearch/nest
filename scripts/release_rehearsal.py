@@ -168,7 +168,9 @@ def transform(release: dict) -> dict:
     # refuses secrets.X, secrets['X'] and toJSON(secrets) alike.
     text = json.dumps(kept)
     reads = [m.group(0) for m in re.finditer(r"\bsecrets\b\S{0,24}", text)]
-    others = sorted({r for r in reads if not r.startswith("secrets.GITHUB_TOKEN")})
+    # the token name must end there: secrets.GITHUB_TOKEN_EXTRA is another secret.
+    own = re.compile(r"secrets\.GITHUB_TOKEN(?![A-Za-z0-9_-])")
+    others = sorted({r for r in reads if not own.match(r)})
     _expect(not others, f"a kept job reads secrets {others}")
     return {
         "name": "Release rehearsal",
