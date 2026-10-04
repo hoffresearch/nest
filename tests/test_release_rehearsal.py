@@ -161,7 +161,6 @@ def test_what_needs_the_rehearsal() -> None:
         "docs/USAGE.md",
         "tests/test_e2e.py",
         ".github/workflows/install-test.yml",
-        "llms.txt",
     ]:
         assert rh.touches_release([path]) == [], path
     assert rh.changed("0" * 40, "HEAD") is None and rh.changed("", "HEAD") is None

@@ -275,8 +275,9 @@ The profile names are the forge's (`[media] profile = "..."`, usage section 14).
 - [fakenews-ptbr-urna-benchmark](https://github.com/brennercruvinel/fakenews-ptbr-urna-benchmark) and [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark): the text and image benchmarks, with their files on Hugging Face
 - [docs/SECURITY.md](https://github.com/hoffresearch/urna/blob/main/docs/SECURITY.md): reporting, hardening, data governance
 - [docs/CHANGELOG](https://github.com/hoffresearch/urna/blob/main/docs/CHANGELOG): releases with measured numbers
-- [docs/arc/ARC.toml](https://github.com/hoffresearch/urna/blob/main/docs/arc/ARC.toml): the architecture map
-- [AGENTS.md](https://github.com/hoffresearch/urna/blob/main/.contracts/.agents/AGENTS.md): notes for contributors and agents
+- [docs/ARC.toml](https://github.com/hoffresearch/urna/blob/main/docs/ARC.toml): the architecture map
+- [docs/ADR](https://github.com/hoffresearch/urna/blob/main/docs/ADR/README.md): architecture decision records, by category
+- [AGENTS.md](https://github.com/hoffresearch/urna/blob/main/.contracts/.ai/.agents/AGENTS.md): notes for contributors and agents
 
 The crates are `urna-format` (the container), `urna-runtime` (search), `urna` (the binary) and `urna-python` (the bridge).
 
