@@ -1,6 +1,6 @@
 """Drive the release binary's space surface (RFC-4): search-space happy path
 and typed errors, the stats spaces block, inspect --json spaces[], and
-benchmark --space. Corpus built via urna.build spaces= (as test_space_bridge).
+benchmark --space. Corpus built via urna.build spaces= (as test_spaceband).
 
 Run: .venv/bin/python tests/test_clispaces.py  (needs target/release/urna)
 """
