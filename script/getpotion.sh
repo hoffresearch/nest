@@ -14,18 +14,18 @@ URL="https://huggingface.co/minishlab/potion-base-8M/resolve/$REV/model.safetens
 
 size=$(wc -c <"$FILE" | tr -d ' ')
 if [ "$size" -gt 1024 ]; then
-    echo "fetch_potion: $FILE is already the table ($size bytes)"
+    echo "getpotion: $FILE is already the table ($size bytes)"
     exit 0
 fi
 oid=$(sed -n 's/^oid sha256://p' "$FILE")
-[ -n "$oid" ] || { echo "fetch_potion: $FILE is neither the table nor an lfs pointer" >&2; exit 1; }
+[ -n "$oid" ] || { echo "getpotion: $FILE is neither the table nor an lfs pointer" >&2; exit 1; }
 
 curl -fsSL --retry 3 -o "$FILE.part" "$URL"
 got=$( (sha256sum "$FILE.part" 2>/dev/null || shasum -a 256 "$FILE.part") | cut -d' ' -f1)
 if [ "$got" != "$oid" ]; then
     rm -f "$FILE.part"
-    echo "fetch_potion: sha256 $got does not match the pointer oid $oid" >&2
+    echo "getpotion: sha256 $got does not match the pointer oid $oid" >&2
     exit 1
 fi
 mv "$FILE.part" "$FILE"
-echo "fetch_potion: $FILE sha256:$got"
+echo "getpotion: $FILE sha256:$got"

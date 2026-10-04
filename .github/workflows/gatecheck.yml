@@ -320,6 +320,6 @@ jobs:
       - name: stage and pack the payload, check its VERSION
         run: |
           set -eu
-          sh script/fetch_potion.sh
+          sh script/getpotion.sh
           python script/embedpack.py "$RUNNER_TEMP/payload" --tar "$RUNNER_TEMP/payload.tar.gz"
           python -c "import sys, tarfile; v = tarfile.open(sys.argv[1]).extractfile('urna/VERSION').read().decode().strip(); print('payload VERSION', v)" "$RUNNER_TEMP/payload.tar.gz"

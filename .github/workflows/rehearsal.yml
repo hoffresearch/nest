@@ -107,7 +107,7 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
         fi
     - name: fetch the potion table (embedder payload), verified against its lfs pointer
-      run: sh script/fetch_potion.sh
+      run: sh script/getpotion.sh
       shell: bash
     - name: Install dist
       run: ${{ matrix.install_dist.run }}
