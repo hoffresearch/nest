@@ -2348,7 +2348,7 @@ purpose = "The checked-in catalog is the registry's (generated without numpy), t
 links = ["python/forge/model_catalog.py", "script/fullcheck.sh"]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_model_install.py"
+path = "tests/test_modelpull.py"
 kind = "python-test"
 purpose = "install_model.py against a real 18 MB hub test model in a scratch HF_HOME: refusals before any download (no confirmation, no remote-code consent, another corpus's hash, an excluded model), the pinned files only with progress as bytes arrive, refs/main, an offline rerun, a wrong catalog hash or a changed reviewed file refused, another revision's refs/main left alone; the download cases skip by name when huggingface.co does not answer; in fullcheck.sh"
 links = ["python/forge/install_model.py", "script/fullcheck.sh"]
