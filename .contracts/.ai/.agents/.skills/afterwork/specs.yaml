@@ -99,9 +99,9 @@ groups:
         rule: symlink para LICENSE; preservar.
       - path: crates/engine/build.rs
         when: mudarem detecção do compilador, suporte SIMD ou condições de compilação.
-      - path: crates/urna-clitui/Cargo.toml
+      - path: crates/clitui/Cargo.toml
         when: mudarem CLI, features, MSRV, canais de pacote ou substituições de release.
-      - path: crates/urna-clitui/LICENSE
+      - path: crates/clitui/LICENSE
         when: mudar a localização da licença compartilhada.
         rule: symlink para LICENSE; preservar.
       - path: crates/bridge/Cargo.toml
@@ -133,7 +133,7 @@ groups:
         rule: preservar os bytes da fixture v1; atualizar testes ou acrescentar fixtures conforme o contrato, sem regenerá-la apenas para fazer um teste passar.
       - path: crates/engine/tests/
         when: mudar um caminho de busca, índice, kernel ou verificação do runtime.
-      - path: crates/urna-clitui/tests/
+      - path: crates/clitui/tests/
         when: mudar um verbo, código de saída, escada de resolução ou etapa do setup.
       - path: fuzz/fuzz_targets/section_decoders.rs
         when: entrar um codec novo (um braço) ou um achado do fuzz for corrigido.
@@ -245,49 +245,49 @@ groups:
 
   - name: caminhos de dados e setup da cli
     files:
-      - path: crates/urna-clitui/src/cmd/paths.rs
+      - path: crates/clitui/src/cmd/paths.rs
         when: mudarem diretórios de dados, payload ou descoberta de arquivos.
-      - path: crates/urna-clitui/src/cmd/payload.rs
+      - path: crates/clitui/src/cmd/payload.rs
         when: mudarem arquivos obrigatórios, versão ou instalação transacional do payload.
-      - path: crates/urna-clitui/src/cmd/pyenv.rs
+      - path: crates/clitui/src/cmd/pyenv.rs
         when: mudar a descoberta ou execução do interpretador Python.
-      - path: crates/urna-clitui/src/cmd/doctor.rs
+      - path: crates/clitui/src/cmd/doctor.rs
         when: mudarem comando, saída ou comportamento do diagnóstico.
-      - path: crates/urna-clitui/src/cmd/health.rs
+      - path: crates/clitui/src/cmd/health.rs
         when: mudarem as verificações de saúde ou seus códigos de resultado.
-      - path: crates/urna-clitui/src/tui/setup/mod.rs
+      - path: crates/clitui/src/tui/setup/mod.rs
         when: mudar a organização do fluxo de setup.
-      - path: crates/urna-clitui/src/tui/setup/scan.rs
+      - path: crates/clitui/src/tui/setup/scan.rs
         when: mudar a detecção do estado da máquina.
-      - path: crates/urna-clitui/src/tui/setup/plan.rs
+      - path: crates/clitui/src/tui/setup/plan.rs
         when: mudar a seleção das etapas necessárias.
-      - path: crates/urna-clitui/src/tui/setup/job.rs
+      - path: crates/clitui/src/tui/setup/job.rs
         when: mudar a execução ou comunicação das tarefas de instalação.
-      - path: crates/urna-clitui/src/tui/setup/net.rs
+      - path: crates/clitui/src/tui/setup/net.rs
         when: mudarem downloads, transporte ou verificação da transferência.
-      - path: crates/urna-clitui/src/tui/setup/unpack.rs
+      - path: crates/clitui/src/tui/setup/unpack.rs
         when: mudarem extração e instalação dos arquivos.
-      - path: crates/urna-clitui/src/tui/setup/venv.rs
+      - path: crates/clitui/src/tui/setup/venv.rs
         when: mudarem criação do ambiente Python ou instalação das dependências.
-      - path: crates/urna-clitui/src/tui/setup/models.rs
+      - path: crates/clitui/src/tui/setup/models.rs
         when: mudar a instalação dos modelos oferecidos.
-      - path: crates/urna-clitui/src/tui/setup/text.rs
+      - path: crates/clitui/src/tui/setup/text.rs
         when: mudarem mensagens e apresentação textual do setup.
-      - path: crates/urna-clitui/src/tui/setup/ui.rs
+      - path: crates/clitui/src/tui/setup/ui.rs
         when: mudar a interação visual do setup.
-      - path: crates/urna-clitui/src/tui/setup/screen/mod.rs
+      - path: crates/clitui/src/tui/setup/screen/mod.rs
         when: mudar a organização das telas.
-      - path: crates/urna-clitui/src/tui/setup/screen/splash.rs
+      - path: crates/clitui/src/tui/setup/screen/splash.rs
         when: mudar a tela de abertura.
-      - path: crates/urna-clitui/src/tui/setup/screen/scan.rs
+      - path: crates/clitui/src/tui/setup/screen/scan.rs
         when: mudar a apresentação da detecção.
-      - path: crates/urna-clitui/src/tui/setup/screen/plan.rs
+      - path: crates/clitui/src/tui/setup/screen/plan.rs
         when: mudar a apresentação do plano.
-      - path: crates/urna-clitui/src/tui/setup/screen/models.rs
+      - path: crates/clitui/src/tui/setup/screen/models.rs
         when: mudar o seletor de modelos.
-      - path: crates/urna-clitui/src/tui/setup/screen/run.rs
+      - path: crates/clitui/src/tui/setup/screen/run.rs
         when: mudar a apresentação da instalação em andamento.
-      - path: crates/urna-clitui/src/tui/setup/screen/done.rs
+      - path: crates/clitui/src/tui/setup/screen/done.rs
         when: mudar o resultado final e as orientações seguintes.
 
   - name: exemplos

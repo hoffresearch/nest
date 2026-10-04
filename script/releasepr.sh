@@ -9,7 +9,7 @@
 #      the urna-format and urna-engine pins and the lockfile (`cargo release
 #      version`), then the changelog section and the versioned fields of
 #      CITATION.cff (`cargo release replace`, the list in
-#      crates/urna-clitui/Cargo.toml); the rest of CITATION.cff does not move;
+#      crates/clitui/Cargo.toml); the rest of CITATION.cff does not move;
 #   2. script/preflight.py checks the result, and nothing outside
 #      those four files may have changed;
 #   3. a signed commit, an explicit push of that one branch, the pull request.

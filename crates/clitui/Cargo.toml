@@ -1,5 +1,5 @@
 [package]
-name = "urna-clitui"
+name = "urna"
 description = "Offline-first vector database in one file: a .urna container with content-addressable citations, and the urna CLI"
 version.workspace = true
 edition.workspace = true
@@ -22,7 +22,7 @@ workspace = true
 name = "urna"
 path = "src/main.rs"
 
-# cargo-binstall: `cargo binstall urna-clitui` fetches the prebuilt binary from
+# cargo-binstall: `cargo binstall urna` fetches the prebuilt binary from
 # the github release instead of compiling (issue #75). names match the
 # cargo-dist archive layout; windows ships a .zip, everything else .tar.xz.
 [package.metadata.binstall]
@@ -50,7 +50,7 @@ pre-release-replacements = [
   { file = "../../docs/CHANGELOG", search = "^last-updated: .*$", replace = "last-updated: {{date}}", exactly = 1 },
   { file = "../../CITATION.cff", search = "^version: .*$", replace = "version: \"{{version}}\"", exactly = 1 },
   { file = "../../CITATION.cff", search = "^date-released: .*$", replace = "date-released: \"{{date}}\"", exactly = 1 },
-  { file = "../../CITATION.cff", search = "^repository-artifact: https://crates\\.io/crates/urna-clitui/.*$", replace = "repository-artifact: https://crates.io/crates/urna-clitui/{{version}}", exactly = 1 },
+  { file = "../../CITATION.cff", search = "^repository-artifact: https://crates\\.io/crates/urna/.*$", replace = "repository-artifact: https://crates.io/crates/urna/{{version}}", exactly = 1 },
   { file = "../../CITATION.cff", search = "^( +value: https://github\\.com/hoffresearch/urna/releases/tag/v).*$", replace = "${1}{{version}}", exactly = 1 },
   { file = "../../CITATION.cff", search = "^( +description: Release of Urna version ).*$", replace = "${1}{{version}}.", exactly = 1 },
 ]
@@ -71,7 +71,7 @@ coolor = "1.1"
 
 # the terminal ui: `urna setup` (the interactive installer every channel
 # ends in) and `urna tui` (the corpus explorer). on by default so brew, npm,
-# crates.io and the tarballs ship the same binary; `cargo install urna-clitui
+# crates.io and the tarballs ship the same binary; `cargo install urna
 # --no-default-features` builds the engine-only cli without any of it.
 # there is no http client here on purpose: `urna setup` downloads through the
 # system `curl`, so the binary itself never links a network stack.

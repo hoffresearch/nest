@@ -29,7 +29,7 @@ RUN rustup target add ${TARGET} \
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
-RUN cargo build --locked --profile dist -p urna-clitui --no-default-features --target ${TARGET}
+RUN cargo build --locked --profile dist -p urna --no-default-features --target ${TARGET}
 
 FROM scratch
 ARG TARGET=x86_64-unknown-linux-musl
