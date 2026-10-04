@@ -137,7 +137,7 @@ def case_happy(repo: Path, signers: Path, tmp: Path):
     names = git(wt, "diff", "--name-only", f"{base}..HEAD").stdout.split()
     assert sorted(names) == FILES, names
     assert git(wt, "status", "--porcelain").stdout == "", "left uncommitted changes"
-    run([sys.executable, "script/release_preflight.py"], wt)
+    run([sys.executable, "script/preflight.py"], wt)
     assert git(repo, "rev-parse", "main").stdout.strip() == base, "main moved"
     assert git(repo, "tag", "--list").stdout == "", "a tag was created"
     assert git(repo, "status", "--porcelain").stdout == "", "the checkout changed"

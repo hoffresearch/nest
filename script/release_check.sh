@@ -170,8 +170,8 @@ ok "bench runner (4 cases)"
 
 # the version a release names agrees across the manifests, the lockfile,
 # CITATION.cff and the changelog; the tag checks need a tag and run in ci.
-step "python tests/test_release_preflight.py"
-"$PY" tests/test_release_preflight.py
+step "python tests/test_preflight.py"
+"$PY" tests/test_preflight.py
 ok "release preflight (7 cases)"
 
 # the pypi upload takes the release's wheels from the run its index allows,

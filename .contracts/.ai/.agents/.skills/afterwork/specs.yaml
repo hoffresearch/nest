@@ -177,7 +177,7 @@ groups:
     files:
       - path: script/release_prepare.sh
         when: mudar a preparação de versão, worktree, assinatura, push ou abertura do PR.
-      - path: script/release_preflight.py
+      - path: script/preflight.py
         when: mudarem campos de versão, metadados ou critérios de origem da release.
       - path: script/rehearsal.py
         when: mudarem estrutura gerada, entradas distribuídas, classificação de impacto ou validação dos artefatos.
