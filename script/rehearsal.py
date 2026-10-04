@@ -306,7 +306,7 @@ def release_inputs() -> tuple[set[str], tuple[str, ...]]:
         "script/stage_embedder_payload.py",
         "script/stage_wheel.py",
         "script/rehearsal.py",
-        "script/release_preflight.py",
+        "script/preflight.py",
         ".github/workflows/release.yml",
         ".github/workflows/rehearsal.yml",
         ".github/workflows/wheelmake.yml",

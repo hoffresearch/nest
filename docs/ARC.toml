@@ -2366,10 +2366,10 @@ purpose = "The staged payload run from outside the checkout: the file list, the 
 links = ["script/stage_embedder_payload.py", "python/forge/embed_query_model.py"]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_release_preflight.py"
+path = "tests/test_preflight.py"
 kind = "python-test"
 purpose = "The release preflight against the checkout and against temp copies with one field drifted per case (a workspace pin, a crate not inheriting, a lockfile entry, each versioned CITATION field, the citation date, the changelog section), and the tag checks in throwaway repos (another version, off main, dated before the release, lightweight, a stale CITATION on the tag's commit while the checkout carries the fix, a release file missing from the commit); in release_check.sh and gatecheck.yml; a tag made at 22:30 at -03:00 fits a release dated the next UTC day, one dated two days later is refused"
-links = ["script/release_preflight.py"]
+links = ["script/preflight.py"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "tests/test_pypi_release.py"
@@ -3008,7 +3008,7 @@ links = [".github/workflows/release.yml", ".github/workflows/wheelmake.yml", "sc
 path = "script/release_prepare.sh"
 kind = "shell-script"
 purpose = "Opens the release pull request (usage step 8): in a new worktree of origin/main on release-X.Y.Z, cargo-release (version pinned here) runs `version` (workspace version, urna-format and urna-engine pins, lockfile) and `replace` (the dated changelog section, CITATION.cff's versioned fields); then the preflight, a refusal of any change outside those four files, a signed commit, an explicit push of that branch and gh pr create. Refuses a version not after the current one, an empty [Unreleased], another cargo-release; never tags or publishes"
-links = ["release.toml", "crates/urna-clitui/Cargo.toml", "script/release_preflight.py", "tests/test_release_prepare.py"]
+links = ["release.toml", "crates/urna-clitui/Cargo.toml", "script/preflight.py", "tests/test_release_prepare.py"]
 
 [[inventory.distribution]]
 path = "release.toml"
@@ -3049,19 +3049,19 @@ links = [".github/workflows/pypiindex.yml", "tests/test_pypi_release.py"]
 [[inventory.distribution]]
 path = ".github/workflows/tagverify.yml"
 kind = "ci-workflow"
-purpose = "Reusable: verifies the release tag is annotated and signed by a key in .github/trustkeys, then runs script/release_preflight.py in tag mode (the tag names the workspace version, its commit is on main, the release date is not after the tag's UTC day); called by wheelmake.yml as its first job (not a dist plan job: the host runs on skipped builds) and by pypiindex.yml before an upload"
+purpose = "Reusable: verifies the release tag is annotated and signed by a key in .github/trustkeys, then runs script/preflight.py in tag mode (the tag names the workspace version, its commit is on main, the release date is not after the tag's UTC day); called by wheelmake.yml as its first job (not a dist plan job: the host runs on skipped builds) and by pypiindex.yml before an upload"
 links = [
     ".github/trustkeys",
-    "script/release_preflight.py",
+    "script/preflight.py",
     ".github/workflows/release.yml",
     ".github/workflows/pypiindex.yml",
 ]
 
 [[inventory.distribution]]
-path = "script/release_preflight.py"
+path = "script/preflight.py"
 kind = "python-source"
 purpose = "One version everywhere a release names it: the urna-format and urna-engine pins, every crate inheriting the workspace version, the four crates in Cargo.lock, CITATION.cff (version, the versioned crates.io and release URLs, a date-released equal to the changelog's) and the changelog section; tree mode in gatecheck.yml; tag mode (--tag) in tagverify.yml runs the same checks on the files of the tag's commit (git show, never the working tree) and adds the tag name, main ancestry and the tag date"
-links = [".github/workflows/tagverify.yml", ".github/workflows/gatecheck.yml", "tests/test_release_preflight.py"]
+links = [".github/workflows/tagverify.yml", ".github/workflows/gatecheck.yml", "tests/test_preflight.py"]
 
 [[inventory.distribution]]
 path = ".github/trustkeys"

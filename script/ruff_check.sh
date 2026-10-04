@@ -68,8 +68,8 @@ tests/test_bench_runner.py
 tests/test_model_catalog.py
 tests/test_model_install.py
 script/stage_embedder_payload.py
-script/release_preflight.py
-tests/test_release_preflight.py
+script/preflight.py
+tests/test_preflight.py
 script/pypi_release.py
 tests/test_pypi_release.py
 script/rehearsal.py

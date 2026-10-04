@@ -291,8 +291,8 @@ jobs:
         # pins, lockfile, CITATION.cff and the changelog section; the tag
         # checks run in tagverify.yml when a release is cut.
         run: |
-          python script/release_preflight.py
-          python tests/test_release_preflight.py
+          python script/preflight.py
+          python tests/test_preflight.py
           python tests/test_pypi_release.py
       - name: the release rehearsal is what release.yml builds
         # rehearsal.yml is generated from release.yml; a dist upgrade
