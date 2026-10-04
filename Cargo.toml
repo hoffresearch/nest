@@ -98,7 +98,7 @@ github-attestations = true
 # can read the dependency tree out of the executable.
 cargo-cyclonedx = true
 cargo-auditable = true
-# the tag check (signature + script/release_preflight.py, tagverify.yml)
+# the tag check (signature + script/preflight.py, tagverify.yml)
 # runs as the first job of wheelmake.yml, not as a plan job: when a plan
 # job fails, the builds that need it are skipped, and dist's host job runs
 # on skipped builds (`always()`, "skipped is fine"), so a refused tag would

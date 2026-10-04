@@ -1,6 +1,6 @@
 """Prove the release preflight agrees with the tree and refuses every drift.
 
-`script/release_preflight.py` runs on every pull request (tree mode) and
+`script/preflight.py` runs on every pull request (tree mode) and
 on the release tag after its signature check (tag mode). this suite runs it
 against the real checkout, then against temp copies of the files a release
 names (the manifests, the lockfile, CITATION.cff, the changelog), one field
@@ -17,7 +17,7 @@ changed per case, and against throwaway git repos for the tag checks:
   missing from the tag's commit;
 - edge case: a pin that drifts only in Cargo.lock (the manifests agree).
 
-Run: python tests/test_release_preflight.py
+Run: python tests/test_preflight.py
 """
 
 import importlib.util
@@ -30,8 +30,8 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPT = REPO / "script" / "release_preflight.py"
-spec = importlib.util.spec_from_file_location("release_preflight", SCRIPT)
+SCRIPT = REPO / "script" / "preflight.py"
+spec = importlib.util.spec_from_file_location("preflight", SCRIPT)
 preflight = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(preflight)
 
