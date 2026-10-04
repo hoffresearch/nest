@@ -151,8 +151,8 @@ ok "embedder payload (3 cases)"
 
 # the model catalog setup offers is the registry's validated presets, with a
 # reason for every preset it leaves out.
-step "python tests/test_model_catalog.py"
-"$PY" tests/test_model_catalog.py
+step "python tests/test_catalogue.py"
+"$PY" tests/test_catalogue.py
 ok "model catalog (5 cases)"
 
 # the model fetch: confirmed downloads only, the pinned files only, kept

@@ -2342,7 +2342,7 @@ purpose = "The fetch half of the model install: plan (missing packages, cached o
 links = ["python/forge/catalog.json", "python/model_fingerprint.py", "crates/urna-clitui/src/tui/setup/models.rs"]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_model_catalog.py"
+path = "tests/test_catalogue.py"
 kind = "python-test"
 purpose = "The checked-in catalog is the registry's (generated without numpy), the MiniLM is offered at its pinned revision and hash, every other preset carries its reason, a stale catalog fails the check, conflicting pins keep the first model; in fullcheck.sh"
 links = ["python/forge/model_catalog.py", "script/fullcheck.sh"]
