@@ -17,7 +17,7 @@ system_view = [
     "The distribution layer (issue #75) turns tags on main into installs: cargo-dist builds the CLI for five targets with SHA256 checksums, Sigstore keyless attestations on the five archives, one CycloneDX SBOM for the CLI package, a Homebrew tap formula (`urna`) and an npm package (`@urna/cli`), and publishes urna-format / urna-runtime / urna (the CLI crate) to crates.io; maturin builds the `urna` abi3 wheel with the potion table bundled (offline embedding after pip install); scripts/install.sh / install.ps1 are the one-liner installers (verify-before-write, --version, --uninstall); urna doctor validates the install offline and `urna setup` completes the channels that ship the bare binary (Homebrew, npm, crates.io); .github/workflows/install-test.yml tests the INSTALLED product per platform after each release, including a job per package channel that waits for the exact version on its registry and ends in `urna setup --yes` + `urna doctor`; .github/workflows/release-report.yml summarizes every completed release run, failed or cancelled included. Three levels of evidence, not interchangeable: scripts/release_check.sh is the full local gate (no release build), release-rehearsal.yml builds the release on pull requests and publishes nothing, and only a tag exercises publishing, install-test and the report.",
     "urna-python is the PyO3 bridge. python/urna.py loads the compiled extension, python/builder.py orchestrates chunking and caching, and python/embed_query.py preserves model parity for search-text. The agent-native flagship is UrnaFile.retrieve(query, k, ...): a pre-embedded query in, cited spans out, whose score IS the exact rerank value, with tier-1 stored canonical text + hashes + citation_id + rerank-source marker.",
     "scripts/release_check.sh is the release gate: rebuilds the extension, runs Rust and Python suites, checks lint and format, measures presets, and compares against the committed baseline.",
-    "crates/ingest (urna-ingest) is the ingestion layer, a SEPARATE cargo workspace under crates/ that the root Cargo.toml excludes, so its (eventually heavy, possibly non-deterministic) deps never enter urna-format or urna-runtime. This phase ships FORGE-0a: the frozen .fci canonical-intermediate schema only. It is not built by the sovereign release gate; it has its own cargo workspace.",
+    "crates/urna-ingest is the ingestion layer, a SEPARATE cargo workspace under crates/ that the root Cargo.toml excludes, so its (eventually heavy, possibly non-deterministic) deps never enter urna-format or urna-runtime. This phase ships FORGE-0a: the frozen .fci canonical-intermediate schema only. It is not built by the sovereign release gate; it has its own cargo workspace.",
     "python/forge is the forge Python surface. Its build-side default is an offline semantic static embedder (python/forge/embed_potion.py): a vendored model2vec/potion-base-8M table (MIT, dim 256, ~30MB via git-lfs), numpy + tokenizers only, no torch, no network round-trip; it self-fingerprints to a SHA256 model_hash recorded in provenance. The #04 lexical bag-of-words (python/forge/embed_default.py) stays as the stdlib-only zero-dependency floor/fallback.",
     "The image corpus path is Python-only and stays in the forge tooling layer, because a vision tower needs torch and the sovereign runtime does not take that dependency; no format or runtime code depends on it and the .urna it emits is an ordinary .urna. python/forge/image_items.py owns discovery (sorted, reproducible: an item's position IS its corpus ordinal, its frame number, and the byte_start its citation resolves through). python/forge/image_media.py, image_encode.py (+ image_encode_still.py for AVIF/JXL, image_gop_probe.py for the probe), and image_backends.py (+ image_backends_av1.py for the stream) own the codec path: images are letterboxed onto one canvas, frames move through a rawvideo pipe, the encoded frame count is verified against the item count, and gop_policy=auto probe-encodes both directions before choosing. Every codec backend (av1, avif, jxl, jxl-transcode) records media.source_bytes as the byte size of the original source files, so compression_ratio is one quantity across them (the AVIF letterboxed PNG sum is kept apart as letterboxed_input_bytes; the png-lossless control reports output_bytes only, it is the ruler). python/forge/embed_image.py fingerprints the weights actually loaded plus the preprocess transform, and rejects a bare architecture name with no pretrained tag. A corpus is corpus.urna beside corpus.media/ plus corpus.manifest.json, or, since the media blob pillar, the media travels inside the .urna itself via blob_refs (0x14) + blob_span_overlay (0x16).",
 ]
@@ -54,7 +54,7 @@ risks = [
     "docs/ARC.toml is the single architecture reference (narrative, contract, quality, risks, inventory, and the Mermaid diagram, merged 2026-09-18 from the former arc.yaml + arc.mmd + arc.schema.json) and must be updated in the same change as any edit to boundaries, data flow, module layout, or runtime contract. There is no separate human-prose architecture doc.",
     "BM25 tokenization is intentionally simple and documented as weak for CJK, Thai, and Lao.",
     "python/_urna.so must be rebuilt after Rust changes that touch urna-format, urna-runtime, or urna-python.",
-    "crates/ingest is a separate cargo workspace, excluded from the sovereign one by the root Cargo.toml, and must stay that way: its (eventually heavy) ingestion deps must never enter the sovereign workspace, and it is not built by the sovereign release gate, so it carries its own cargo build/test/fmt/clippy.",
+    "crates/urna-ingest is a separate cargo workspace, excluded from the sovereign one by the root Cargo.toml, and must stay that way: its (eventually heavy) ingestion deps must never enter the sovereign workspace, and it is not built by the sovereign release gate, so it carries its own cargo build/test/fmt/clippy.",
 ]
 
 # layers: the module / crate / pillar breakdown.
@@ -187,10 +187,10 @@ links = [
 ]
 
 [[layers]]
-name = "ingest"
+name = "urna-ingest"
 role = "Ingestion layer in a SEPARATE cargo workspace under crates/, excluded by the root Cargo.toml, so its deps never touch the sovereign core; FORGE-0a owns the frozen .fci canonical-intermediate schema, versioned independently of URNA_FORMAT_VERSION"
-entrypoints = ["crates/ingest/src/lib.rs"]
-links = ["crates/ingest/src/fci/mod.rs"]
+entrypoints = ["crates/urna-ingest/src/lib.rs"]
+links = ["crates/urna-ingest/src/fci/mod.rs"]
 
 [[layers]]
 name = "distribution"
@@ -338,9 +338,9 @@ path = [
     "crates/urna-runtime/tests/mutation_fuzz.rs",
     "fuzz/Cargo.toml",
     "scripts/ruff_check.sh",
-    "crates/ingest/Cargo.toml",
+    "crates/urna-ingest/Cargo.toml",
 ]
-summary = "On every push and pull request: fmt, Clippy with the workspace deny lints, build + test on Ubuntu (AVX2) and macOS (NEON), the mutation-fuzz harnesses at a higher iteration count, the 639-line guard, crates/ingest's gate, ruff over the shared file list, and a bounded cargo-fuzz smoke on nightly"
+summary = "On every push and pull request: fmt, Clippy with the workspace deny lints, build + test on Ubuntu (AVX2) and macOS (NEON), the mutation-fuzz harnesses at a higher iteration count, the 639-line guard, crates/urna-ingest's gate, ruff over the shared file list, and a bounded cargo-fuzz smoke on nightly"
 
 [[flows]]
 name = "mutation-fuzz"
@@ -465,12 +465,12 @@ links = ["Dockerfile"]
 path = "deny.toml"
 kind = "dependency-policy"
 purpose = "cargo-deny policy for the three cargo workspaces: advisories, the license allowlist, bans and sources; CI runs it on each manifest"
-links = ["Cargo.toml", "crates/ingest/Cargo.toml", "fuzz/Cargo.toml"]
+links = ["Cargo.toml", "crates/urna-ingest/Cargo.toml", "fuzz/Cargo.toml"]
 
 [[inventory.root]]
 path = ".github/workflows/ci.yml"
 kind = "ci-workflow"
-purpose = "The pull-request gate: fmt, Clippy with the deny lints, build + test on Ubuntu and macOS, mutation-fuzz harnesses, 639-line guard, crates/ingest gate, ruff via scripts/ruff_check.sh, cargo-fuzz smoke on nightly; nightly: fuzz soak, Miri on urna-format"
+purpose = "The pull-request gate: fmt, Clippy with the deny lints, build + test on Ubuntu and macOS, mutation-fuzz harnesses, 639-line guard, crates/urna-ingest gate, ruff via scripts/ruff_check.sh, cargo-fuzz smoke on nightly; nightly: fuzz soak, Miri on urna-format"
 links = [
     "scripts/release_check.sh",
     "scripts/ruff_check.sh",
@@ -3093,74 +3093,74 @@ links = [
     "python/forge/embed_potion.py",
 ]
 
-[[inventory.ingest]]
-path = "crates/ingest/Cargo.toml"
+[[inventory.urna_ingest]]
+path = "crates/urna-ingest/Cargo.toml"
 kind = "rust-manifest"
 purpose = "Standalone cargo workspace + package (urna-ingest) under crates/, excluded from the root workspace, minimal deps (serde, serde_json, thiserror), edition 2024"
 links = []
 
-[[inventory.ingest]]
-path = "crates/ingest/.gitignore"
+[[inventory.urna_ingest]]
+path = "crates/urna-ingest/.gitignore"
 kind = "vcs-config"
-purpose = "Ignores crates/ingest's own target/"
+purpose = "Ignores crates/urna-ingest's own target/"
 links = []
 
-[[inventory.ingest]]
-path = "crates/ingest/Cargo.lock"
+[[inventory.urna_ingest]]
+path = "crates/urna-ingest/Cargo.lock"
 kind = "lockfile"
-purpose = "Lockfile of the separate crates/ingest workspace"
-links = ["crates/ingest/Cargo.toml"]
+purpose = "Lockfile of the separate crates/urna-ingest workspace"
+links = ["crates/urna-ingest/Cargo.toml"]
 
-[[inventory.ingest]]
-path = "crates/ingest/src/lib.rs"
+[[inventory.urna_ingest]]
+path = "crates/urna-ingest/src/lib.rs"
 kind = "rust-source"
 purpose = "urna-ingest surface + boundary doc: no chunker, no model runtime, determinism on canonical text + per-space fingerprint"
 links = [
-    "crates/ingest/src/fci/mod.rs",
-    "crates/ingest/src/error.rs",
+    "crates/urna-ingest/src/fci/mod.rs",
+    "crates/urna-ingest/src/error.rs",
 ]
 
-[[inventory.ingest]]
-path = "crates/ingest/src/error.rs"
+[[inventory.urna_ingest]]
+path = "crates/urna-ingest/src/error.rs"
 kind = "rust-source"
 purpose = "Typed ForgeError variants, never panic"
 links = []
 
-[[inventory.ingest]]
-path = "crates/ingest/src/fci/mod.rs"
+[[inventory.urna_ingest]]
+path = "crates/urna-ingest/src/fci/mod.rs"
 kind = "rust-source"
 purpose = "FciBundle container + FCI_SCHEMA_VERSION + cross-reference/version validate"
-links = ["crates/ingest/src/fci/serialize.rs"]
+links = ["crates/urna-ingest/src/fci/serialize.rs"]
 
-[[inventory.ingest]]
-path = "crates/ingest/src/fci/record.rs"
+[[inventory.urna_ingest]]
+path = "crates/urna-ingest/src/fci/record.rs"
 kind = "rust-source"
 purpose = "ChunkRecord mirroring builder.ChunkSpec exactly (1:1 adapter map, spans round-trip through urna cite)"
 links = ["python/builder.py"]
 
-[[inventory.ingest]]
-path = "crates/ingest/src/fci/embedding_request.rs"
+[[inventory.urna_ingest]]
+path = "crates/urna-ingest/src/fci/embedding_request.rs"
 kind = "rust-source"
 purpose = "EmbeddingRequest + SpaceTag + PayloadRef, the multimodal carrier"
 links = []
 
-[[inventory.ingest]]
-path = "crates/ingest/src/fci/entity.rs"
+[[inventory.urna_ingest]]
+path = "crates/urna-ingest/src/fci/entity.rs"
 kind = "rust-source"
 purpose = "Entity, MentionSpan, typed weighted Edge for the graph pillar"
 links = []
 
-[[inventory.ingest]]
-path = "crates/ingest/src/fci/blob_ref.rs"
+[[inventory.urna_ingest]]
+path = "crates/urna-ingest/src/fci/blob_ref.rs"
 kind = "rust-source"
 purpose = "BlobRef content-hash reference to an original artifact for catalog mode"
 links = []
 
-[[inventory.ingest]]
-path = "crates/ingest/src/fci/serialize.rs"
+[[inventory.urna_ingest]]
+path = "crates/urna-ingest/src/fci/serialize.rs"
 kind = "rust-source"
 purpose = "Deterministic canonical serialize/deserialize + roundtrip/determinism/validate tests"
-links = ["crates/ingest/src/fci/mod.rs"]
+links = ["crates/urna-ingest/src/fci/mod.rs"]
 
 [diagram]
 format = "mermaid"

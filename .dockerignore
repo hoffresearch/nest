@@ -10,7 +10,7 @@ tools/
 docs/
 examples/
 python/
-crates/ingest/
+crates/urna-ingest/
 scripts/
 tests/
 *.md

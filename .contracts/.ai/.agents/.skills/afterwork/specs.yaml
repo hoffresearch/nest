@@ -109,13 +109,13 @@ groups:
       - path: crates/urna-python/build.rs
         when: mudarem configuração ou flags de ligação da extensão Python.
 
-  - name: crates/ingest e fuzz
+  - name: crates/urna-ingest e fuzz
     files:
-      - path: crates/ingest/Cargo.toml
+      - path: crates/urna-ingest/Cargo.toml
         when: mudarem dependências ou configuração do workspace de ingestão.
-      - path: crates/ingest/Cargo.lock
-        when: mudar a resolução das dependências do crates/ingest.
-      - path: crates/ingest/.gitignore
+      - path: crates/urna-ingest/Cargo.lock
+        when: mudar a resolução das dependências do crates/urna-ingest.
+      - path: crates/urna-ingest/.gitignore
         when: surgirem novas saídas locais desse workspace.
       - path: fuzz/Cargo.toml
         when: mudarem dependências ou alvos de fuzzing.
