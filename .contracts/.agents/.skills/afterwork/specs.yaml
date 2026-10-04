@@ -54,7 +54,7 @@ groups:
       - path: docs/BENCH.md
         when: houver nova medição aprovada.
         rule: regenerar com python/tools/bench_competitors.py, nunca à mão.
-      - path: docs/arc/ARC.toml
+      - path: docs/ARC.toml
         when: mudarem módulos, contratos, fluxos, arquitetura ou inventário de arquivos.
       - path: CITATION.cff
         when: mudar a versão publicada ou houver alteração explícita dos metadados de citação.

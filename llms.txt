@@ -9,7 +9,7 @@ The CLI is a Rust binary: `brew tap hoffresearch/urna && brew install urna`, `ca
 - [docs.urna.dev](https://docs.urna.dev): the documentation site, with install, quickstart, concepts, guides and the full CLI, build spec, Python and file format reference; its [llms.txt](https://docs.urna.dev/llms.txt) indexes every page
 - [README](https://github.com/hoffresearch/urna/blob/main/README.md): what it is, install, the two terminal screens, quickstart, the Python and CLI surfaces, benchmarks
 - [Usage](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md): every verb, `urna setup` and `urna tui`, presets, offline mode, citations, the model registry, declarative builds, the compression levers, every install channel and the maintainer checklist
-- [Architecture](https://github.com/hoffresearch/urna/blob/main/docs/arc/ARC.toml): the single architecture reference, in TOML: narrative, contracts, the file inventory and the Mermaid map of the build and query flows
+- [Architecture](https://github.com/hoffresearch/urna/blob/main/docs/ARC.toml): the single architecture reference, in TOML: narrative, contracts, the file inventory and the Mermaid map of the build and query flows
 - [Benchmarks](https://github.com/hoffresearch/urna/blob/main/docs/BENCH.md): Urna against usearch, hnswlib, sqlite-vec and LanceDB on the same rows, same machine
 - [Changelog](https://github.com/hoffresearch/urna/blob/main/docs/CHANGELOG): every release, with the why and the measured numbers
 - [Security](https://github.com/hoffresearch/urna/blob/main/docs/SECURITY.md): reporting, supported versions, hardening, the data-governance posture
