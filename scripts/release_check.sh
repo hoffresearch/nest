@@ -186,6 +186,12 @@ step "python tests/test_release_rehearsal.py"
 "$PY" tests/test_release_rehearsal.py
 ok "release rehearsal (7 cases)"
 
+# install-test waits for the exact version on each registry, and the release
+# report names what every channel serves, a failed or cancelled run included.
+step "python tests/test_release_channels.py"
+"$PY" tests/test_release_channels.py
+ok "release channels (8 cases)"
+
 # ---- ruff (best-effort) ----
 # the file list lives in scripts/ruff_check.sh so ci.yml and this gate stay
 # in lockstep; ruff missing from $PY is a skip here, a failure in ci.
