@@ -250,6 +250,11 @@ def test_a_real_binary_against_the_golden_fixture() -> None:
         d = Path(tmp)
         with tarfile.open(d / "urna-host.tar.xz", "w:xz") as tar:
             tar.add(binary, arcname="urna-host/urna")
+        # beside it, its checksum, as in a release (a glob once picked this).
+        digest = hashlib.sha256((d / "urna-host.tar.xz").read_bytes()).hexdigest()
+        (d / "urna-host.tar.xz.sha256").write_text(
+            f"{digest} *urna-host.tar.xz\n", encoding="utf-8"
+        )
         assert rh.check_binary(d, "host", golden, VERSION) == []
         broken = d / "broken.urna"
         data = bytearray(golden.read_bytes())

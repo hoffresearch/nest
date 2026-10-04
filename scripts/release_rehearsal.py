@@ -376,7 +376,10 @@ def check_assets(directory: Path, plan: dict, version: str) -> list[str]:
 
 
 def check_binary(directory: Path, target: str, golden: Path, version: str) -> list[str]:
-    archive = next(directory.glob(f"urna-{target}.tar.*"), None)
+    # the exact archive names, never a glob: `urna-<target>.tar.*` also
+    # matches the archive's .sha256, which sorts first on the runner.
+    names = (f"urna-{target}.tar.xz", f"urna-{target}.tar.gz")
+    archive = next((directory / n for n in names if (directory / n).is_file()), None)
     if archive is None:
         return [f"no urna-{target} archive"]
     with tempfile.TemporaryDirectory() as tmp, tarfile.open(archive) as tar:
