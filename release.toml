@@ -1,0 +1,12 @@
+# cargo-release, at the version scripts/release_prepare.sh pins, prepares a
+# release pull request and nothing else: the script runs `cargo release
+# version` (the workspace version, the urna-format and urna-runtime pins, the
+# lockfile) and `cargo release replace` (the list in crates/urna-cli/Cargo.toml),
+# then commits, pushes and opens the pull request itself. cargo-release never
+# commits, tags, pushes or publishes here; the tag is a separate step after the
+# merge (docs/USAGE.md, maintainer checklist step 8).
+allow-branch = ["release-*"]
+dependent-version = "upgrade"
+publish = false
+push = false
+tag = false
