@@ -13,8 +13,8 @@ summary = "Single-file semantic knowledge stack: Rust owns format, runtime, CLI,
 system_view = [
     "urna-format is the frozen v1 container contract. It owns layout, manifest, reader, writer, canonical sections, hashes, and wire encodings. Embeddings stay raw float32, float16, int8, or int4 (fixed-stride quant only); zstd is reserved for non-embedding sections.",
     "urna-engine opens .urna files through mmap, validates queries, dispatches SIMD, and executes exact, ANN, graph, and hybrid search while reranking candidates with real cosine. That hot path is why embeddings are never zstd-compressed.",
-    "urna-cli is a thin clap surface over the runtime and format crates. It carries the twelve engine subcommands (inspect, validate, stats, media, search, search-text, search-ann, search-graph, search-space, benchmark, cite, doctor: file + vector in; only search-text and doctor spawn Python) and the three agent verbs (ask, retrieve, build: text or spec in, shell out to the offline Python embedder / forge), tagged [engine] / [agent] in --help. ask and retrieve are the agent-native flagship verbs layered over the engine (text query in, cited answer out; both embed the query offline with the default potion static table, validate the embedder's model_hash against the manifest exactly like search-text, and route by what the file carries through MmapUrnaFile::search_routed: hybrid when a BM25 section is present, hnsw when an HNSW section is present, exact otherwise; ask prints one cited answer (--disclose answer) or adds the rerank-source honesty line + route + candidate counts (--disclose explain); retrieve emits the agent-shaped JSON/JSONL answer-pack where each hit's score IS the exact-cosine rerank value). doctor is the post-install health check with typed exit codes (0 ok, 2 Python missing, 3 deps missing, 4 embedder missing, 5 potion table missing, 6 embedder run failed). Behind the default-on `tui` feature the CLI also carries the terminal UI in src/tui: `setup` (the interactive installer, exit codes 10 download, 11 checksum, 12 unpack, 13 Python env, 14 blocked, 15 a model install; --model installs catalog models) and `tui` (the corpus explorer; a bare `urna` on a terminal opens it, in a pipe it prints the help and exits 2). Verb-collapse, the urna dev namespace, and the urna-profile crate are deferred.",
-    "The distribution layer (issue #75) turns tags on main into installs: cargo-dist builds the CLI for five targets with SHA256 checksums, Sigstore keyless attestations on the five archives, one CycloneDX SBOM for the CLI package, a Homebrew tap formula (`urna`) and an npm package (`@urna/cli`), and publishes urna-format / urna-engine / urna (the CLI crate) to crates.io; maturin builds the `urna` abi3 wheel with the potion table bundled (offline embedding after pip install); scripts/install.sh / install.ps1 are the one-liner installers (verify-before-write, --version, --uninstall); urna doctor validates the install offline and `urna setup` completes the channels that ship the bare binary (Homebrew, npm, crates.io); .github/workflows/install-test.yml tests the INSTALLED product per platform after each release, including a job per package channel that waits for the exact version on its registry and ends in `urna setup --yes` + `urna doctor`; .github/workflows/release-report.yml summarizes every completed release run, failed or cancelled included. Three levels of evidence, not interchangeable: scripts/release_check.sh is the full local gate (no release build), release-rehearsal.yml builds the release on pull requests and publishes nothing, and only a tag exercises publishing, install-test and the report.",
+    "urna-clitui is a thin clap surface over the runtime and format crates. It carries the twelve engine subcommands (inspect, validate, stats, media, search, search-text, search-ann, search-graph, search-space, benchmark, cite, doctor: file + vector in; only search-text and doctor spawn Python) and the three agent verbs (ask, retrieve, build: text or spec in, shell out to the offline Python embedder / forge), tagged [engine] / [agent] in --help. ask and retrieve are the agent-native flagship verbs layered over the engine (text query in, cited answer out; both embed the query offline with the default potion static table, validate the embedder's model_hash against the manifest exactly like search-text, and route by what the file carries through MmapUrnaFile::search_routed: hybrid when a BM25 section is present, hnsw when an HNSW section is present, exact otherwise; ask prints one cited answer (--disclose answer) or adds the rerank-source honesty line + route + candidate counts (--disclose explain); retrieve emits the agent-shaped JSON/JSONL answer-pack where each hit's score IS the exact-cosine rerank value). doctor is the post-install health check with typed exit codes (0 ok, 2 Python missing, 3 deps missing, 4 embedder missing, 5 potion table missing, 6 embedder run failed). Behind the default-on `tui` feature the CLI also carries the terminal UI in src/tui: `setup` (the interactive installer, exit codes 10 download, 11 checksum, 12 unpack, 13 Python env, 14 blocked, 15 a model install; --model installs catalog models) and `tui` (the corpus explorer; a bare `urna` on a terminal opens it, in a pipe it prints the help and exits 2). Verb-collapse, the urna dev namespace, and the urna-profile crate are deferred.",
+    "The distribution layer (issue #75) turns tags on main into installs: cargo-dist builds the CLI for five targets with SHA256 checksums, Sigstore keyless attestations on the five archives, one CycloneDX SBOM for the CLI package, a Homebrew tap formula (`urna`) and an npm package (`@urna/cli`), and publishes urna-format / urna-engine / urna-clitui (the CLI crate, binary `urna`) to crates.io; maturin builds the `urna` abi3 wheel with the potion table bundled (offline embedding after pip install); scripts/install.sh / install.ps1 are the one-liner installers (verify-before-write, --version, --uninstall); urna doctor validates the install offline and `urna setup` completes the channels that ship the bare binary (Homebrew, npm, crates.io); .github/workflows/install-test.yml tests the INSTALLED product per platform after each release, including a job per package channel that waits for the exact version on its registry and ends in `urna setup --yes` + `urna doctor`; .github/workflows/release-report.yml summarizes every completed release run, failed or cancelled included. Three levels of evidence, not interchangeable: scripts/release_check.sh is the full local gate (no release build), release-rehearsal.yml builds the release on pull requests and publishes nothing, and only a tag exercises publishing, install-test and the report.",
     "urna-bridge is the PyO3 bridge. python/urna.py loads the compiled extension, python/builder.py orchestrates chunking and caching, and python/embed_query.py preserves model parity for search-text. The agent-native flagship is UrnaFile.retrieve(query, k, ...): a pre-embedded query in, cited spans out, whose score IS the exact rerank value, with tier-1 stored canonical text + hashes + citation_id + rerank-source marker.",
     "scripts/release_check.sh is the release gate: rebuilds the extension, runs Rust and Python suites, checks lint and format, measures presets, and compares against the committed baseline.",
     "crates/urna-ingest is the ingestion layer, a SEPARATE cargo workspace under crates/ that the root Cargo.toml excludes, so its (eventually heavy, possibly non-deterministic) deps never enter urna-format or urna-engine. This phase ships FORGE-0a: the frozen .fci canonical-intermediate schema only. It is not built by the sovereign release gate; it has its own cargo workspace.",
@@ -83,29 +83,29 @@ links = [
 ]
 
 [[layers]]
-name = "urna-cli"
+name = "urna-clitui"
 role = "Thin clap front-end over format and runtime APIs, two verb groups in one binary: the ENGINE verbs in cmd/*.rs (inspect, validate, stats, media, search, search-ann, search-graph, search-space over named bands, search-text, benchmark, cite, doctor: file + vector in; only search-text and doctor spawn Python) and the AGENT verbs in cmd/agent/*.rs (ask, retrieve, build: text or spec in, offline embed routed by manifest model through the ONE three-layer model gate in cmd/embed_gate.rs, capability route, tier-1 cited spans, --disclose answer|explain honesty, the declarative build launcher); --help orders and tags the groups"
-entrypoints = ["crates/urna-cli/src/main.rs"]
+entrypoints = ["crates/urna-clitui/src/main.rs"]
 links = [
-    "crates/urna-cli/src/cli.rs",
-    "crates/urna-cli/src/cmd/mod.rs",
-    "crates/urna-cli/src/cmd/agent/mod.rs",
-    "crates/urna-cli/src/cmd/agent/ask.rs",
-    "crates/urna-cli/src/cmd/agent/retrieve.rs",
-    "crates/urna-cli/src/cmd/doctor.rs",
+    "crates/urna-clitui/src/cli.rs",
+    "crates/urna-clitui/src/cmd/mod.rs",
+    "crates/urna-clitui/src/cmd/agent/mod.rs",
+    "crates/urna-clitui/src/cmd/agent/ask.rs",
+    "crates/urna-clitui/src/cmd/agent/retrieve.rs",
+    "crates/urna-clitui/src/cmd/doctor.rs",
     "crates/urna-engine/src/mmap_file.rs",
 ]
 
 [[layers]]
-name = "urna-cli terminal ui"
-role = "The default-on `tui` feature of urna-cli: `urna setup` (inline installer: scan the machine, plan with checkboxes, install the payload via a curl child + SHA256 + staged unpack and the managed Python env, verify with the doctor checks; plain printer for --yes / no terminal, both reading one worker) and `urna tui` (full-screen explorer: home with the hash rain, corpus, ask, health, a file picker, toasts). The urna.dev palette folded to the terminal's color depth, tachyonfx on every screen change. No network stack is linked; no format or runtime API is touched"
-entrypoints = ["crates/urna-cli/src/tui/mod.rs"]
+name = "urna-clitui terminal ui"
+role = "The default-on `tui` feature of urna-clitui: `urna setup` (inline installer: scan the machine, plan with checkboxes, install the payload via a curl child + SHA256 + staged unpack and the managed Python env, verify with the doctor checks; plain printer for --yes / no terminal, both reading one worker) and `urna tui` (full-screen explorer: home with the hash rain, corpus, ask, health, a file picker, toasts). The urna.dev palette folded to the terminal's color depth, tachyonfx on every screen change. No network stack is linked; no format or runtime API is touched"
+entrypoints = ["crates/urna-clitui/src/tui/mod.rs"]
 links = [
-    "crates/urna-cli/src/tui/setup/mod.rs",
-    "crates/urna-cli/src/tui/app/mod.rs",
-    "crates/urna-cli/src/cmd/health.rs",
-    "crates/urna-cli/src/cmd/paths.rs",
-    "crates/urna-cli/src/cmd/embed_gate.rs",
+    "crates/urna-clitui/src/tui/setup/mod.rs",
+    "crates/urna-clitui/src/tui/app/mod.rs",
+    "crates/urna-clitui/src/cmd/health.rs",
+    "crates/urna-clitui/src/cmd/paths.rs",
+    "crates/urna-clitui/src/cmd/embed_gate.rs",
 ]
 
 [[layers]]
@@ -180,8 +180,8 @@ links = [
     "python/forge/forge_media_stage.py",
     "python/forge/forge_manifest.py",
     "python/forge/embed_query_model.py",
-    "crates/urna-cli/src/cmd/agent/build.rs",
-    "crates/urna-cli/src/cmd/embed_gate.rs",
+    "crates/urna-clitui/src/cmd/agent/build.rs",
+    "crates/urna-clitui/src/cmd/embed_gate.rs",
     "python/tools/urna_model_bench.py",
     "python/tools/urna_ui_bridge.py",
 ]
@@ -213,27 +213,27 @@ links = [
 
 [[flows]]
 name = "cli-setup"
-entry = "crates/urna-cli/src/tui/setup/mod.rs"
+entry = "crates/urna-clitui/src/tui/setup/mod.rs"
 path = [
-    "crates/urna-cli/src/tui/setup/scan.rs",
-    "crates/urna-cli/src/tui/setup/plan.rs",
-    "crates/urna-cli/src/tui/setup/job.rs",
-    "crates/urna-cli/src/tui/setup/net.rs",
-    "crates/urna-cli/src/tui/setup/unpack.rs",
-    "crates/urna-cli/src/tui/setup/venv.rs",
-    "crates/urna-cli/src/tui/setup/models.rs",
+    "crates/urna-clitui/src/tui/setup/scan.rs",
+    "crates/urna-clitui/src/tui/setup/plan.rs",
+    "crates/urna-clitui/src/tui/setup/job.rs",
+    "crates/urna-clitui/src/tui/setup/net.rs",
+    "crates/urna-clitui/src/tui/setup/unpack.rs",
+    "crates/urna-clitui/src/tui/setup/venv.rs",
+    "crates/urna-clitui/src/tui/setup/models.rs",
     "python/forge/install_model.py",
-    "crates/urna-cli/src/cmd/health.rs",
+    "crates/urna-clitui/src/cmd/health.rs",
 ]
 summary = "Probe the machine (channel from the exe path, data root, payload, interpreter + deps, curl/uv/python3), derive the plan (satisfied steps unticked, impossible ones blocked with the reason), then on a worker: fetch the release .sha256, stream the payload through a curl child hashing as it arrives, unpack into a staging dir (entries escaping it abort) and swap it in for <root>/urna/forge, build <root>/urna/venv with uv or venv+pip (also when chosen models need it and another Python has the base deps), install the chosen catalog models (--model, or the picker; packages only into that venv, then install_model.py fetches the pinned revision's exact files into the shared HF cache and refuses any model_hash but the catalog's; repo code needs --allow-remote-code), and run the doctor checks; the inline screen and the --yes printer render the same event stream"
 
 [[flows]]
 name = "tui-model-install"
-entry = "crates/urna-cli/src/tui/app/offer.rs"
+entry = "crates/urna-clitui/src/tui/app/offer.rs"
 path = [
-    "crates/urna-cli/src/tui/app/ask.rs",
-    "crates/urna-cli/src/cmd/embed_failure.rs",
-    "crates/urna-cli/src/tui/setup/models.rs",
+    "crates/urna-clitui/src/tui/app/ask.rs",
+    "crates/urna-clitui/src/cmd/embed_failure.rs",
+    "crates/urna-clitui/src/tui/setup/models.rs",
     "python/forge/catalog.json",
     "python/forge/install_model.py",
     "python/model_fingerprint.py",
@@ -242,10 +242,10 @@ summary = "A query that fails with packages or weights missing, on a model the p
 
 [[flows]]
 name = "cli-search-text"
-entry = "crates/urna-cli/src/cmd/search_text.rs"
+entry = "crates/urna-clitui/src/cmd/search_text.rs"
 path = [
-    "crates/urna-cli/src/cmd/embed_gate.rs",
-    "crates/urna-cli/src/cmd/embed_failure.rs",
+    "crates/urna-clitui/src/cmd/embed_gate.rs",
+    "crates/urna-clitui/src/cmd/embed_failure.rs",
     "python/embed_query.py",
     "python/model_fingerprint.py",
     "crates/urna-engine/src/search.rs",
@@ -254,15 +254,15 @@ summary = "Embed a query in Python (embed_query.py resolved from a checkout or t
 
 [[flows]]
 name = "cli-ask-retrieve"
-entry = "crates/urna-cli/src/cmd/agent/ask.rs"
+entry = "crates/urna-clitui/src/cmd/agent/ask.rs"
 path = [
-    "crates/urna-cli/src/cmd/embed_gate.rs",
-    "crates/urna-cli/src/cmd/embed_failure.rs",
+    "crates/urna-clitui/src/cmd/embed_gate.rs",
+    "crates/urna-clitui/src/cmd/embed_failure.rs",
     "python/forge/embed_query_potion.py",
     "python/forge/embed_query_model.py",
     "python/embed_query.py",
     "crates/urna-engine/src/search.rs",
-    "crates/urna-cli/src/cmd/agent/retrieve.rs",
+    "crates/urna-clitui/src/cmd/agent/retrieve.rs",
 ]
 summary = "The agent-native flagship: embed_gate::embed_and_search embeds the query OFFLINE routing by the manifest model (potion corpora keep the potion table byte-for-byte; any registry model goes through embed_query_model.py with the query-role encode and --mrl-dim for truncated default spaces; st_text presets such as minilm-multilingual, and ST models no preset names, continue into embed_query.py), runs the ONE name/dim/model_hash gate shared with search-text, routes by manifest capability, then ask renders the cited canonical text (--disclose answer) or adds the rerank-source honesty line (--disclose explain) and retrieve emits the JSON/JSONL answer-pack where every hit score IS the exact rerank value with tier-1 text + hashes + citation_id"
 
@@ -426,11 +426,11 @@ links = ["Cargo.toml"]
 [[inventory.root]]
 path = "Cargo.toml"
 kind = "workspace-manifest"
-purpose = "Workspace members, edition, resolver, rust-version 1.85 (the MSRV of urna-format, urna-engine and urna-bridge; crates/urna-cli pins its own 1.88), and shared dependencies"
+purpose = "Workspace members, edition, resolver, rust-version 1.85 (the MSRV of urna-format, urna-engine and urna-bridge; crates/urna-clitui pins its own 1.88), and shared dependencies"
 links = [
     "crates/urna-format/Cargo.toml",
     "crates/urna-engine/Cargo.toml",
-    "crates/urna-cli/Cargo.toml",
+    "crates/urna-clitui/Cargo.toml",
     "crates/urna-bridge/Cargo.toml",
 ]
 
@@ -650,64 +650,64 @@ purpose = "Workspace crate root"
 links = [
     "crates/urna-format",
     "crates/urna-engine",
-    "crates/urna-cli",
+    "crates/urna-clitui",
     "crates/urna-bridge",
 ]
 
 [[inventory.workspace]]
-path = "crates/urna-cli"
+path = "crates/urna-clitui"
 kind = "crate-dir"
 purpose = "CLI crate"
-links = ["crates/urna-cli/src/main.rs"]
+links = ["crates/urna-clitui/src/main.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-cli/src"
+path = "crates/urna-clitui/src"
 kind = "directory"
 purpose = "CLI source root"
 links = [
-    "crates/urna-cli/src/main.rs",
-    "crates/urna-cli/src/cmd",
+    "crates/urna-clitui/src/main.rs",
+    "crates/urna-clitui/src/cmd",
 ]
 
 [[inventory.workspace]]
-path = "crates/urna-cli/src/cmd"
+path = "crates/urna-clitui/src/cmd"
 kind = "directory"
 purpose = "CLI subcommands and helpers"
 links = [
-    "crates/urna-cli/src/cmd/search_text.rs",
-    "crates/urna-cli/src/cmd/util.rs",
+    "crates/urna-clitui/src/cmd/search_text.rs",
+    "crates/urna-clitui/src/cmd/util.rs",
 ]
 
 [[inventory.workspace]]
-path = "crates/urna-cli/src/tui"
+path = "crates/urna-clitui/src/tui"
 kind = "directory"
 purpose = "The terminal UI (feature `tui`): pal (urna.dev palette + depth fold), art (the symbol and wordmark as braille), fx (the tachyonfx presets), rain (hash rain, adapted from tui-rain), hud + row + txt (panel, gauge, leader, checkbox, badges, text fitting; adapted from noble and tui-checkbox), toast (adapted from ratatui-toaster), term (terminal lifecycle), setup/ (the installer), app/ (the explorer)"
 links = [
-    "crates/urna-cli/src/tui/setup",
-    "crates/urna-cli/src/tui/app",
+    "crates/urna-clitui/src/tui/setup",
+    "crates/urna-clitui/src/tui/app",
 ]
 
 [[inventory.workspace]]
-path = "crates/urna-cli/src/tui/setup"
+path = "crates/urna-clitui/src/tui/setup"
 kind = "directory"
 purpose = "urna setup: scan, plan, job (the worker and its event stream), net (curl downloads + streaming SHA256), unpack (staged, traversal-safe), venv (uv or venv+pip, streamed with exit status), models (the payload's model catalog and the one model install setup and the explorer share: packages into the managed venv, then forge/install_model.py's verified fetch), text (the --yes printer), ui (state + keys, the model picker), screen/ (the frame and one file per step, models.rs the picker)"
-links = ["crates/urna-cli/src/tui/setup/mod.rs"]
+links = ["crates/urna-clitui/src/tui/setup/mod.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-cli/src/tui/app"
+path = "crates/urna-clitui/src/tui/app"
 kind = "directory"
 purpose = "urna tui: the explorer state and loop (mod), draw, keys (keyboard + mouse routing), chrome (header tabs + footer help), home, corpus (inspect + validate model and view), ask (query worker + error wording, the failure's model when an install can fix it) and hits (its view), offer (the install panel over the ask tab: plan, y/r/n consents, progress, retry), health, pick (the ratatui-explorer overlay)"
-links = ["crates/urna-cli/src/tui/app/mod.rs"]
+links = ["crates/urna-clitui/src/tui/app/mod.rs"]
 
 [[inventory.workspace]]
-path = "crates/urna-cli/tests"
+path = "crates/urna-clitui/tests"
 kind = "directory"
 purpose = "CLI integration tests"
 links = [
-    "crates/urna-cli/tests/cli_e2e.rs",
-    "crates/urna-cli/tests/media_cite_validate.rs",
-    "crates/urna-cli/tests/embedder_resolution.rs",
-    "crates/urna-cli/tests/setup_e2e.rs",
+    "crates/urna-clitui/tests/cli_e2e.rs",
+    "crates/urna-clitui/tests/media_cite_validate.rs",
+    "crates/urna-clitui/tests/embedder_resolution.rs",
+    "crates/urna-clitui/tests/setup_e2e.rs",
 ]
 
 [[inventory.workspace]]
@@ -907,107 +907,107 @@ links = [
     "tests/test_search_text_model_hash.py",
 ]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/Cargo.toml"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/Cargo.toml"
 kind = "rust-manifest"
 purpose = "CLI crate manifest"
 links = ["Cargo.toml"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/LICENSE"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/LICENSE"
 kind = "symlink"
 purpose = "Link to the root LICENSE; cargo package copies its content, so the published crate carries the MIT text"
 links = ["LICENSE"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/main.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/main.rs"
 kind = "rust-source"
 purpose = "Dispatch only: matches cli::Commands to cmd::* (engine) and cmd::agent::* (agent) implementations"
 links = [
-    "crates/urna-cli/src/cli.rs",
-    "crates/urna-cli/src/cmd/mod.rs",
+    "crates/urna-clitui/src/cli.rs",
+    "crates/urna-clitui/src/cmd/mod.rs",
 ]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cli.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cli.rs"
 kind = "rust-source"
 purpose = "The clap surface: Cli + Commands, every verb tagged [engine] or [agent] in its summary, display_order groups them, after_help carries the two-group legend"
-links = ["crates/urna-cli/src/main.rs"]
+links = ["crates/urna-clitui/src/main.rs"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/agent"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/agent"
 kind = "directory"
 purpose = "The agent verbs (ask, retrieve, build): text or spec in, cited answers out, shell out to the offline Python embedder / forge; a product layered over the engine verbs in the parent module"
 links = [
-    "crates/urna-cli/src/cmd/agent/mod.rs",
-    "crates/urna-cli/src/cmd/agent/ask.rs",
-    "crates/urna-cli/src/cmd/agent/retrieve.rs",
-    "crates/urna-cli/src/cmd/agent/build.rs",
+    "crates/urna-clitui/src/cmd/agent/mod.rs",
+    "crates/urna-clitui/src/cmd/agent/ask.rs",
+    "crates/urna-clitui/src/cmd/agent/retrieve.rs",
+    "crates/urna-clitui/src/cmd/agent/build.rs",
 ]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cli.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cli.rs"
 kind = "rust-source"
 purpose = "The clap surface (Cli + Commands), split from main.rs, which keeps the dispatch"
-links = ["crates/urna-cli/src/main.rs"]
+links = ["crates/urna-clitui/src/main.rs"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/payload.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/payload.rs"
 kind = "rust-source"
 purpose = "The embedder payload's contract, outside the tui feature: REQUIRED (every file the stage script ships; tests/test_embedder_payload.py pins the two to the same set), missing(home), home_of(script) (an installed <root>/urna, never a checkout) and MODULES (the Python modules the payload provides); setup installs and repairs by it, the gate names a broken payload by it"
-links = ["crates/urna-cli/src/tui/setup/unpack.rs", "crates/urna-cli/src/cmd/embed_gate.rs", "scripts/stage_embedder_payload.py"]
+links = ["crates/urna-clitui/src/tui/setup/unpack.rs", "crates/urna-clitui/src/cmd/embed_gate.rs", "scripts/stage_embedder_payload.py"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/embed_failure.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/embed_failure.rs"
 kind = "rust-source"
 purpose = "Why a query could not be embedded or gated, typed: script missing, payload incomplete (named by path and missing files, fixed by urna setup, never a pip hint), packages missing (the embedder's urna-needs line, or a Python import error), weights missing (urna-fetch), model incompatible (no backend, a refused preset, a name or dim mismatch), model_hash mismatch; the long Display form with the fix for the CLI, short() for the explorer's ask tab"
-links = ["crates/urna-cli/src/cmd/embed_gate.rs", "crates/urna-cli/src/tui/app/ask.rs"]
+links = ["crates/urna-clitui/src/cmd/embed_gate.rs", "crates/urna-clitui/src/tui/app/ask.rs"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/embed_gate.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/embed_gate.rs"
 kind = "rust-source"
 purpose = "The ONE copy of the query-embedder spawn protocol and the three-layer model gate (name/dim/model_hash); routes ask/retrieve by manifest model (potion script for potion corpora, embed_query_model.py for registry models, --mrl-dim for truncated default spaces) and by capability through MmapUrnaFile::search_routed; installed_script_in is the script ladder every Python child shares (repo layout, then each data root); spawn and gate failures are typed cmd/embed_failure.rs values; every embedder script (search-text's embed_query.py included) resolves through installed_script_in, a path under python/ in a checkout or under <data root>/urna/"
 links = [
-    "crates/urna-cli/src/cmd/search_text.rs",
+    "crates/urna-clitui/src/cmd/search_text.rs",
     "python/forge/embed_query_model.py",
     "python/forge/embed_query_potion.py",
 ]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/search_space.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/search_space.rs"
 kind = "rust-source"
 purpose = "`search-space` verb: exact search over one named multimodal band with the runtime's typed errors, never a silent text-path fallback"
 links = ["crates/urna-engine/src/space_search.rs"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/agent/build.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/agent/build.rs"
 kind = "rust-source"
 purpose = "`build --spec` launcher over python/tools/urna_forge.py (the build is officially a Python frontend, RFC-0 N13): resolve interpreter + tool, forward --out-dir/--cache-dir and the flags, stream output, propagate exit code"
 links = [
     "python/tools/urna_forge.py",
-    "crates/urna-cli/src/cmd/pyenv.rs",
+    "crates/urna-clitui/src/cmd/pyenv.rs",
 ]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/agent/ask.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/agent/ask.rs"
 kind = "rust-source"
 purpose = "The flagship `ask` verb: offline embed via embed_gate (routed by manifest model) + model_hash gate + capability route, then the --disclose answer|explain renderer with the rerank-source honesty line; tier-1 cited text only"
 links = [
-    "crates/urna-cli/src/cmd/embed_gate.rs",
-    "crates/urna-cli/src/cmd/agent/retrieve.rs",
+    "crates/urna-clitui/src/cmd/embed_gate.rs",
+    "crates/urna-clitui/src/cmd/agent/retrieve.rs",
 ]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/agent/retrieve.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/agent/retrieve.rs"
 kind = "rust-source"
 purpose = "The agent-shaped `retrieve` verb: JSON/JSONL answer-pack of cited spans where score IS the exact rerank value + tier-1 stored canonical text + verifying hashes + citation_id + rerank_source; owns canonical_texts() shared with ask"
 links = [
-    "crates/urna-cli/src/cmd/util.rs",
+    "crates/urna-clitui/src/cmd/util.rs",
     "crates/urna-format/src/sections/canonical.rs",
 ]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/benchmark.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/benchmark.rs"
 kind = "rust-source"
 purpose = "Bench exact and ANN latency plus cold-cache hint mode"
 links = [
@@ -1015,8 +1015,8 @@ links = [
     "crates/urna-engine/src/search.rs",
 ]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/cite.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/cite.rs"
 kind = "rust-source"
 purpose = "Resolve citation ids into text and spans"
 links = [
@@ -1024,38 +1024,38 @@ links = [
     "crates/urna-format/src/sections/chunk_ids.rs",
 ]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/inspect.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/inspect.rs"
 kind = "rust-source"
 purpose = "Print header, sections, manifest, and hashes (the CLI inspect surface; the runtime inspect_json + canonical_texts live in crates/urna-engine/src/inspect.rs)"
 links = ["crates/urna-engine/src/mmap_file.rs"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/mod.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/mod.rs"
 kind = "rust-source"
 purpose = "Module export list for subcommands"
 links = []
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/search.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/search.rs"
 kind = "rust-source"
 purpose = "Exact vector search command"
 links = ["crates/urna-engine/src/search.rs"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/search_ann.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/search_ann.rs"
 kind = "rust-source"
 purpose = "Forced ANN search command"
 links = ["crates/urna-engine/src/search.rs"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/search_graph.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/search_graph.rs"
 kind = "rust-source"
 purpose = "9th subcommand: graph search (exact top-ef seed -> bounded bfs over the chunk graph -> exact rerank; falls back to exact if no 0x0C section)"
 links = ["crates/urna-engine/src/search.rs"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/search_text.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/search_text.rs"
 kind = "rust-source"
 purpose = "Python embedder orchestration (interpreter via pyenv::resolve_interpreter: URNA_PYTHON, else the repo .venv, else python3) plus strict model_hash gate"
 links = [
@@ -1064,8 +1064,8 @@ links = [
     "crates/urna-engine/src/search.rs",
 ]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/stats.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/stats.rs"
 kind = "rust-source"
 purpose = "stats command for size, dim (plus mrl_dim/full_dim when matryoshka-truncated), dtype, sections, hashes, and SIMD backend"
 links = [
@@ -1073,77 +1073,77 @@ links = [
     "crates/urna-engine/src/simd/mod.rs",
 ]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/pyenv.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/pyenv.rs"
 kind = "rust-source"
 purpose = "resolve_interpreter: the Python interpreter the offline embedder runs under (URNA_PYTHON, else the venv `urna setup` built, else the nearest .venv walking up, else python3; set_quiet keeps the choice off stderr under the terminal UI), with a unit-tested resolve_interpreter_from core; shared by search-text and the flagship verbs, and the embedder opens no socket regardless of interpreter"
 links = [
-    "crates/urna-cli/src/cmd/util.rs",
-    "crates/urna-cli/src/cmd/search_text.rs",
+    "crates/urna-clitui/src/cmd/util.rs",
+    "crates/urna-clitui/src/cmd/search_text.rs",
 ]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/util.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/util.rs"
 kind = "rust-source"
 purpose = "Shared output + embedder path helpers (incl default_potion_embedder_path) and embed_and_search: the shared offline-potion-embed + model_hash gate + capability route used by ask and retrieve (interpreter via cmd::pyenv::resolve_interpreter)"
 links = ["crates/urna-engine/src/lib.rs"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/validate.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/validate.rs"
 kind = "rust-source"
 purpose = "Full integrity validation command"
 links = ["crates/urna-format/src/reader/mod.rs"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/doctor.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/doctor.rs"
 kind = "rust-source"
 purpose = "urna doctor: prints the health rows (colored on a terminal, plain when piped), points at `urna setup` on install failures, exits with the first failing typed code"
-links = ["crates/urna-cli/src/cmd/health.rs"]
+links = ["crates/urna-clitui/src/cmd/health.rs"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/health.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/health.rs"
 kind = "rust-source"
 purpose = "The doctor checks as data (version, SIMD, interpreter, deps, embedder, potion table, one offline embed) with doctor's stop points and typed codes; shared by doctor, setup's verify step and the explorer's health tab"
 links = [
-    "crates/urna-cli/src/cmd/pyenv.rs",
-    "crates/urna-cli/src/cmd/embed_gate.rs",
+    "crates/urna-clitui/src/cmd/pyenv.rs",
+    "crates/urna-clitui/src/cmd/embed_gate.rs",
 ]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/paths.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/paths.rs"
 kind = "rust-source"
 purpose = "The one data-root ladder (URNA_DATA_DIR, XDG_DATA_HOME, ~/.local/share, %LOCALAPPDATA%, <exe>/../share) every reader searches and `urna setup` writes into, plus the managed venv interpreter path"
-links = ["crates/urna-cli/src/cmd/embed_gate.rs"]
+links = ["crates/urna-clitui/src/cmd/embed_gate.rs"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/src/cmd/tone.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/src/cmd/tone.rs"
 kind = "rust-source"
 purpose = "Color depth probe (NO_COLOR, URNA_COLOR, COLORTERM and known terminals) and the RGB -> xterm-256 fold (coolor's perceptual search, memoized) shared by the plain output and the terminal UI"
-links = ["crates/urna-cli/src/tui/pal.rs"]
+links = ["crates/urna-clitui/src/tui/pal.rs"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/tests/setup_e2e.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/tests/setup_e2e.rs"
 kind = "rust-test"
 purpose = "urna setup end to end against a file:// release built in the test: the payload installs, a tampered checksum exits 11 and installs nothing, a missing release exits 10, --uninstall keeps the binary; a bare urna in a pipe prints help and exits 2; doctor in a pipe prints no escapes and names setup"
-links = ["crates/urna-cli/src/tui/setup/mod.rs"]
+links = ["crates/urna-clitui/src/tui/setup/mod.rs"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/tests/embedder_resolution.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/tests/embedder_resolution.rs"
 kind = "rust-test"
 purpose = "ask, retrieve and search-text resolve their Python embedders from the data roots with a binary copied out of the checkout and a cwd outside it: the data-root scripts are found, a missing payload names the missing script, a checkout in the cwd wins over the data root"
-links = ["crates/urna-cli/src/cmd/embed_gate.rs"]
+links = ["crates/urna-clitui/src/cmd/embed_gate.rs"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/tests/media_cite_validate.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/tests/media_cite_validate.rs"
 kind = "rust-test"
 purpose = "cite and validate on a real media corpus (blob_refs + inlined blob_data + span overlay): cite prints the overlay span retrieve reports and keeps the stored span of a BLOB_REF_NONE chunk; validate reports the inlined blobs on a good file and prints no OK when a blob fails its content_hash"
-links = ["crates/urna-cli/src/cmd/cite.rs", "crates/urna-cli/src/cmd/validate.rs", "crates/urna-engine/src/blobs.rs"]
+links = ["crates/urna-clitui/src/cmd/cite.rs", "crates/urna-clitui/src/cmd/validate.rs", "crates/urna-engine/src/blobs.rs"]
 
-[[inventory.urna_cli]]
-path = "crates/urna-cli/tests/cli_e2e.rs"
+[[inventory.urna_clitui]]
+path = "crates/urna-clitui/tests/cli_e2e.rs"
 kind = "rust-test"
 purpose = "Integration coverage for the compiled CLI, incl the flagship verbs (ask answer=cited-text-only + urna:// citation, ask explain adds the real-cosine honesty line; retrieve emits a valid JSON/JSONL answer-pack with score_type=cosine + well-formed citation_id that cite round-trips, mismatched cite still fails) - these two skip cleanly when no Python with the forge deps is present"
-links = ["crates/urna-cli/src/main.rs"]
+links = ["crates/urna-clitui/src/main.rs"]
 
 [[inventory.urna_format]]
 path = "crates/urna-format/Cargo.toml"
@@ -2265,7 +2265,7 @@ path = "python/forge/embed_query_model.py"
 kind = "python-source"
 purpose = "Registry-backed query embedder for the CLI (same argv/stdout contract as embed_query_potion.py + --preset + --mrl-dim, query-role encoding for asymmetric models; exit codes 2/3/4); a manifest model no preset names goes to python/embed_query.py when sentence-transformers imports"
 links = [
-    "crates/urna-cli/src/cmd/embed_gate.rs",
+    "crates/urna-clitui/src/cmd/embed_gate.rs",
     "python/forge/model_registry.py",
 ]
 
@@ -2275,7 +2275,7 @@ kind = "python-tool"
 purpose = "The declarative build CLI (--spec/--sample/--models/--out-dir/--cache-dir/--resume/--rebuild-only/--strict-env/--dry-run/--allow-heavy); dry-run resolves the plan, dep status and the out + cache roots without loading a model; `urna build` launches it"
 links = [
     "python/forge/forge_pipeline.py",
-    "crates/urna-cli/src/cmd/agent/build.rs",
+    "crates/urna-clitui/src/cmd/agent/build.rs",
 ]
 
 [[inventory.data_docs_python_scripts_tests]]
@@ -2321,7 +2321,7 @@ links = ["python/forge/quality_gate.py"]
 path = "tests/test_cli_space.py"
 kind = "python-test"
 purpose = "Release-binary space surface: search-space happy + typed errors, stats spaces block, inspect --json spaces[], benchmark --space, no-spaces degradation"
-links = ["crates/urna-cli/src/cmd/search_space.rs"]
+links = ["crates/urna-clitui/src/cmd/search_space.rs"]
 
 [[inventory.data_docs_python_scripts_tests]]
 path = "python/forge/model_catalog.py"
@@ -2333,13 +2333,13 @@ links = ["python/forge/model_registry.py", "python/forge/catalog.json", "scripts
 path = "python/forge/catalog.json"
 kind = "generated"
 purpose = "The installable model catalog the payload ships (forge/catalog.json): what urna setup's picker and --model, and the explorer's install panel, offer; generated by model_catalog.py, checked in, refused by the stage script when stale"
-links = ["python/forge/model_catalog.py", "crates/urna-cli/src/tui/setup/models.rs"]
+links = ["python/forge/model_catalog.py", "crates/urna-clitui/src/tui/setup/models.rs"]
 
 [[inventory.data_docs_python_scripts_tests]]
 path = "python/forge/install_model.py"
 kind = "python-source"
 purpose = "The fetch half of the model install: plan (missing packages, cached or not, bytes, no network) and fetch (exactly the catalog's files at the pinned revision into $HF_HOME/hub, progress lines per megabyte over HTTP and xet, refs/main pinned when absent and never moved, then the fingerprint must equal the catalog's model_hash and the corpus's); downloads only with URNA_ALLOW_DOWNLOAD=1, repo code only with --allow-remote-code and its reviewed hashes; typed exit codes 3 to 8"
-links = ["python/forge/catalog.json", "python/model_fingerprint.py", "crates/urna-cli/src/tui/setup/models.rs"]
+links = ["python/forge/catalog.json", "python/model_fingerprint.py", "crates/urna-clitui/src/tui/setup/models.rs"]
 
 [[inventory.data_docs_python_scripts_tests]]
 path = "tests/test_model_catalog.py"
@@ -2399,7 +2399,7 @@ links = ["scripts/release_channels.py"]
 path = "tests/test_query_embedder_routing.py"
 kind = "python-test"
 purpose = "Routing by manifest model observable via the fake preset; --mrl-dim passed for truncated default spaces; slice_renorm equals the engine truncation"
-links = ["crates/urna-cli/src/cmd/embed_gate.rs"]
+links = ["crates/urna-clitui/src/cmd/embed_gate.rs"]
 
 [[inventory.data_docs_python_scripts_tests]]
 path = "docs/ARC.toml"
@@ -2425,7 +2425,7 @@ kind = "usage-doc"
 purpose = "The operator guide: every verb with examples, presets and the recall ladder, model_hash and offline operation, benchmark, citations, release verification, urna doctor, the model registry, declarative builds, compression levers, media blobs, and the collapsed reference section: every install channel (one-liner, Windows, urna wheel, Homebrew tap, cargo binstall, Docker, dev build), verification (SHA256, Sigstore attestations, SBOM, install-test), offline and air-gapped notes, and the maintainer one-time checklist"
 links = [
     "README.md",
-    "crates/urna-cli/src/main.rs",
+    "crates/urna-clitui/src/main.rs",
 ]
 
 [[inventory.data_docs_python_scripts_tests]]
@@ -2528,7 +2528,7 @@ kind = "python-source"
 purpose = "sentence-transformers query embedder: the default of CLI search-text, the path of st_text presets and of any ST model no preset names (through embed_query_model.py), and the load/encode/fingerprint functions the st_text adapter reuses; prints urna-needs (exit 4) and urna-fetch (exit 3) lines; ships in the payload at urna/embed_query.py"
 links = [
     "python/model_fingerprint.py",
-    "crates/urna-cli/src/cmd/search_text.rs",
+    "crates/urna-clitui/src/cmd/search_text.rs",
 ]
 
 [[inventory.data_docs_python_scripts_tests]]
@@ -2621,7 +2621,7 @@ kind = "python-source"
 purpose = "The OFFLINE query embedder the CLI ask/retrieve verbs shell out to: potion table (numpy + tokenizers, no torch, no socket), emits the SAME JSON contract as embed_query.py so the Rust model_hash gate is reused verbatim"
 links = [
     "python/forge/embed_potion.py",
-    "crates/urna-cli/src/cmd/util.rs",
+    "crates/urna-clitui/src/cmd/util.rs",
 ]
 
 [[inventory.data_docs_python_scripts_tests]]
@@ -2899,7 +2899,7 @@ path = "tests/test_search_text_model_hash.py"
 kind = "python-test"
 purpose = "model_hash gate coverage for search-text"
 links = [
-    "crates/urna-cli/src/cmd/search_text.rs",
+    "crates/urna-clitui/src/cmd/search_text.rs",
     "python/embed_query.py",
 ]
 
@@ -2926,7 +2926,7 @@ links = [
 path = "scripts/stage_embedder_payload.py"
 kind = "python-source"
 purpose = "Stage + tar the offline embedder payload for release artifacts and installers: the potion route (embed_query_potion.py + the table) and the registry route (embed_query_model.py, model_registry, model_adapters, embed_st + worker, embed_image, and python/model_fingerprint.py at the tree root), and the sentence-transformers route (python/embed_query.py at the tree root); the registry's model deps are not bundled, embed_query_model.py names them"
-links = ["crates/urna-cli/src/cmd/embed_gate.rs", "tests/test_embedder_payload.py"]
+links = ["crates/urna-clitui/src/cmd/embed_gate.rs", "tests/test_embedder_payload.py"]
 
 [[inventory.distribution]]
 path = "scripts/fetch_potion.sh"
@@ -2971,7 +2971,7 @@ links = ["Cargo.toml", ".github/workflows/release.yml", "scripts/fetch_potion.sh
 [[inventory.distribution]]
 path = ".github/workflows/publish-crates.yml"
 kind = "ci-workflow"
-purpose = "Custom cargo-dist publish job: urna-format, urna-engine, urna-cli to crates.io in dependency order after the GitHub release, skipping versions already published; needs the CARGO_REGISTRY_TOKEN repo secret"
+purpose = "Custom cargo-dist publish job: urna-format, urna-engine, urna-clitui to crates.io in dependency order after the GitHub release, skipping versions already published; needs the CARGO_REGISTRY_TOKEN repo secret"
 links = [
     ".github/workflows/release.yml",
     "Cargo.toml",
@@ -3008,7 +3008,7 @@ links = [".github/workflows/release.yml", ".github/workflows/build-wheels.yml", 
 path = "scripts/release_prepare.sh"
 kind = "shell-script"
 purpose = "Opens the release pull request (usage step 8): in a new worktree of origin/main on release-X.Y.Z, cargo-release (version pinned here) runs `version` (workspace version, urna-format and urna-engine pins, lockfile) and `replace` (the dated changelog section, CITATION.cff's versioned fields); then the preflight, a refusal of any change outside those four files, a signed commit, an explicit push of that branch and gh pr create. Refuses a version not after the current one, an empty [Unreleased], another cargo-release; never tags or publishes"
-links = ["release.toml", "crates/urna-cli/Cargo.toml", "scripts/release_preflight.py", "tests/test_release_prepare.py"]
+links = ["release.toml", "crates/urna-clitui/Cargo.toml", "scripts/release_preflight.py", "tests/test_release_prepare.py"]
 
 [[inventory.distribution]]
 path = "release.toml"
@@ -3082,7 +3082,7 @@ links = [
 path = "Dockerfile"
 kind = "container-image"
 purpose = "Minimal static-musl image on scratch: the engine-only CLI (--no-default-features, no setup or tui) built --locked from a toolchain image pinned by tag and digest; corpus via mounted volume, air-gapped friendly"
-links = ["crates/urna-cli"]
+links = ["crates/urna-clitui"]
 
 [[inventory.distribution]]
 path = "examples"

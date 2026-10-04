@@ -402,12 +402,12 @@ def check_assets(directory: Path, plan: dict, version: str) -> list[str]:
 
 
 def check_binary(directory: Path, target: str, golden: Path, version: str) -> list[str]:
-    # the exact archive names, never a glob: `urna-<target>.tar.*` also
+    # the exact archive names, never a glob: `urna-clitui-<target>.tar.*` also
     # matches the archive's .sha256, which sorts first on the runner.
-    names = (f"urna-{target}.tar.xz", f"urna-{target}.tar.gz")
+    names = (f"urna-clitui-{target}.tar.xz", f"urna-clitui-{target}.tar.gz")
     archive = next((directory / n for n in names if (directory / n).is_file()), None)
     if archive is None:
-        return [f"no urna-{target} archive"]
+        return [f"no urna-clitui-{target} archive"]
     with tempfile.TemporaryDirectory() as tmp, tarfile.open(archive) as tar:
         tar.extractall(tmp, filter="data")
         exe = next((p for p in Path(tmp).rglob("urna") if p.is_file()), None)
