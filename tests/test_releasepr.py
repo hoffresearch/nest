@@ -110,7 +110,7 @@ def case_happy(repo: Path, signers: Path, tmp: Path):
 
     assert workspace_version(wt) == new
     manifest = (wt / "Cargo.toml").read_text()
-    for pin, path in (("urna-format", "crates/format"), ("urna-engine", "crates/urna-engine")):
+    for pin, path in (("urna-format", "crates/format"), ("urna-engine", "crates/engine")):
         assert f'{pin} = {{ path = "{path}", version = "{new}" }}' in manifest, pin
     lock = (wt / "Cargo.lock").read_text()
     for name in ("urna-clitui", "urna-format", "urna-engine", "urna-bridge"):
