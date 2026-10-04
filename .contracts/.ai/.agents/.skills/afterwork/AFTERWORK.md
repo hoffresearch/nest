@@ -10,7 +10,7 @@ domain: workflow
 
 # Revisão final
 
-Ao concluir uma tarefa, preparar um PR ou encerrar a sessão, confira se o trabalho atende ao pedido e se o repositório descreve o comportamento entregue. Use o [specs.yaml](specs.yaml) para localizar arquivos que podem precisar de revisão e o [AGENTS.md](../../AGENTS.md) para as orientações de trabalho e validação.
+Auditar tudo que foi realizado nessa tarefa, transcrição completa dos pedidos, incluso arquivo de historico na pasta do agentic (ex: pasta do .claude) para maepamento completo de tudo que foi realizado. Depois de revisar todo contexot, memoria, arquivo alterados e/ou criados. preparar um PR depois de realizar as diretrizes abaixo, confira se o trabalho atende ao pedido e se o repositório descreve o comportamento entregue. Use o [specs.yaml](specs.yaml) para localizar arquivos que podem precisar de revisão e o [AGENTS.md](../../AGENTS.md) para as orientações de trabalho e validação.
 
 ## 1. Confira o que foi feito
 
@@ -40,18 +40,49 @@ Ao criar, remover ou renomear algo, ajuste os consumidores e os links. Atualize 
 
 Escreva sobre o estado atual, mantendo histórico apenas onde ajuda a compreender decisões ou migrações. Registre uma lição recorrente de forma curta no documento de uso correspondente. Evite copiar o mesmo procedimento para vários lugares.
 
-## 4. Valide e revise o diff final
+## 4. Confira a organização dos arquivos
+
+Revise os arquivos criados ou alterados e os consumidores afetados. Procure código sem uso, imports órfãos, scripts temporários, documentação duplicada e arquivos deixados fora das pastas correspondentes à sua função.
+
+Antes de remover algo, confira também usos indiretos em comandos, workflows, configuração, empacotamento e exemplos. Preserve alterações de outras pessoas e arquivos locais cuja finalidade não esteja esclarecida.
+
+Confira os caminhos e nomes conforme a organização do projeto e o inventário do ARC. Ao mover ou renomear um arquivo, atualize imports, links, scripts, workflows e referências de distribuição. Ajuste o `specs.yaml` quando o caminho estiver representado no catálogo.
+
+Enxugue comentários que repetem o código, narram o andamento da tarefa ou descrevem um comportamento antigo. Preserve explicações sobre decisões, limitações, compatibilidade e invariantes de segurança.
+
+Confira o limite de 639 linhas nos arquivos de código abrangidos pela mudança, seguindo as exceções do AGENTS. Quando necessário, modularize por responsabilidade e valide os consumidores. Registre problemas fora do escopo sem transformar o encerramento em uma refatoração geral.
+
+## 5. Valide e revise o diff final
 
 Execute os checks pertinentes descritos no AGENTS e exigidos pelo projeto. Para scripts de release, valide seus contratos, falhas e integrações; para mudanças no runtime, avalie o gate completo e a medição. Alterações editoriais não precisam reconstruir benchmarks.
 
 Distinga testes aprovados, falhos e pulados, com seus pré-requisitos e o commit testado. Reaproveite evidência quando a mudança posterior não afetar o que foi medido e explique essa relação. Provas de publicação precisam identificar o serviço, a execução e os artefatos usados; um teste no TestPyPI não comprova a publicação de produção.
 
-Leia o resultado como revisor: confira comandos, links, configuração, exemplos e texto. Remova resíduos criados pela tarefa, como scripts temporários e imports órfãos, preservando arquivos locais ou mudanças de outra pessoa. Avalie nomes e responsabilidades sem introduzir refatorações alheias ao objetivo. A contagem de testes pode mudar; a cobertura necessária deve permanecer.
+Leia o resultado como revisor: confira comandos, links, configuração, exemplos e texto. A contagem de testes pode mudar; a cobertura necessária deve permanecer.
 
-## 5. Entregue e encerre
+## 6. Entregue e encerre
 
 Informe o que foi entregue, por que mudou, como foi validado e qualquer limitação relevante. Para um PR, identifique o commit final e diga claramente se está pronto para merge. Se ainda houver uma verificação necessária em andamento, nomeie-a.
 
-Depois de um merge, confira a árvore entregue e atualize as referências ou evidências que dependiam da base. Faça a limpeza pertinente dentro das autorizações já dadas, sem descartar trabalho local.
+Confira a árvore entregue e atualize as referências ou evidências que dependiam da base. Faça a limpeza pertinente dentro das autorizações já dadas, sem descartar trabalho local.
 
-Resolva as pendências do escopo antes de declarar conclusão. Uma prova reservada à próxima release normal pode ficar registrada como tal, sem manter a implementação aberta indefinidamente. Se houver uma ação indispensável na conta do mantenedor, apresente somente essa ação e seu motivo.
+Resolva as pendências do escopo antes de declarar conclusão. Uma prova reservada à próxima release normal pode ficar registrada como tal, sem manter a implementação aberta indefinidamente. Se houver uma ação indispensável na conta do desenvolvedor atual, apresente somente essa ação e seu motivo.
+
+Depois de todas etapas executadas, crie o PR seguindo os padrõe de PR da aplicacão, revise o mesmo online de não apresentou conflitos, se sim, corrija. Por fim, apresente o relatorio de execução final com todos itens confirmados.
+
+
+Agora, crie uma lista de tarefas com os itens mencionados acima, por ordem de conexão, não pule etapas, se precisar executa rum item fora do escopo, adicone tambem a lista de tarefa e siga-a até temrinar todos itens.
+
+Lista de tarefas
+
+[ ] Task 01.... 
+[ ] Task 02...
+[ ] Task 03...
+[ ] Task 04...
+
+/goal :
+
+[ ] Goal.... 
+[ ] Goal.... 
+[ ] Goal.... 
+[ ] Goal....

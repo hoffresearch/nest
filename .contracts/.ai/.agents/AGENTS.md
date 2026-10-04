@@ -25,7 +25,7 @@ Leia a solicitação, confira a branch e o estado do checkout e examine a parte 
 
 Prossiga com as decisões de implementação e verificações necessárias ao objetivo autorizado. Melhore o desenho quando houver motivo, explicando a escolha e validando seus efeitos. Convenções podem evoluir na mesma mudança; proteja a compatibilidade e as garantias públicas ao fazer isso.
 
-O mantenedor escreve rápido e usa transcrição de voz. Interprete a intenção apesar de erros de digitação, acentos ausentes ou maiúsculas. Pergunte apenas quando uma ambiguidade mudar o resultado do trabalho.
+O dev principal e tech lead da aplicação escreve rápido e usa transcrição de voz. Interprete a intenção apesar de erros de digitação, acentos ausentes, Caps Lock ativo ou maiúsculas. Não interprete erros como fadiga de trabalho, dispersão ou meltdown emocional.
 
 ## Autonomia e cuidado com o repositório
 
@@ -37,7 +37,7 @@ Credenciais ficam nos mecanismos de secrets ou autenticação do serviço, fora 
 
 O projeto usa commits assinados e squash merge. Ao atualizar um PR empilhado, resolva os conflitos e confira o diff contra a nova base. Depois do merge, compare o conteúdo entregue com a árvore aprovada e explique qualquer diferença. A troca do hash pelo squash é esperada.
 
-## Onde cada parte vive
+## Principais responsabilidades da aplicação
 
 - `crates/urna-format`: formato binário, leitura, escrita e hashes.
 - `crates/urna-runtime`: mmap, índices, kernels e busca.
@@ -51,12 +51,15 @@ Os manifests definem as versões e os requisitos das ferramentas. Consulte-os ao
 
 ## Cuidados técnicos essenciais
 
-- Preserve a compatibilidade do formato v1 e as fixtures congeladas. Antes de alterar layout, codecs ou identificadores, confira o contrato no ARC e as definições em `crates/urna-format/src/layout/`. Teste leitura, escrita e rejeição de entradas inválidas; mudanças em decoders também pedem os testes de mutação e fuzzing pertinentes.
+- Antes de alterar layout, codecs ou identificadores, confira o contrato no ARC e as definições em `crates/urna-format/src/layout/`. Teste leitura, escrita e rejeição de entradas inválidas; mudanças em decoders também pedem os testes de mutação e fuzzing pertinentes.
 - Trate dados externos com limites e aritmética checados, erros tipados e comprimentos validados em release. Documente o invariante de cada `unsafe`. Use os leitores de bytes e a ordenação de scores compartilhados, evitando duplicar essas verificações.
 - Mantenha a identidade dos modelos: dimensão compatível não basta. Na API Python, informe `expected_model_hash` ao consultar com um embedder conhecido e `query_text` quando a busca precisar do texto original. Presets, snapshots, tokenizer e arquivos baixados participam dessa identidade.
-- Preserve as garantias offline. O runtime não abre sockets e o binário usa o `curl` do sistema para downloads de setup. Downloads de modelos e execução de código remoto seguem os consentimentos existentes.
+- Preserve as garantias offline. O runtime não abre sockets, o binário não incorpora uma pilha de rede e o setup baixa arquivos pelo `curl` do sistema. Downloads de modelos e execução de código remoto seguem os consentimentos existentes.
 - Use os caminhos compartilhados para descobrir dados, resolver Python, instalar modelos e apresentar erros. A CLI e a interface de terminal devem observar o mesmo comportamento; workers da interface comunicam resultados por canais, sem escrever por cima da tela.
+- Preserve o rerank exato, a interpretação dos hashes e as citações do texto canônico armazenado. Ao mudar esses caminhos, use os contratos e testes existentes como referência.
 - Distinga as superfícies de instalação: o binário Rust oferece `setup`, `doctor` e a interface de terminal; o comando da wheel é um console de leitura da API Python. Teste cada um conforme seu contrato.
+
+Limitações relevantes ao escolher modelos e interpretar resultados: Potion é voltado ao inglês; o tokenizer BM25 atual perde qualidade em CJK, tailandês e lao; consultas com sentence-transformers carregam Python e o modelo, custo que as medições do engine não incluem. Considere essas limitações quando a tarefa tocar na área e valide qualquer melhoria proposta.
 
 ## Validar a mudança
 
@@ -89,7 +92,11 @@ O ensaio anterior à tag verifica empacotamento e artefatos, sem publicar ou rec
 
 ## Organização e escrita
 
-Prefira módulos por responsabilidade, nomes claros e comentários que expliquem decisões. Respeite o limite de código cobrado pelos checks atuais; ele não impõe dividir documentação ou arquivos gerados. Refatorações devem servir à mudança, preservando os comportamentos e sua cobertura.
+Organize o código por responsabilidade, com nomes claros e comentários que expliquem decisões. O limite é de 639 linhas por arquivo de código, incluindo comentários e linhas em branco. Ao criar ou alterar um arquivo que ultrapasse esse limite, examine suas responsabilidades, dependências e consumidores e divida-o em módulos coesos. Preserve o comportamento, atualize imports e chamadas e valide os caminhos afetados.
+
+O limite não se aplica à documentação, a arquivos dedicados a testes e fixtures, nem a arquivos gerados, vendorizados, dados estruturados ou lockfiles, como JSON, JSONL, TOML, YAML, CSV e RON. Essas exceções não dispensam organização. Configurações e dados escritos dentro de um arquivo de código continuam sujeitos ao limite desse arquivo.
+
+Mantenha a reorganização ligada à tarefa. Use a revisão final do AFTERWORK para conferir arquivos deslocados, código sem uso e resíduos do trabalho.
 
 Escreva estas instruções em português natural. Mantenha o idioma e as convenções dos demais documentos, com parágrafos curtos, títulos claros e exemplos úteis. Commits e PRs usam inglês simples. Os documentos existentes em maiúsculas, como `USAGE.md`, mantêm seus nomes; código segue o estilo da linguagem e `.editorconfig`.
 
@@ -97,10 +104,10 @@ Atualize a explicação atual no documento responsável. Registre o motivo e o h
 
 ## Cuidados que evitam retrabalho
 
-- Busque no código do projeto com `rg` ou `git grep`, respeitando arquivos ignorados. `tools/` e `TMP/` podem conter clones de terceiros.
+- Busque no código do projeto com `rg` ou `git grep`, respeitando arquivos ignorados. `tools/` e `TMP/` podem conter clones de exemplos opensource, estudos e anotações da equipe de desenvolvimento.
 - Testes de instalação devem usar diretórios isolados e um binário fora de `target/`, para não encontrar acidentalmente o payload, o Python ou os modelos da máquina.
 - Atualize `python/forge/catalog.json` pelo gerador ao mudar o registry e confira `python python/forge/model_catalog.py --check`. Resolva snapshots pelas revisões fixadas e preserve a lista de arquivos usada no fingerprint.
 - Ao tocar em SIMD ou Miri, confira os requisitos do compilador em `build.rs` e as limitações documentadas nos testes. Mudanças nesses caminhos precisam manter o fallback compatível.
 - Mantenha arquivos de dados e pesos nos destinos e políticas de LFS existentes. O hook `scripts/pre-commit` verifica os dados preparados para commit; a release obtém a tabela Potion pelo script com hash fixado.
 
-Antes de concluir, faça a [revisão final](.skills/afterwork/AFTERWORK.md). Entregue o resultado, as evidências e as limitações relevantes. Se depender do mantenedor, indique a ação indispensável de forma direta.
+Antes de concluir, faça a [revisão final](.skills/afterwork/AFTERWORK.md). Entregue o resultado, as evidências e as limitações relevantes. Se depender do desenvolvedor humano, indique a ação indispensável de forma direta.

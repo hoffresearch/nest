@@ -1,1 +1,1 @@
-.contracts/.code/.ai/.agents/AGENTS.md
+.contracts/.ai/.agents/AGENTS.md

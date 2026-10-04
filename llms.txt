@@ -20,7 +20,7 @@ The CLI is a Rust binary: `brew tap hoffresearch/urna && brew install urna`, `ca
 - [Crates](https://github.com/hoffresearch/urna/tree/main/crates): urna-format (the frozen v1 container), urna-runtime (mmap, SIMD, exact, HNSW, BM25, graph and hybrid search with exact rerank), urna-cli (the `urna` binary, published as the crate `urna`), urna-python (the PyO3 bridge, shipped as the `urna` wheel)
 - [python/forge](https://github.com/hoffresearch/urna/tree/main/python/forge): the offline embedders, the model registry, declarative builds, the media stage, the quality gate
 - [Examples](https://github.com/hoffresearch/urna/tree/main/examples): quickstart (the five-verb loop on twelve CC0 paragraphs), FastAPI, Flask, Jupyter
-- [Agents contract](https://github.com/hoffresearch/urna/blob/main/.contracts/.code/.ai/.agents/AGENTS.md): the one instruction source for AI coding agents and contributors
+- [Agents contract](https://github.com/hoffresearch/urna/blob/main/.contracts/.ai/.agents/AGENTS.md): the one instruction source for AI coding agents and contributors
 
 ## Optional
 

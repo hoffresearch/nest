@@ -4,35 +4,33 @@ status: active
 last-updated: 2026-10-04
 domain: workflow
 description: >
-  Todo arquivo versionado que o walk do afterwork revisa, com o tipo de
-  mudança que o deixa desatualizado. O AFTERWORK.md lê esta lista; nada mais
-  a tem fixa no texto. Um arquivo criado, removido ou renomeado na árvore, ou
-  cuja responsabilidade muda de lugar, tem sua entrada ajustada aqui no mesmo
-  pull request.
+  Catálogo de referências para a revisão final descrita no AFTERWORK.md desta
+  pasta. Os grupos indicam onde procurar conforme o comportamento alterado.
+  Revise as entradas pertinentes e siga as referências encontradas no código;
+  edite somente o que precisar de correção. O inventário detalhado fica no ARC.
 
-# Campos de cada entrada:
-#   path: relativo à raiz do repo; barra no final nomeia um diretório.
-#   when: a mudança que exige atualização, depara com o diff e atualizações/refatoraçoes nesta seção.
-#   rule: uma restrição sobre como a atualização é feita (opcional).
+# path: caminho relativo à raiz; uma barra final indica um diretório.
+# when: situação em que o arquivo ou grupo deve ser revisado.
+# rule: cuidado específico de manutenção, quando necessário.
 
 groups:
   - name: afterwork
     files:
-      - path: .contracts/.agents/.skills/afterwork/AFTERWORK.md
-        when: mudarem o walk, seus passos, as regras de higiene ou onde uma lição é registrada.
-      - path: .contracts/.agents/.skills/afterwork/specs.yaml
-        when: um arquivo versionado for criado, removido ou renomeado, ou sua responsabilidade mudar.
+      - path: .contracts/.ai/.agents/.skills/afterwork/AFTERWORK.md
+        when: mudar o procedimento de revisão final, organização de arquivos, validação ou entrega.
+      - path: .contracts/.ai/.agents/.skills/afterwork/specs.yaml
+        when: mudar um caminho, responsabilidade ou situação de revisão representada neste catálogo.
 
   - name: instruções dos agentes
     files:
-      - path: .contracts/.code/.ai/.agents/AGENTS.md
-        when: mudarem comandos, arquitetura, testes, permissões, procedimentos ou limitações dos agentes.
+      - path: .contracts/.ai/.agents/AGENTS.md
+        when: mudarem orientações recorrentes de trabalho, organização e tamanho do código, validação, autonomia ou cuidados técnicos do projeto.
       - path: AGENTS.md
         when: mudar o caminho da fonte de instruções.
-        rule: symlink para .contracts/.code/.ai/.agents/AGENTS.md; nunca duplicar o conteúdo.
+        rule: manter o symlink para .contracts/.ai/.agents/AGENTS.md.
       - path: CLAUDE.md
         when: mudar o caminho da fonte de instruções.
-        rule: symlink para .contracts/.code/.ai/.agents/AGENTS.md; nunca duplicar o conteúdo, manter simplificidade organziado, sem deduplicaçao instruções inplicitas que bloqueam inovação.
+        rule: manter o symlink para .contracts/.ai/.agents/AGENTS.md.
       - path: .github/pull_request_template.md
         when: mudarem requisitos de revisão, evidências ou critérios de conclusão.
 
@@ -61,7 +59,7 @@ groups:
         when: mudarem módulos, contratos, fluxos, arquitetura ou inventário de arquivos.
       - path: CITATION.cff
         when: mudar a versão publicada ou houver alteração explícita dos metadados de citação.
-        rule: preservar suas escolhas atuais.
+        rule: preservar os metadados escolhidos pelo mantenedor; a preparação atualiza os campos versionados.
 
   - name: workspace e ferramental
     files:
@@ -136,8 +134,8 @@ groups:
       - path: crates/urna-format/tests/
         when: mudar uma seção, um codec ou um caminho do reader (um roundtrip e um negative_*.rs).
       - path: crates/urna-format/tests/fixtures/golden_v1_minimal.urna
-        when: o formato congelado mudar de verdade, o que no v1 quase nunca acontece.
-        rule: regenerar com cargo run -p urna-format --example regen_golden; congelado byte a byte em 1366 bytes.
+        when: uma mudança no formato precisar comprovar compatibilidade com arquivos existentes.
+        rule: preservar os bytes da fixture v1; atualizar testes ou acrescentar fixtures conforme o contrato, sem regenerá-la apenas para fazer um teste passar.
       - path: crates/urna-runtime/tests/
         when: mudar um caminho de busca, índice, kernel ou verificação do runtime.
       - path: crates/urna-cli/tests/
@@ -178,7 +176,7 @@ groups:
         when: mudar a release ou seu gerador.
         rule: regenerar com python scripts/release_rehearsal.py generate, nunca à mão.
       - path: .github/workflows/release-report.yml
-        when: mudarem eventos, permissões ou verificações do relatório consolidado.
+        when: mudarem eventos, permissões, identificação da execução ou relato de canais indisponíveis e publicações parciais.
 
   - name: scripts
     files:
@@ -193,13 +191,13 @@ groups:
       - path: scripts/pypi_release.py
         when: mudarem validação da origem, checksums ou recuperação de uploads parciais.
       - path: scripts/release_check.sh
-        when: mudarem suítes, pré-requisitos ou verificações do gate local.
+        when: mudarem suítes, pré-requisitos, critérios de execução ou resultados de aprovação, falha e dispensa do gate local.
       - path: scripts/ruff_check.sh
         when: surgir um módulo Python sujeito a lint ou mudar a execução do Ruff.
       - path: scripts/stage_embedder_payload.py
-        when: mudar qualquer arquivo ou modelo distribuído no payload.
+        when: mudarem arquivos distribuídos, modelos ou o processo de staging do payload.
       - path: scripts/stage_wheel.py
-        when: mudar qualquer arquivo ou modelo distribuído na wheel.
+        when: mudarem arquivos distribuídos, modelos ou o processo de staging da wheel.
       - path: scripts/fetch_potion.sh
         when: mudar a revisão aprovada, origem ou identidade da tabela Potion.
       - path: scripts/install.sh
@@ -353,4 +351,3 @@ groups:
         when: mudar a interface apresentada no explorer.
       - path: assets/images/urna-hoff-research-db-iage-thumb-git.png
         when: mudar a apresentação visual usada no README.
-
