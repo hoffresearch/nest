@@ -2824,7 +2824,7 @@ links = [
 ]
 
 [[inventory.data_docs_python_script_tests]]
-path = "script/fuzz_soak.sh"
+path = "script/fuzzsweep.sh"
 kind = "shell-script"
 purpose = "Local coverage-guided fuzz soak: every cargo-fuzz target for N seconds (default one hour), corpus accumulated under fuzz/corpus/, minimized after each run; the same loop gatecheck.yml runs nightly"
 links = [
