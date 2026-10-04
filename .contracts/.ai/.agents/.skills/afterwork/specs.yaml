@@ -199,7 +199,7 @@ groups:
         when: mudarem instalação Unix, arquivos baixados, checksums ou destinos.
       - path: script/installer.ps1
         when: mudarem instalação Windows, arquivos baixados, checksums ou destinos.
-      - path: script/pre-commit
+      - path: script/precommit
         when: mudarem as regras sobre dados e arquivos permitidos nos commits.
       - path: script/fuzzsweep.sh
         when: mudarem alvos, duração ou execução dos testes de fuzzing.
