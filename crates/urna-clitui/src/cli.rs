@@ -19,14 +19,14 @@ const AFTER_HELP: &str = concat!(
     help_footer!(),
     "  setup   setup, tui  (the installer every channel ends in, and the terminal explorer)\n\n",
     "first run: urna setup (a bare `urna` on a terminal opens the explorer)\n",
-    "a corpus to try: examples/quickstart/ in the repo (urna build --spec examples/quickstart/corpus.toml)"
+    "a corpus to try: demos/quickstart/ in the repo (urna build --spec demos/quickstart/corpus.toml)"
 );
 
 #[cfg(not(feature = "tui"))]
 const AFTER_HELP: &str = concat!(
     help_footer!(),
     "\nthis build has no terminal ui (`setup`, `tui`): it was compiled without the `tui` feature\n",
-    "a corpus to try: examples/quickstart/ in the repo (urna build --spec examples/quickstart/corpus.toml)"
+    "a corpus to try: demos/quickstart/ in the repo (urna build --spec demos/quickstart/corpus.toml)"
 );
 
 /// Two products share one binary and one engine. The ENGINE verbs take a

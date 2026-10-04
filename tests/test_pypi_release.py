@@ -1,6 +1,6 @@
 """Prove the PyPI upload takes the right wheels from the right run, once.
 
-`scripts/pypi_release.py` is what pypi.yml runs before its upload. this
+`script/pypi_release.py` is what pypiindex.yml runs before its upload. this
 suite serves controlled answers from a local HTTP server, standing in for
 the GitHub runs API and the index's JSON API, over real wheel-shaped files
 with real sha256 sidecars:
@@ -32,7 +32,7 @@ import threading
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("pypi_release", REPO / "scripts" / "pypi_release.py")
+spec = importlib.util.spec_from_file_location("pypi_release", REPO / "script" / "pypi_release.py")
 pypi = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pypi)
 
@@ -136,7 +136,7 @@ def test_the_sources_each_index_allows() -> None:
     release_run(1, "abc")
     pypi.check_source("pypi", "1", "o/r", "abc")
     expect_error(pypi.check_source, "pypi", "1", "o/r", "def", contains="not the tag push")
-    release_run(2, "abc", path=".github/workflows/ci.yml")
+    release_run(2, "abc", path=".github/workflows/gatecheck.yml")
     expect_error(
         pypi.check_source, "pypi", "2", "o/r", "abc", contains="takes wheels from release.yml"
     )
@@ -144,13 +144,13 @@ def test_the_sources_each_index_allows() -> None:
     expect_error(pypi.check_source, "pypi", "3", "o/r", "abc", contains="no successful host")
     expect_error(pypi.check_source, "pypi", "404", "o/r", "abc", contains="does not exist")
     # a release run is never a testpypi source, a rehearsal never a pypi one.
-    expect_error(pypi.check_source, "testpypi", "1", "o/r", "abc", contains="release-rehearsal.yml")
+    expect_error(pypi.check_source, "testpypi", "1", "o/r", "abc", contains="rehearsal.yml")
     with tempfile.TemporaryDirectory() as tmp:
         on_main, off = git_main(Path(tmp))
         cwd = os.getcwd()
         os.chdir(tmp)
         try:
-            rehearsal = ".github/workflows/release-rehearsal.yml"
+            rehearsal = ".github/workflows/rehearsal.yml"
             ROUTES["/repos/o/r/actions/runs/10"] = {
                 "path": rehearsal,
                 "head_sha": on_main,

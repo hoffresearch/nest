@@ -1,4 +1,4 @@
-"""Prove scripts/release_prepare.sh prepares a release and nothing else.
+"""Prove script/release_prepare.sh prepares a release and nothing else.
 
 every case runs the real script, with the pinned cargo-release, in a scratch
 repository built from this checkout's tracked files (git-lfs files left out,
@@ -31,7 +31,7 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPT = "scripts/release_prepare.sh"
+SCRIPT = "script/release_prepare.sh"
 PINNED = re.search(r"^CARGO_RELEASE_VERSION=(\S+)$", (REPO / SCRIPT).read_text(), re.M).group(1)
 FILES = ["CITATION.cff", "Cargo.lock", "Cargo.toml", "docs/CHANGELOG"]
 CITED = ("version:", "date-released:", "repository-artifact:", "    value:", "    description:")
@@ -62,7 +62,7 @@ def scratch(tmp: Path) -> tuple[Path, Path]:
         shutil.copy2(src, dst, follow_symlinks=False)
     key = tmp / "key"
     run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "t@t", "-f", str(key)], tmp)
-    signers = tmp / "allowed_signers"
+    signers = tmp / "trustkeys"
     signers.write_text(f"t@t {(tmp / 'key.pub').read_text().strip()}\n")
     git(tmp, "init", "-q", "-b", "main", str(repo))
     for k, v in [
@@ -137,7 +137,7 @@ def case_happy(repo: Path, signers: Path, tmp: Path):
     names = git(wt, "diff", "--name-only", f"{base}..HEAD").stdout.split()
     assert sorted(names) == FILES, names
     assert git(wt, "status", "--porcelain").stdout == "", "left uncommitted changes"
-    run([sys.executable, "scripts/release_preflight.py"], wt)
+    run([sys.executable, "script/release_preflight.py"], wt)
     assert git(repo, "rev-parse", "main").stdout.strip() == base, "main moved"
     assert git(repo, "tag", "--list").stdout == "", "a tag was created"
     assert git(repo, "status", "--porcelain").stdout == "", "the checkout changed"

@@ -1,0 +1,53 @@
+# publish the library crates and the cli to crates.io. a reusable workflow:
+# cargo-dist calls it as a custom publish job (`publish-jobs` in
+# Cargo.toml) after the github release is up, so a tag that fails the
+# signature check or the build never reaches crates.io.
+#
+# order matters (each crate depends on the one before it): urna-format,
+# urna-engine, urna-clitui (the cli). urna-bridge and urna-ingest are `publish = false`.
+# a crate whose version is already on crates.io is skipped, so re-running a
+# half-finished release picks up where it stopped instead of failing.
+#
+# prerequisite (one-time): the CARGO_REGISTRY_TOKEN repo secret; see the
+# maintainer checklist in docs/USAGE.md.
+
+name: rustready
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: publish crates to crates.io
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - name: publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -eu
+          version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "urna-clitui") | .version')
+          for crate in urna-format urna-engine urna-clitui; do
+            # 0 published, 10 absent; a 429, a 5xx or no answer exits 1 after
+            # retries and stops here instead of publishing over an outage.
+            state=0
+            python3 script/release_channels.py crate --name "$crate" --version "$version" || state=$?
+            case "$state" in
+              0) echo "$crate $version is already on crates.io, skipping" ;;
+              10) cargo publish --locked -p "$crate" ;;
+              *) exit 1 ;;
+            esac
+          done

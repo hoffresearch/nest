@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-# ships as the `urna` wheel on pypi (built by build-wheels.yml in the release, published by pypi.yml), never as a crate.
+# ships as the `urna` wheel on pypi (built by wheelmake.yml in the release, published by pypiindex.yml), never as a crate.
 publish = false
 
 [lints]
