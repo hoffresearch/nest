@@ -15,7 +15,7 @@ claims L3 (the lock never records the cache location), `<out>/.cache` is
 never created, a conflicting model_hash probe is corrected by the loaded
 model, and an unusable cache root is a SpecError naming the setting.
 
-Run: .venv/bin/python tests/test_forge_spec.py
+Run: .venv/bin/python tests/test_forgespec.py
 """
 
 import json
