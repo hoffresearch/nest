@@ -22,6 +22,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 - Usage's release verification names what v0.5.3 carries (checked on the release: the five archives with `LICENSE` and a `.sha256`, the payload's `VERSION`, `sha256.sum`, the Sigstore attestation of an archive bound to `refs/tags/v0.5.3` and `7a417e1e`), and PyPI 0.5.0 to 0.5.3 without PEP 740 provenance. Item 11 of the maintainer checklist gains two lessons of the 0.5.2 and 0.5.3 tags: rehearse the global job in the runner's image before tagging, and rerun install-test's npm legs once the registry serves the version.
 
+### Fixed
+
+- The model install's progress lines could go back (17.55 MB, then 16.54 MB of the same file), which failed `tests/test_model_install.py` inside the gate. Over xet, `huggingface_hub` drives two bars per file with the progress class it is given, the reconstructed bytes and the fewer transferred (compressed) bytes, each from zero, and each instance printed its own count. The instances now share what was shown, so the lines never go back, and a count is capped at the file's size. A new no-network case drives both bars and reproduces the old 16.54 MB line.
+
 ## [0.5.3] - 2026-10-03
 
 The 0.5.2 release for every channel. The `v0.5.2` tag reached PyPI and nothing else: the release's global job stopped on the payload stamp (below), so the GitHub release, the archives, crates.io, npm and Homebrew never ran. 0.5.3 is 0.5.2 plus that fix; the wheel is built from the same sources. No format or API change.
