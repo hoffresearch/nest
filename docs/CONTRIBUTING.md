@@ -101,7 +101,7 @@ cargo test --release --workspace
 python tests/test_pythonapi.py                      # the python suites, in the order
 python tests/test_ingestion.py                  # fullcheck.sh runs them; that
 python tests/test_search_text_model_hash.py   # script is the list, AGENTS.md names
-python tests/test_forge_spec.py               # the three that run by hand
+python tests/test_forgespec.py               # the three that run by hand
 ./script/fullcheck.sh
 ```
 
