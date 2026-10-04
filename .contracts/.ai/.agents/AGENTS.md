@@ -109,6 +109,6 @@ Atualize a explicação atual no documento responsável. Registre o motivo e o h
 - Testes de instalação devem usar diretórios isolados e um binário fora de `target/`, para não encontrar acidentalmente o payload, o Python ou os modelos da máquina.
 - Atualize `python/forge/catalog.json` pelo gerador ao mudar o registry e confira `python python/forge/model_catalog.py --check`. Resolva snapshots pelas revisões fixadas e preserve a lista de arquivos usada no fingerprint.
 - Ao tocar em SIMD ou Miri, confira os requisitos do compilador em `build.rs` e as limitações documentadas nos testes. Mudanças nesses caminhos precisam manter o fallback compatível.
-- Mantenha arquivos de dados e pesos nos destinos e políticas de LFS existentes. O hook `script/pre-commit` verifica os dados preparados para commit; a release obtém a tabela Potion pelo script com hash fixado.
+- Mantenha arquivos de dados e pesos nos destinos e políticas de LFS existentes. O hook `script/precommit` verifica os dados preparados para commit; a release obtém a tabela Potion pelo script com hash fixado.
 
 Antes de concluir, faça a [revisão final](.skills/afterwork/AFTERWORK.md). Entregue o resultado, as evidências e as limitações relevantes. Se depender do desenvolvedor humano, indique a ação indispensável de forma direta.
