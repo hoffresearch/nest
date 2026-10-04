@@ -156,7 +156,7 @@ def test_what_needs_the_rehearsal() -> None:
     for path in [
         "docs/USAGE.md",
         "tests/test_pythonapi.py",
-        "crates/urna-ingest/src/lib.rs",
+        "crates/ingest/src/lib.rs",
         ".github/workflows/setuptest.yml",
     ]:
         assert rh.touches_release([path]) == [], path
