@@ -51,7 +51,7 @@ urna-engine = { path = "crates/engine", version = "0.5.3" }
 cargo-dist-version = "0.32.0"
 ci = ["github"]
 # npm ships the same release archive behind `npm i -g @urna/cli` (the
-# package fetches the binary on install; name set in crates/urna-clitui). npm
+# package fetches the binary on install; name set in crates/clitui). npm
 # refuses the bare name `urna` (too similar to url, lerna, ora), so it lives
 # in the `urna` org.
 npm-scope = "@urna"
@@ -93,7 +93,7 @@ github-custom-job-permissions = { "rustready" = { contents = "read", id-token = 
 # sbom, formula, npm package) carry none, and wheelmake.yml attests the
 # wheels itself.
 github-attestations = true
-# supply chain: one cyclonedx sbom for the cli package (urna-clitui.cdx.xml, not
+# supply chain: one cyclonedx sbom for the cli package (urna.cdx.xml, not
 # attested); binaries built with cargo-auditable so `cargo audit bin urna`
 # can read the dependency tree out of the executable.
 cargo-cyclonedx = true
@@ -105,7 +105,7 @@ cargo-auditable = true
 # still reach the release and the publish jobs. a failed wheelmake call
 # is a failure, which the host condition does refuse.
 
-# build only the packages that ship (the `urna-clitui` crate, binary `urna`).
+# build only the packages that ship (the `urna` crate, binary `urna`).
 # without it dist compiles the whole workspace per target, and urna-bridge's
 # cdylib cannot be built for the musl targets, which failed the first 0.5.0
 # tag on both linux builds.

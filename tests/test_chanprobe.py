@@ -83,18 +83,18 @@ os.environ.pop("GITHUB_STEP_SUMMARY", None)
 
 V = "0.5.3"
 SHA = "a" * 40
-INDEX = "/index/ur/na/urna-clitui"
+INDEX = "/index/ur/na/urna"
 FORMULA = "/raw/hoffresearch/homebrew-urna/main/Formula/urna.rb"
 
 
 def index_line(vers: str, yanked: bool = False) -> str:
-    return json.dumps({"name": "urna-clitui", "vers": vers, "yanked": yanked})
+    return json.dumps({"name": "urna", "vers": vers, "yanked": yanked})
 
 
 WHEELS = {
     f"urna-{V}-cp312-abi3-{tag}.whl": f"{i:064x}" for i, tag in enumerate(["a", "b", "c", "d"], 1)
 }
-ARCHIVES = {f"urna-clitui-{t}.tar.xz": f"{i:064x}" for i, t in enumerate(["linux", "darwin"], 10)}
+ARCHIVES = {f"urna-{t}.tar.xz": f"{i:064x}" for i, t in enumerate(["linux", "darwin"], 10)}
 
 
 def released(version: str = V) -> None:
@@ -132,21 +132,21 @@ def released(version: str = V) -> None:
 
 
 def test_crates_io_outages_are_not_absence() -> None:
-    url = f"/crates-api/crates/urna-clitui/{V}"
+    url = f"/crates-api/crates/urna/{V}"
     ROUTES[url] = {"version": {"num": V}}
-    assert ch.crate_status("urna-clitui", V, delay=0)[0] == ch.PUBLISHED
+    assert ch.crate_status("urna", V, delay=0)[0] == ch.PUBLISHED
     ROUTES[url] = None
-    assert ch.crate_status("urna-clitui", V, delay=0)[0] == ch.ABSENT
+    assert ch.crate_status("urna", V, delay=0)[0] == ch.ABSENT
     # a 429 then a 200: retried, then published, never "absent".
     ROUTES[url] = lambda hit: {"version": {"num": V}} if hit >= 2 else (429, "")
     HITS.pop(url, None)
-    assert ch.crate_status("urna-clitui", V, delay=0)[0] == ch.PUBLISHED and HITS[url] == 2
+    assert ch.crate_status("urna", V, delay=0)[0] == ch.PUBLISHED and HITS[url] == 2
     ROUTES[url] = (503, "")
-    code, why = ch.crate_status("urna-clitui", V, attempts=3, delay=0)
+    code, why = ch.crate_status("urna", V, attempts=3, delay=0)
     assert code == 1 and "answered 503" in why, (code, why)
     os.environ["CRATES_API"] = "http://127.0.0.1:9/crates-api"  # nothing listens
     try:
-        code, why = ch.crate_status("urna-clitui", V, attempts=2, delay=0)
+        code, why = ch.crate_status("urna", V, attempts=2, delay=0)
         assert code == 1 and "answered nothing" in why, (code, why)
     finally:
         os.environ["CRATES_API"] = BASE + "/crates-api"
@@ -163,10 +163,10 @@ def test_wheels_and_attestations() -> None:
     first = next(iter(WHEELS))
     pypi = f"/pypi-host/pypi/urna/{V}/json"
     ROUTES[pypi]["urls"][0]["digests"]["sha256"] = "f" * 64
-    ROUTES[f"/api/repos/o/r/attestations/sha256:{ARCHIVES['urna-clitui-linux.tar.xz']}"] = None
+    ROUTES[f"/api/repos/o/r/attestations/sha256:{ARCHIVES['urna-linux.tar.xz']}"] = None
     _, problems = ch.wheels_and_attestations(V, "o/r")
     assert f"PyPI and the GitHub release differ on ['{first}']" in problems, problems
-    assert "no attestation for ['urna-clitui-linux.tar.xz']" in problems, problems
+    assert "no attestation for ['urna-linux.tar.xz']" in problems, problems
     ROUTES[f"/api/repos/o/r/releases/tags/v{V}"] = {
         "assets": [{"name": n, "digest": f"sha256:{d}"} for n, d in ARCHIVES.items()]
     }
@@ -275,14 +275,14 @@ def test_missing_answers_are_never_success() -> None:
     runs = f"/api/repos/o/r/actions/workflows/pypiindex.yml/runs?head_sha={SHA}"
     ROUTES[runs] = {"workflow_runs": []}
     ROUTES[f"/npm/@urna%2fcli/{V}"] = "<html>not json</html>"
-    ROUTES[f"/api/repos/o/r/attestations/sha256:{ARCHIVES['urna-clitui-linux.tar.xz']}"] = (502, "")
+    ROUTES[f"/api/repos/o/r/attestations/sha256:{ARCHIVES['urna-linux.tar.xz']}"] = (502, "")
     ok, text = ch.report("7", SHA, f"v{V}", "o/r")
     assert not ok, text
     for want in [
         "the run's jobs are unavailable (HTTP 500)",
         "- pypiindex.yml: no run for this commit",
         "| npm | absent",
-        "the attestations of ['urna-clitui-linux.tar.xz'] are unavailable",
+        "the attestations of ['urna-linux.tar.xz'] are unavailable",
     ]:
         assert want in text, (want, text)
     ROUTES[f"/api/repos/o/r/releases/tags/v{V}"] = (503, "")

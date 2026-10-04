@@ -2,13 +2,13 @@
 id: ADR-0001
 title: Short names of equal length for crates, folders, scripts, workflows and tests
 kind: decision
-status: accepted
+status: superseded
 category: STRUCTURE
 date: 2026-10-04
 last-updated: 2026-10-04
 tags: [PACKAGING, WORKFLOWS, naming, crates]
 supersedes: []
-superseded-by: null
+superseded-by: ADR-0002
 related: ["#296", "#310", "#314", "#315", "#316", "#333", "#361", "#387", "crates/", "script/", ".github/workflows/", "tests/"]
 ---
 
