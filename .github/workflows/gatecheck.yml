@@ -281,7 +281,7 @@ jobs:
       - name: ruff (same file list as fullcheck.sh)
         run: |
           python -m pip install ruff
-          URNA_PYTHON=python sh script/ruff_check.sh
+          URNA_PYTHON=python sh script/ruffcheck.sh
       - name: the registry imports and the model catalog is current
         # bare python, no ml deps: model_catalog imports the whole registry,
         # so a preset that names a field ModelPreset lacks fails here, and a

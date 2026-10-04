@@ -86,7 +86,7 @@ Rust:
 Python:
 
 - Target `py312`, line length 100. Ruff config in `pyproject.toml`.
-- Lints: `E F W I B UP SIM`. Run `sh script/ruff_check.sh` (`URNA_PYTHON=.venv/bin/python` picks the interpreter): it checks and format-checks the one file list CI and `fullcheck.sh` share; a new Python module goes on that list.
+- Lints: `E F W I B UP SIM`. Run `sh script/ruffcheck.sh` (`URNA_PYTHON=.venv/bin/python` picks the interpreter): it checks and format-checks the one file list CI and `fullcheck.sh` share; a new Python module goes on that list.
 - Private helpers in `python/tools/` use the `_` prefix (e.g. `_baseline_decoder.py`).
 - Keep modules focused and follow the file hygiene guidance above.
 
