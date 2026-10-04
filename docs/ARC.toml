@@ -2396,7 +2396,7 @@ purpose = "chanprobe.py against a local HTTP server standing in for the GitHub A
 links = ["script/chanprobe.py"]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_query_embedder_routing.py"
+path = "tests/test_askrouter.py"
 kind = "python-test"
 purpose = "Routing by manifest model observable via the fake preset; --mrl-dim passed for truncated default spaces; slice_renorm equals the engine truncation"
 links = ["crates/urna-clitui/src/cmd/embed_gate.rs"]
