@@ -158,7 +158,7 @@ links = [
     "crates/urna-bridge/src/build_spaces.rs",
     "tests/test_image_corpus.py",
     "tests/test_blob_bridge.py",
-    "tests/test_space_bridge.py",
+    "tests/test_spaceband.py",
 ]
 
 [[layers]]
@@ -2860,7 +2860,7 @@ links = [
 ]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_space_bridge.py"
+path = "tests/test_spaceband.py"
 kind = "python-test"
 purpose = "PyO3 bridge coverage for named spaces: spaces kwarg build, has_spaces / space_names, search_space hits, per-space model_hash isolation"
 links = [
