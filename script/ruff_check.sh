@@ -72,8 +72,8 @@ script/release_preflight.py
 tests/test_release_preflight.py
 script/pypi_release.py
 tests/test_pypi_release.py
-script/release_rehearsal.py
-tests/test_release_rehearsal.py
+script/rehearsal.py
+tests/test_rehearsal.py
 script/release_channels.py
 tests/test_release_channels.py
 tests/test_release_prepare.py

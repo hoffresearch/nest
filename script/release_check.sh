@@ -182,8 +182,8 @@ ok "pypi release (5 cases)"
 
 # the release rehearsal is generated from release.yml, publishes nothing,
 # and its required check fails a needed build that did not pass.
-step "python tests/test_release_rehearsal.py"
-"$PY" tests/test_release_rehearsal.py
+step "python tests/test_rehearsal.py"
+"$PY" tests/test_rehearsal.py
 ok "release rehearsal (7 cases)"
 
 # setuptest waits for the exact version on each registry, and the release
