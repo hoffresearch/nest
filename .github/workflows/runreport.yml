@@ -6,7 +6,7 @@
 # a workflow_run event runs on main, so github.sha is main's commit, not the
 # release's: the report names the release by the triggering run's id and
 # head_sha, and the tag by that run's head_branch (the tag name on a tag
-# push). script/release_channels.py checks the tag points at that commit,
+# push). script/chanprobe.py checks the tag points at that commit,
 # lists every job that did not succeed, the pypiindex.yml run of that commit, and
 # what the GitHub release, crates.io, npm, Homebrew and PyPI serve. the
 # summary is written before the step fails on anything missing.
@@ -39,7 +39,7 @@ jobs:
           RUN_ID: ${{ github.event.workflow_run.id }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           TAG: ${{ github.event.workflow_run.head_branch }}
-        run: python3 script/release_channels.py report --run "$RUN_ID" --sha "$HEAD_SHA" --tag "$TAG" --repo "$GITHUB_REPOSITORY"
+        run: python3 script/chanprobe.py report --run "$RUN_ID" --sha "$HEAD_SHA" --tag "$TAG" --repo "$GITHUB_REPOSITORY"
       - name: verify the attestations of the archives and wheels
         # cryptographically, after the report and whatever it found: the signer
         # workflow (release.yml for archives, wheelmake.yml for wheels), the

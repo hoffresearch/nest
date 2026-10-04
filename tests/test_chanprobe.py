@@ -1,6 +1,6 @@
 """Prove the channel probes wait for the exact version and the report survives a failure.
 
-`script/release_channels.py` is what setuptest waits with and what
+`script/chanprobe.py` is what setuptest waits with and what
 runreport.yml summarizes a release with. This suite serves controlled
 answers from a local HTTP server standing in for the GitHub API, npm, the
 crates.io sparse index, PyPI and the Homebrew tap:
@@ -19,7 +19,7 @@ crates.io sparse index, PyPI and the Homebrew tap:
   reported as unavailable or absent, never as success, and an answer the
   report cannot read still leaves a summary and exit 1.
 
-Run: python tests/test_release_channels.py
+Run: python tests/test_chanprobe.py
 """
 
 import http.server
@@ -32,7 +32,7 @@ import threading
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("channels", REPO / "script" / "release_channels.py")
+spec = importlib.util.spec_from_file_location("channels", REPO / "script" / "chanprobe.py")
 ch = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ch)
 
