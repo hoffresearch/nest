@@ -10,7 +10,7 @@ contents staged:
   staging/pyproject.toml               <- packaging/pyproject.toml (verbatim;
                                           its paths resolve from staging/)
   staging/README.md                    <- README.md
-  staging/LICENSE                      <- docs/LICENSE (license-files in the
+  staging/LICENSE                      <- LICENSE (license-files in the
                                           pyproject; the wheel ships the text)
   staging/urna/__init__.py             <- python/urna.py
   staging/urna/_cli.py                 <- python/urna_cli.py
@@ -37,7 +37,7 @@ STAGING = ROOT / "packaging" / "staging"
 COPIES = [
     (ROOT / "packaging" / "pyproject.toml", STAGING / "pyproject.toml"),
     (ROOT / "README.md", STAGING / "README.md"),
-    (ROOT / "docs" / "LICENSE", STAGING / "LICENSE"),
+    (ROOT / "LICENSE", STAGING / "LICENSE"),
     (ROOT / "python" / "urna.py", STAGING / "urna" / "__init__.py"),
     (ROOT / "python" / "urna_cli.py", STAGING / "urna" / "_cli.py"),
     # the offline potion embedder is self-contained (stdlib + numpy +

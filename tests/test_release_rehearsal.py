@@ -152,7 +152,7 @@ def test_what_needs_the_rehearsal() -> None:
         "crates/urna-cli/src/main.rs",
         "Cargo.lock",
         "README.md",
-        "docs/LICENSE",
+        "LICENSE",
         ".github/workflows/build-wheels.yml",
     ]
     for path in needs:
