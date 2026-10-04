@@ -10,7 +10,7 @@
 #      version`), then the changelog section and the versioned fields of
 #      CITATION.cff (`cargo release replace`, the list in
 #      crates/urna-clitui/Cargo.toml); the rest of CITATION.cff does not move;
-#   2. script/release_preflight.py checks the result, and nothing outside
+#   2. script/preflight.py checks the result, and nothing outside
 #      those four files may have changed;
 #   3. a signed commit, an explicit push of that one branch, the pull request.
 # the tag and the publication are separate steps after the merge (usage,
@@ -72,7 +72,7 @@ GIT_LFS_SKIP_SMUDGE=1 git -C "$repo" worktree add --quiet -b "$branch" "$worktre
 cd "$worktree"
 cargo release version "$version" --execute --no-confirm
 cargo release replace --execute --no-confirm
-python3 script/release_preflight.py
+python3 script/preflight.py
 
 # untracked files count too: anything cargo-release created is a change.
 changed="$(git status --porcelain | awk '{print $2}' | LC_ALL=C sort | tr '\n' ' ')"

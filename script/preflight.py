@@ -24,8 +24,8 @@ UTC day is still refused.
 
 Needs Python 3.11+ (tomllib); the jobs that run it are on ubuntu-24.04.
 
-    python script/release_preflight.py
-    python script/release_preflight.py --tag v0.5.3 --main-ref origin/main
+    python script/preflight.py
+    python script/preflight.py --tag v0.5.3 --main-ref origin/main
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def _toml(text: str) -> dict:
     try:
         import tomllib
     except ModuleNotFoundError:
-        raise SystemExit("release-preflight: needs Python 3.11+ (tomllib)") from None
+        raise SystemExit("preflight: needs Python 3.11+ (tomllib)") from None
 
     return tomllib.loads(text)
 
@@ -212,11 +212,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     errors = check_tag(args.tag, args.root, args.main_ref) if args.tag else check_tree(args.root)
     for error in errors:
-        print(f"release-preflight: {error}", file=sys.stderr)
+        print(f"preflight: {error}", file=sys.stderr)
     if errors:
         return 1
     scope = f"tag {args.tag} (its own commit)" if args.tag else "tree"
-    print(f"release-preflight: {scope} ok")
+    print(f"preflight: {scope} ok")
     return 0
 
 
