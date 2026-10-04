@@ -1,5 +1,5 @@
 #!/bin/sh
-# script/pre-commit - defense-in-depth against committing PHI / data artifacts.
+# script/precommit - defense-in-depth against committing PHI / data artifacts.
 #
 # Clinical data MUST live OUTSIDE this repo (e.g. /Volumes/<redacted>/dat/psy/work).
 # The .gitignore already ignores *.urna / *.sidecar.jsonl / **/pairs/ (a catch-all
@@ -11,7 +11,7 @@
 # Install once per clone (it lives outside .git/hooks so it is version-tracked).
 # Copy it in rather than `core.hooksPath scripts`, which would DISABLE the git-lfs
 # hooks (LFS uses post-commit/pre-push, not pre-commit, so the two coexist):
-#   cp script/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+#   cp script/precommit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 #
 set -eu
 
@@ -34,7 +34,7 @@ if [ -n "$violations" ]; then
   printf >&2 '\nBLOCKED: data / PHI artifact(s) staged for commit:\n'
   printf >&2 '  %s\n' $violations
   printf >&2 '\nClinical data must live OUTSIDE this repo (e.g. /Volumes/<redacted>/dat/psy/work).\n'
-  printf >&2 'If a file is legitimately tracked, add it to ALLOW in script/pre-commit.\n\n'
+  printf >&2 'If a file is legitimately tracked, add it to ALLOW in script/precommit.\n\n'
   exit 1
 fi
 exit 0
