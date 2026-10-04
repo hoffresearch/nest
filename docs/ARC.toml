@@ -321,7 +321,7 @@ path = [
     "Cargo.toml",
     "crates/*",
     "python/_urna.so",
-    "tests/test_e2e.py",
+    "tests/test_pythonapi.py",
     "tests/test_builder.py",
     "tests/test_search_text_model_hash.py",
     "script/ruffcheck.sh",
@@ -902,7 +902,7 @@ path = "tests"
 kind = "directory"
 purpose = "Python integration test scripts"
 links = [
-    "tests/test_e2e.py",
+    "tests/test_pythonapi.py",
     "tests/test_builder.py",
     "tests/test_search_text_model_hash.py",
 ]
@@ -2839,7 +2839,7 @@ purpose = "Full release gate"
 links = [
     "python/tools/measure_presets.py",
     "python/tools/compare_measure.py",
-    "tests/test_e2e.py",
+    "tests/test_pythonapi.py",
     "tests/test_builder.py",
     "tests/test_search_text_model_hash.py",
 ]
@@ -2885,7 +2885,7 @@ purpose = "The offline guard: blocked sockets stay blocked across build and quer
 links = ["python/urna.py"]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_e2e.py"
+path = "tests/test_pythonapi.py"
 kind = "python-test"
 purpose = "PyO3 end-to-end coverage, incl the flagship-is-a-lie guard: UrnaFile.retrieve(q, k) score equals UrnaFile.search(q, k) byte-for-byte and each hit carries tier-1 text + a well-formed urna:// citation; and the capability route: retrieve(query_text=...) on a BM25 file brings the word match (a chunk at cosine -1) into the exact rerank, on a hybrid preset file (index_type hnsw) too"
 links = [
