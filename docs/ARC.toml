@@ -2312,7 +2312,7 @@ purpose = "Spec errors name their key; the six media profiles incl retrieval-aut
 links = ["python/forge/forge_pipeline.py"]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_quality_gate.py"
+path = "tests/test_mediagate.py"
 kind = "python-test"
 purpose = "Visual and drift legs reject independently; the utility leg passes on a labeled sample with a stub text+image adapter, rejects alone with the report naming the leg, and refuses an image-only gate model naming utility_floor_hit1; JXL round-trip bit-exact + fallback policy; cluster_order determinism; skips cleanly without ssimulacra2/cjxl"
 links = ["python/forge/quality_gate.py"]
