@@ -187,7 +187,7 @@ groups:
         when: mudarem validação da origem, checksums ou recuperação de uploads parciais.
       - path: script/fullcheck.sh
         when: mudarem suítes, pré-requisitos, critérios de execução ou resultados de aprovação, falha e dispensa do gate local.
-      - path: script/ruff_check.sh
+      - path: script/ruffcheck.sh
         when: surgir um módulo Python sujeito a lint ou mudar a execução do Ruff.
       - path: script/stage_embedder_payload.py
         when: mudarem arquivos distribuídos, modelos ou o processo de staging do payload.

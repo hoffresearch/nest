@@ -200,11 +200,11 @@ step "python tests/test_releasepr.py"
 ok "release prepare (4 cases)"
 
 # ---- ruff (best-effort) ----
-# the file list lives in script/ruff_check.sh so gatecheck.yml and this gate stay
+# the file list lives in script/ruffcheck.sh so gatecheck.yml and this gate stay
 # in lockstep; ruff missing from $PY is a skip here, a failure in ci.
 if "$PY" -c "import ruff" 2>/dev/null || "$PY" -m ruff --version 2>/dev/null | head -1 >/dev/null; then
-  step "ruff check / format on the files we own (script/ruff_check.sh)"
-  URNA_PYTHON="$PY" sh script/ruff_check.sh
+  step "ruff check / format on the files we own (script/ruffcheck.sh)"
+  URNA_PYTHON="$PY" sh script/ruffcheck.sh
   ok "ruff clean"
 else
   printf '  skip: ruff not importable in %s\n' "$PY" >&2
