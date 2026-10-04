@@ -156,7 +156,7 @@ links = [
     "python/builder.py",
     "crates/urna-bridge/src/build_fn.rs",
     "crates/urna-bridge/src/build_spaces.rs",
-    "tests/test_image_corpus.py",
+    "tests/test_imagepipe.py",
     "tests/test_mediablob.py",
     "tests/test_spaceband.py",
 ]
@@ -2869,7 +2869,7 @@ links = [
 ]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_image_corpus.py"
+path = "tests/test_imagepipe.py"
 kind = "python-test"
 purpose = "42-case suite over the image pillar: encode/decode round-trips, GOP probe, sharding, ordering, corpus build determinism, backend edge cases, the AVIF manifest accounting the original source bytes (skips cleanly without FFmpeg codecs)"
 links = [

@@ -10,7 +10,7 @@ checkpoint to prove. A stub embedder that reduces pixels to a small
 deterministic vector exercises every one of them.
 
 Needs ffmpeg with libsvtav1 for the compressed cases; those skip cleanly
-when it is absent. Run: python tests/test_image_corpus.py
+when it is absent. Run: python tests/test_imagepipe.py
 """
 
 from __future__ import annotations
