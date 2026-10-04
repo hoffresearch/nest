@@ -38,7 +38,7 @@ python/tools/urna_image_sweep.py
 tests/test_search_text_model_hash.py
 tests/test_image_corpus.py
 tests/test_blob_bridge.py
-tests/test_space_bridge.py
+tests/test_spaceband.py
 python/forge/model_registry.py
 python/forge/embed_st.py
 python/forge/build_spec.py
