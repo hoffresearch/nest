@@ -19,7 +19,7 @@ Two subcommands share one probe per channel:
 Endpoints (overridable for tests through the environment):
 
 - npm: ``$NPM_REGISTRY/@urna%2fcli/<version>`` (the version document);
-- crates.io: ``$CRATES_INDEX/ur/na/urna`` (the sparse index cargo and
+- crates.io: ``$CRATES_INDEX/ur/na/urna-clitui`` (the sparse index cargo and
   binstall resolve through), a non-yanked line with that ``vers``;
 - PyPI: ``$PYPI_URL/pypi/urna/<version>/json``, with files;
 - Homebrew: ``$RAW_GITHUB/hoffresearch/homebrew-urna/main/Formula/urna.rb``;
@@ -91,13 +91,13 @@ def probe_npm(version: str) -> str:
 
 
 def probe_crates(version: str) -> str:
-    status, body = _get(f"{_env('CRATES_INDEX', 'https://index.crates.io')}/ur/na/urna")
+    status, body = _get(f"{_env('CRATES_INDEX', 'https://index.crates.io')}/ur/na/urna-clitui")
     lines = [_load(ln) for ln in body.splitlines()] if status == 200 else []
     ok = any(
         isinstance(ln, dict) and ln.get("vers") == version and ln.get("yanked") is False
         for ln in lines
     )
-    return _state(status, ok, f"the index has no unyanked urna {version}")
+    return _state(status, ok, f"the index has no unyanked urna-clitui {version}")
 
 
 def probe_pypi(version: str) -> str:

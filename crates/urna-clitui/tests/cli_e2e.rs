@@ -180,7 +180,7 @@ fn potion_table_present(root: &std::path::Path) -> bool {
 /// repo root, then `python3`. returns None, with the reason printed, when
 /// the toolchain to build the demo is absent.
 fn forge_python() -> Option<(String, PathBuf)> {
-    // repo root: this test file is crates/urna-cli/tests/, go up three.
+    // repo root: this test file is crates/urna-clitui/tests/, go up three.
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())
