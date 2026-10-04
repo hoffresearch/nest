@@ -45,7 +45,7 @@ O projeto usa commits assinados e squash merge. Ao atualizar um PR empilhado, re
 - `crates/urna-cli`: binário `urna`, comandos e interface de terminal.
 - `crates/urna-python`: extensão PyO3 distribuída na wheel.
 - `python/`: API Python, construção dos corpora, embedders e catálogo de modelos.
-- `forge-core/` e `fuzz/`: workspaces Cargo separados; comandos no workspace principal não os cobrem.
+- `crates/ingest` (`urna-ingest`, schema `.fci` do forge) e `fuzz/`: workspaces Cargo separados; o `Cargo.toml` da raiz exclui o primeiro e comandos no workspace principal não os cobrem.
 - `packaging/`, `scripts/` e `.github/`: empacotamento, instalação, validação e releases.
 
 Os manifests definem as versões e os requisitos das ferramentas. Consulte-os ao mudar dependências, features ou compatibilidade; o crate da CLI pode ter um MSRV diferente do restante do workspace.
@@ -70,7 +70,7 @@ Escolha verificações que exercitem o comportamento alterado e cumpram os check
 | --- | --- |
 | Rust | Testes dos crates afetados, `cargo fmt --all --check` e Clippy; confira também `--no-default-features` ao tocar na CLI |
 | Python | Scripts `tests/test_*.py` e testes próximos ao módulo, mais `sh scripts/ruff_check.sh` |
-| `forge-core/` ou `fuzz/` | Comandos no manifesto próprio, conforme CONTRIBUTING e `fuzz/README.md` |
+| `crates/ingest/` ou `fuzz/` | Comandos no manifesto próprio, conforme CONTRIBUTING e `fuzz/README.md` |
 | Formato, busca, desempenho ou integração ampla | `./scripts/release_check.sh`, incluindo a medição quando aplicável |
 | Empacotamento e distribuição | Testes dos scripts afetados, coerência dos workflows gerados e ensaio de empacotamento |
 | Documentação, links ou comentários | Conferência de caminhos, exemplos e sintaxe afetados; sem repetir a medição de corpora |

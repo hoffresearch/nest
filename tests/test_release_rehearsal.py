@@ -160,6 +160,7 @@ def test_what_needs_the_rehearsal() -> None:
     for path in [
         "docs/USAGE.md",
         "tests/test_e2e.py",
+        "crates/ingest/src/lib.rs",
         ".github/workflows/install-test.yml",
     ]:
         assert rh.touches_release([path]) == [], path
