@@ -18,7 +18,9 @@ one; they skip, by name, only when huggingface.co does not answer.
   out is exit 7 with the reason; a catalog hash the files do not produce,
   or a reviewed code file that changed, is exit 6;
 - edge: a cache whose refs/main names another revision is left alone and
-  the fetch fails naming both.
+  the fetch fails naming both; the two progress bars xet drives for one
+  file (reconstructed and transferred bytes) print monotonic lines capped
+  at the file's size.
 
 Run: .venv/bin/python tests/test_model_install.py
 """
@@ -121,6 +123,39 @@ def test_refusals_before_any_download(d: Path) -> None:
     )
 
 
+def test_two_bars_for_one_file_never_go_back() -> None:
+    # xet drives two bars per file with the reporter class (the reconstructed
+    # bytes, then the fewer transferred bytes, each from zero): the lines
+    # stay monotonic and never pass the file's size. no network.
+    try:
+        import huggingface_hub  # noqa: F401
+    except ImportError:
+        print("edge (two bars for one file) skipped: huggingface_hub is not installed")
+        return
+    import contextlib
+    import importlib.util
+    import io
+
+    spec = importlib.util.spec_from_file_location("install_model", SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    base, size, total = 5048, 17547912, 18497794
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        report = mod._reporter(base, size, total, "model.safetensors")
+        reconstruct, transfer = report(total=size), report(total=size)
+        for _ in range(16):
+            reconstruct.update(1 << 20)
+        transfer.update(16535263)  # the compressed bytes, behind what was shown
+        # an overshoot (a fresh reporter, one big update) is capped at the size.
+        mod._reporter(base, size, total, "model.safetensors")(total=size).update(2 * size)
+    done = [int(line.split()[1]) for line in out.getvalue().splitlines()]
+    assert done[:16] == sorted(done[:16]) and len(done) == 17, done
+    assert base + 16535263 not in done, "the transfer bar printed a lower count"
+    assert done[-1] == base + size, done
+    print("edge (two progress bars for one file: monotonic, capped at the size): OK")
+
+
 def _hub_up() -> bool:
     url = f"https://huggingface.co/api/models/{TINY}/revision/{TINY_REV}"
     try:
@@ -179,6 +214,7 @@ def test_fetch_lays_down_the_pinned_files(d: Path) -> None:
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="urna-install-") as tmp:
         test_refusals_before_any_download(Path(tmp))
+    test_two_bars_for_one_file_never_go_back()
     if not _hub_up():
         print("download cases skipped: huggingface.co is unreachable")
     else:

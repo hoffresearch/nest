@@ -126,25 +126,31 @@ def _progress(done: int, total: int, path: str) -> None:
     print(f"urna-progress: {done} {total} {path}", flush=True)
 
 
-def _reporter(base: int, total: int, path: str):
+def _reporter(base: int, size: int, total: int, path: str):
     """A progress class for hf_hub_download: the hub client feeds it the
     bytes of one file over plain http and over xet alike (xet holds a file
     in memory until it is whole, so a partial file on disk says nothing).
-    it draws no bar; it prints an urna-progress line every MB."""
+    it draws no bar; it prints an urna-progress line every MB.
+
+    xet opens two bars for one file with this class, the reconstructed
+    bytes and the transferred (compressed, fewer) bytes, each counting from
+    zero. the instances share what was shown, so the lines never go back,
+    and a count is capped at the file's size."""
     from huggingface_hub.utils import tqdm as hub_tqdm
+
+    shown = {"at": -1}
 
     class Report(hub_tqdm):
         def __init__(self, *args, **kwargs):
             kwargs["file"] = io.StringIO()
             super().__init__(*args, **kwargs)
             self.n = 0
-            self._shown = -1
 
         def update(self, n=1):
             self.n += n or 0
-            at = base + int(self.n)
-            if at - self._shown >= 1 << 20:
-                self._shown = at
+            at = base + min(int(self.n), size)
+            if at - shown["at"] >= 1 << 20:
+                shown["at"] = at
                 _progress(at, total, path)
 
         def refresh(self, *args, **kwargs):
@@ -176,7 +182,7 @@ def download(entry: dict) -> None:
                 f["path"],
                 revision=entry["revision"],
                 cache_dir=str(hub_dir()),
-                tqdm_class=_reporter(done, total, f["path"]),
+                tqdm_class=_reporter(done, f["size"], total, f["path"]),
             )
         except Exception as e:
             raise Refused(8, f"downloading {f['path']} from {entry['repo']} failed: {e}") from e
