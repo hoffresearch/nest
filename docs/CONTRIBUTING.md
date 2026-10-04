@@ -65,8 +65,8 @@ These conventions are not aesthetic preferences. They exist to keep the repo rea
 
 ### Agent instruction files
 
-- `.contracts/.agents/AGENTS.md` is the single instruction source for AI coding agents working in this repo: use/update/init only `.contracts/.agents/AGENTS.md` (the core global agent file).
-- Do not create per-tool instruction files (GEMINI.md, CODEX.md, cursor rules). The root `CLAUDE.md` is a symlink to that file, not a second source; most agentic tooling already reads `.contracts/.agents/AGENTS.md` by default, point the rest at it on init.
+- `.contracts/.code/.ai/.agents/AGENTS.md` is the single instruction source for AI coding agents working in this repo: use/update/init only `.contracts/.code/.ai/.agents/AGENTS.md` (the core global agent file).
+- Do not create per-tool instruction files (GEMINI.md, CODEX.md, cursor rules). The root `CLAUDE.md` is a symlink to that file, not a second source; most agentic tooling already reads `.contracts/.code/.ai/.agents/AGENTS.md` by default, point the rest at it on init.
 
 ### File hygiene
 

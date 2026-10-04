@@ -25,11 +25,14 @@ groups:
 
   - name: instruções dos agentes
     files:
-      - path: .contracts/.agents/AGENTS.md
+      - path: .contracts/.code/.ai/.agents/AGENTS.md
         when: mudarem comandos, arquitetura, testes, permissões, procedimentos ou limitações dos agentes.
+      - path: AGENTS.md
+        when: mudar o caminho da fonte de instruções.
+        rule: symlink para .contracts/.code/.ai/.agents/AGENTS.md; nunca duplicar o conteúdo.
       - path: CLAUDE.md
         when: mudar o caminho da fonte de instruções.
-        rule: symlink para .contracts/.agents/AGENTS.md; nunca duplicar o conteúdo, manter simplificidade organziado, sem deduplicaçao instruções inplicitas que bloqueam inovação.
+        rule: symlink para .contracts/.code/.ai/.agents/AGENTS.md; nunca duplicar o conteúdo, manter simplificidade organziado, sem deduplicaçao instruções inplicitas que bloqueam inovação.
       - path: .github/pull_request_template.md
         when: mudarem requisitos de revisão, evidências ou critérios de conclusão.
 
@@ -350,6 +353,4 @@ groups:
         when: mudar a interface apresentada no explorer.
       - path: assets/images/urna-hoff-research-db-iage-thumb-git.png
         when: mudar a apresentação visual usada no README.
-      - path: assets/images/urna-hoff-research-db-thumb.png
-        when: mudar a identidade visual ou seu uso público.
 

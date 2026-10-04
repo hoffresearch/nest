@@ -8,7 +8,7 @@ tick what the change touched; leave the rest. the full walk is `.contracts/.agen
 
 - [ ] `docs/CHANGELOG` `[Unreleased]`: the why, measured numbers, test counts
 - [ ] `docs/arc/ARC.toml`: architecture, contracts, inventory, dated `summary` note
-- [ ] `.contracts/.agents/AGENTS.md`: commands, gotchas, known gaps, layout
+- [ ] `.contracts/.code/.ai/.agents/AGENTS.md`: commands, gotchas, known gaps, layout
 - [ ] tests: happy path, error path, edge case, real artifacts
 - [ ] user-visible: `README.md`, `llms.txt`, `docs/USAGE.md`, `examples/`, `assets/images/`
 - [ ] format or decoders: roundtrip + `negative_*.rs`, fuzz arm, baselines, `docs/BENCH.md`

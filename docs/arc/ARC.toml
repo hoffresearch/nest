@@ -390,7 +390,7 @@ purpose = "Ignores build outputs, caches, and regenerated corpora"
 links = []
 
 [[inventory.root]]
-path = ".contracts/.agents/AGENTS.md"
+path = ".contracts/.code/.ai/.agents/AGENTS.md"
 kind = "repo-ops"
 purpose = "Agent operating contract, commands, conventions, and gotchas; the single agent instruction source, no per-tool instruction files"
 links = ["scripts/release_check.sh"]
@@ -401,7 +401,7 @@ kind = "repo-ops"
 purpose = "End-of-task skill: the walk procedure over the file list in specs.yaml, each file updated in place, file hygiene, and where a lesson goes"
 links = [
     ".contracts/.agents/.skills/afterwork/specs.yaml",
-    ".contracts/.agents/AGENTS.md",
+    ".contracts/.code/.ai/.agents/AGENTS.md",
     ".github/pull_request_template.md",
 ]
 
@@ -456,10 +456,16 @@ purpose = "Keeps the Docker build context to Cargo.toml, Cargo.lock and crates/"
 links = ["docker/Dockerfile"]
 
 [[inventory.root]]
+path = "AGENTS.md"
+kind = "symlink"
+purpose = "Link to .contracts/.code/.ai/.agents/AGENTS.md, the one instruction source, at the root where agent tooling looks for it; never edited as a file of its own"
+links = [".contracts/.code/.ai/.agents/AGENTS.md"]
+
+[[inventory.root]]
 path = "CLAUDE.md"
 kind = "symlink"
-purpose = "Link to .contracts/.agents/AGENTS.md, the one instruction source; never edited as a file of its own"
-links = [".contracts/.agents/AGENTS.md"]
+purpose = "Link to .contracts/.code/.ai/.agents/AGENTS.md, the one instruction source; never edited as a file of its own"
+links = [".contracts/.code/.ai/.agents/AGENTS.md"]
 
 [[inventory.root]]
 path = "deny.toml"
@@ -624,7 +630,7 @@ path = "llms.txt"
 kind = "metadata"
 purpose = "llms.txt discovery file (llmstxt.org format): title, summary, links to the docs with a line each; no instruction, that is AGENTS.md"
 links = [
-    ".contracts/.agents/AGENTS.md",
+    ".contracts/.code/.ai/.agents/AGENTS.md",
     "docs/CONTRIBUTING.md",
     "README.md",
 ]
