@@ -273,6 +273,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # the rehearsal impact cases read real history
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -292,3 +294,28 @@ jobs:
           python scripts/release_preflight.py
           python tests/test_release_preflight.py
           python tests/test_pypi_release.py
+      - name: the release rehearsal is what release.yml builds
+        # release-rehearsal.yml is generated from release.yml; a dist upgrade
+        # or a hand edit that drifts fails here.
+        run: |
+          python -m pip install pyyaml
+          python scripts/release_rehearsal.py generate --check
+          python tests/test_release_rehearsal.py
+
+  payload-py310:
+    name: payload staged under python 3.10
+    if: github.event_name != 'schedule'
+    # the release's global job stages the payload with ubuntu-22.04's python3
+    # (3.10); the 0.5.2 tag failed there on a 3.11 import.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+      - name: stage and pack the payload, check its VERSION
+        run: |
+          set -eu
+          sh scripts/fetch_potion.sh
+          python scripts/stage_embedder_payload.py "$RUNNER_TEMP/payload" --tar "$RUNNER_TEMP/payload.tar.gz"
+          python -c "import sys, tarfile; v = tarfile.open(sys.argv[1]).extractfile('urna/VERSION').read().decode().strip(); print('payload VERSION', v)" "$RUNNER_TEMP/payload.tar.gz"

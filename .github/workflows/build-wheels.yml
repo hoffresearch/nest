@@ -20,8 +20,10 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: read
+# no permissions block, here or on the jobs: they take the caller's. the
+# release grants id-token + attestations (github-custom-job-permissions in
+# Cargo.toml); the rehearsal (release-rehearsal.yml) grants contents: read
+# only, and a nested job may not ask for more than its caller gave.
 
 jobs:
   # the release tag's signature and preflight. here rather than in dist's
@@ -35,10 +37,6 @@ jobs:
     name: wheel ${{ matrix.target }}
     needs: [tag-verify]
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
-      id-token: write # sigstore build attestation
-      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -75,6 +73,8 @@ jobs:
             cat "$wheel.sha256"
           done
       - name: attest the wheels
+        # the release tag push only: the rehearsal has no id-token to sign with.
+        if: github.event_name == 'push' && github.ref_type == 'tag'
         uses: actions/attest@v4
         with:
           subject-path: dist-wheels/*.whl
