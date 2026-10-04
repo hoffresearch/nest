@@ -5,7 +5,8 @@ Tree mode (every pull request, ``ci.yml``): the workspace version in
 
 - the ``urna-format`` and ``urna-runtime`` pins in ``[workspace.dependencies]``
   (``cargo publish`` keeps the version and strips the path);
-- every crate under ``crates/`` inherits it (``version.workspace = true``);
+- every crate under ``crates/`` inherits it (``version.workspace = true``),
+  except one that is its own workspace (``crates/ingest``, excluded at the root);
 - ``Cargo.lock`` carries it for urna, urna-format, urna-runtime, urna-python;
 - ``CITATION.cff``: ``version``, the versioned ``repository-artifact`` and
   release URLs, and a ``date-released`` equal to the changelog's date;
@@ -125,7 +126,10 @@ def _check_manifests(tree: Tree, v: str) -> list[str]:
         if pin != v:
             errors.append(f"Cargo.toml: [workspace.dependencies] {name} pins {pin!r}, not {v!r}")
     for rel in tree.crate_manifests():
-        version = _toml(tree.read(rel))["package"].get("version")
+        manifest = _toml(tree.read(rel))
+        if "workspace" in manifest:
+            continue  # its own workspace (crates/ingest), excluded by the root manifest
+        version = manifest["package"].get("version")
         if version != {"workspace": True} and version != v:
             errors.append(f"{rel}: version {version!r} neither inherits nor equals {v!r}")
     locked = {p["name"]: p["version"] for p in _toml(tree.read("Cargo.lock")).get("package", [])}

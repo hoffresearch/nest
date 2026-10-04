@@ -7,7 +7,7 @@
 //! returns it unchanged, and two builds of the same table are
 //! byte-identical.
 //!
-//! the record mirrors forge-core's `BlobRef`: a raw 32-byte sha-256 of
+//! the record mirrors urna-ingest's `BlobRef`: a raw 32-byte sha-256 of
 //! the original bytes, a uri hint, the original byte length, and whether
 //! the heavy bytes are inlined in this .urna (self-contained) or stay
 //! out-of-line (catalog sidecar).

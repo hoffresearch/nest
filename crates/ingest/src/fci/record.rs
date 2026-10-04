@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 /// adapter maps it 1:1 to a `ChunkSpec` and the byte spans round-trip
 /// through `urna cite`.
 ///
-/// forge-core does NOT chunk. producing these records is extraction;
+/// urna-ingest does NOT chunk. producing these records is extraction;
 /// splitting their canonical text into chunk-sized records is the python
 /// adapter's call to the ONE authoritative chunker, `builder.chunk_text`.
 /// keeping this struct byte-for-byte the shape of `ChunkSpec` is what lets

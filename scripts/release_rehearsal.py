@@ -318,9 +318,18 @@ def release_inputs() -> tuple[set[str], tuple[str, ...]]:
     return exact, ("crates/", "packaging/", *sorted(models))
 
 
+# under crates/ but its own workspace, excluded by the root manifest: no
+# release artifact builds it.
+OUTSIDE_RELEASE = ("crates/ingest/",)
+
+
 def touches_release(paths: list[str]) -> list[str]:
     exact, prefixes = release_inputs()
-    return [p for p in paths if p in exact or p.startswith(prefixes)]
+    return [
+        p
+        for p in paths
+        if p in exact or (p.startswith(prefixes) and not p.startswith(OUTSIDE_RELEASE))
+    ]
 
 
 def changed(base: str, head: str) -> list[str] | None:
