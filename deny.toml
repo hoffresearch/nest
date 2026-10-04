@@ -1,6 +1,6 @@
 # cargo-deny policy (docs/SECURITY.md supply-chain items).
 # run: `cargo deny check` (workspace), and with `--manifest-path
-# crates/ingest/Cargo.toml` / `fuzz/Cargo.toml` for the two side workspaces.
+# crates/urna-ingest/Cargo.toml` / `fuzz/Cargo.toml` for the two side workspaces.
 # ci.yml runs all three on every push and pull request, and on the nightly
 # schedule (advisories change without a commit).
 
@@ -16,7 +16,7 @@ ignore = []
 [licenses]
 # the set present in the three lockfiles, rechecked on 2026-09-26 when the
 # terminal ui (ratatui, tachyonfx) brought the workspace lock to 294 entries
-# (it was 128), with crates/ingest and fuzz unchanged; no new license entered. every expression below
+# (it was 128), with crates/urna-ingest and fuzz unchanged; no new license entered. every expression below
 # resolves through one of these; `r-efi` (MIT OR Apache-2.0 OR LGPL) enters
 # through MIT, `libfuzzer-sys` ((MIT OR Apache-2.0) AND NCSA) needs NCSA.
 # adding a copyleft-only crate fails the check on purpose.
@@ -46,7 +46,7 @@ wildcards = "allow"
 # are still on syn 2 while serde_derive, clap_derive, bytemuck_derive and
 # thiserror-impl moved to syn 3. build-time proc-macro input only, nothing of
 # it reaches a binary. drop the entry when pyo3 and zerocopy-derive move.
-# crates/ingest has no syn 2, so its ci step runs with `-A unmatched-skip`.
+# crates/urna-ingest has no syn 2, so its ci step runs with `-A unmatched-skip`.
 skip = [
     { crate = "syn@2", reason = "pyo3-macros 0.29 and zerocopy-derive 0.8 have not moved to syn 3 yet" },
 ]

@@ -320,7 +320,7 @@ def release_inputs() -> tuple[set[str], tuple[str, ...]]:
 
 # under crates/ but its own workspace, excluded by the root manifest: no
 # release artifact builds it.
-OUTSIDE_RELEASE = ("crates/ingest/",)
+OUTSIDE_RELEASE = ("crates/urna-ingest/",)
 
 
 def touches_release(paths: list[str]) -> list[str]:
