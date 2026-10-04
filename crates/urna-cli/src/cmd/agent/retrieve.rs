@@ -57,7 +57,7 @@ pub fn run(
     candidates: Option<usize>,
     model_path: Option<PathBuf>,
 ) -> Result<()> {
-    let runtime = urna_runtime::MmapUrnaFile::open(&file)?;
+    let runtime = urna_engine::MmapUrnaFile::open(&file)?;
     let result = embed_and_search(&runtime, &query, k, candidates, embedder, model_path)?;
 
     let texts = canonical_texts(&file)?;

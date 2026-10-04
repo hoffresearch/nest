@@ -5,11 +5,11 @@
 //! not seconds. the build is deterministic for the seed, which is what
 //! makes a before/after comparison meaningful.
 //!
-//! run: `cargo bench -p urna-runtime --bench hnsw_build`
+//! run: `cargo bench -p urna-engine --bench hnsw_build`
 
 use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use std::time::Duration;
-use urna_runtime::ann::HnswIndex;
+use urna_engine::ann::HnswIndex;
 
 const N: usize = 20_000;
 const DIM: usize = 384;

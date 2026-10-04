@@ -40,7 +40,7 @@ pub fn run(
     candidates: Option<usize>,
     model_path: Option<PathBuf>,
 ) -> Result<()> {
-    let runtime = urna_runtime::MmapUrnaFile::open(&file)?;
+    let runtime = urna_engine::MmapUrnaFile::open(&file)?;
     let result = embed_and_search(&runtime, &query, k, candidates, embedder, model_path)?;
 
     // tier-1 canonical text for the returned chunk_ids, the same bytes cite

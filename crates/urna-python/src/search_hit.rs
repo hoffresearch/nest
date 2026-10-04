@@ -1,5 +1,5 @@
 //! `SearchHitPy`: the Python-visible search hit. One field per
-//! `urna_runtime::SearchHit` field, all read-only from Python; `score` is
+//! `urna_engine::SearchHit` field, all read-only from Python; `score` is
 //! the exact-cosine rerank value and `citation_id` the stable
 //! `urna://content_hash/chunk_id` reference.
 
@@ -34,8 +34,8 @@ pub struct SearchHitPy {
     pub citation_id: String,
 }
 
-impl From<urna_runtime::SearchHit> for SearchHitPy {
-    fn from(h: urna_runtime::SearchHit) -> Self {
+impl From<urna_engine::SearchHit> for SearchHitPy {
+    fn from(h: urna_engine::SearchHit) -> Self {
         Self {
             chunk_id: h.chunk_id,
             score: h.score,

@@ -506,7 +506,7 @@ fn missing_required_section_fails() {
 #[test]
 fn citation_id_uses_content_hash_with_urna_scheme() {
     // Build, open via runtime, search, and check citation_id format.
-    // (Runtime test lives in urna-runtime/tests, but we sanity-check the
+    // (Runtime test lives in urna-engine/tests, but we sanity-check the
     // content_hash format here.)
     let bytes = UrnaFileBuilder::new(manifest(4, 1))
         .add_chunk(chunk("alpha", "doc.txt", 0, 5, vec![1.0, 0.0, 0.0, 0.0]))

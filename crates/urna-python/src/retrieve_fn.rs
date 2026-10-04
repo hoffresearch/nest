@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-use urna_runtime::{MmapUrnaFile, SearchResult};
+use urna_engine::{MmapUrnaFile, SearchResult};
 
 /// one cited span from `retrieve()`. mirrors `SearchHitPy` and adds the
 /// tier-1 `text` plus the `rerank_source` precision disclosure, so an agent

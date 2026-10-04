@@ -17,7 +17,7 @@ crate-type = ["cdylib"]
 [dependencies]
 pyo3 = { version = "0.29", features = ["abi3-py312"] }
 urna-format = { workspace = true }
-urna-runtime = { workspace = true }
+urna-engine = { workspace = true }
 serde_json = { workspace = true }
 hex = "0.4"
 

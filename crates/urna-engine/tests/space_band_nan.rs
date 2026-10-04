@@ -16,13 +16,13 @@ mod common;
 
 use common::mutation::reseal;
 use std::path::PathBuf;
+use urna_engine::{MmapUrnaFile, RuntimeError};
 use urna_format::manifest::Manifest;
 use urna_format::writer::UrnaFileBuilder;
 use urna_format::{
     ChunkInput, SECTION_ENCODING_RAW, SECTION_SPACE_EMBEDDINGS_BASE, SPACE_DTYPE_F32, SpaceEntry,
     UrnaView, encode_space_table,
 };
-use urna_runtime::{MmapUrnaFile, RuntimeError};
 
 const N: usize = 3;
 

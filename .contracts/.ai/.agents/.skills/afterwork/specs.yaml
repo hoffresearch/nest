@@ -92,12 +92,12 @@ groups:
       - path: crates/urna-format/LICENSE
         when: mudar a localização da licença compartilhada.
         rule: symlink para LICENSE; preservar.
-      - path: crates/urna-runtime/Cargo.toml
+      - path: crates/urna-engine/Cargo.toml
         when: mudarem dependências, benchmarks ou configuração do runtime.
-      - path: crates/urna-runtime/LICENSE
+      - path: crates/urna-engine/LICENSE
         when: mudar a localização da licença compartilhada.
         rule: symlink para LICENSE; preservar.
-      - path: crates/urna-runtime/build.rs
+      - path: crates/urna-engine/build.rs
         when: mudarem detecção do compilador, suporte SIMD ou condições de compilação.
       - path: crates/urna-cli/Cargo.toml
         when: mudarem CLI, features, MSRV, canais de pacote ou substituições de release.
@@ -131,7 +131,7 @@ groups:
       - path: crates/urna-format/tests/fixtures/golden_v1_minimal.urna
         when: uma mudança no formato precisar comprovar compatibilidade com arquivos existentes.
         rule: preservar os bytes da fixture v1; atualizar testes ou acrescentar fixtures conforme o contrato, sem regenerá-la apenas para fazer um teste passar.
-      - path: crates/urna-runtime/tests/
+      - path: crates/urna-engine/tests/
         when: mudar um caminho de busca, índice, kernel ou verificação do runtime.
       - path: crates/urna-cli/tests/
         when: mudar um verbo, código de saída, escada de resolução ou etapa do setup.

@@ -116,7 +116,7 @@ impl Ask {
 fn run_query(file: &PathBuf, query: &str) -> Result<Vec<Answer>, Failure> {
     let mut manifest = None;
     (|| -> anyhow::Result<Vec<Answer>> {
-        let rt = urna_runtime::MmapUrnaFile::open(file)?;
+        let rt = urna_engine::MmapUrnaFile::open(file)?;
         let info: serde_json::Value = serde_json::from_str(&rt.inspect_json()?)?;
         manifest = Some(info["manifest"].clone());
         let result = embed_gate::embed_and_search(&rt, query, 10, None, None, None)?;

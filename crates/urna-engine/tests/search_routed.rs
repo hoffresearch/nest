@@ -19,12 +19,12 @@
     reason = "test code: a failing unwrap is a failing test"
 )]
 use std::path::PathBuf;
+use urna_engine::MmapUrnaFile;
+use urna_engine::ann::{DEFAULT_EF_CONSTRUCTION, DEFAULT_M, HnswIndex};
+use urna_engine::bm25::Bm25Index;
 use urna_format::ChunkInput;
 use urna_format::manifest::Manifest;
 use urna_format::writer::UrnaFileBuilder;
-use urna_runtime::MmapUrnaFile;
-use urna_runtime::ann::{DEFAULT_EF_CONSTRUCTION, DEFAULT_M, HnswIndex};
-use urna_runtime::bm25::Bm25Index;
 
 struct Lcg(u64);
 impl Lcg {

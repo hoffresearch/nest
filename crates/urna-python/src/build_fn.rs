@@ -293,10 +293,10 @@ pub fn build(
             .iter()
             .map(|c| c.canonical_text.clone())
             .collect();
-        let bm = urna_runtime::bm25::Bm25Index::build(
+        let bm = urna_engine::bm25::Bm25Index::build(
             &docs,
-            urna_runtime::bm25::DEFAULT_K1,
-            urna_runtime::bm25::DEFAULT_B,
+            urna_engine::bm25::DEFAULT_K1,
+            urna_engine::bm25::DEFAULT_B,
         );
         builder = builder.bm25_index(bm.to_bytes());
     }

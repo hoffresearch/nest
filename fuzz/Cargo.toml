@@ -15,7 +15,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 urna-format = { path = "../crates/urna-format" }
-urna-runtime = { path = "../crates/urna-runtime" }
+urna-engine = { path = "../crates/urna-engine" }
 
 # reach the decoders with the checksum layer resealed (see fuzz_targets/
 # reseal.rs); sha2 matches the workspace pin.

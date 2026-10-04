@@ -1,6 +1,6 @@
 [package]
-name = "urna-runtime"
-description = "Memory-mapped runtime of the Urna vector database: SIMD exact search, HNSW, BM25, graph and hybrid search with a mandatory exact rerank"
+name = "urna-engine"
+description = "Memory-mapped search engine of the Urna vector database: SIMD exact search, HNSW, BM25, graph and hybrid search with a mandatory exact rerank"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -29,10 +29,10 @@ libc = "0.2"
 workspace = true
 
 [lib]
-name = "urna_runtime"
+name = "urna_engine"
 path = "src/lib.rs"
 
-# criterion benches: `cargo bench -p urna-runtime`.
+# criterion benches: `cargo bench -p urna-engine`.
 # default features off: no rayon, no plotters html report, just the
 # statistics and the cli.
 [dev-dependencies]

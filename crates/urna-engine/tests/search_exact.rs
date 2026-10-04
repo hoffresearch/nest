@@ -4,10 +4,10 @@
     reason = "test code: a failing unwrap is a failing test"
 )]
 use std::path::PathBuf;
+use urna_engine::MmapUrnaFile;
 use urna_format::ChunkInput;
 use urna_format::manifest::Manifest;
 use urna_format::writer::UrnaFileBuilder;
-use urna_runtime::MmapUrnaFile;
 
 fn tmp_path(name: &str) -> PathBuf {
     let mut p = std::env::temp_dir();
@@ -172,9 +172,6 @@ fn zero_vector_query_fails() {
     build_axes_file(&path, 4, 3);
     let rt = MmapUrnaFile::open(&path).unwrap();
     let res = rt.search(&[0.0, 0.0, 0.0, 0.0], 1);
-    assert!(matches!(
-        res,
-        Err(urna_runtime::RuntimeError::ZeroNormQuery)
-    ));
+    assert!(matches!(res, Err(urna_engine::RuntimeError::ZeroNormQuery)));
     let _ = std::fs::remove_file(&path);
 }

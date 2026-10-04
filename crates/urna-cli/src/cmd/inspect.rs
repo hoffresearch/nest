@@ -46,7 +46,7 @@ pub fn run(file: PathBuf, json: bool) -> Result<()> {
 fn run_json(file: PathBuf) -> Result<()> {
     // Reuse the runtime's inspect_json; same schema as
     // `UrnaFile.inspect()` from Python and the PyO3 bindings.
-    let rt = urna_runtime::MmapUrnaFile::open(&file)?;
+    let rt = urna_engine::MmapUrnaFile::open(&file)?;
     let s = rt.inspect_json()?;
     // Pretty-print so humans can read it too without a separate tool.
     let v: serde_json::Value = serde_json::from_str(&s)?;
