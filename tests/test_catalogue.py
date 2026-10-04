@@ -13,7 +13,7 @@ the registry and the payload ships it; the installer reads nothing else.
   keep only the first;
 - edge: the test-only fake preset is in neither list.
 
-Run: .venv/bin/python tests/test_model_catalog.py
+Run: .venv/bin/python tests/test_catalogue.py
 """
 
 import dataclasses
