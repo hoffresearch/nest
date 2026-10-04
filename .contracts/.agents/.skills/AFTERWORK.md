@@ -4,7 +4,7 @@ description: run at the end of every task, before the pull request. walks the fi
 project: urna
 audience: ai agents and human contributors
 status: active
-last-updated: 2026-10-02
+last-updated: 2026-10-04
 domain: workflow
 ---
 
@@ -14,10 +14,22 @@ A change is done when the tree describes it. Walk the list below against the dif
 
 Edit in place, as if the file had always said the right thing. History lives in three places only: `docs/CHANGELOG`, the commit message and the pull request body. No "renamed x to y" or "updated for the new flow" notes anywhere else, and no edits to files the change does not affect.
 
+## The walk
+
+At the end of each task and before closing a session:
+
+1. Review the final diff and identify the behaviors, commands, interfaces, artifacts and processes it changes.
+2. Inspect their callers and references. Check README and llms.txt, USAGE, CONTRIBUTING, SECURITY, CHANGELOG, ARC, examples, manifests, packaging, workflows and agent instructions where affected (`git grep -n <name>` finds them; never `grep -r`, which walks the gitignored clones under `tools/` and `TMP/`).
+3. Update incorrect or incomplete information in place. Check the references affected by each update until no unresolved inconsistency remains. Inspect relevant directories recursively; do not edit unrelated files merely because they were inspected.
+4. Validate commands, links, configuration and affected examples with appropriate checks. Reuse valid evidence and identify its tested commit. Documentation-only changes do not require repeating benchmarks.
+5. Record the final result, unverified paths and indispensable maintainer actions. Do not declare completion while an affected reference or required check remains unresolved.
+
+The blocks below name the files to check for each kind of change.
+
 ## Code and behavior
 
 - `docs/CHANGELOG`: an `[Unreleased]` entry for anything a user, an operator or a contributor would notice, with the why and the measured numbers. This is also where a decision and its reasoning are recorded (the project's decision log). Test counts in it match what runs.
-- `docs/arc/ARC.toml`: the one architecture reference. Update it when a module, boundary, flow, public contract, storage or runtime behavior changes; a new tracked file gets an `inventory` entry. Bump `last-updated`, append a dated note to `summary`.
+- `docs/arc/ARC.toml`: the one architecture reference. Update it when a module, boundary, flow, public contract, storage or runtime behavior changes; a new tracked file gets an `inventory` entry. Bump `last-updated`; a dated note in `summary` is one short sentence on what changed in the architecture, and the reasoning and history go to the CHANGELOG.
 - `.contracts/.agents/AGENTS.md`: the one instruction source (the root `CLAUDE.md` is a symlink to it; never edit the link or add a parallel file). Update it when a command, gotcha, known gap, test count or layout changes.
 - Tests next to the code it changes (`crates/*/tests/`, `tests/*.py`, `python/forge/test_*.py`): happy path, error path, one edge case, against real artifacts, no mocks.
 - `scripts/release_check.sh`: run it for any code change, do not edit it to pass; it rebuilds `python/_urna.so` after Rust changes. A docs-only change does not need it, and the pull request says it was not run.
@@ -43,7 +55,7 @@ Edit in place, as if the file had always said the right thing. History lives in 
 - `scripts/ruff_check.sh`: the one Python file list shared by CI and release_check. A new module goes here.
 - `packaging/pyproject.toml`: the one source of the wheel. `packaging/staging/` is generated.
 - `pyproject.toml` (root): dependency groups and the ruff config.
-- `Cargo.toml` (workspace): the version tracks the latest tag; MSRV 1.85, the CLI crate 1.88. After editing the dist config run `dist generate`.
+- `Cargo.toml` (workspace): the version tracks the latest tag, set by `scripts/release_prepare.sh` (usage step 8), not by hand; MSRV 1.85, the CLI crate 1.88. After editing the dist config run `dist generate`, then `python scripts/release_rehearsal.py generate`, and commit both workflows; never hand-edit `release.yml` or `release-rehearsal.yml` (usage step 10).
 - `.github/workflows/*.yml`: a new install channel or release artifact gets a job in `install-test.yml`. Read item 11 of the maintainer checklist in `docs/USAGE.md` before touching `release.yml` or `pypi.yml`.
 
 ## Security and data
@@ -54,7 +66,7 @@ Edit in place, as if the file had always said the right thing. History lives in 
 
 ## Rarely
 
-- `docs/CONTRIBUTING.md`: only when the contribution flow (branch, PR, gate) changes.
+- `docs/CONTRIBUTING.md`: when the contribution flow (branch, PR, gate), the local setup or what CI covers changes.
 - `data/demo/Instructions.md`: only when the gate corpus or an image source changes.
 - `.editorconfig`: only for a new language or file type.
 
@@ -64,7 +76,7 @@ Every file the change created or grew:
 
 - Over 639 lines: read what it does, what it depends on and who imports it, then split it by responsibility into modules that each do one thing. Update every import and caller, and keep the public surface where it was. The tests pass before and after, with the same count. Exempt: tests, data and generated files, lockfiles, JSON, YAML, TOML, RON, JSONL, CSV, datasets, vendored files.
 - Dead weight: temporary scripts, logs, backups, stray files, code nothing calls. Check that nothing imports it, delete it, run the tests.
-- Misplaced: a file outside the folder its role belongs to per ARC.toml, or named against the repo's style (kebab-case dirs and docs, language-idiomatic sources). Move or rename it (`git mv`, `git mv -f` for a case-only rename), fix every reference, list it in ARC.toml's inventory.
+- Misplaced: a file outside the folder its role belongs to per ARC.toml, or named against the repo's style (kebab-case directories and assets, the docs' upper-case names such as `USAGE.md` and `ARC.toml`, language-idiomatic sources). Move or rename it (`git mv`, `git mv -f` for a case-only rename), fix every reference, list it in ARC.toml's inventory.
 - In the code: machine-specific paths and hardcoded values that should come from config or env, and comments that are verbose, stale or narrate history. Fix or trim them.
 
 ## Lessons
