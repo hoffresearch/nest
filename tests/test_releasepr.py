@@ -1,4 +1,4 @@
-"""Prove script/release_prepare.sh prepares a release and nothing else.
+"""Prove script/releasepr.sh prepares a release and nothing else.
 
 every case runs the real script, with the pinned cargo-release, in a scratch
 repository built from this checkout's tracked files (git-lfs files left out,
@@ -18,7 +18,7 @@ runs with --no-push, so nothing leaves the machine:
 skips when the pinned cargo-release is not installed (the script names the
 install command).
 
-Run: python tests/test_release_prepare.py
+Run: python tests/test_releasepr.py
 """
 
 import datetime as dt
@@ -31,7 +31,7 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPT = "script/release_prepare.sh"
+SCRIPT = "script/releasepr.sh"
 PINNED = re.search(r"^CARGO_RELEASE_VERSION=(\S+)$", (REPO / SCRIPT).read_text(), re.M).group(1)
 FILES = ["CITATION.cff", "Cargo.lock", "Cargo.toml", "docs/CHANGELOG"]
 CITED = ("version:", "date-released:", "repository-artifact:", "    value:", "    description:")

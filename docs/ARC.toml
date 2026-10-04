@@ -2378,10 +2378,10 @@ purpose = "pypiindex.py against a local HTTP server standing in for the GitHub r
 links = ["script/pypiindex.py"]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_release_prepare.py"
+path = "tests/test_releasepr.py"
 kind = "python-test"
-purpose = "release_prepare.sh with the pinned cargo-release in a scratch repo of the tracked files, signing with a throwaway ssh key and --no-push: the next patch in the version, pins, lockfile, a dated changelog section holding the old [Unreleased] and the five CITATION.cff fields with every other line unchanged, preflight ok, one signed commit on release-X.Y.Z touching exactly four files, main, the checkout and the tags unmoved; the current or a malformed version, another cargo-release and an empty [Unreleased] refused before anything is created; skips without the pinned tool"
-links = ["script/release_prepare.sh"]
+purpose = "releasepr.sh with the pinned cargo-release in a scratch repo of the tracked files, signing with a throwaway ssh key and --no-push: the next patch in the version, pins, lockfile, a dated changelog section holding the old [Unreleased] and the five CITATION.cff fields with every other line unchanged, preflight ok, one signed commit on release-X.Y.Z touching exactly four files, main, the checkout and the tags unmoved; the current or a malformed version, another cargo-release and an empty [Unreleased] refused before anything is created; skips without the pinned tool"
+links = ["script/releasepr.sh"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "tests/test_rehearsal.py"
@@ -3005,16 +3005,16 @@ purpose = "Generated from release.yml by script/rehearsal.py (never hand-edited)
 links = [".github/workflows/release.yml", ".github/workflows/wheelmake.yml", "script/rehearsal.py"]
 
 [[inventory.distribution]]
-path = "script/release_prepare.sh"
+path = "script/releasepr.sh"
 kind = "shell-script"
 purpose = "Opens the release pull request (usage step 8): in a new worktree of origin/main on release-X.Y.Z, cargo-release (version pinned here) runs `version` (workspace version, urna-format and urna-engine pins, lockfile) and `replace` (the dated changelog section, CITATION.cff's versioned fields); then the preflight, a refusal of any change outside those four files, a signed commit, an explicit push of that branch and gh pr create. Refuses a version not after the current one, an empty [Unreleased], another cargo-release; never tags or publishes"
-links = ["release.toml", "crates/urna-clitui/Cargo.toml", "script/preflight.py", "tests/test_release_prepare.py"]
+links = ["release.toml", "crates/urna-clitui/Cargo.toml", "script/preflight.py", "tests/test_releasepr.py"]
 
 [[inventory.distribution]]
 path = "release.toml"
 kind = "toml-config"
-purpose = "cargo-release workspace config for release_prepare.sh: release-* branches, dependents upgraded, and no publish, push or tag from cargo-release"
-links = ["script/release_prepare.sh"]
+purpose = "cargo-release workspace config for releasepr.sh: release-* branches, dependents upgraded, and no publish, push or tag from cargo-release"
+links = ["script/releasepr.sh"]
 
 [[inventory.distribution]]
 path = "script/rehearsal.py"
