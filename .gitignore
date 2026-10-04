@@ -71,7 +71,7 @@ data/demo/*
 !data/demo/Instructions.md
 .env
 
-# wheel staging (script/stage_wheel.py output)
+# wheel staging (script/wheelprep.py output)
 packs/staging/
 # mtg corpus artifacts (the benchmark lives in its own repository)
 data/mtg/

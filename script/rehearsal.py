@@ -292,7 +292,7 @@ def _load(name: str):
 
 def release_inputs() -> tuple[set[str], tuple[str, ...]]:
     """(exact paths, path prefixes) whose change reaches a release artifact."""
-    payload, wheel = _load("embedpack"), _load("stage_wheel")
+    payload, wheel = _load("embedpack"), _load("wheelprep")
     exact = {f"python/forge/{n}" for n in payload.MODULES}
     exact |= {f"python/{n}" for n in payload.TOP_LEVEL_MODULES}
     exact |= {src.relative_to(ROOT).as_posix() for src, _ in wheel.COPIES}
@@ -304,7 +304,7 @@ def release_inputs() -> tuple[set[str], tuple[str, ...]]:
         ".github/buildprep.yml",
         "script/fetch_potion.sh",
         "script/embedpack.py",
-        "script/stage_wheel.py",
+        "script/wheelprep.py",
         "script/rehearsal.py",
         "script/preflight.py",
         ".github/workflows/release.yml",
