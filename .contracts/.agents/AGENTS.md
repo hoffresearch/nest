@@ -43,7 +43,7 @@ Secrets live in the GitHub repository secrets (`CARGO_REGISTRY_TOKEN`, `NPM_TOKE
 - `cargo semver-checks -p urna-format --baseline-rev origin/main`: the Rust API of the frozen format against the pull request's base; CI fails a pull request that breaks it (in 0.x a minor bump is the major bump)
 - `cargo bench -p urna-runtime --no-run`: the criterion benches (simd, rerank, hnsw_build) have to compile; CI checks that, the numbers are not a gate
 - `sh scripts/ruff_check.sh`: ruff over the one Python file list shared with CI (`URNA_PYTHON=.venv/bin/python` picks the interpreter)
-- `./scripts/release_check.sh`: the full pipeline (the Rust suite in release, the extension rebuilt, twelve Python suites, ruff when importable) plus the regression gates against `data/measure/baseline.json`; exits non-zero on any failure. It is the definition of pull-request ready
+- `./scripts/release_check.sh`: the full pipeline (the Rust suite in release, the extension rebuilt, thirteen Python suites, ruff when importable) plus the regression gates against `data/measure/baseline.json`; exits non-zero on any failure. It is the definition of pull-request ready
 - `forge-core/` is a separate cargo workspace outside `crates/` (the ingestion layer, the frozen `.fci` schema). `--workspace` and `release_check.sh` never reach it; run `cargo build`, `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --all --check` with `--manifest-path forge-core/Cargo.toml`
 - `fuzz/` is the third cargo workspace (cargo-fuzz, nightly toolchain): `sh scripts/fuzz_soak.sh [seconds]` runs every target with the corpus kept under `fuzz/corpus/`; `fuzz/README.md` has the targets and how a finding becomes a test
 
@@ -95,9 +95,10 @@ python tests/test_embedder_payload.py
 python tests/test_bench_runner.py
 python tests/test_model_catalog.py
 python tests/test_model_install.py
+python tests/test_release_preflight.py
 ```
 
-`release_check.sh` runs twelve of them; `test_offline_guard.py`, `test_blob_bridge.py` and `test_space_bridge.py` run by hand.
+`release_check.sh` runs thirteen of them; `test_offline_guard.py`, `test_blob_bridge.py` and `test_space_bridge.py` run by hand.
 
 `test_image_corpus.py` covers the forge image pillar (encode and decode, GOP probe, sharding, ordering) with a stub embedder and skips cleanly without FFmpeg's AV1 and AVIF encoders. Building a real image corpus (`python/forge/embed_image.py`) needs `open_clip` and torch, outside the default forge dependency group.
 

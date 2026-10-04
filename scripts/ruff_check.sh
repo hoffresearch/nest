@@ -68,6 +68,8 @@ tests/test_bench_runner.py
 tests/test_model_catalog.py
 tests/test_model_install.py
 scripts/stage_embedder_payload.py
+scripts/release_preflight.py
+tests/test_release_preflight.py
 "
 # shellcheck disable=SC2086
 "$PY" -m ruff check $TARGETS
