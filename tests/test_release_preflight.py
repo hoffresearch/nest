@@ -1,6 +1,6 @@
 """Prove the release preflight agrees with the tree and refuses every drift.
 
-`scripts/release_preflight.py` runs on every pull request (tree mode) and
+`script/release_preflight.py` runs on every pull request (tree mode) and
 on the release tag after its signature check (tag mode). this suite runs it
 against the real checkout, then against temp copies of the files a release
 names (the manifests, the lockfile, CITATION.cff, the changelog), one field
@@ -30,7 +30,7 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPT = REPO / "scripts" / "release_preflight.py"
+SCRIPT = REPO / "script" / "release_preflight.py"
 spec = importlib.util.spec_from_file_location("release_preflight", SCRIPT)
 preflight = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(preflight)

@@ -1,7 +1,7 @@
 # cargo-deny policy (docs/SECURITY.md supply-chain items).
 # run: `cargo deny check` (workspace), and with `--manifest-path
 # crates/urna-ingest/Cargo.toml` / `fuzz/Cargo.toml` for the two side workspaces.
-# ci.yml runs all three on every push and pull request, and on the nightly
+# gatecheck.yml runs all three on every push and pull request, and on the nightly
 # schedule (advisories change without a commit).
 
 [graph]

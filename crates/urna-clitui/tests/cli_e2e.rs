@@ -187,7 +187,7 @@ fn forge_python() -> Option<(String, PathBuf)> {
         .map(PathBuf::from)?;
     if !potion_table_present(&root) {
         eprintln!(
-            "the potion table is an lfs pointer: run `git lfs pull` or scripts/fetch_potion.sh"
+            "the potion table is an lfs pointer: run `git lfs pull` or script/fetch_potion.sh"
         );
         return None;
     }
