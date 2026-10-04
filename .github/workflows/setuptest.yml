@@ -76,7 +76,7 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           # the installed binary is the tagged version, exactly.
           test "$(urna --version)" = "urna ${TAG#v}"
-          urna validate "$GITHUB_WORKSPACE/crates/urna-format/tests/fixtures/golden_v1_minimal.urna"
+          urna validate "$GITHUB_WORKSPACE/crates/format/tests/fixtures/golden_v1_minimal.urna"
           urna doctor
 
       - name: validate the golden fixture (windows)
@@ -201,7 +201,7 @@ jobs:
         working-directory: ${{ runner.temp }}
         run: |
           urna doctor
-          urna validate "$GITHUB_WORKSPACE/crates/urna-format/tests/fixtures/golden_v1_minimal.urna"
+          urna validate "$GITHUB_WORKSPACE/crates/format/tests/fixtures/golden_v1_minimal.urna"
       # the released payload carries the model catalog: a model it leaves out
       # is refused with its reason (exit 14), with nothing downloaded.
       - name: the payload carries the model catalog
@@ -239,8 +239,8 @@ jobs:
           python -m pip install "urna==${TAG#v}"
           python -c "import importlib.metadata as m, sys; v = m.version('urna'); assert v == sys.argv[1], v" "${TAG#v}"
           python -c "import urna; assert urna.potion_model_path(), 'potion table must be bundled'"
-          python -c "import urna; urna.open('crates/urna-format/tests/fixtures/golden_v1_minimal.urna').validate(); print('validate ok')"
-          urna validate crates/urna-format/tests/fixtures/golden_v1_minimal.urna
+          python -c "import urna; urna.open('crates/format/tests/fixtures/golden_v1_minimal.urna').validate(); print('validate ok')"
+          urna validate crates/format/tests/fixtures/golden_v1_minimal.urna
       - name: uvx entry point
         shell: bash
-        run: uvx --from "urna==${TAG#v}" urna validate crates/urna-format/tests/fixtures/golden_v1_minimal.urna
+        run: uvx --from "urna==${TAG#v}" urna validate crates/format/tests/fixtures/golden_v1_minimal.urna

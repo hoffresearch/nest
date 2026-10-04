@@ -259,7 +259,7 @@ mod tests {
 
     fn golden() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../urna-format/tests/fixtures/golden_v1_minimal.urna")
+            .join("../format/tests/fixtures/golden_v1_minimal.urna")
     }
 
     #[test]

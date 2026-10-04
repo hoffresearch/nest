@@ -39,7 +39,7 @@ fn detached_binary(dir: &Path) -> PathBuf {
 /// `dir`; the interpreter is a path that does not exist, so the run stops
 /// right after the embedder is resolved and names it. returns stderr.
 fn run(bin: &Path, dir: &Path, cwd: &Path, verb: &str) -> String {
-    let fixture = repo().join("crates/urna-format/tests/fixtures/golden_v1_minimal.urna");
+    let fixture = repo().join("crates/format/tests/fixtures/golden_v1_minimal.urna");
     let out = output(
         Command::new(bin)
             .args([verb, fixture.to_str().unwrap(), "q"])
@@ -213,7 +213,7 @@ fn a_payload_missing_a_module_names_the_files_and_setup_not_pip() {
     let bin = detached_binary(&dir);
     let home = dir.join("data").join("urna");
     lay_down_payload(&home, "forge/model_registry.py");
-    let fixture = repo().join("crates/urna-format/tests/fixtures/golden_v1_minimal.urna");
+    let fixture = repo().join("crates/format/tests/fixtures/golden_v1_minimal.urna");
     let out = output(
         Command::new(&bin)
             .args(["ask", fixture.to_str().unwrap(), "q"])

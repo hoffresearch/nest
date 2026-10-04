@@ -1,5 +1,5 @@
 //! Deterministic mutation fuzz over the runtime open + search path. The
-//! format crate's twin (`crates/urna-format/tests/mutation_fuzz.rs`) covers
+//! format crate's twin (`crates/format/tests/mutation_fuzz.rs`) covers
 //! the reader and the section decoders; this one covers what only the
 //! runtime does with a file: the HNSW / BM25 / graph codecs, the blob store,
 //! the multimodal spaces, and every search entry point, all through a real

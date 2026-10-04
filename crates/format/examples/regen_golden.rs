@@ -28,7 +28,7 @@ fn main() {
         .build_bytes()
         .unwrap();
 
-    let path = "crates/urna-format/tests/fixtures/golden_v1_minimal.urna";
+    let path = "crates/format/tests/fixtures/golden_v1_minimal.urna";
     std::fs::write(path, &bytes).unwrap();
 
     let view = UrnaView::from_bytes(&bytes).unwrap();

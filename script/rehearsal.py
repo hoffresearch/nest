@@ -220,7 +220,7 @@ def _assets_job() -> dict:
     run = (
         "printf '%s' \"$PLAN\" > plan.json\n"
         "python3 script/rehearsal.py assets --dir dist --plan plan.json \\\n"
-        "  --golden crates/urna-format/tests/fixtures/golden_v1_minimal.urna\n"
+        "  --golden crates/format/tests/fixtures/golden_v1_minimal.urna\n"
     )
     return {
         "name": "the artifacts a release would upload",

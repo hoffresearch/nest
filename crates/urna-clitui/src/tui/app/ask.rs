@@ -276,7 +276,7 @@ mod tests {
     #[test]
     fn a_query_without_an_embedder_fails_with_words_not_a_panic() {
         let golden = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../urna-format/tests/fixtures/golden_v1_minimal.urna");
+            .join("../format/tests/fixtures/golden_v1_minimal.urna");
         let mut ask = Ask::default();
         ask.input.set_value("anything".into());
         ask.submit(golden);
