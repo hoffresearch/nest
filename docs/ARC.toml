@@ -199,7 +199,7 @@ entrypoints = [
     "script/install.sh",
     "packs/pyproject.toml",
     "script/stage_wheel.py",
-    "script/stage_embedder_payload.py",
+    "script/embedpack.py",
 ]
 links = [
     "docs/USAGE.md",
@@ -954,8 +954,8 @@ links = ["crates/urna-clitui/src/main.rs"]
 [[inventory.urna_clitui]]
 path = "crates/urna-clitui/src/cmd/payload.rs"
 kind = "rust-source"
-purpose = "The embedder payload's contract, outside the tui feature: REQUIRED (every file the stage script ships; tests/test_embedder_payload.py pins the two to the same set), missing(home), home_of(script) (an installed <root>/urna, never a checkout) and MODULES (the Python modules the payload provides); setup installs and repairs by it, the gate names a broken payload by it"
-links = ["crates/urna-clitui/src/tui/setup/unpack.rs", "crates/urna-clitui/src/cmd/embed_gate.rs", "script/stage_embedder_payload.py"]
+purpose = "The embedder payload's contract, outside the tui feature: REQUIRED (every file the stage script ships; tests/test_embedpack.py pins the two to the same set), missing(home), home_of(script) (an installed <root>/urna, never a checkout) and MODULES (the Python modules the payload provides); setup installs and repairs by it, the gate names a broken payload by it"
+links = ["crates/urna-clitui/src/tui/setup/unpack.rs", "crates/urna-clitui/src/cmd/embed_gate.rs", "script/embedpack.py"]
 
 [[inventory.urna_clitui]]
 path = "crates/urna-clitui/src/cmd/embed_failure.rs"
@@ -2327,7 +2327,7 @@ links = ["crates/urna-clitui/src/cmd/search_space.rs"]
 path = "python/forge/model_catalog.py"
 kind = "python-source"
 purpose = "Generates the model catalog from the registry: the presets with a validated install (an InstallSpec: pinned revision, the exact files, the model_hash they fingerprint to) and packages that do not contradict another offered model's pins, and every other preset with the reason it is left out; --write rewrites python/forge/catalog.json, --check fails on a stale copy; stdlib only, so the release stages it under a bare python3"
-links = ["python/forge/model_registry.py", "python/forge/catalog.json", "script/stage_embedder_payload.py"]
+links = ["python/forge/model_registry.py", "python/forge/catalog.json", "script/embedpack.py"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "python/forge/catalog.json"
@@ -2360,10 +2360,10 @@ purpose = "The benchmark rebuild never destroys the corpus it replaces: an exist
 links = ["python/tools/_bench_runner.py", "script/fullcheck.sh"]
 
 [[inventory.data_docs_python_script_tests]]
-path = "tests/test_embedder_payload.py"
+path = "tests/test_embedpack.py"
 kind = "python-test"
 purpose = "The staged payload run from outside the checkout: the file list, the potion and registry routes agreeing on the potion model_hash, a remote-code preset refused without the opt-in (exit 4), an unknown manifest model (exit 4), and a half tree refused by the staging script; the payload carries urna/embed_query.py and urna/VERSION (the workspace version)"
-links = ["script/stage_embedder_payload.py", "python/forge/embed_query_model.py"]
+links = ["script/embedpack.py", "python/forge/embed_query_model.py"]
 
 [[inventory.data_docs_python_script_tests]]
 path = "tests/test_preflight.py"
@@ -2923,10 +2923,10 @@ links = [
 ]
 
 [[inventory.distribution]]
-path = "script/stage_embedder_payload.py"
+path = "script/embedpack.py"
 kind = "python-source"
 purpose = "Stage + tar the offline embedder payload for release artifacts and installers: the potion route (embed_query_potion.py + the table) and the registry route (embed_query_model.py, model_registry, model_adapters, embed_st + worker, embed_image, and python/model_fingerprint.py at the tree root), and the sentence-transformers route (python/embed_query.py at the tree root); the registry's model deps are not bundled, embed_query_model.py names them"
-links = ["crates/urna-clitui/src/cmd/embed_gate.rs", "tests/test_embedder_payload.py"]
+links = ["crates/urna-clitui/src/cmd/embed_gate.rs", "tests/test_embedpack.py"]
 
 [[inventory.distribution]]
 path = "script/fetch_potion.sh"
@@ -2943,7 +2943,7 @@ kind = "shell-script"
 purpose = "One-liner installer: platform detect, SHA256 verify-before-write, binary to ~/.local/bin, payload to the XDG data dir, --version/--uninstall"
 links = [
     "script/install.ps1",
-    "script/stage_embedder_payload.py",
+    "script/embedpack.py",
 ]
 
 [[inventory.distribution]]
@@ -3020,7 +3020,7 @@ links = ["script/releasepr.sh"]
 path = "script/rehearsal.py"
 kind = "python-source"
 purpose = "generate [--check]: the strict release.yml -> rehearsal.yml transformation, refusing an unknown job, condition, plan command, top-level key or a kept job reading a secret; impact: the release inputs (crates, manifests, packaging, staging scripts, the payload and wheel sources read from the stage scripts, the model dirs, README, LICENSE, the release workflows); assets: every planned artifact, the four wheels and their .sha256, every checksum and sha256.sum, the payload VERSION, the Linux binary on the golden fixture; verdict: the required check"
-links = [".github/workflows/rehearsal.yml", "tests/test_rehearsal.py", "script/stage_embedder_payload.py", "script/stage_wheel.py"]
+links = [".github/workflows/rehearsal.yml", "tests/test_rehearsal.py", "script/embedpack.py", "script/stage_wheel.py"]
 
 [[inventory.distribution]]
 path = ".github/workflows/runreport.yml"
