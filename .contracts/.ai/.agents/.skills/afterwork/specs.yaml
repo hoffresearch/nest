@@ -4,7 +4,7 @@ status: active
 last-updated: 2026-10-04
 domain: workflow
 description: >
-  Catálogo de referências para a revisão final descrita no AFTERWORK.md desta
+  Catálogo de referências para a revisão final descrita no SKILL.md desta
   pasta. Os grupos indicam onde procurar conforme o comportamento alterado.
   Revise as entradas pertinentes e siga as referências encontradas no código;
   edite somente o que precisar de correção. O inventário detalhado fica no ARC.
@@ -16,7 +16,7 @@ description: >
 groups:
   - name: afterwork
     files:
-      - path: .contracts/.ai/.agents/.skills/afterwork/AFTERWORK.md
+      - path: .contracts/.ai/.agents/.skills/afterwork/SKILL.md
         when: mudar o procedimento de revisão final, organização de arquivos, validação ou entrega.
       - path: .contracts/.ai/.agents/.skills/afterwork/specs.yaml
         when: mudar um caminho, responsabilidade ou situação de revisão representada neste catálogo.
