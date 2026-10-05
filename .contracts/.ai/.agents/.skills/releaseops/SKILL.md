@@ -20,6 +20,7 @@ Confira as contas antes de começar:
 
 - tokens do npm e do tap do Homebrew dentro do prazo (as datas estão no checklist do USAGE);
 - um crate publicado pela primeira vez, inclusive um crate renomeado, exige o escopo `publish-new` no `CARGO_REGISTRY_TOKEN`;
+- o push da tag `v*` exige uma conta admin do repositório ou da organização: o ruleset `release-tags` recusa as demais;
 - o publisher do PyPI aponta para o workflow e o environment atuais, e o environment `pypi` aceita deploy a partir das tags `v*`.
 
 ## 2. Revise o que cada registry vai mostrar
@@ -59,7 +60,7 @@ O `runreport` resume o run e cada canal; o `setuptest` instala o produto por tod
 
 ## 6. Recupere uma falha sem mover a tag
 
-Uma tag só pode ser movida enquanto nada irreversível saiu. Depois disso, cada canal é decidido separadamente, normalmente com a próxima versão de patch. Um job de publicação que falhou volta com `gh run rerun <id> --failed`; o upload do PyPI ignora o arquivo que já tem o mesmo sha256. Uma falha do `setuptest` que vem do próprio teste se corrige num branch, e a correção se prova antes do merge com `gh workflow run setuptest.yml --ref <branch> -f tag=vX.Y.Z`.
+Uma tag só pode ser movida enquanto nada irreversível saiu, e só por um admin, porque o ruleset `release-tags` recusa os demais. Depois disso, cada canal é decidido separadamente, normalmente com a próxima versão de patch. Um job de publicação que falhou volta com `gh run rerun <id> --failed`; o upload do PyPI ignora o arquivo que já tem o mesmo sha256. Uma falha do `setuptest` que vem do próprio teste se corrige num branch, e a correção se prova antes do merge com `gh workflow run setuptest.yml --ref <branch> -f tag=vX.Y.Z`.
 
 ## 7. Atualize o que a release mudou
 
