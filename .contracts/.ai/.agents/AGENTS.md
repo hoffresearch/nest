@@ -44,14 +44,14 @@ O projeto usa commits assinados. Um PR de um commit entra por squash; um PR com 
 
 ## Issues, PRs e histórico
 
-Antes do primeiro commit, defina o tamanho do trabalho e procure uma issue existente (`gh issue list --search`). Se o pedido já tem issue, use-a.
+Antes do primeiro commit, defina o tamanho do trabalho e procure uma issue existente (`gh issue list --search`). Se o pedido já tem issue, use-a, se necessario, atualize-a com novo escopo e link a sub-issues.
 
 - **Uma mudança coesa:** uma issue e um PR.
 - **Vários itens independentes**, como uma série de renomeações ou um conjunto de skills: uma **épica** (a issue mãe), com o objetivo e a lista dos itens, e uma **sub-issue** por item, ligada à épica pelo recurso de sub-issues do GitHub. Cada sub-issue tem o seu PR.
 
 Criar issues, sub-issues e labels faz parte do trabalho autorizado. Títulos e corpos usam inglês simples. A sub-issue diz o que muda, as referências que serão atualizadas e o efeito fora do repositório, quando houver.
 
-Associe cada issue, sub-issue e PR ao label correto antes de abri-lo; se o label ainda não existir, crie-o com uma descrição curta (`gh label create`). Siga a mesma regra para a milestone e as views do projeto, quando o repositório as tiver.
+Associe cada issue, sub-issue e PR ao label correto antes de abri-lo; se o label ainda não existir, crie-o com uma descrição curta (`gh label create`). Siga a mesma regra para a milestone e as views do projeto, quando o repositório as tiver. O label descreve a área do produto ou o tipo de mudança, como `documentation`, `bug` ou `enhancement`, e não quem fez o trabalho. A mesma regra vale para títulos de issue e PR, milestones e views.
 
 Cada PR começa com `Closes #<sub-issue>. Part of #<épica>.` (ou só `Closes #<issue>.`) e é aberto a partir da `main` atualizada, depois do merge do anterior, sem empilhar. A seção de validação lista cada check como caixa de seleção, com o resultado e o commit testado: `- [x] cargo test --workspace (53 binários ok)` para o que rodou e `- [ ]` com o motivo para o que não rodou ou foi dispensado.
 
