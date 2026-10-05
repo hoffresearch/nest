@@ -40,7 +40,7 @@ Publicar, enviar ou mover tags, alterar permissões ou secrets e remover branche
 
 Credenciais ficam nos mecanismos de secrets ou autenticação do serviço, fora dos arquivos e dos logs. Uma credencial exposta deve ser tratada como comprometida. O fluxo PyPI usa OIDC; confira no USAGE o procedimento de publicação e recuperação.
 
-O projeto usa commits assinados e squash merge. Ao atualizar um PR empilhado, resolva os conflitos e confira o diff contra a nova base. Depois do merge, compare o conteúdo entregue com a árvore aprovada e explique qualquer diferença. A troca do hash pelo squash é esperada.
+O projeto usa commits assinados. Um PR de um commit entra por squash; um PR com commits que devem ficar separados no histórico entra por rebase, que mantém cada commit e o histórico linear. Ao atualizar um PR empilhado, resolva os conflitos e confira o diff contra a nova base. Depois do merge, compare o conteúdo entregue com a árvore aprovada e explique qualquer diferença. A troca do hash pelo squash ou pelo rebase é esperada.
 
 ## Principais responsabilidades da aplicação
 
