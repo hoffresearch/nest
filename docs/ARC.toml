@@ -424,6 +424,12 @@ purpose = "Agent skill for a release end to end: readiness and account checks, w
 links = ["docs/USAGE.md", "script/releasepr.sh", ".github/workflows/release.yml"]
 
 [[inventory.data_docs_python_script_tests]]
+path = ".contracts/.ai/.agents/.skills/renameops/SKILL.md"
+kind = "repo-ops"
+purpose = "Agent skill for renames and moves: folder name versus published name, every form a name takes (backslash paths, sibling paths, bare names, packages, registry URLs, generated files), one pull request per item from main, format and regenerate after each, the full gate once at the end"
+links = ["docs/CONTRIBUTING.md", "docs/ADR/STRUCTURE/0002-short-folder-names-published-package-names.md"]
+
+[[inventory.data_docs_python_script_tests]]
 path = ".contracts/.ai/.agents/.skills/run-urna/SKILL.md"
 kind = "repo-ops"
 purpose = "Agent skill to build, smoke and drive the CLI and the terminal explorer: the verified commands, the interpreter ladder and the explorer's quirks"

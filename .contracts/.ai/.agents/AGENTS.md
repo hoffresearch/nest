@@ -22,6 +22,7 @@ Este é o ponto de partida para desenvolvedores humanos e agentes de código (CL
 | Compilar, rodar e dirigir o CLI e o explorer | [run-urna](.skills/run-urna/SKILL.md) |
 | Revisar o repositório inteiro contra o estado real | [factcheck](.skills/factcheck/SKILL.md) |
 | Preparar, publicar e provar uma release em todos os canais | [releaseops](.skills/releaseops/SKILL.md) |
+| Renomear pastas, crates, pacotes, scripts, workflows ou testes | [renameops](.skills/renameops/SKILL.md) |
 
 ## Começar e conduzir o trabalho
 
