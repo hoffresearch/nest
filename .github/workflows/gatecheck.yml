@@ -54,7 +54,7 @@ jobs:
           python-version: "3.12"
       - name: toolchain
         run: rustup toolchain install stable --profile minimal --component clippy,rustfmt && rustup default stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: fmt
         run: cargo fmt --all --check
       - name: clippy (workspace deny lints)
@@ -97,7 +97,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: toolchain
         run: rustup toolchain install stable --profile minimal --component clippy && rustup default stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: clippy
         run: cargo clippy -p urna --all-targets -- -D warnings
       - name: test (unit + setup end to end)
@@ -111,7 +111,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: nightly toolchain
         run: rustup toolchain install nightly --profile minimal && rustup default nightly
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: fuzz
       - name: cargo-fuzz
@@ -144,11 +144,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: workspace (advisories, licenses, bans, sources)
-        uses: EmbarkStudios/cargo-deny-action@v2
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
           command: check advisories licenses bans sources
       - name: crates/ingest (separate workspace)
-        uses: EmbarkStudios/cargo-deny-action@v2
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
           command: check advisories licenses bans sources
           manifest-path: crates/ingest/Cargo.toml
@@ -156,7 +156,7 @@ jobs:
           # deny.toml goes unmatched there (one policy file, three workspaces).
           command-arguments: -A unmatched-skip
       - name: fuzz (separate workspace)
-        uses: EmbarkStudios/cargo-deny-action@v2
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
           command: check advisories licenses bans sources
           manifest-path: fuzz/Cargo.toml
@@ -170,7 +170,7 @@ jobs:
           fetch-depth: 0 # the baseline is a rev, not a published crate
       - name: toolchain
         run: rustup toolchain install stable --profile minimal && rustup default stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       # a base commit without crates/format has nothing to compare
       # against; skip instead of failing.
       - name: baseline has urna-format
@@ -186,7 +186,7 @@ jobs:
       # when it breaks. the baseline is the pr's base commit, not the last
       # version on crates.io, so a break is caught before it ships. in 0.x
       # a minor bump is the major bump, which the tool understands.
-      - uses: obi1kenobi/cargo-semver-checks-action@v2
+      - uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2
         if: steps.baseline.outputs.present == 'true'
         with:
           package: urna-format
@@ -204,7 +204,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: nightly toolchain
         run: rustup toolchain install nightly --profile minimal && rustup default nightly
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: fuzz
       - name: cargo-fuzz
@@ -250,7 +250,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: nightly toolchain with miri
         run: rustup toolchain install nightly --profile minimal --component miri && rustup default nightly
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: miri setup
         run: cargo miri setup
       # urna-format has zero `unsafe`; this turns "no undefined behaviour"

@@ -58,7 +58,7 @@ jobs:
       - name: stage the wheel project
         run: python script/wheelprep.py
       - name: build the abi3 wheel
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           working-directory: packs/staging
           target: ${{ matrix.target }}
