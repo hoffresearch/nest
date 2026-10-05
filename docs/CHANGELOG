@@ -17,6 +17,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ### Added
 
 - `factcheck`, an agent skill for reviewing the whole repository against verified facts: a fact sheet of current names and released state, the `specs.yaml` catalog split into groups, one read-only reviewer per group in parallel, each finding confirmed before it is fixed in the owning doc. It is the method that found, after the 0.5.4 release, what path sweeps could not: bare suite names, log prefixes, stale counts, a `.gitignore` rule hiding `python/tools/`. The afterwork skill points to it for repository-wide changes.
+- `releaseops`, an agent skill for a release from the version number to the proof in every channel: readiness and account checks (token scopes for a new crate, publisher and environment), a review of what each registry will show (crate and package descriptions, the rendered README, published names), `script/releasepr.sh`, the signed tag, a proof per channel by service, recovery without moving a published tag, and the docs brought to the released state. It records the 0.5.4 lessons: `fuzz/Cargo.lock` is outside the preparation, a renamed crate's old name stays published, and a pull request's head must be the pushed commit before its checks are trusted.
 
 ### Changed
 
