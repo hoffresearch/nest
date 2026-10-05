@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # fullcheck.sh - full release verification pipeline.
 #
-# Runs every CI gate end-to-end:
+# Runs the local release gate end-to-end (what it skips: docs/USAGE.md section 10):
 #   1. cargo build (release), then the PyO3 extension (.so) the tests load
 #   2. cargo test/clippy/fmt (release profile), the 639-line guard
 #   3. the python suites (the `step "python tests/..."` lines below), ruff
@@ -107,97 +107,97 @@ ok "all source files ≤ 639 lines"
 # ---- python tests ----
 step "python tests/test_pythonapi.py"
 "$PY" tests/test_pythonapi.py
-ok "e2e"
+ok "pythonapi"
 
 step "python tests/test_ingestion.py"
 "$PY" tests/test_ingestion.py
-ok "builder"
+ok "ingestion"
 
 step "python tests/test_hashguard.py"
 "$PY" tests/test_hashguard.py
-ok "search-text model_hash gate (5 cases)"
+ok "hashguard: search-text model_hash gate (7 cases)"
 
 # builds its own dataset, so it needs no demo corpus; the compressed cases
 # skip themselves when ffmpeg/libsvtav1 is absent.
 step "python tests/test_imagepipe.py"
 "$PY" tests/test_imagepipe.py
-ok "image corpus pipeline (37 cases)"
+ok "imagepipe: image corpus pipeline (43 cases)"
 
 # declarative builds: spec validation, fake-preset e2e, triad cache, dedup,
 # output modes, L3 rebuild. no heavy ML deps; media legs skip without ffmpeg.
 step "python tests/test_forgespec.py"
 "$PY" tests/test_forgespec.py
-ok "forge spec + pipeline"
+ok "forgespec: forge spec + pipeline"
 
 # dual quality gate + jxl round-trip; skips cleanly without ssimulacra2/cjxl.
 step "python tests/test_mediagate.py"
 "$PY" tests/test_mediagate.py
-ok "quality gate + jxl"
+ok "mediagate: quality gate + jxl"
 
 step "python tests/test_clispaces.py"
 "$PY" tests/test_clispaces.py
-ok "cli space verbs (8 cases)"
+ok "clispaces: cli space verbs (8 cases)"
 
 step "python tests/test_askrouter.py"
 "$PY" tests/test_askrouter.py
-ok "query embedder routing (10 cases; 7 to 10 need sentence-transformers, URNA_ST_PYTHON)"
+ok "askrouter: query embedder routing (10 cases; 7 to 10 need sentence-transformers, URNA_ST_PYTHON)"
 
 # the release payload, staged and run from outside the checkout: both query
 # embedders answer, the registry route names its missing deps, a half tree
 # does not stage.
 step "python tests/test_embedpack.py"
 "$PY" tests/test_embedpack.py
-ok "embedder payload (3 cases)"
+ok "embedpack: embedder payload (3 cases)"
 
 # the model catalog setup offers is the registry's validated presets, with a
 # reason for every preset it leaves out.
 step "python tests/test_catalogue.py"
 "$PY" tests/test_catalogue.py
-ok "model catalog (5 cases)"
+ok "catalogue: model catalog (5 cases)"
 
 # the model fetch: confirmed downloads only, the pinned files only, kept
 # only when the fingerprint is the catalog's (an 18 MB hub model; the
 # download cases skip by name when huggingface.co does not answer).
 step "python tests/test_modelpull.py"
 "$PY" tests/test_modelpull.py
-ok "model install (5 cases)"
+ok "modelpull: model install (5 cases)"
 
 # the benchmark rebuild builds beside the corpus and renames at the end, so
 # an interrupted gate never leaves data/measure without its corpora.
 step "python tests/test_benchmark.py"
 "$PY" tests/test_benchmark.py
-ok "bench runner (4 cases)"
+ok "benchmark: bench runner (4 cases)"
 
 # the version a release names agrees across the manifests, the lockfile,
 # CITATION.cff and the changelog; the tag checks need a tag and run in ci.
 step "python tests/test_preflight.py"
 "$PY" tests/test_preflight.py
-ok "release preflight (7 cases)"
+ok "preflight (7 cases)"
 
 # the pypi upload takes the release's wheels from the run its index allows,
 # and a rerun uploads only what the index does not have yet.
 step "python tests/test_pypiindex.py"
 "$PY" tests/test_pypiindex.py
-ok "pypi release (5 cases)"
+ok "pypiindex (5 cases)"
 
 # the release rehearsal is generated from release.yml, publishes nothing,
 # and its required check fails a needed build that did not pass.
 step "python tests/test_rehearsal.py"
 "$PY" tests/test_rehearsal.py
-ok "release rehearsal (7 cases)"
+ok "rehearsal (7 cases)"
 
 # setuptest waits for the exact version on each registry, and the release
 # report names what every channel serves, a failed or cancelled run included.
 step "python tests/test_chanprobe.py"
 "$PY" tests/test_chanprobe.py
-ok "release channels (8 cases)"
+ok "chanprobe (8 cases)"
 
 # the release pull request is prepared by cargo-release in its own worktree,
 # signed, and touches only the version, the lockfile, the changelog and
 # CITATION.cff; skips without the pinned cargo-release.
 step "python tests/test_releasepr.py"
 "$PY" tests/test_releasepr.py
-ok "release prepare (4 cases)"
+ok "releasepr (4 cases)"
 
 # ---- ruff (best-effort) ----
 # the file list lives in script/ruffcheck.sh so gatecheck.yml and this gate stay
@@ -220,7 +220,7 @@ step "python python/tools/compare_measure.py $BASELINE $OUT"
 ok "regression gates"
 
 # ---- summary ----
-printf '\n\033[1;32m== release check passed ==\033[0m\n'
+printf '\n\033[1;32m== fullcheck passed ==\033[0m\n'
 printf '  baseline: %s\n' "$BASELINE"
 printf '  post:     %s\n' "$OUT"
 printf '  next:     script/releasepr.sh X.Y.Z (docs/USAGE.md, maintainer checklist step 8)\n'

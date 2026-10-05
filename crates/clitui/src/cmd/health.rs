@@ -50,8 +50,7 @@ fn run_capture(cmd: &mut ProcCommand) -> Option<std::process::Output> {
 }
 
 /// Every check, in order. A missing interpreter or a missing embedder stops
-/// the list there (the later checks need them), exactly as `doctor` always
-/// did.
+/// the list there (the later checks need them).
 pub fn collect() -> Vec<Row> {
     let mut rows = Vec::new();
     rows.push(Row::new(

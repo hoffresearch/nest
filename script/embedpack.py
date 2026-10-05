@@ -12,8 +12,7 @@ crates/clitui/src/cmd/embed_gate.rs `installed_script_in`).
 the registry path ships its scripts only, not its model dependencies: the
 setup venv has numpy and tokenizers, and `embed_query_model.py` names the
 exact `pip install` line for what a registry model still needs (torch,
-sentence-transformers, open_clip), exit 4, instead of the old "embedder
-script not found".
+sentence-transformers, open_clip), exit 4.
 
 usage:  python script/embedpack.py <dest> [--tar <out.tar.gz>]
 writes: <dest>/urna/model_fingerprint.py          (imported by the registry)

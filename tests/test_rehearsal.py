@@ -336,7 +336,7 @@ def main() -> int:
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     for test in tests:
         test()
-    print(f"release rehearsal: {len(tests)} cases passed")
+    print(f"rehearsal: {len(tests)} cases passed")
     return 0
 
 

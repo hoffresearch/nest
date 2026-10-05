@@ -6,8 +6,8 @@ model's. every other preset is listed under `excluded` with the reason, so
 the installer can say why a model is not offered instead of hiding it.
 
 the catalog ships in the payload as `forge/catalog.json`; no remote index.
-`python/forge/catalog.json` is this module's output, checked in: the stage
-script and `tests/test_embedpack.py` refuse a stale copy.
+`python/forge/catalog.json` is this module's output, checked in:
+`script/embedpack.py` and `tests/test_embedpack.py` refuse a stale copy.
 
 usage:  python python/forge/model_catalog.py            print the catalog
         python python/forge/model_catalog.py --write    rewrite catalog.json

@@ -20,7 +20,7 @@ cognitive-complexity-threshold = 15
 # moves the default cannot change what the gate flags.
 type-complexity-threshold = 250
 
-# `too_many_arguments` threshold. Default is 7; runtime crate has a
+# `too_many_arguments` threshold. Default is 7; the engine crate has a
 # legitimate 8-arg recall harness (n + dim + queries + n_q + k + ef +
 # corpus + idx). Tag those with #[allow(clippy::too_many_arguments)]
 # at the call site rather than raising the threshold globally.

@@ -242,7 +242,7 @@ def main() -> int:
     for test in tests:
         test()
         print(f"ok  {test.__name__}")
-    print(f"release preflight: {len(tests)} cases passed")
+    print(f"preflight: {len(tests)} cases passed")
     return 0
 
 
