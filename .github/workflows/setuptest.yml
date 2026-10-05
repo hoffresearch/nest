@@ -93,7 +93,7 @@ jobs:
           $expected = "urna $($env:TAG.TrimStart('v'))"
           $shown = (urna --version | Out-String).Trim()
           if ($LASTEXITCODE -ne 0 -or $shown -ne $expected) { Write-Error "urna --version: '$shown' (exit $LASTEXITCODE), expected '$expected'"; exit 1 }
-          urna validate "$env:GITHUB_WORKSPACE\crates\urna-format\tests\fixtures\golden_v1_minimal.urna"
+          urna validate "$env:GITHUB_WORKSPACE\crates\format\tests\fixtures\golden_v1_minimal.urna"
           if ($LASTEXITCODE -ne 0) { Write-Error "urna validate exited $LASTEXITCODE"; exit $LASTEXITCODE }
           urna doctor
           if ($LASTEXITCODE -ne 0) { Write-Error "urna doctor exited $LASTEXITCODE"; exit $LASTEXITCODE }
