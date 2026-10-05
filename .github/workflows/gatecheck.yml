@@ -1,9 +1,8 @@
 # continuous integration for the rust workspace and the python surface.
 #
-# the release / setuptest / pypi workflows only run on tags and
-# releases, so until this file existed nothing ran `cargo test` on a pull
-# request. this is the gate `script/fullcheck.sh` runs locally, minus
-# the LFS corpus measurement (no LFS budget in CI): fmt, clippy with the
+# the release workflows run on tags; this is the pull-request gate, the
+# one `script/fullcheck.sh` runs locally, minus the LFS corpus
+# measurement (no LFS budget in CI): fmt, clippy with the
 # workspace deny lints (`unwrap_used`, `undocumented_unsafe_blocks`), the
 # whole test suite on linux + macos (the aarch64 macos runner exercises the
 # NEON kernels, the x86_64 linux runner the AVX2 ones), the 639-line guard,
@@ -173,7 +172,7 @@ jobs:
         run: rustup toolchain install stable --profile minimal && rustup default stable
       - uses: Swatinem/rust-cache@v2
       # a base commit without crates/format has nothing to compare
-      # against (the nest -> urna rename); skip instead of failing.
+      # against; skip instead of failing.
       - name: baseline has urna-format
         id: baseline
         run: |
@@ -184,8 +183,8 @@ jobs:
             echo "::notice::base commit has no crates/format; semver check skipped"
           fi
       # the on-disk format is frozen; the rust api that reads it should say
-      # when it breaks. urna-format is not on crates.io, so the baseline is
-      # the pr's base commit rather than the last published version. in 0.x
+      # when it breaks. the baseline is the pr's base commit, not the last
+      # version on crates.io, so a break is caught before it ships. in 0.x
       # a minor bump is the major bump, which the tool understands.
       - uses: obi1kenobi/cargo-semver-checks-action@v2
         if: steps.baseline.outputs.present == 'true'

@@ -70,7 +70,7 @@ def _build(path: Path, with_blobs: bool) -> None:
 
 class TestBlobBridge(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp = Path(tempfile.mkdtemp(prefix="urna-blob-bridge-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="urna-mediablob-"))
         self.plain = self.tmp / "plain.urna"
         self.blobs = self.tmp / "blobs.urna"
         _build(self.plain, False)

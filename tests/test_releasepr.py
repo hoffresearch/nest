@@ -187,7 +187,7 @@ def case_empty_unreleased(repo: Path, tmp: Path):
 def main():
     found = run(["cargo", "release", "--version"], REPO, check=False).stdout.split()
     if found[1:2] != [PINNED]:
-        print(f"release prepare: skipped, cargo-release {PINNED} is not installed")
+        print(f"releasepr: skipped, cargo-release {PINNED} is not installed")
         return
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)
@@ -196,7 +196,7 @@ def main():
         case_refused(repo, tmp)
         case_wrong_tool(repo, tmp)
         case_empty_unreleased(repo, tmp)
-    print("release prepare: 4 cases passed")
+    print("releasepr: 4 cases passed")
 
 
 if __name__ == "__main__":

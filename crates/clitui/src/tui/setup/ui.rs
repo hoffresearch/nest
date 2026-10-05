@@ -1,8 +1,8 @@
-//! The interactive installer: state, input and the event loop. Five steps
-//! in an inline viewport: splash, scan, plan, install, verify. The scan
-//! starts on launch, so it is usually done by the time the splash is
+//! The interactive installer: state, input and the event loop. A splash,
+//! then four steps in an inline viewport: scan, plan, install, verify. The
+//! scan starts on launch, so it is usually done by the time the splash is
 //! dismissed; the install runs on the `job` worker and this loop only
-//! folds its events into state. drawing lives in `view`.
+//! folds its events into state. drawing lives in `screen`.
 
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::{Duration, Instant};

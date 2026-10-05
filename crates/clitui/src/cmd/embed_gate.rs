@@ -1,13 +1,12 @@
 //! The ONE copy of the query-embedder spawn protocol and the three-layer
 //! model gate (name -> dim -> model_hash). `search-text`, `ask` and
-//! `retrieve` all come through here; before this module the gate lived
-//! twice and could drift.
+//! `retrieve` all come through here.
 //!
 //! Routing: a manifest whose `embedding_model` starts with the potion
-//! prefix keeps the offline potion script (status quo, byte-for-byte);
-//! any other model routes to `python/forge/embed_query_model.py`, the
-//! registry-backed embedder, passing `--mrl-dim` when the manifest
-//! records a truncated default space (`full_dim` present).
+//! prefix keeps the offline potion script; any other model routes to
+//! `forge/embed_query_model.py`, the registry-backed embedder, passing
+//! `--mrl-dim` when the manifest records a truncated default space
+//! (`full_dim` present).
 
 use anyhow::Result;
 use std::path::{Path, PathBuf};

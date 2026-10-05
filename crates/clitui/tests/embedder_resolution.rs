@@ -155,7 +155,7 @@ fn a_checkout_in_the_cwd_wins_over_the_data_root() {
 
 /// The files of a complete payload (mirrors `cmd::payload::REQUIRED`, which
 /// this binary-crate test cannot import; the payload test pins that list to
-/// what the stage script ships).
+/// what `script/embedpack.py` ships).
 const REQUIRED: [&str; 22] = [
     "VERSION",
     "model_fingerprint.py",
