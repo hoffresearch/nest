@@ -263,7 +263,7 @@ Real-query quality is in [fakenews-ptbr-urna-benchmark](https://github.com/brenn
 | `stills-av1` | AV1 all-intra crf35 | 1.37 GB | 2.89x |
 | `retrieval` | AV1 all-intra crf50 | 533 MB | 7.46x |
 
-The profile names are the forge's (`[media] profile = "..."`, usage section 14). Text-to-image hit@1 over every card: SigLIP2 0.750, wemm-2b 0.744, Jina 0.336, CLIP 0.098. The benchmark is [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark), and the `.urna` files are on [Hugging Face](https://huggingface.co/datasets/brennercruvinel/mtg-urna-benchmark); the recipes the forge uses are recorded in `python/forge/media_profiles.py` and `docs/CHANGELOG`.
+The profile names are the forge's (`[media] profile = "..."`, usage section 14). mtg-urna-benchmark names its v0.3 files from before AVIF became the forge's `stills`: its `stills` file is this table's `stills-av1` row, and the AVIF q48 row is its candidate `v03-avif-q48`. Text-to-image hit@1 over every card: SigLIP2 0.750, wemm-2b 0.744, Jina 0.336, CLIP 0.098. The benchmark is [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark), and the `.urna` files are on [Hugging Face](https://huggingface.co/datasets/brennercruvinel/mtg-urna-benchmark); the recipes the forge uses are recorded in `python/forge/media_profiles.py` and `docs/CHANGELOG`.
 
 </details>
 
