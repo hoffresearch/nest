@@ -42,6 +42,21 @@ Credenciais ficam nos mecanismos de secrets ou autenticação do serviço, fora 
 
 O projeto usa commits assinados. Um PR de um commit entra por squash; um PR com commits que devem ficar separados no histórico entra por rebase, que mantém cada commit e o histórico linear. Ao atualizar um PR empilhado, resolva os conflitos e confira o diff contra a nova base. Depois do merge, compare o conteúdo entregue com a árvore aprovada e explique qualquer diferença. A troca do hash pelo squash ou pelo rebase é esperada.
 
+## Issues, PRs e histórico
+
+Antes do primeiro commit, defina o tamanho do trabalho e procure uma issue existente (`gh issue list --search`). Se o pedido já tem issue, use-a.
+
+- **Uma mudança coesa:** uma issue e um PR.
+- **Vários itens independentes**, como uma série de renomeações ou um conjunto de skills: uma **épica** (a issue mãe), com o objetivo e a lista dos itens, e uma **sub-issue** por item, ligada à épica pelo recurso de sub-issues do GitHub. Cada sub-issue tem o seu PR.
+
+Criar issues, sub-issues e labels faz parte do trabalho autorizado. Títulos e corpos usam inglês simples. A sub-issue diz o que muda, as referências que serão atualizadas e o efeito fora do repositório, quando houver.
+
+Associe cada issue, sub-issue e PR ao label correto antes de abri-lo; se o label ainda não existir, crie-o com uma descrição curta (`gh label create`). Siga a mesma regra para a milestone e as views do projeto, quando o repositório as tiver.
+
+Cada PR começa com `Closes #<sub-issue>. Part of #<épica>.` (ou só `Closes #<issue>.`) e é aberto a partir da `main` atualizada, depois do merge do anterior, sem empilhar. A seção de validação lista cada check como caixa de seleção, com o resultado e o commit testado: `- [x] cargo test --workspace (53 binários ok)` para o que rodou e `- [ ]` com o motivo para o que não rodou ou foi dispensado.
+
+Ao fechar a série, atualize o corpo da épica como histórico: cada sub-issue com o seu PR, as provas, as lições e as pendências.
+
 ## Principais responsabilidades da aplicação
 
 - `crates/format`: formato binário, leitura, escrita e hashes.

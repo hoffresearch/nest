@@ -1,10 +1,17 @@
+Closes #<sub-issue>. Part of #<epic>.
+
 ## Change
 
 <!-- Explain the problem and the resulting behavior. Keep the title and body in plain English. -->
 
 ## Validation
 
-<!-- Name the tested commit, relevant checks and results. Distinguish passed, failed, skipped and not run, with reasons where needed. Reuse valid measurements and explain any later changes. -->
+<!-- One checkbox per check, with its result and the tested commit. Reuse valid measurements and explain any later changes. -->
+
+Tested commit: `<sha>`
+
+- [x] <check that ran> (<result>)
+- [ ] <check not run or dispensed> (<reason>)
 
 ## Final review
 

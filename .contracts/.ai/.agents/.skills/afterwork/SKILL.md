@@ -73,7 +73,7 @@ Resolva as pendências do escopo antes de declarar conclusão. Uma prova reserva
 
 ## 8. Crie e revise o PR
 
-Crie o PR no padrão do AGENTS: commits assinados, título e corpo em inglês simples e justificativa das verificações usadas. Depois, revise o PR online: confira se há conflitos com a base e o estado dos checks obrigatórios, incluindo o `rehearsal`. Havendo conflito, resolva-o e confira o diff contra a nova base.
+Crie o PR no padrão do AGENTS: commits assinados, título e corpo em inglês simples, a validação como lista de caixas de seleção e justificativa das verificações usadas. Confira que o PR fecha a sua issue ou sub-issue, que a sub-issue pertence à épica, que a épica lista todos os itens e que issue, sub-issue e PR têm o label correto, e a milestone e as views quando o repositório as tiver. Num trabalho com vários itens, nenhum item fica sem sub-issue nem sub-issue sem PR. Depois, revise o PR online: confira se há conflitos com a base e o estado dos checks obrigatórios, incluindo o `rehearsal`. Havendo conflito, resolva-o e confira o diff contra a nova base.
 
 ## 9. Apresente o relatório final
 
@@ -102,8 +102,8 @@ Importante: os épicos abaixo resumem as seções acima, e tudo o que elas pedem
 
 - [ ] 7 Conferir a árvore do diff entregue, realizar a higiene dos arquivos soltos e/ou que não são mais necessários e resolver as pendências do escopo, incluindo na lista e executando os itens extras que surgirem
 
-- [ ] 8 Criar o PR no padrão do AGENTS e revisá-lo online, corrigindo os conflitos
+- [ ] 8 Criar o PR no padrão do AGENTS, ligado à sua issue ou sub-issue e à épica, com labels, milestone e views, e revisá-lo online, corrigindo os conflitos
 
 - [ ] 9 Apresentar o relatório final de execução com todos os itens confirmados
 
-/goal : O pedido original foi executado e concluído com sucesso, sem pendências sob controle do agente; dependências externas devem ser identificadas com a ação necessária. Ao término da lista de tarefas, o resultado final deverá contemplar os pedidos desta skill auditados; O repositório deve refletir o comportamento entregue; Referências, links e arquivos gerados consistentes, higienizados, sem imports quebrados, pastas soltas, comentários verbosos desnecessários, tipagem fora do padrão; Documentação atualizada e cada informação no documento certo, sem duplicação; O Código organizado, sem resíduos e dentro do limite de linhas; Checks pertinentes aprovados, dispensas justificadas e evidência atrelada ao commit; Itens do `specs.yaml` revisados e todos arquivos necessários auditados, sem dead code e/ou duplicação de informação; Entrega do PR sem conflitos e pronto para merge e relatório final apresentado no chat ou no corpo do PR com todos itens da lista de tarefas concluídos.
+/goal : O pedido original foi executado e concluído com sucesso, sem pendências sob controle do agente; dependências externas devem ser identificadas com a ação necessária. Ao término da lista de tarefas, o resultado final deverá contemplar os pedidos desta skill auditados; O repositório deve refletir o comportamento entregue; Referências, links e arquivos gerados consistentes, higienizados, sem imports quebrados, pastas soltas, comentários verbosos desnecessários, tipagem fora do padrão; Documentação atualizada e cada informação no documento certo, sem duplicação; O Código organizado, sem resíduos e dentro do limite de linhas; Checks pertinentes aprovados, dispensas justificadas e evidência atrelada ao commit; Itens do `specs.yaml` revisados e todos arquivos necessários auditados, sem dead code e/ou duplicação de informação; Issues, sub-issues e PRs ligados, com labels, e a épica atualizada como histórico; Entrega do PR sem conflitos e pronto para merge e relatório final apresentado no chat ou no corpo do PR com todos itens da lista de tarefas concluídos.
