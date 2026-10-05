@@ -131,3 +131,16 @@ Atualize a explicação atual no documento responsável. Registre o motivo e o h
 - Mantenha arquivos de dados e pesos nos destinos e políticas de LFS existentes. O hook `script/precommit` verifica os dados preparados para commit; a release obtém a tabela Potion pelo script com hash fixado.
 
 Antes de concluir, faça a [revisão final](.skills/afterwork/SKILL.md). Entregue o resultado, as evidências e as limitações relevantes. Se depender do desenvolvedor humano, indique a ação indispensável de forma direta.
+
+## Idioma e comunicação
+- Sempre responda em português do Brasil (PT-BR) quando o desenvolvedor escrever em português. Não troque para o inglês no meio da sessão.
+- Ao traduzir docs para PT-BR, escreva em português natural, não tradução literal.
+- Respostas  diretas. Listas com um item por linha, e um resumo de uma pagrafo no maximo abaixo, se envolve link externo, como (github, hiugginface, ou relacionados), sempre apresentar a url do repositório testando antes de inserir no chat. 
+
+
+## Jeito de trabalhar
+- Para reestruturações, reorganizações ou qualquer coisa destrutiva (por exemplo: apagar e/ou mover pastas, reescrever histórico), proponha um plano curto antes e espere aprovação.
+- Quando o usuário der exemplos do resultado esperado, trate cada item individualmente para bater com eles. Não gere em massa com script sem antes realziar um prova de conceito pequena que comprove que não vai quebrar.
+- Use o pipeline, os workers e os crons do próprio projeto. Não escreva scripts improvisados para substituir isso. Se for necessários consturir um novo, construa na pasta de scprit da aplicaçao.
+- Respostas curtas e diretas. Listas com um item por linha, sem introdução longa.
+- Quando pedirem para rodar uma GUI, confirme que a janela está visível de fato (traga para frente, tire um screenshot) antes de dizer que deu certo.
