@@ -2,7 +2,7 @@
 project: urna
 audience: diretrizes globais para desenvolvedores humanos e agentes de código
 status: active
-last-updated: 2026-10-04
+last-updated: 2026-10-05
 domain: repo-ops
 ---
 
@@ -23,6 +23,7 @@ Este é o ponto de partida para desenvolvedores humanos e agentes de código (CL
 | Revisar o repositório inteiro contra o estado real | [factcheck](.skills/factcheck/SKILL.md) |
 | Preparar, publicar e provar uma release em todos os canais | [releaseops](.skills/releaseops/SKILL.md) |
 | Renomear pastas, crates, pacotes, scripts, workflows ou testes | [renameops](.skills/renameops/SKILL.md) |
+| Sincronizar benchmarks, datasets e repositórios externos | [benchsync](.skills/benchsync/SKILL.md) e [benches.yaml](.skills/benchsync/benches.yaml) |
 
 ## Começar e conduzir o trabalho
 
@@ -40,20 +41,19 @@ Publicar, enviar ou mover tags, alterar permissões ou secrets e remover branche
 
 Credenciais ficam nos mecanismos de secrets ou autenticação do serviço, fora dos arquivos e dos logs. Uma credencial exposta deve ser tratada como comprometida. O fluxo PyPI usa OIDC; confira no USAGE o procedimento de publicação e recuperação.
 
-O projeto usa commits assinados. Um PR de um commit entra por squash; um PR com commits que devem ficar separados no histórico entra por rebase, que mantém cada commit e o histórico linear. Ao atualizar um PR empilhado, resolva os conflitos e confira o diff contra a nova base. Depois do merge, compare o conteúdo entregue com a árvore aprovada e explique qualquer diferença. A troca do hash pelo squash ou pelo rebase é esperada.
+O agente abre o PR, pede a revisão do mantenedor e para aí: não faz o merge, nem quando os checks passam ou quando já recebeu outra autorização. O mantenedor revisa e faz o merge com um merge commit, que mantém na `main` cada commit do PR. Se a `main` avançar e o PR tiver conflito, atualize a branch com um merge da `main`, resolva os conflitos e confira o diff contra a nova base. Depois do merge, compare o conteúdo entregue com a árvore aprovada e explique qualquer diferença.
 
 ## Issues, PRs e histórico
 
-Antes do primeiro commit, defina o tamanho do trabalho e procure uma issue existente (`gh issue list --search`). Se o pedido já tem issue, use-a, se necessario, atualize-a com novo escopo e link a sub-issues.
+Antes do primeiro commit, defina o tamanho do trabalho e procure uma issue existente (`gh issue list --search`). Se o pedido já tiver uma issue, use-a. Se o escopo mudar, atualize o corpo da issue e vincule a ela as novas sub-issues.
 
-- **Uma mudança coesa:** uma issue e um PR.
-- **Vários itens independentes**, como uma série de renomeações ou um conjunto de skills: uma **épica** (a issue mãe), com o objetivo e a lista dos itens, e uma **sub-issue** por item, ligada à épica pelo recurso de sub-issues do GitHub. Cada sub-issue tem o seu PR.
+Uma mudança coesa tem uma issue e um PR. Correções do mesmo assunto formam uma mudança só, mesmo quando tocam arquivos diferentes. Vários itens independentes, como uma série de renomeações ou um conjunto de skills, ganham uma épica com o objetivo e a lista dos itens, e uma sub-issue por item, ligada à épica pelo recurso de sub-issues do GitHub. Cada sub-issue tem o seu PR.
 
-Criar issues, sub-issues e labels faz parte do trabalho autorizado. Títulos e corpos usam inglês simples. A sub-issue diz o que muda, as referências que serão atualizadas e o efeito fora do repositório, quando houver.
+Criar issues, sub-issues e labels faz parte do trabalho autorizado. Títulos e corpos usam inglês simples. O título diz o que muda no projeto, no imperativo, como `Leave every merge to the maintainer`. Ele não descreve a edição do texto (`Say…`, `Note…`, `Document…`) nem leva prefixo de área (`releaseops: …`), porque a área vai no label. A sub-issue diz o que muda, as referências que serão atualizadas e o efeito fora do repositório, quando houver.
 
-Associe cada issue, sub-issue e PR ao label correto antes de abri-lo; se o label ainda não existir, crie-o com uma descrição curta (`gh label create`). Siga a mesma regra para a milestone e as views do projeto, quando o repositório as tiver. O label descreve a área do produto ou o tipo de mudança, como `documentation`, `bug` ou `enhancement`, e não quem fez o trabalho. A mesma regra vale para títulos de issue e PR, milestones e views.
+Associe cada issue, sub-issue e PR ao label correto antes de abri-lo; se o label ainda não existir, crie-o com uma descrição curta (`gh label create`). Siga a mesma regra para a milestone e as views do projeto, quando o repositório as tiver. O label descreve a área do produto ou o tipo de mudança, como `documentation`, `bug` ou `enhancement`.
 
-Cada PR começa com `Closes #<sub-issue>. Part of #<épica>.` (ou só `Closes #<issue>.`) e é aberto a partir da `main` atualizada, depois do merge do anterior, sem empilhar. A seção de validação lista cada check como caixa de seleção, com o resultado e o commit testado: `- [x] cargo test --workspace (53 binários ok)` para o que rodou e `- [ ]` com o motivo para o que não rodou ou foi dispensado.
+Cada PR começa com `Closes #<sub-issue>. Part of #<épica>.` (ou só `Closes #<issue>.`) e é aberto a partir da `main` atualizada, depois que o mantenedor fizer o merge do anterior. A seção de validação, em inglês, lista cada check como caixa de seleção. Marque o que rodou, com o comando, o resultado e o commit testado. Deixe desmarcado o que não rodou ou foi dispensado, com o motivo. Ao abrir o PR, peça a revisão e aguarde.
 
 Ao fechar a série, atualize o corpo da épica como histórico: cada sub-issue com o seu PR, as provas, as lições e as pendências.
 

@@ -1,0 +1,35 @@
+project: urna
+audience: agentes de ia e contribuidores humanos
+status: active
+last-updated: 2026-10-05
+domain: workflow
+description: >
+  Catálogo da benchsync: uma entrada por benchmark ou repositório externo ligado
+  ao urna. Os caminhos só aparecem aqui; numa reorganização do urna ou com um
+  repositório novo, atualize este arquivo e o procedimento continua o mesmo.
+
+# name:    nome curto do repositório, o mesmo do corpus de demonstração quando houver.
+# repo:    repositório no GitHub.
+# dataset: dataset no Hugging Face, quando houver.
+# urna:    como o repositório obtém o urna (wheel ou checkout).
+# pin:     arquivos que fixam ou citam a versão do urna.
+# uses:    superfícies do urna de que depende (api, cli, forge, format, models).
+# proof:   comando que valida o repositório a partir de um clone limpo.
+# demo:    pasta do corpus de demonstração no urna, quando existir.
+
+benches:
+  - name: cards
+    repo: brennercruvinel/mtg-urna-benchmark
+    dataset: brennercruvinel/mtg-urna-benchmark
+    urna: checkout
+    pin: [README.md, docs/environment.md, benchmark/tools/clean_install_proof.sh]
+    uses: [api, cli, forge, format]
+    proof: sh benchmark/tools/clean_install_proof.sh <WORKDIR>
+
+  - name: paper
+    repo: brennercruvinel/fakenews-ptbr-urna-benchmark
+    dataset: brennercruvinel/fakenews-ptbr-urna-benchmark
+    urna: wheel
+    pin: [pyproject.toml, uv.lock, profiles/models.toml, CITATION.cff, README.md]
+    uses: [api, cli, models]
+    proof: sh benchmark/tools/check_clean.sh <WORK_DIR>

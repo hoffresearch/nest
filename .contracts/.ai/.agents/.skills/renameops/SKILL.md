@@ -32,7 +32,7 @@ Mantenha intocado o histórico intencional: seções datadas do CHANGELOG, o res
 
 ## 3. Uma mudança por PR, a partir da `main`
 
-Abra uma sub-issue e um PR para cada item, sempre a partir da `main` atualizada e depois do merge do anterior. Não empilhe PRs: com squash merge, o PR de cima entra em conflito quando o de baixo é mesclado e passa a listar os commits anteriores. Se vários commits precisarem entrar juntos, um PR com commits separados e mesclado por rebase preserva cada um.
+Abra uma sub-issue e um PR para cada item, sempre a partir da `main` atualizada e depois que o mantenedor fizer o merge do anterior. Não empilhe PRs.
 
 ## 4. Troque e confira
 
@@ -56,7 +56,7 @@ Com esse contexto, crie a sua lista de tarefas na ferramenta de tarefas do agent
 
 - [ ] 2 Mapear todas as formas do nome antigo, incluindo `\`, caminhos entre irmãos, nomes sem caminho, pacotes, URLs de registry, testes e arquivos gerados
 
-- [ ] 3 Abrir uma sub-issue e um PR por item a partir da `main` atualizada, sem empilhar
+- [ ] 3 Abrir uma sub-issue e um PR por item a partir da `main` atualizada, depois do merge do anterior pelo mantenedor
 
 - [ ] 4 Trocar com regras que respeitem as exceções, formatar, regenerar, repetir a busca e rodar a checagem rápida em cada item
 

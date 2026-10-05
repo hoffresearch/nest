@@ -20,6 +20,14 @@ Rust (o CLI pede 1.88), `tmux` e um Python com `numpy` e `tokenizers` para o emb
 sh script/getpotion.sh
 ```
 
+O `corpus` chama o forge, que importa a extensão `_urna`. Num checkout limpo, compile-a antes:
+
+```sh
+cargo build --release -p urna-bridge --features pyo3/extension-module
+cp target/release/lib_urna.dylib python/_urna.so   # macOS
+cp target/release/lib_urna.so   python/_urna.so    # linux
+```
+
 ## Agente: build, corpus e smoke
 
 ```sh
@@ -69,9 +77,9 @@ python3 tests/test_pythonapi.py
 
 ## Pegadinhas
 
-- **Qual Python os verbos usam:** `URNA_PYTHON`, depois o venv do `urna setup` (`~/.local/share/urna/venv`), depois o `.venv` mais próximo, depois `python3`. A linha `[urna] embedder interpreter: ...` vai para o stderr e diz qual foi. Para forçar o `.venv` do repo: `URNA_PYTHON=.venv/bin/python target/release/urna doctor`.
-- **O `doctor` acha o embedder pelo layout do repo** a partir do caminho do binário, mesmo rodando fora do repo e com um `URNA_DATA_DIR` vazio. Um binário copiado para outro lugar depende do payload instalado.
-- **Ao abrir, um aviso "opening quickstart.urna" cobre a tabela de seções** por uns 3 segundos. O `tui` do driver espera 4 antes de devolver; uma captura feita antes disso sai com a tabela cortada.
-- **Na aba ask, `q` vira texto da pergunta.** Para sair, use `ctrl+q` (`sh $D key C-q`), que funciona em todas as abas.
-- **O `ask` responde em 100 a 200 ms** depois que o Python sobe; a primeira chamada da sessão demora mais. Espere uns 5 segundos antes do `shot ask`.
-- **A captura é texto**, sem cor: `tmux capture-pane -p`. O conteúdo é o mesmo da tela.
+- O Python dos verbos segue esta ordem: `URNA_PYTHON`, depois o venv do `urna setup` (`~/.local/share/urna/venv`), depois o `.venv` mais próximo, depois `python3`. A linha `[urna] embedder interpreter: ...` vai para o stderr e diz qual foi. Para forçar o `.venv` do repo: `URNA_PYTHON=.venv/bin/python target/release/urna doctor`.
+- O `doctor` acha o embedder pelo layout do repo a partir do caminho do binário, mesmo rodando fora do repo e com um `URNA_DATA_DIR` vazio. Um binário copiado para outro lugar depende do payload instalado.
+- Ao abrir, um aviso "opening quickstart.urna" cobre a tabela de seções por uns 3 segundos. O `tui` do driver espera 4 antes de devolver; uma captura feita antes disso sai com a tabela cortada.
+- Na aba ask, `q` vira texto da pergunta. Para sair, use `ctrl+q` (`sh $D key C-q`), que funciona em todas as abas.
+- O `ask` responde em 100 a 200 ms depois que o Python sobe; a primeira chamada da sessão demora mais. Espere uns 5 segundos antes do `shot ask`.
+- A captura é texto, sem cor: `tmux capture-pane -p`. O conteúdo é o mesmo da tela.
