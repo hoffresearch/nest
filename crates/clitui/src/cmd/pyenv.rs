@@ -48,8 +48,9 @@ pub fn resolve_interpreter() -> String {
 }
 
 /// Testable core of [`resolve_interpreter`]: an explicit interpreter (the
-/// `URNA_PYTHON` value, else the managed setup venv) wins, then the nearest `.venv/bin/python` walking up to four ancestors of `start`,
-/// then `python3`.
+/// `URNA_PYTHON` value, else the managed setup venv) wins, then the nearest
+/// `.venv/bin/python` in `start` or up to three of its ancestors, then
+/// `python3`.
 fn resolve_interpreter_from(urna_python: Option<String>, start: Option<PathBuf>) -> String {
     if let Some(p) = urna_python {
         return p;

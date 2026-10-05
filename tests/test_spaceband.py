@@ -65,7 +65,7 @@ def _build(path: Path, with_spaces: bool) -> None:
 
 class TestSpaceBridge(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp = Path(tempfile.mkdtemp(prefix="urna-space-bridge-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="urna-spaceband-"))
         self.plain = self.tmp / "plain.urna"
         self.multi = self.tmp / "multi.urna"
         _build(self.plain, False)

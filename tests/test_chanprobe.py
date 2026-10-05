@@ -32,7 +32,7 @@ import threading
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("channels", REPO / "script" / "chanprobe.py")
+spec = importlib.util.spec_from_file_location("chanprobe", REPO / "script" / "chanprobe.py")
 ch = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ch)
 
@@ -310,7 +310,7 @@ def main() -> int:
     for test in tests:
         ROUTES.clear()
         test()
-    print(f"release channels: {len(tests)} cases passed")
+    print(f"chanprobe: {len(tests)} cases passed")
     return 0
 
 
