@@ -21,6 +21,7 @@ Este é o ponto de partida para desenvolvedores humanos e agentes de código (CL
 | Revisão final e arquivos que a mudança pode afetar | [afterwork](.skills/afterwork/SKILL.md) e [specs.yaml](.skills/afterwork/specs.yaml) |
 | Compilar, rodar e dirigir o CLI e o explorer | [run-urna](.skills/run-urna/SKILL.md) |
 | Revisar o repositório inteiro contra o estado real | [factcheck](.skills/factcheck/SKILL.md) |
+| Preparar, publicar e provar uma release em todos os canais | [releaseops](.skills/releaseops/SKILL.md) |
 
 ## Começar e conduzir o trabalho
 
@@ -87,7 +88,7 @@ Registre o que passou, falhou ou foi pulado e em qual commit. Um teste dispensad
 
 `packs/pyproject.toml` é a fonte da wheel; `packs/staging/` é gerado. Para mudar a configuração do cargo-dist, rode `dist generate` e depois `python script/rehearsal.py generate`. Edite as fontes dos geradores e confira os arquivos resultantes.
 
-A preparação local usa `script/releasepr.sh X.Y.Z`, com cargo-release fixado, worktree isolada e PR assinado. Tag e publicação são etapas separadas. Preserve os metadados de citação escolhidos pelo mantenedor ao atualizar os campos versionados.
+A preparação local usa `script/releasepr.sh X.Y.Z`, com cargo-release fixado, worktree isolada e PR assinado. Tag e publicação são etapas separadas; a skill [releaseops](.skills/releaseops/SKILL.md) conduz a release do número à prova em cada canal. Preserve os metadados de citação escolhidos pelo mantenedor ao atualizar os campos versionados.
 
 A release constrói binários, payload e wheels antes de publicar. O PyPI recebe as mesmas wheels por um workflow de topo despachado pela release. Os testes de instalação esperam a versão exata; o relatório acompanha também execuções com falha. O USAGE contém os comandos, requisitos de origem, autenticação e recuperação de uploads parciais.
 

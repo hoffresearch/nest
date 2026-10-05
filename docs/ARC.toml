@@ -418,6 +418,12 @@ purpose = "Agent skill for a repository-wide review against verified facts: a fa
 links = [".contracts/.ai/.agents/.skills/afterwork/specs.yaml", ".contracts/.ai/.agents/.skills/afterwork/SKILL.md"]
 
 [[inventory.data_docs_python_script_tests]]
+path = ".contracts/.ai/.agents/.skills/releaseops/SKILL.md"
+kind = "repo-ops"
+purpose = "Agent skill for a release end to end: readiness and account checks, what each registry will show (crate and package metadata, rendered READMEs, published names), releasepr.sh, the signed tag, proof per channel by service, recovery without moving a published tag, and the docs updated to the released state"
+links = ["docs/USAGE.md", "script/releasepr.sh", ".github/workflows/release.yml"]
+
+[[inventory.data_docs_python_script_tests]]
 path = ".contracts/.ai/.agents/.skills/run-urna/SKILL.md"
 kind = "repo-ops"
 purpose = "Agent skill to build, smoke and drive the CLI and the terminal explorer: the verified commands, the interpreter ladder and the explorer's quirks"
