@@ -20,6 +20,9 @@ groups:
         when: mudar o procedimento de revisão final, organização de arquivos, validação ou entrega.
       - path: .contracts/.ai/.agents/.skills/afterwork/specs.yaml
         when: mudar um caminho, responsabilidade ou situação de revisão representada neste catálogo.
+      - path: .contracts/.ai/.agents/.skills/run-urna/
+        when: mudarem o build do CLI, os verbos do ciclo (build, ask, retrieve, cite, validate, doctor), o quickstart ou as teclas e abas do explorer.
+        rule: rodar o drive.sh de novo (smoke e tui) e manter só comandos que funcionaram.
 
   - name: instruções dos agentes
     files:

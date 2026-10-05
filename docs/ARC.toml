@@ -411,6 +411,18 @@ kind = "repo-ops"
 purpose = "Conditional maintenance catalog for AFTERWORK: paths, review triggers and specific maintenance requirements; guides review without requiring unrelated edits or duplicating the full inventory"
 links = [".contracts/.ai/.agents/.skills/afterwork/AFTERWORK.md"]
 
+[[inventory.data_docs_python_script_tests]]
+path = ".contracts/.ai/.agents/.skills/run-urna/SKILL.md"
+kind = "repo-ops"
+purpose = "Agent skill to build, smoke and drive the CLI and the terminal explorer: the verified commands, the interpreter ladder and the explorer's quirks"
+links = [".contracts/.ai/.agents/.skills/run-urna/drive.sh", "demos/quickstart/corpus.toml"]
+
+[[inventory.data_docs_python_script_tests]]
+path = ".contracts/.ai/.agents/.skills/run-urna/drive.sh"
+kind = "shell-script"
+purpose = "The skill's driver: build, the quickstart corpus, a five-verb smoke with checks, and the explorer in a tmux session (key, type, text screen captures, quit)"
+links = ["crates/clitui", "demos/quickstart/corpus.toml"]
+
 [[inventory.root]]
 path = ".github/pull_request_template.md"
 kind = "repo-ops"
