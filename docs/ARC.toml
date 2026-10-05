@@ -412,6 +412,12 @@ purpose = "Conditional maintenance catalog for AFTERWORK: paths, review triggers
 links = [".contracts/.ai/.agents/.skills/afterwork/SKILL.md"]
 
 [[inventory.data_docs_python_script_tests]]
+path = ".contracts/.ai/.agents/.skills/factcheck/SKILL.md"
+kind = "repo-ops"
+purpose = "Agent skill for a repository-wide review against verified facts: a fact sheet, specs.yaml split into groups, read-only reviewers in parallel, findings confirmed and fixed in the owning doc, protected history and out-of-scope behavior recorded"
+links = [".contracts/.ai/.agents/.skills/afterwork/specs.yaml", ".contracts/.ai/.agents/.skills/afterwork/SKILL.md"]
+
+[[inventory.data_docs_python_script_tests]]
 path = ".contracts/.ai/.agents/.skills/run-urna/SKILL.md"
 kind = "repo-ops"
 purpose = "Agent skill to build, smoke and drive the CLI and the terminal explorer: the verified commands, the interpreter ladder and the explorer's quirks"
