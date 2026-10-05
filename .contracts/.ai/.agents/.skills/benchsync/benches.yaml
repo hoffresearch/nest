@@ -1,5 +1,5 @@
 project: urna
-audience: agentes de ia e contribuidores humanos
+audience: agentes de código e contribuidores humanos
 status: active
 last-updated: 2026-10-05
 domain: workflow
@@ -8,21 +8,20 @@ description: >
   ao urna. Os caminhos só aparecem aqui; numa reorganização do urna ou com um
   repositório novo, atualize este arquivo e o procedimento continua o mesmo.
 
-# name:    nome curto do repositório, o mesmo do corpus de demonstração quando houver.
+# name:    nome curto do repositório.
 # repo:    repositório no GitHub.
 # dataset: dataset no Hugging Face, quando houver.
 # urna:    como o repositório obtém o urna (wheel ou checkout).
 # pin:     arquivos que fixam ou citam a versão do urna.
 # uses:    superfícies do urna de que depende (api, cli, forge, format, models).
 # proof:   comando que valida o repositório a partir de um clone limpo.
-# demo:    pasta do corpus de demonstração no urna, quando existir.
 
 benches:
   - name: cards
     repo: brennercruvinel/mtg-urna-benchmark
     dataset: brennercruvinel/mtg-urna-benchmark
     urna: checkout
-    pin: [README.md, docs/environment.md, benchmark/tools/clean_install_proof.sh]
+    pin: [pyproject.toml, README.md, docs/environment.md, benchmark/tools/clean_install_proof.sh]
     uses: [api, cli, forge, format]
     proof: sh benchmark/tools/clean_install_proof.sh <WORKDIR>
 
