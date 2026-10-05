@@ -24,9 +24,9 @@ for t in $TARGETS; do
     if [ -z "$(ls -A "corpus/$t")" ]; then
         cp seeds/*.bin ../crates/format/tests/fixtures/golden_v1_minimal.urna "corpus/$t/"
     fi
-    echo "fuzz-soak: $t for ${SECONDS_PER_TARGET}s"
+    echo "fuzzsweep: $t for ${SECONDS_PER_TARGET}s"
     cargo +nightly fuzz run "$t" -- \
         -max_total_time="$SECONDS_PER_TARGET" -max_len=65536 -rss_limit_mb=4096
     cargo +nightly fuzz cmin "$t" >/dev/null 2>&1 || true
 done
-echo "fuzz-soak: clean ($TARGETS)"
+echo "fuzzsweep: clean ($TARGETS)"

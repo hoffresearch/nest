@@ -1,9 +1,8 @@
 #!/bin/sh
-# fetch the vendored potion table without git-lfs. the release and wheel
-# jobs used to `git lfs pull`, which spends the repo's lfs budget on every
-# build and stops the release when that budget runs out. the table is the
-# upstream file byte for byte, so this downloads it from hugging face at the
-# pinned revision and accepts it only when its sha256 is the oid recorded in
+# fetch the vendored potion table without git-lfs, so release and wheel
+# builds never spend the repo's lfs budget (a pull that runs out of it stops
+# the release). the table is the upstream file byte for byte, so this
+# downloads it from hugging face at the pinned revision and accepts it only when its sha256 is the oid recorded in
 # the lfs pointer that git checked out. a real (already smudged) file is
 # left alone.
 set -eu

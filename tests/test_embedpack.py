@@ -206,7 +206,7 @@ def test_version_stamp_reads_without_tomllib(base: Path) -> None:
     """dist's global release job stages the payload with ubuntu-22.04's
     python3 (3.10, no tomllib); the stamp must come out the same there. The
     0.5.2 tag failed in that job on `import tomllib`."""
-    spec = importlib.util.spec_from_file_location("stage_payload", STAGE)
+    spec = importlib.util.spec_from_file_location("embedpack", STAGE)
     stage = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(stage)
     with_tomllib = stage.workspace_version()

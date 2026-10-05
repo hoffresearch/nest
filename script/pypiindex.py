@@ -129,7 +129,7 @@ def plan_upload(
     upload = []
     for name, path in wheels.items():
         if name in remote:
-            print(f"pypi-release: {name} already on {index}, same sha256, skipped")
+            print(f"pypiindex: {name} already on {index}, same sha256, skipped")
             continue
         out.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, out / name)
@@ -157,15 +157,15 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.cmd == "source":
             check_source(args.index, args.run, args.repo, args.sha, args.main_ref)
-            print(f"pypi-release: run {args.run} is a valid {args.index} source")
+            print(f"pypiindex: run {args.run} is a valid {args.index} source")
             return 0
         upload = plan_upload(
             args.index, args.dir, args.version, args.out, args.expect, args.json_base
         )
     except ReleaseError as err:
-        print(f"pypi-release: {err}", file=sys.stderr)
+        print(f"pypiindex: {err}", file=sys.stderr)
         return 1
-    print(f"pypi-release: {len(upload)} wheel(s) to upload to {args.index}: {upload}")
+    print(f"pypiindex: {len(upload)} wheel(s) to upload to {args.index}: {upload}")
     if output := os.environ.get("GITHUB_OUTPUT"):
         with open(output, "a", encoding="utf-8") as fh:
             fh.write(f"upload={len(upload)}\n")
