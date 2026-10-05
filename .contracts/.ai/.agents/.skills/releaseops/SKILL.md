@@ -10,7 +10,7 @@ domain: workflow
 
 # Release do urna e atualização dos repositórios ligados
 
-Este procedimento leva uma versão da `main` até cada canal de distribuição e, depois que ela sai, atualiza o que depende dela: o próprio repositório, os benchmarks, os datasets dos corpora e os outros repositórios que usam o urna.
+Uma release leva a `main` a cada canal de distribuição. Depois que ela sai, o que depende do urna passa a descrever a versão nova: o próprio repositório, os benchmarks, os datasets dos corpora e os outros repositórios que usam o urna.
 
 O detalhe de cada canal (credenciais, comandos e recuperação) está no checklist do mantenedor, no [USAGE.md](../../../../../docs/USAGE.md). As verificações por tipo de mudança estão no [AGENTS.md](../../AGENTS.md).
 
@@ -22,7 +22,7 @@ Antes de começar, crie a lista de tarefas conforme o fim deste arquivo.
 
 O último commit da `main` precisa estar verde no `gatecheck` e no `rehearsal`, e não pode haver PR de release aberto.
 
-O número da versão segue a política 0.x do CHANGELOG: patch para mudanças compatíveis, minor quando algo quebra. Na dúvida, rode o `cargo-semver-checks` no `urna-format`.
+O número da versão segue o SemVer na fase 0.x: patch para mudanças compatíveis, minor quando algo quebra. Na dúvida, rode o `cargo-semver-checks` no `urna-format`.
 
 Confira também as contas:
 
@@ -50,7 +50,7 @@ Abra primeiro a issue da release, com o label `release`. Depois rode o script de
 script/releasepr.sh X.Y.Z
 ```
 
-O script cria uma worktree e atualiza a versão do workspace, as pins, o lockfile, a seção datada do CHANGELOG e os campos versionados do `CITATION.cff`. Em seguida roda o preflight e abre o PR assinado.
+O script cria uma worktree e atualiza a versão do workspace, as pins, o lockfile, a seção datada do CHANGELOG e os campos versionados do `CITATION.cff`. Em seguida roda o preflight, faz um commit assinado e abre o PR.
 
 Complete o PR com o parágrafo de resumo da versão, como nas releases anteriores, e com o `fuzz/Cargo.lock`, que o script não atualiza:
 
@@ -58,7 +58,7 @@ Complete o PR com o parágrafo de resumo da versão, como nas releases anteriore
 cargo update -p urna-format -p urna-engine --manifest-path fuzz/Cargo.toml
 ```
 
-O mantenedor revisa e faz o merge. O merge é a aprovação do número da versão.
+Peça a revisão e aguarde. O mantenedor revisa e faz o merge, e o merge é a aprovação do número da versão.
 
 ## 4. Crie a tag e acompanhe a release
 
@@ -70,7 +70,7 @@ git -c gpg.ssh.allowedSignersFile=.github/trustkeys verify-tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-Acompanhe o run `Release` até o fim com `gh run watch`. Os jobs rodam nesta ordem: verificação da tag, build dos binários e das wheels, job global, criação da release no GitHub e publicação em cada canal.
+Acompanhe o run `Release` até o fim com `gh run watch`. Primeiro roda o `plan`. Depois, em paralelo, saem os binários e as wheels; o job das wheels começa verificando a assinatura da tag e o preflight. Em seguida vêm o job global, a criação da release no GitHub (`host`), a publicação em cada canal e, no fim, o `setuptest`.
 
 O GitHub pode demorar a registrar um push. Antes de confiar no estado de um PR ou de um run, confira se ele aponta para o commit que você enviou.
 
@@ -103,10 +103,10 @@ gh workflow run setuptest.yml --ref <branch> -f tag=vX.Y.Z
 
 Depois da release, o repositório passa a descrever o que foi publicado:
 
-- no USAGE e no SECURITY, o que a versão provou deixa de aparecer como implementado e ainda não provado. O checklist do mantenedor mostra a versão atual de cada canal e as credenciais que deixaram de ser usadas;
+- no USAGE e no SECURITY, o que esta versão comprovou passa a aparecer como comprovado, e não mais como implementado e ainda sem prova. O checklist do mantenedor mostra a versão atual de cada canal e as credenciais que deixaram de ser usadas;
 - no ARC, a versão ganha a sua entrada no resumo histórico;
 - a issue da release registra os runs, as provas e o que ficou pendente;
-- uma lição nova entra, curta, no item 11 do checklist do USAGE.
+- uma lição nova entra, curta, no item de lições do checklist do USAGE ("What the 0.5.0 tag taught").
 
 Credenciais que nenhum workflow usa mais devem ser revogadas no serviço e removidas do repositório. Essa ação é do mantenedor.
 
