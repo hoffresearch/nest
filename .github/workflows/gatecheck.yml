@@ -186,7 +186,7 @@ jobs:
       # when it breaks. the baseline is the pr's base commit, not the last
       # version on crates.io, so a break is caught before it ships. in 0.x
       # a minor bump is the major bump, which the tool understands.
-      - uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2
+      - uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2.9
         if: steps.baseline.outputs.present == 'true'
         with:
           package: urna-format

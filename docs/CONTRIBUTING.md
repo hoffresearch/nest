@@ -2,7 +2,7 @@
 project: urna
 audience: contributors
 status: active
-last-updated: 2026-10-04
+last-updated: 2026-10-05
 domain: contributing
 ---
 
@@ -19,7 +19,7 @@ domain: contributing
 5. If the change alters architecture, module boundaries, data flow, or doc locations, update `docs/ARC.toml` in the same PR. Keep it concise and pragmatic. Do not add a separate human architecture doc; `ARC.toml` is the machine map, the human reference, and the mermaid diagram all in one file. Record an architecture decision, or a lesson that must stay as reference, as an ADR under `docs/ADR/` (layout and categories in `docs/ADR/README.md`).
 6. Run checks appropriate to the change and the required CI checks. Use `./script/fullcheck.sh` for format, runtime, performance or broad integration changes; it rebuilds the extension, runs Rust and Python tests, lint and the corpus regression measurements. Focused script or documentation changes can use targeted checks, with their scope explained in the PR; editorial changes do not repeat corpus measurements. `.github/workflows/gatecheck.yml` covers the Rust side on Linux, macOS and Windows plus checks the local gate does not run (cargo-deny, cargo-semver-checks, the engine-only Clippy, the benches compiled, a cargo-fuzz smoke, the embedder payload staged under Python 3.10). Its Python job runs ruff, the model catalog check and the release suites that need no built extension; the suites that load `_urna.so` run only in the local gate, so run them locally. A pull request that touches a release input also runs the release rehearsal (`rehearsal.yml`), a required check.
 7. Commit with a clear message in plain English. No conventional commits prefix.
-8. Start from an issue: one change is one issue; several independent items are an epic with one sub-issue each. Give the issue and the PR the right label. Open a PR against `main` whose body starts with `Closes #<issue>` and lists its checks as checkboxes. The maintainer squash merges it, or rebase merges it when its commits should stay separate in the history; `main` is guarded by one ruleset (`opensource`): verified (SSH-signed) commits, linear history, a branch up to date with `main`, resolved review conversations and a passing `rehearsal` check (the release rehearsal, dispensed when the change touches no release input), so sign your commits (`git config commit.gpgsign true` with an SSH or GPG key registered on GitHub). A pull request that builds on another opens from the updated `main` after that one merges: a squash merge leaves the stacked branch's own commits behind, so a stacked pull request conflicts with `main` and lists every earlier commit.
+8. Start from an issue: one change is one issue; several independent items are an epic with one sub-issue each. Give the issue and the PR the right label. Open a PR against `main` whose body starts with `Closes #<issue>` and lists its checks as checkboxes, then ask for a review. Only the maintainer merges, with a merge commit, so every commit of the pull request stays in `main`'s history. `main` is guarded by one ruleset (`opensource`): one approving review, verified (signed) commits, a branch up to date with `main`, resolved review conversations and a passing `rehearsal` check (the release rehearsal, dispensed when the change touches no release input); admins can bypass it. Sign your commits (`git config commit.gpgsign true` with an SSH or GPG key registered on GitHub). A pull request that builds on another opens from the updated `main` after that one merges.
 
 ## Setup
 

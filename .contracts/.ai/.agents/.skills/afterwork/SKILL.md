@@ -4,7 +4,7 @@ description: revisão final do trabalho, das referências afetadas e das evidên
 project: urna
 audience: agentes de código e contribuidores humanos
 status: active
-last-updated: 2026-10-04
+last-updated: 2026-10-05
 domain: workflow
 ---
 
@@ -18,7 +18,7 @@ Reúna a transcrição completa dos pedidos, o histórico guardado pelo agente (
 
 ## 2. Confira o que foi feito
 
-Compare o pedido com os commits, o diff contra a base adequada e as alterações ainda locais, incluindo arquivos novos. Separe as mudanças desta tarefa das que já estavam no checkout. Em PRs empilhados, considere a base e as dependências reais; depois de um merge, confira também o conteúdo que chegou à `main`.
+Compare o pedido com os commits, o diff contra a base adequada e as alterações ainda locais, incluindo arquivos novos. Separe as mudanças desta tarefa das que já estavam no checkout. Considere a base e as dependências reais do PR; depois de um merge, confira também o conteúdo que chegou à `main`.
 
 Identifique os comportamentos alterados: comandos, interfaces, dados, configuração, instalação, publicação ou procedimentos de desenvolvimento. Essa lista define o alcance da revisão.
 
@@ -73,7 +73,7 @@ Resolva as pendências do escopo antes de declarar conclusão. Uma prova reserva
 
 ## 8. Crie e revise o PR
 
-Crie o PR no padrão do AGENTS: commits assinados, título e corpo em inglês simples, a validação como lista de caixas de seleção e justificativa das verificações usadas. Confira que o PR fecha a sua issue ou sub-issue, que a sub-issue pertence à épica, que a épica lista todos os itens e que issue, sub-issue e PR têm o label correto, e a milestone e as views quando o repositório as tiver. Labels e títulos descrevem a área do produto ou o tipo de mudança, e não quem fez o trabalho. Num trabalho com vários itens, nenhum item fica sem sub-issue nem sub-issue sem PR. Depois, revise o PR online: confira se há conflitos com a base e o estado dos checks obrigatórios, incluindo o `rehearsal`. Havendo conflito, resolva-o e confira o diff contra a nova base.
+Crie o PR no padrão do AGENTS e do CONTRIBUTING, com as seções do template: título e corpo em inglês simples, a validação como lista de caixas de seleção e a justificativa das verificações usadas. Confira que o PR fecha a sua issue ou sub-issue, que a sub-issue pertence à épica, que a épica lista todos os itens e que issue, sub-issue e PR têm o label correto, e a milestone e as views quando o repositório as tiver. Num trabalho com vários itens, nenhum item fica sem sub-issue nem sub-issue sem PR. Depois, revise o PR online: confira se há conflitos com a base e o estado dos checks obrigatórios, incluindo o `rehearsal`. Havendo conflito, resolva-o e confira o diff contra a nova base. Peça a revisão do mantenedor e não faça o merge: ele é do mantenedor.
 
 ## 9. Apresente o relatório final
 
@@ -90,7 +90,7 @@ Importante: os épicos abaixo resumem as seções acima, e tudo o que elas pedem
 
 - [ ] 1 Auditar a transcrição dos pedidos, o histórico do agente, a memória e os arquivos alterados ou criados
 
-- [ ] 2 Comparar o pedido com os commits, o diff contra a base, as alterações locais, os PRs empilhados em branches locais e o conteúdo que chegou à `main` remota, separar o que é desta tarefa e definir o alcance pelos comportamentos alterados
+- [ ] 2 Comparar o pedido com os commits, o diff contra a base, as alterações locais e o conteúdo que chegou à `main` remota, separar o que é desta tarefa e definir o alcance pelos comportamentos alterados
 
 - [ ] 3 Seguir o `specs.yaml` e rastrear imports, chamadas, links, exemplos, geradores e symlinks, ajustando os consumidores e o catálogo
 
