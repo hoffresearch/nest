@@ -83,7 +83,20 @@ urna validate demos/quickstart/out/quickstart.urna
 
 `ask` prints the answer with its citation, `retrieve` prints JSON for another program, `cite` turns a citation back into the stored text, and `validate` checks every hash. To build from your own rows, see [usage section 13](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
 
+Doc  [docs.urna.dev](https://docs.urna.dev)
 
+Web [www.urna.dev](https://urna.dev)
+
+----
+
+## License
+
+MIT, see [LICENSE](https://github.com/hoffresearch/urna/blob/main/LICENSE). [Hoff Research](https://hoffresearch.com)
+
+Made it simple, but significant (∂μfμν = jν)
+Author: Brenner Cruvinel
+
+----
 <details>
 ## What the file guarantees
 
@@ -285,11 +298,4 @@ The crates are `urna-format` (the container), `urna-engine` (search), `urna` (th
 
 > Renamed from `nest` after 0.4.0. A `.nest` file written by 0.4.0 still opens.
 
-## License
-
-MIT, see [LICENSE](https://github.com/hoffresearch/urna/blob/main/LICENSE). [Hoff Research](https://hoffresearch.com)
-
-Made it simple, but significant (∂μfμν = jν)
-
-Author: Brenner Cruvinel
 </details>
