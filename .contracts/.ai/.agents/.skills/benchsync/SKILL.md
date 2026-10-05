@@ -88,7 +88,7 @@ Se o urna ficou para trás em relação aos repositórios, atualize o que ele ci
 Antes de encerrar, confira se:
 
 - toda validação, todo check e todo PR que você começou terminou, com o resultado registrado;
-- cada item tem o seu PR, e cada linha da tabela teve a saída prevista;
+- cada correção entrou num PR, com as do mesmo assunto juntas, e cada linha da tabela teve a saída prevista;
 - as issues que agrupam o trabalho foram atualizadas como histórico, com cada item, o PR e a validação;
 - os clones, worktrees e arquivos temporários que você criou foram apagados, sem deixar referência para eles.
 
