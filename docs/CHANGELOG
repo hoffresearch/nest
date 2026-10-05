@@ -14,6 +14,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- `factcheck`, an agent skill for reviewing the whole repository against verified facts: a fact sheet of current names and released state, the `specs.yaml` catalog split into groups, one read-only reviewer per group in parallel, each finding confirmed before it is fixed in the owning doc. It is the method that found, after the 0.5.4 release, what path sweeps could not: bare suite names, log prefixes, stale counts, a `.gitignore` rule hiding `python/tools/`. The afterwork skill points to it for repository-wide changes.
+
 ### Changed
 
 - The final review procedure is a skill like the others: `.contracts/.ai/.agents/.skills/afterwork/AFTERWORK.md` is now `afterwork/SKILL.md`, the name every skill file in that folder carries. AGENTS, `specs.yaml`, CONTRIBUTING, the pull request template and the ARC inventory point to the new path; the skill's name and steps are unchanged.

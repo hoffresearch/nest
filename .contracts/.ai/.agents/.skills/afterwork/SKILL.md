@@ -26,7 +26,7 @@ Identifique os comportamentos alterados: comandos, interfaces, dados, configura�
 
 No `specs.yaml`, cada entrada informa um caminho (`path`), quando revisá-lo (`when`) e, quando necessário, um cuidado específico (`rule`). Leia as entradas relacionadas à mudança e confira os arquivos. Atualize apenas informações incorretas, incompletas ou desatualizadas; um arquivo revisado pode continuar igual.
 
-O catálogo é um ponto de partida. Siga imports, chamadas, links, exemplos e geradores com `rg` ou `git grep`, incluindo os arquivos novos da tarefa. Examine os diretórios relevantes e repita essa revisão quando uma correção afetar outra referência, até resolver as inconsistências relacionadas ao trabalho.
+O catálogo é um ponto de partida. Siga imports, chamadas, links, exemplos e geradores com `rg` ou `git grep`, incluindo os arquivos novos da tarefa. Examine os diretórios relevantes e repita essa revisão quando uma correção afetar outra referência, até resolver as inconsistências relacionadas ao trabalho. Quando o alcance for o repositório inteiro, como depois de uma série de renomeações ou de uma release, use a [factcheck](../factcheck/SKILL.md).
 
 Ao criar, remover ou renomear algo, ajuste os consumidores e os links. Atualize o catálogo quando mudar um ponto de manutenção que ele precisa representar; o inventário detalhado pertence ao ARC. Confira também os symlinks e os arquivos gerados, usando suas fontes e comandos de geração.
 
