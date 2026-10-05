@@ -18,7 +18,7 @@ Este é o ponto de partida para desenvolvedores humanos e agentes de código (CL
 | Segurança, proveniência e relato de vulnerabilidades | [SECURITY.md](../../../docs/SECURITY.md) |
 | Mudanças entregues e histórico | [CHANGELOG](../../../docs/CHANGELOG) |
 | Decisões de arquitetura e lições de referência | [ADR](../../../docs/ADR/README.md) |
-| Revisão final e arquivos que a mudança pode afetar | [AFTERWORK.md](.skills/afterwork/AFTERWORK.md) e [specs.yaml](.skills/afterwork/specs.yaml) |
+| Revisão final e arquivos que a mudança pode afetar | [afterwork](.skills/afterwork/SKILL.md) e [specs.yaml](.skills/afterwork/specs.yaml) |
 | Compilar, rodar e dirigir o CLI e o explorer | [run-urna](.skills/run-urna/SKILL.md) |
 
 ## Começar e conduzir o trabalho
@@ -98,7 +98,7 @@ Organize o código por responsabilidade, com nomes claros e comentários que exp
 
 O limite não se aplica à documentação, a arquivos dedicados a testes e fixtures, nem a arquivos gerados, vendorizados, dados estruturados ou lockfiles, como JSON, JSONL, TOML, YAML, CSV e RON. Essas exceções não dispensam organização. Configurações e dados escritos dentro de um arquivo de código continuam sujeitos ao limite desse arquivo.
 
-Mantenha a reorganização ligada à tarefa. Use a revisão final do AFTERWORK para conferir arquivos deslocados, código sem uso e resíduos do trabalho.
+Mantenha a reorganização ligada à tarefa. Use a revisão final do afterwork para conferir arquivos deslocados, código sem uso e resíduos do trabalho.
 
 Escreva estas instruções em português natural. Mantenha o idioma e as convenções dos demais documentos, com parágrafos curtos, títulos claros e exemplos úteis. Commits e PRs usam inglês simples. Os documentos existentes em maiúsculas, como `USAGE.md`, mantêm seus nomes; código segue o estilo da linguagem e `.editorconfig`.
 
@@ -112,4 +112,4 @@ Atualize a explicação atual no documento responsável. Registre o motivo e o h
 - Ao tocar em SIMD ou Miri, confira os requisitos do compilador em `build.rs` e as limitações documentadas nos testes. Mudanças nesses caminhos precisam manter o fallback compatível.
 - Mantenha arquivos de dados e pesos nos destinos e políticas de LFS existentes. O hook `script/precommit` verifica os dados preparados para commit; a release obtém a tabela Potion pelo script com hash fixado.
 
-Antes de concluir, faça a [revisão final](.skills/afterwork/AFTERWORK.md). Entregue o resultado, as evidências e as limitações relevantes. Se depender do desenvolvedor humano, indique a ação indispensável de forma direta.
+Antes de concluir, faça a [revisão final](.skills/afterwork/SKILL.md). Entregue o resultado, as evidências e as limitações relevantes. Se depender do desenvolvedor humano, indique a ação indispensável de forma direta.

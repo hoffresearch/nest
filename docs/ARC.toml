@@ -396,7 +396,7 @@ purpose = "Portuguese entry point for agents and contributors: autonomy, essenti
 links = ["script/fullcheck.sh"]
 
 [[inventory.root]]
-path = ".contracts/.ai/.agents/.skills/afterwork/AFTERWORK.md"
+path = ".contracts/.ai/.agents/.skills/afterwork/SKILL.md"
 kind = "repo-ops"
 purpose = "Final review procedure in nine steps, each matching an epic: the agent first builds its task list in its task tool from the epics, then audits the session history, compares the request with the diff, follows affected references through specs.yaml, routes information to its owning doc (decisions and reference lessons to docs/ADR), checks file organization, validates, resolves pending scope, opens and reviews the PR and reports; closing criteria list what must hold at the end"
 links = [
@@ -409,7 +409,7 @@ links = [
 path = ".contracts/.ai/.agents/.skills/afterwork/specs.yaml"
 kind = "repo-ops"
 purpose = "Conditional maintenance catalog for AFTERWORK: paths, review triggers and specific maintenance requirements; guides review without requiring unrelated edits or duplicating the full inventory"
-links = [".contracts/.ai/.agents/.skills/afterwork/AFTERWORK.md"]
+links = [".contracts/.ai/.agents/.skills/afterwork/SKILL.md"]
 
 [[inventory.data_docs_python_script_tests]]
 path = ".contracts/.ai/.agents/.skills/run-urna/SKILL.md"
@@ -427,7 +427,7 @@ links = ["crates/clitui", "demos/quickstart/corpus.toml"]
 path = ".github/pull_request_template.md"
 kind = "repo-ops"
 purpose = "PR description prompts for the change, tested commit and checks, affected references and remaining limits"
-links = [".contracts/.ai/.agents/.skills/afterwork/AFTERWORK.md"]
+links = [".contracts/.ai/.agents/.skills/afterwork/SKILL.md"]
 
 [[inventory.root]]
 path = "Cargo.lock"

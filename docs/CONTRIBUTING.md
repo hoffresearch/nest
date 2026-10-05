@@ -68,7 +68,7 @@ These conventions are not aesthetic preferences. They exist to keep the repo rea
 
 `.contracts/.ai/.agents/AGENTS.md` is the shared instruction source. The repository keeps no `AGENTS.md`, `CLAUDE.md` or other per-tool file at the root: point your agent tooling at this file yourself.
 
-Before delivery, follow `.contracts/.ai/.agents/.skills/afterwork/AFTERWORK.md`. Its `specs.yaml` maps the files to review for each kind of change; update information that is stale and preserve files that are already correct.
+Before delivery, follow the afterwork skill, `.contracts/.ai/.agents/.skills/afterwork/SKILL.md`. Its `specs.yaml` maps the files to review for each kind of change; update information that is stale and preserve files that are already correct.
 
 ### File hygiene
 
