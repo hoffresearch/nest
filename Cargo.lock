@@ -2391,7 +2391,7 @@ checksum = "b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254"
 
 [[package]]
 name = "urna"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "clap",
@@ -2417,7 +2417,7 @@ dependencies = [
 
 [[package]]
 name = "urna-bridge"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "hex",
  "pyo3",
@@ -2429,7 +2429,7 @@ dependencies = [
 
 [[package]]
 name = "urna-engine"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "criterion",
  "half",
@@ -2446,7 +2446,7 @@ dependencies = [
 
 [[package]]
 name = "urna-format"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "bytemuck",
  "half",
