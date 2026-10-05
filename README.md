@@ -83,6 +83,8 @@ urna validate demos/quickstart/out/quickstart.urna
 
 `ask` prints the answer with its citation, `retrieve` prints JSON for another program, `cite` turns a citation back into the stored text, and `validate` checks every hash. To build from your own rows, see [usage section 13](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
 
+
+<details>
 ## What the file guarantees
 
 | Property | How |
@@ -290,3 +292,4 @@ MIT, see [LICENSE](https://github.com/hoffresearch/urna/blob/main/LICENSE). [Hof
 Made it simple, but significant (∂μfμν = jν)
 
 Author: Brenner Cruvinel
+</details>
