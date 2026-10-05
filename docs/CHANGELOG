@@ -14,6 +14,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Security
+
+- Third-party actions in `gatecheck.yml`, `wheelmake.yml` and `pypiindex.yml` are pinned to a commit SHA, with the version in a comment, so a moved tag upstream cannot change what runs, the PyPI publish action included. Repository settings to match: a `release-tags` ruleset lets only admins create a `v*` tag and nobody move or delete one, and the `pypi` environment deploys only from `v*` tags, `testpypi` only from `main`. `main` is guarded by the `opensource` ruleset alone: the classic branch protection that duplicated it is gone, and its two rules of its own (an up-to-date branch, resolved conversations) moved into the ruleset.
+
 ### Fixed
 
 - setuptest's Windows CLI leg validated the golden fixture at `crates\urna-format\...`, a backslash path the folder rename to `crates/format` did not match, so that leg failed on the v0.5.4 release run while the release and every channel were fine. It points at `crates\format\` now; dispatched against v0.5.4 with the fix, setuptest passed all 20 legs (run 37256022536).
