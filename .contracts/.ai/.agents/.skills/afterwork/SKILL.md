@@ -43,7 +43,9 @@ Ao criar, remover ou renomear algo, ajuste os consumidores e os links. Atualize 
 | Decisões de arquitetura e lições de referência | `docs/ADR/` |
 | Orientação recorrente para agentes | `.contracts/.ai/.agents/AGENTS.md`; o procedimento de revisão fica nesta skill |
 
-Escreva sobre o estado atual, mantendo histórico apenas onde ajuda a compreender decisões ou migrações. Registre em `docs/ADR/` as decisões de arquitetura e as lições que precisam continuar como referência. Uma lição operacional fica, de forma curta, no documento de uso correspondente. Cada ADR parte do `docs/ADR/TEMPLATE.md` e fica em `docs/ADR/<categoria>/NNNN-titulo-curto.md`, com numeração única em todo o `docs/ADR/` e todos os campos do cabeçalho YAML do modelo preenchidos. Um ADR aceito não é apagado nem tem o corpo reescrito: o novo o cita em `supersedes`, e no antigo só o cabeçalho muda (`status: superseded`, `superseded-by` e `last-updated`). As categorias e o escopo de cada uma estão no `docs/ADR/README.md`. Evite copiar o mesmo procedimento para vários lugares.
+Escreva sobre o estado atual, mantendo histórico apenas onde ajuda a compreender decisões ou migrações. Registre em `docs/ADR/` as decisões de arquitetura e as lições que precisam continuar como referência; uma lição operacional fica, de forma curta, no documento de uso correspondente. Evite copiar o mesmo procedimento para vários lugares.
+
+Cada ADR parte do `docs/ADR/TEMPLATE.md` e fica em `docs/ADR/<categoria>/NNNN-titulo-curto.md`, com numeração única em todo o `docs/ADR/` e todos os campos do cabeçalho YAML do modelo preenchidos. As categorias e o escopo de cada uma estão no `docs/ADR/README.md`. Um ADR aceito não é apagado nem tem o corpo reescrito: o novo o cita em `supersedes`, e no antigo só o cabeçalho muda (`status: superseded`, `superseded-by` e `last-updated`).
 
 ## 5. Confira a organização dos arquivos
 
@@ -61,7 +63,7 @@ Confira o limite de 639 linhas nos arquivos de código abrangidos pela mudança,
 
 Execute os checks pertinentes descritos no AGENTS e exigidos pelo projeto. Para scripts de release, valide seus contratos, falhas e integrações; para mudanças no runtime, avalie o gate completo e a medição. Alterações editoriais não precisam reconstruir benchmarks.
 
-Distinga testes aprovados, falhos e pulados, com seus pré-requisitos e o commit testado. Reaproveite evidência quando a mudança posterior não afetar o que foi medido e explique essa relação. Provas de publicação precisam identificar o serviço, a execução e os artefatos usados. Importante: um teste no TestPyPI não comprova a publicação de produção.
+Distinga testes aprovados, falhos e pulados, com seus pré-requisitos e o commit testado. Reaproveite evidência quando a mudança posterior não afetar o que foi medido e explique essa relação. Provas de publicação precisam identificar o serviço, a execução e os artefatos usados. Um teste no TestPyPI não comprova a publicação de produção.
 
 Leia o resultado como revisor: confira comandos, links, configuração, exemplos e texto. A contagem de testes pode mudar; a cobertura necessária deve permanecer.
 
@@ -73,7 +75,11 @@ Resolva as pendências do escopo antes de declarar conclusão. Uma prova reserva
 
 ## 8. Crie e revise o PR
 
-Crie o PR no padrão do AGENTS e do CONTRIBUTING, com as seções do template: título e corpo em inglês simples, a validação como lista de caixas de seleção e a justificativa das verificações usadas. Confira que o PR fecha a sua issue ou sub-issue, que a sub-issue pertence à épica, que a épica lista todos os itens e que issue, sub-issue e PR têm o label correto, e a milestone e as views quando o repositório as tiver. Num trabalho com vários itens, nenhum item fica sem sub-issue nem sub-issue sem PR. Depois, revise o PR online: confira se há conflitos com a base e o estado dos checks obrigatórios, incluindo o `rehearsal`. Havendo conflito, resolva-o e confira o diff contra a nova base. Peça a revisão do mantenedor e não faça o merge: ele é do mantenedor.
+Crie o PR no padrão do AGENTS e do CONTRIBUTING, com as seções do template: título e corpo em inglês simples, a validação como lista de caixas de seleção e a justificativa das verificações usadas.
+
+Confira que o PR fecha a sua issue ou sub-issue, que a sub-issue pertence à épica, que a épica lista todos os itens e que issue, sub-issue e PR têm o label correto, e a milestone e as views quando o repositório as tiver. Num trabalho com vários itens, nenhum item fica sem sub-issue nem sub-issue sem PR.
+
+Depois, revise o PR online: confira se há conflitos com a base e o estado dos checks obrigatórios, incluindo o `rehearsal`. Havendo conflito, resolva-o e confira o diff contra a nova base. Peça a revisão do mantenedor e não faça o merge: ele é do mantenedor.
 
 ## 9. Apresente o relatório final
 
@@ -81,10 +87,9 @@ Informe o que foi entregue, por que mudou, como foi validado e qualquer limitaç
 
 Se houver uma ação indispensável na conta do desenvolvedor atual, apresente somente essa ação e seu motivo.
 
+Com esse contexto, crie a sua lista de tarefas na ferramenta de tarefas do agente (TodoWrite, TaskCreate, update_plan ou equivalente) a partir das etapas abaixo, na ordem de execução. Se surgir algo inesperado que crie um novo item, acrescente-o à lista.
 
-Com esse contexto, crie a sua lista de tarefas na ferramenta de tarefas do agente (TodoWrite, TaskCreate, update_plan ou equivalente) a partir dos épicos abaixo, na ordem de execução. Se surgir algo inesperado que crie um novo item, acrescente-o à lista.
-
-Importante: os épicos abaixo resumem as seções acima, e tudo o que elas pedem deve aparecer na lista. Mantenha a execução organizada, para que o tech lead possa auditar item por item no histórico da transcrição e comparar com o pull request.
+Importante: as etapas abaixo resumem as seções acima, e tudo o que elas pedem deve aparecer na lista. Mantenha a execução organizada, para que o tech lead possa auditar item por item no histórico da transcrição e comparar com o pull request.
 
 ## Agora, vamos à execução: crie a lista de tarefas e execute-a
 
@@ -100,10 +105,10 @@ Importante: os épicos abaixo resumem as seções acima, e tudo o que elas pedem
 
 - [ ] 6 Executar os checks e testes pertinentes, corrigir a causa dos testes reprovados, registrar no PR os testes aprovados, pulados e dispensados com o commit testado, conferir as provas de publicação e revisar o diff final
 
-- [ ] 7 Conferir a árvore do diff entregue, realizar a higiene dos arquivos soltos e/ou que não são mais necessários e resolver as pendências do escopo, incluindo na lista e executando os itens extras que surgirem
+- [ ] 7 Conferir a árvore do diff entregue, apagar os arquivos soltos ou que não servem mais e resolver as pendências do escopo, incluindo na lista e executando os itens extras que surgirem
 
-- [ ] 8 Criar o PR no padrão do AGENTS, ligado à sua issue ou sub-issue e à épica, com labels, milestone e views, e revisá-lo online, corrigindo os conflitos
+- [ ] 8 Criar o PR no padrão do AGENTS, ligado à sua issue ou sub-issue e à épica, com labels, e com milestone e views quando existirem, e revisá-lo online, corrigindo os conflitos
 
 - [ ] 9 Apresentar o relatório final de execução com todos os itens confirmados
 
-/goal : O pedido original foi executado e concluído com sucesso, sem pendências sob controle do agente; dependências externas devem ser identificadas com a ação necessária. Ao término da lista de tarefas, o resultado final deverá contemplar os pedidos desta skill auditados; O repositório deve refletir o comportamento entregue; Referências, links e arquivos gerados consistentes, higienizados, sem imports quebrados, pastas soltas, comentários verbosos desnecessários, tipagem fora do padrão; Documentação atualizada e cada informação no documento certo, sem duplicação; O Código organizado, sem resíduos e dentro do limite de linhas; Checks pertinentes aprovados, dispensas justificadas e evidência atrelada ao commit; Itens do `specs.yaml` revisados e todos arquivos necessários auditados, sem dead code e/ou duplicação de informação; Issues, sub-issues e PRs ligados, com labels, e a épica atualizada como histórico; Entrega do PR sem conflitos e pronto para merge e relatório final apresentado no chat ou no corpo do PR com todos itens da lista de tarefas concluídos.
+/goal : O pedido foi atendido e não há pendência sob controle do agente; o que depende de outra pessoa está nomeado com a ação necessária. O repositório descreve o comportamento entregue, cada informação no documento responsável e sem duplicação. Referências, links e arquivos gerados estão consistentes, sem imports quebrados, resíduos ou código sem uso, e o código respeita o limite de linhas. Os checks pertinentes passaram, as dispensas estão justificadas e a evidência indica o commit. Issue, épica e PR estão ligados e com labels, o PR está sem conflitos, a revisão foi pedida ao mantenedor e o relatório cobre cada item da lista.
