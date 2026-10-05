@@ -12,10 +12,11 @@
 #
 # trigger: cargo-dist calls it as a post-announce job (`post-announce-jobs`
 # in Cargo.toml), so it runs inside the release run once every channel has
-# published; or manual dispatch with a tag. it used to listen for the
-# `release: published` event, which never fired: the release is created
-# with GITHUB_TOKEN, and events from that token start no workflows. if this
-# fails, the release is broken for users; yank and re-cut.
+# published; or manual dispatch with a tag. it cannot listen for
+# `release: published`: the release is created with GITHUB_TOKEN, and
+# events from that token start no workflows. if this fails, the release is
+# broken for users: crates.io and pypi versions are permanent, so the fix
+# is a per-channel decision, usually the next patch.
 
 name: setuptest
 

@@ -3,7 +3,7 @@ name = "urna"
 description = "Offline-first vector database in one file: a .urna container with content-addressable citations, and the urna CLI"
 version.workspace = true
 edition.workspace = true
-# ratatui 0.30 needs 1.88; the format and runtime crates keep the
+# ratatui 0.30 needs 1.88; the format and engine crates keep the
 # workspace msrv (1.85), only the binary with the terminal ui moves.
 rust-version = "1.88"
 license.workspace = true

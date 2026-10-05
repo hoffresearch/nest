@@ -318,7 +318,7 @@ def main() -> int:
     for test in tests:
         test()
         print(f"ok  {test.__name__}")
-    print(f"pypi release: {len(tests)} cases passed")
+    print(f"pypiindex: {len(tests)} cases passed")
     return 0
 
 

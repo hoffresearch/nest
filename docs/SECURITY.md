@@ -17,7 +17,7 @@ Only the latest minor on `main` is supported.
 | Version | Status |
 |---------|--------|
 | 0.5.x   | Supported (current) |
-| 0.4.x and earlier | Not supported, please upgrade (the reader still opens 0.4.0 files, see the `NEST` magic note in the agents contract) |
+| 0.4.x and earlier | Not supported, please upgrade (the reader still opens 0.4.0 `.nest` files: `LEGACY_MAGIC` in `crates/format/src/layout/mod.rs`) |
 
 ## Reporting a vulnerability
 

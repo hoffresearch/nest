@@ -1,5 +1,4 @@
-//! The clap surface: `Cli` + `Commands`. Split from `main.rs`, which keeps
-//! the dispatch.
+//! The clap surface: `Cli` + `Commands`; `main.rs` keeps the dispatch.
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -99,7 +98,8 @@ pub enum Commands {
         query: String,
         #[arg(short, long, default_value = "10")]
         k: i32,
-        /// Override the embedder script. Default: `python/embed_query.py`.
+        /// Override the embedder script. Default: `python/embed_query.py` in a
+        /// checkout, else the installed payload's `<data root>/urna/embed_query.py`.
         #[arg(long)]
         embedder: Option<PathBuf>,
         /// `ef` (HNSW) / candidates-per-path (hybrid). Default: 4*k or 64.
@@ -216,7 +216,7 @@ pub enum Commands {
         ann: Option<usize>,
         /// Force a "madvise-cold" cache between queries by calling
         /// posix_madvise(MADV_DONTNEED) on the mmap. Approximates the
-        /// first hit pos-boot - but it's a hint, not a guarantee.
+        /// first hit post-boot - but it's a hint, not a guarantee.
         /// See MmapUrnaFile::madvise_cold for caveats.
         #[arg(long)]
         madvise_cold: bool,

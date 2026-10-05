@@ -60,7 +60,7 @@ These conventions are not aesthetic preferences. They exist to keep the repo rea
 ### Writing style
 
 - Write in **Diataxis style**: separate tutorial, how-to, reference, and explanation. Mixing them produces noise.
-- **No emoji**, anywhere. **No em-dash** (`-`); use `,`, `;`, `.`, or a regular hyphen.
+- **No emoji**, anywhere. **No em-dash** (U+2014); use `,`, `;`, `.`, or a regular hyphen.
 - Short paragraphs, direct voice, no marketing copy. Commits explain the **why**; the diff already shows the what. No conventional-commits prefix.
 - Every governance or architecture doc starts with a YAML frontmatter block (`project`, `audience`, `status`, `last-updated`, `domain`) so LLM and vector tooling can resolve it semantically.
 
@@ -93,16 +93,16 @@ Python:
 
 Format and runtime invariants:
 
-The format is frozen at v1. Any byte-level change either fits inside v1 (unused section IDs and encoding IDs are reserved and additive; the IDs already written are listed in the agents contract and named in `crates/format/src/layout/mod.rs`) or bumps `URNA_FORMAT_VERSION` and ships as v2.
+The format is frozen at v1. Any byte-level change either fits inside v1 (unused section IDs and encoding IDs are reserved and additive; the IDs already written are listed in the `contract` of `docs/ARC.toml` and named in `crates/format/src/layout/mod.rs`) or bumps `URNA_FORMAT_VERSION` and ships as v2.
 
 ## Tests
 
 ```
 cargo test --release --workspace
-python tests/test_pythonapi.py                      # the python suites, in the order
-python tests/test_ingestion.py                  # fullcheck.sh runs them; that
-python tests/test_hashguard.py   # script is the list, AGENTS.md names
-python tests/test_forgespec.py               # the three that run by hand
+python tests/test_pythonapi.py   # the python suites, in the order fullcheck.sh
+python tests/test_ingestion.py   # runs them; that script is the list, and
+python tests/test_hashguard.py   # USAGE section 10 names the three that run
+python tests/test_forgespec.py   # by hand
 ./script/fullcheck.sh
 ```
 
