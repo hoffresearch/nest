@@ -6,7 +6,7 @@ A vector database in one file, with citations that stay valid.
 
 A `.urna` file holds the chunks, the embeddings, the source spans, the indices and the search contract. The Rust runtime maps it into memory, checks its hashes, and answers with exact cosine scores and a `urna://content_hash/chunk_id` citation for every hit. It works offline and rebuilds byte for byte. Python builds the file, Rust serves it.
 
-Documentation: [docs.urna.dev](https://docs.urna.dev), with install, a quickstart, the concepts, the guides and the full CLI, build spec, Python and file format reference. Project site: [urna.dev](https://urna.dev).
+Documentation: [docs.urna.dev](https://docs.urna.dev), with install, a quickstart, the concepts, the guides and the full CLI, build spec, Python and file format reference. Project site: [urna.dev](https://urna.dev)
 
 ## Install
 
