@@ -19,6 +19,7 @@ Este é o ponto de partida para desenvolvedores humanos e agentes de código (CL
 | Mudanças entregues e histórico | [CHANGELOG](../../../docs/CHANGELOG) |
 | Decisões de arquitetura e lições de referência | [ADR](../../../docs/ADR/README.md) |
 | Revisão final e arquivos que a mudança pode afetar | [AFTERWORK.md](.skills/afterwork/AFTERWORK.md) e [specs.yaml](.skills/afterwork/specs.yaml) |
+| Compilar, rodar e dirigir o CLI e o explorer | [run-urna](.skills/run-urna/SKILL.md) |
 
 ## Começar e conduzir o trabalho
 
