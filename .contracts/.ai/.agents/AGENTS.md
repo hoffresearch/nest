@@ -23,6 +23,7 @@ Este é o ponto de partida para desenvolvedores humanos e agentes de código (CL
 | Revisar o repositório inteiro contra o estado real | [factcheck](.skills/factcheck/SKILL.md) |
 | Preparar, publicar e provar uma release em todos os canais | [releaseops](.skills/releaseops/SKILL.md) |
 | Renomear pastas, crates, pacotes, scripts, workflows ou testes | [renameops](.skills/renameops/SKILL.md) |
+| Sincronizar os benchmarks e os repositórios externos ligados ao urna, com os seus datasets | [benchsync](.skills/benchsync/SKILL.md) e [benches.yaml](.skills/benchsync/benches.yaml) |
 
 ## Começar e conduzir o trabalho
 
@@ -40,7 +41,7 @@ Publicar, enviar ou mover tags, alterar permissões ou secrets e remover branche
 
 Credenciais ficam nos mecanismos de secrets ou autenticação do serviço, fora dos arquivos e dos logs. Uma credencial exposta deve ser tratada como comprometida. O fluxo PyPI usa OIDC; confira no USAGE o procedimento de publicação e recuperação.
 
-O projeto usa commits assinados. Um PR de um commit entra por squash; um PR com commits que devem ficar separados no histórico entra por rebase, que mantém cada commit e o histórico linear. Ao atualizar um PR empilhado, resolva os conflitos e confira o diff contra a nova base. Depois do merge, compare o conteúdo entregue com a árvore aprovada e explique qualquer diferença. A troca do hash pelo squash ou pelo rebase é esperada.
+O rojeto usa commits assinados com a chave SSH ou GPG do desenvolvedor, sem linha de co-autoria. Um PR de um commit entra por squash; um PR com commits que devem ficar separados no histórico entra por rebase, que mantém cada commit e o histórico linear. Ao atualizar um PR empilhado, resolva os conflitos e confira o diff contra a nova base. Depois do merge, compare o conteúdo entregue com a árvore aprovada e explique qualquer diferença. A troca do hash pelo squash ou pelo rebase é esperada.
 
 ## Issues, PRs e histórico
 
@@ -128,6 +129,6 @@ Atualize a explicação atual no documento responsável. Registre o motivo e o h
 - Testes de instalação devem usar diretórios isolados e um binário fora de `target/`, para não encontrar acidentalmente o payload, o Python ou os modelos da máquina.
 - Atualize `python/forge/catalog.json` pelo gerador ao mudar o registry e confira `python python/forge/model_catalog.py --check`. Resolva snapshots pelas revisões fixadas e preserve a lista de arquivos usada no fingerprint.
 - Ao tocar em SIMD ou Miri, confira os requisitos do compilador em `build.rs` e as limitações documentadas nos testes. Mudanças nesses caminhos precisam manter o fallback compatível.
-- Mantenha arquivos de dados e pesos nos destinos e políticas de LFS existentes. O hook `script/precommit` verifica os dados preparados para commit; a release obtém a tabela Potion pelo script com hash fixado.
+- Mantenha arquivos de dados e pesos nos destinos e políticas de LFS existentes. O hook `script/precommit` verifica os dados preparados para commit; a release obtém a tabela Potion pelo s agora, crie jum cript com hash fixado.
 
 Antes de concluir, faça a [revisão final](.skills/afterwork/SKILL.md). Entregue o resultado, as evidências e as limitações relevantes. Se depender do desenvolvedor humano, indique a ação indispensável de forma direta.

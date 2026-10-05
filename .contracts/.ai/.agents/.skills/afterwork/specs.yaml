@@ -20,6 +20,9 @@ groups:
         when: mudar o procedimento de revisão final, organização de arquivos, validação ou entrega.
       - path: .contracts/.ai/.agents/.skills/afterwork/specs.yaml
         when: mudar um caminho, responsabilidade ou situação de revisão representada neste catálogo.
+      - path: .contracts/.ai/.agents/.skills/benchsync/
+        when: mudarem a versão publicada, uma superfície que um benchmark usa, um caminho que ele cita, ou entrar um benchmark novo.
+        rule: os caminhos dos benchmarks ficam só no benches.yaml.
       - path: .contracts/.ai/.agents/.skills/factcheck/SKILL.md
         when: mudar a forma de dividir o catálogo, as regras dos revisores ou a validação das correções.
       - path: .contracts/.ai/.agents/.skills/releaseops/SKILL.md

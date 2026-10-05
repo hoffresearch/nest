@@ -73,7 +73,7 @@ Resolva as pendências do escopo antes de declarar conclusão. Uma prova reserva
 
 ## 8. Crie e revise o PR
 
-Crie o PR no padrão do AGENTS: commits assinados, título e corpo em inglês simples, a validação como lista de caixas de seleção e justificativa das verificações usadas. Confira que o PR fecha a sua issue ou sub-issue, que a sub-issue pertence à épica, que a épica lista todos os itens e que issue, sub-issue e PR têm o label correto, e a milestone e as views quando o repositório as tiver. Labels e títulos descrevem a área do produto ou o tipo de mudança, e não quem fez o trabalho. Num trabalho com vários itens, nenhum item fica sem sub-issue nem sub-issue sem PR. Depois, revise o PR online: confira se há conflitos com a base e o estado dos checks obrigatórios, incluindo o `rehearsal`. Havendo conflito, resolva-o e confira o diff contra a nova base.
+Crie o PR no padrão do AGENTS e do CONTRIBUTING, com as seções do template: commits assinados com a chave SSH ou GPG do desenvolvedor (git commit -S), sem linha de co-autoria, título e corpo em inglês simples, linguagem natural. Confira que o PR fecha a sua issue ou sub-issue, que a sub-issue pertence à épica, que a épica lista todos os itens e que issue, sub-issue e PR têm o label correto, e a milestone e as views quando o repositório as tiver. Labels e títulos descrevem a área do produto ou o tipo de mudança, e não quem fez o trabalho. Num trabalho com vários itens, nenhum item fica sem sub-issue nem sub-issue sem PR. Depois, revise o PR online: confira se há conflitos com a base e o estado dos checks obrigatórios, incluindo o `rehearsal`. Havendo conflito, resolva-o e confira o diff contra a nova base.
 
 ## 9. Apresente o relatório final
 
