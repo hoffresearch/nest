@@ -37,11 +37,9 @@ O dev principal e tech lead da aplicação escreve rápido e usa transcrição d
 
 Branches, edições, testes, commits, PRs e workflows sem publicação fazem parte do trabalho autorizado. Use caminhos explícitos ao preparar commits e confira o diff para não incluir alterações de outra tarefa.
 
-Publicar, enviar ou mover tags, alterar permissões ou secrets e remover branches remotas exige autorização compatível com a ação. Uma autorização já dada continua válida durante o trabalho. Force-push numa branch de trabalho exige autorização e `--force-with-lease`; preserve a `main` e seus requisitos de revisão, sem bypass de administrador. Não desative verificações para esconder falhas.
+Publicar, enviar ou mover tags, alterar permissões ou secrets e remover branches remotas exige autorização compatível com a ação. Uma autorização já dada continua válida durante o trabalho, salvo o merge, que é sempre do mantenedor. Force-push numa branch de trabalho exige autorização e `--force-with-lease`; preserve a `main` e seus requisitos de revisão, sem bypass de administrador. Não desative verificações para esconder falhas.
 
 Credenciais ficam nos mecanismos de secrets ou autenticação do serviço, fora dos arquivos e dos logs. Uma credencial exposta deve ser tratada como comprometida. O fluxo PyPI usa OIDC; confira no USAGE o procedimento de publicação e recuperação.
-
-O agente abre o PR, pede a revisão do mantenedor e para aí: não faz o merge, nem quando os checks passam ou quando já recebeu outra autorização. O mantenedor revisa e faz o merge com um merge commit, que mantém na `main` cada commit do PR. Se a `main` avançar e o PR tiver conflito, atualize a branch com um merge da `main`, resolva os conflitos e confira o diff contra a nova base. Depois do merge, compare o conteúdo entregue com a árvore aprovada e explique qualquer diferença.
 
 ## Issues, PRs e histórico
 
@@ -54,6 +52,8 @@ Criar issues, sub-issues e labels faz parte do trabalho autorizado. Títulos e c
 Associe cada issue, sub-issue e PR ao label correto antes de abri-lo; se o label ainda não existir, crie-o com uma descrição curta (`gh label create`). Siga a mesma regra para a milestone e as views do projeto, quando o repositório as tiver. O label descreve a área do produto ou o tipo de mudança, como `documentation`, `bug` ou `enhancement`.
 
 Cada PR começa com `Closes #<sub-issue>. Part of #<épica>.` (ou só `Closes #<issue>.`) e é aberto a partir da `main` atualizada, depois que o mantenedor fizer o merge do anterior. A seção de validação, em inglês, lista cada check como caixa de seleção. Marque o que rodou, com o comando, o resultado e o commit testado. Deixe desmarcado o que não rodou ou foi dispensado, com o motivo. Ao abrir o PR, peça a revisão e aguarde.
+
+O agente abre o PR, pede a revisão do mantenedor e para aí: não faz o merge, nem quando os checks passam ou quando já recebeu outra autorização. O mantenedor revisa e faz o merge com um merge commit, que mantém na `main` cada commit do PR. Se a `main` avançar e o PR tiver conflito, atualize a branch com um merge da `main`, resolva os conflitos e confira o diff contra a nova base. Depois do merge, compare o conteúdo entregue com a árvore aprovada e explique qualquer diferença.
 
 Ao fechar a série, atualize o corpo da épica como histórico: cada sub-issue com o seu PR, as provas, as lições e as pendências.
 
@@ -104,7 +104,7 @@ Registre o que passou, falhou ou foi pulado e em qual commit. Um teste dispensad
 
 `packs/pyproject.toml` é a fonte da wheel; `packs/staging/` é gerado. Para mudar a configuração do cargo-dist, rode `dist generate` e depois `python script/rehearsal.py generate`. Edite as fontes dos geradores e confira os arquivos resultantes.
 
-A preparação local usa `script/releasepr.sh X.Y.Z`, com cargo-release fixado, worktree isolada e PR assinado. Tag e publicação são etapas separadas; a skill [releaseops](.skills/releaseops/SKILL.md) conduz a release do número à prova em cada canal. Preserve os metadados de citação escolhidos pelo mantenedor ao atualizar os campos versionados.
+A preparação local usa `script/releasepr.sh X.Y.Z`, com cargo-release fixado, worktree isolada e commit assinado. Tag e publicação são etapas separadas; a skill [releaseops](.skills/releaseops/SKILL.md) conduz a release do número à prova em cada canal. Preserve os metadados de citação escolhidos pelo mantenedor ao atualizar os campos versionados.
 
 A release constrói binários, payload e wheels antes de publicar. O PyPI recebe as mesmas wheels por um workflow de topo despachado pela release. Os testes de instalação esperam a versão exata; o relatório acompanha também execuções com falha. O USAGE contém os comandos, requisitos de origem, autenticação e recuperação de uploads parciais.
 
