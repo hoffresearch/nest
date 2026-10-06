@@ -77,6 +77,11 @@ tool/tests/test_rehearsal.py
 tool/tasks/chanprobe.py
 tool/tests/test_chanprobe.py
 tool/tests/test_releasepr.py
+rust/bridge/python/urna/__init__.py
+rust/bridge/python/urna/embed/__init__.py
+tool/tasks/wheelprep.py
+tool/tasks/namecheck.py
+tool/tests/test_namecheck.py
 "
 # shellcheck disable=SC2086
 "$PY" -m ruff check $TARGETS
