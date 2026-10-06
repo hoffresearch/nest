@@ -171,16 +171,18 @@ jobs:
       - name: toolchain
         run: rustup toolchain install stable --profile minimal && rustup default stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      # a base commit without rust/format has nothing to compare
-      # against; skip instead of failing.
+      # a base commit without the urna-format package has nothing to compare
+      # against; skip instead of failing. found by package name, not by path:
+      # cargo-semver-checks finds the baseline the same way, so a base from
+      # before a folder move still compares.
       - name: baseline has urna-format
         id: baseline
         run: |
-          if git cat-file -e "${{ github.event.pull_request.base.sha }}:rust/format/Cargo.toml" 2>/dev/null; then
+          if git grep -q '^name = "urna-format"' "${{ github.event.pull_request.base.sha }}" -- '*Cargo.toml'; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::base commit has no rust/format; semver check skipped"
+            echo "::notice::base commit has no urna-format package; semver check skipped"
           fi
       # the on-disk format is frozen; the rust api that reads it should say
       # when it breaks. the baseline is the pr's base commit, not the last
