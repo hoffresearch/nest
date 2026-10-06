@@ -216,7 +216,7 @@ def fingerprint_for(preset, model_dir: Path, normalize: bool, dtype_policy: str)
             code_hashes[f.name] = hashlib.sha256(f.read_bytes()).hexdigest()
     return {
         "embedder": "st_multimodal",
-        "modelhash": fp,
+        "model_fingerprint": fp,
         "remote_code_sha256": code_hashes,
         "pooling": "model-native",
         "normalize": "l2" if normalize else "none",

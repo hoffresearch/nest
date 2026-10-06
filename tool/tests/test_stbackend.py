@@ -2,7 +2,8 @@
 subprocess isolation (the jina+wemm dynamic-module collision is the reason
 the adapter owns a worker), dim/norm contracts, model_hash stability across
 constructions, and cross-modal sanity. Skips cleanly when the deps or the
-local snapshot are absent. NOT run by fullcheck.sh (loads a 2B model).
+local snapshot are absent, except the pinned model_hash of a synthetic
+snapshot, which always runs. NOT run by fullcheck.sh (loads a 2B model).
 
 Run: .venv/bin/python tool/tests/test_stbackend.py
 """
@@ -21,6 +22,34 @@ from urna.model import presetmap as mr
 WEMM = mr.PRESETS["wemm-2b"]
 HAVE_DEPS = all(importlib.util.find_spec(m) is not None for m, _ in WEMM.requires)
 HAVE_MODEL = WEMM.local_dir is not None and Path(WEMM.local_dir).is_dir()
+
+
+# the model_hash of a fixed synthetic snapshot, as the st_multimodal backend
+# computed it before the move (306e65fd, python/forge/embed_st.py). the key
+# names of the fingerprint dict are data that goes into the hash: a renamed
+# key changes every corpus's model_hash.
+PINNED_MODEL_HASH = "sha256:9885c42ea691ef1dc8fffd08c4403d8580ada6eb3cc20f763e9c0bb8d8b341cb"
+
+
+def test_model_hash_is_pinned() -> None:
+    import hashlib
+    import json
+    import tempfile
+    from types import SimpleNamespace
+
+    from urna.embed.stbackend import fingerprint_for
+
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp) / "acme-fixture"
+        d.mkdir()
+        (d / "config.json").write_text('{"hidden_size": 8, "_name_or_path": "acme/fixture"}')
+        (d / "tokenizer.json").write_text('{"version": "1.0"}')
+        (d / "modules.json").write_text("[]")
+        (d / "modeling_fixture.py").write_text("X = 1\n")
+        fp = fingerprint_for(SimpleNamespace(model_id="acme/fixture"), d, True, "float32")
+    blob = json.dumps(fp, sort_keys=True, separators=(",", ":"))
+    assert "model_fingerprint" in fp, sorted(fp)
+    assert "sha256:" + hashlib.sha256(blob.encode()).hexdigest() == PINNED_MODEL_HASH, blob
 
 
 def test_hash_without_load() -> None:
@@ -66,6 +95,9 @@ def test_worker_survives_multi_model() -> None:
 
 
 def main() -> None:
+    # needs no model and no sentence-transformers: always runs.
+    test_model_hash_is_pinned()
+    print("test_model_hash_is_pinned: OK")
     if not (HAVE_DEPS and HAVE_MODEL):
         print("SKIP: sentence-transformers stack or the local WeMM-2B snapshot is absent")
         return
