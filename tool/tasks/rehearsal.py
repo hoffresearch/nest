@@ -290,8 +290,9 @@ def _load(name: str):
     return module
 
 
-def release_inputs() -> tuple[set[str], tuple[str, ...]]:
-    """(exact paths, path prefixes) whose change reaches a release artifact."""
+def release_inputs() -> tuple[set[str], tuple[str, ...], str]:
+    """(exact paths, path prefixes, the potion table's prefix) whose change
+    reaches a release artifact."""
     payload, wheel = _load("embedpack"), _load("wheelprep")
     exact = {f"rust/bridge/python/urna/{n}" for n in payload.MODULES}
     exact |= {src.relative_to(ROOT).as_posix() for src, _ in wheel.COPIES}
@@ -313,7 +314,7 @@ def release_inputs() -> tuple[set[str], tuple[str, ...]]:
     }
     # the potion table, shipped by the payload and the wheel alike.
     model = wheel.MODEL_SRC.relative_to(ROOT).as_posix() + "/"
-    return exact, ("rust/", "pkgs/wheel/", model)
+    return exact, ("rust/", "pkgs/wheel/"), model
 
 
 # under rust/ but no release artifact builds it: rust/ingest is its own
@@ -323,12 +324,12 @@ OUTSIDE_RELEASE = ("rust/ingest/", "rust/bridge/python/")
 
 
 def touches_release(paths: list[str]) -> list[str]:
-    exact, prefixes = release_inputs()
+    exact, prefixes, model = release_inputs()
     return [
         p
         for p in paths
         if p in exact
-        or p.startswith(prefixes[-1])
+        or p.startswith(model)
         or (p.startswith(prefixes) and not p.startswith(OUTSIDE_RELEASE))
     ]
 

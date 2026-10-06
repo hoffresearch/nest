@@ -15,7 +15,6 @@ import json
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # holds urna/
 
 from urna import _urna  # noqa: E402
@@ -82,7 +81,7 @@ def cmd_browse(db, manifest, args) -> dict:
     return {"total": len(items), "offset": args.offset, "items": page}
 
 
-def searchtxt(preset_name: str, dim: int, query: str):
+def embed_text_query(preset_name: str, dim: int, query: str):
     import os
 
     from urna.model import presetmap
@@ -108,10 +107,10 @@ def cmd_search(db, manifest, args) -> dict:
     if args.space:
         preset = args.space.split("@")[0].removesuffix("-text")
         dim = int(args.space.split("@")[1]) if "@" in args.space else 0
-        vec = searchtxt(preset, dim, args.query)
+        vec = embed_text_query(preset, dim, args.query)
         hits = db.search_space(args.space, vec, args.k)
     else:
-        vec = searchtxt("potion", 0, args.query)
+        vec = embed_text_query("potion", 0, args.query)
         if args.mode == "ann":
             hits = db.search_ann(vec, args.k, 100)
         elif args.mode == "hybrid":

@@ -99,7 +99,7 @@ pub enum Commands {
         #[arg(short, long, default_value = "10")]
         k: i32,
         /// Override the embedder script. Default: `rust/bridge/python/urna/embed/searchtxt.py` in a
-        /// checkout, else the installed payload's `<data root>/urna/searchtxt.py`.
+        /// checkout, else the installed payload's `<data root>/urna/python/urna/embed/searchtxt.py`.
         #[arg(long)]
         embedder: Option<PathBuf>,
         /// `ef` (HNSW) / candidates-per-path (hybrid). Default: 4*k or 64.

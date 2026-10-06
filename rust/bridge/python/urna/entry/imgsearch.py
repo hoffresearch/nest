@@ -99,7 +99,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def searchtxt(args: argparse.Namespace, embedder, manifest: dict | None):
+def embed_text_query(args: argparse.Namespace, embedder, manifest: dict | None):
     """The query vector, from pixels or from the text tower."""
     if args.query_text:
         return embedder.embed_texts([args.query_text])[0].tolist()
@@ -124,7 +124,7 @@ def main() -> int:
         model_id=args.model, pretrained=args.pretrained, device=args.device
     )
     manifest = load_manifest(args.index)
-    qvec = searchtxt(args, embedder, manifest)
+    qvec = embed_text_query(args, embedder, manifest)
 
     db = urna.open(str(args.index))
     expected = None if args.skip_model_check else embedder.model_hash
