@@ -2,13 +2,13 @@
 id: ADR-0002
 title: Short folder names; published package names keep the urna prefix
 kind: decision
-status: accepted
+status: superseded
 category: STRUCTURE
 date: 2026-10-04
-last-updated: 2026-10-04
+last-updated: 2026-10-06
 tags: [PACKAGING, WORKFLOWS, naming, crates]
 supersedes: [ADR-0001]
-superseded-by: null
+superseded-by: ADR-0003
 related: ["#296", "#391", "#392", "#393", "#394", "#395", "crates/", "script/", ".github/workflows/", "tests/"]
 ---
 

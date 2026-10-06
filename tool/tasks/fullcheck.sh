@@ -5,7 +5,7 @@
 #   0. the name check (length table, exceptions, lexicon)
 #   1. cargo build (release), then the PyO3 extension (.so) the tests load
 #   2. cargo test/clippy/fmt (release profile), the 639-line guard
-#   3. the python suites (the `step "python tests/..."` lines below), ruff
+#   3. the python suites (the `step "python tool/tests/..."` lines below), ruff
 #   4. presetrun --json on the LFS-tracked corpus
 #   5. benchgate regression gates vs data/measure/baseline.json
 #

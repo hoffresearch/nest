@@ -2,7 +2,7 @@
 
 run: python tool/tests/test_lexifloor.py
 
-a plain script (no pytest), matching the repo's tests/ convention. proves the
+a plain script (no pytest), matching the repo's tool/tests/ convention. proves the
 embedder is deterministic, offline (stdlib only), f32-stable, normalized,
 carries a stable config fingerprint, and that the demo corpus ships.
 """
@@ -55,7 +55,7 @@ def main() -> None:
     e2 = embed_one("")
     assert e1 == e2 and any(e1), "empty text embeds deterministically and non-zero"
 
-    # builder.Pipeline-compatible: callable over ChunkSpec-likes and raw strings.
+    # buildfile.Pipeline-compatible: callable over ChunkSpec-likes and raw strings.
     class _Spec:
         canonical_text = "hello world"
 

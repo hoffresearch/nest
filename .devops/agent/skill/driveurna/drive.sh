@@ -1,7 +1,7 @@
 #!/bin/sh
 # drive.sh - build, smoke and drive the urna CLI and its terminal explorer.
 # run from the repo root, on macOS or Linux:
-#   sh .contracts/.ai/.agents/.skills/run-urna/drive.sh <command> [args]
+#   sh .devops/agent/skill/driveurna/drive.sh <command> [args]
 #
 #   ext               build the python extension (_urna) the forge imports
 #   build             cargo build --release -p urna, then print its version
@@ -21,7 +21,7 @@ set -eu
 
 TARGET="${CARGO_TARGET_DIR:-target}"
 U="${URNA_BIN:-$TARGET/release/urna}"
-SPEC=demos/quickstart/corpus.toml
+SPEC=demo/starter/corpus.toml
 F="${URNA_FILE:-demos/quickstart/out/quickstart.urna}"
 tmp="${TMPDIR:-/tmp}"
 SHOTS="${SHOTS:-${tmp%/}/urna-shots}"
@@ -62,10 +62,10 @@ ext)
     *) die "ext: macOS and Linux only; elsewhere use the wheel (pip install urna)" ;;
     esac
     PYO3_PYTHON="$PY" cargo build --release -p urna-bridge --features pyo3/extension-module
-    cp "$TARGET/release/$lib" python/_urna.so
-    "$PY" -c 'import sys; sys.path.insert(0, "python"); import urna' \
-        || die "$PY cannot load python/_urna.so (the extension needs python 3.12 or newer)"
-    echo "drive: python/_urna.so built for $PY"
+    cp "$TARGET/release/$lib" rust/bridge/python/urna/_urna.so
+    "$PY" -c 'import sys; sys.path.insert(0, "rust/bridge/python"); import urna; urna.UrnaFile' \
+        || die "$PY cannot load rust/bridge/python/urna/_urna.so (the extension needs python 3.12 or newer)"
+    echo "drive: rust/bridge/python/urna/_urna.so built for $PY"
     ;;
 build)
     cargo build --release -p urna
@@ -73,7 +73,7 @@ build)
     ;;
 corpus)
     need_bin
-    [ -f python/_urna.so ] || die "no python/_urna.so, which the forge imports; run: drive.sh ext"
+    [ -f rust/bridge/python/urna/_urna.so ] || die "no rust/bridge/python/urna/_urna.so, which the forge imports; run: drive.sh ext"
     out=$("$U" build --spec "${2:-$SPEC}") || die "build failed for ${2:-$SPEC}"
     printf '%s\n' "$out" | "$PY" -c '
 import json, sys

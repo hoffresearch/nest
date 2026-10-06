@@ -371,7 +371,7 @@ def pinned_snapshot(preset: ModelPreset, model_path: str | os.PathLike | None = 
 
 def _fetch_snapshot(preset: ModelPreset) -> Path:
     """Download the preset's pinned files: the explicit URNA_ALLOW_DOWNLOAD=1 opt-in."""
-    # importing forge (potiontab) defaults the hub offline; the opt-in wins,
+    # importing potiontab defaults the hub offline; the opt-in wins,
     # as in stbackend. huggingface_hub reads the flag when it is first imported.
     for k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
         os.environ.pop(k, None)

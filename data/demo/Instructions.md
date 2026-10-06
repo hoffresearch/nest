@@ -16,7 +16,7 @@ This directory is local-only and gitignored, except this file.
 
 ```
 data/demo/
-├── truw-built/                  v2 canonical csvs, npy embeddings and the sqlite-era truw_ptbr.urna (python/convert_legacy.py)
+├── truw-built/                  v2 canonical csvs, npy embeddings and the sqlite-era truw_ptbr.urna (rust/bridge/python/urna/entry/oldformat.py)
 ├── derm/ph2 + derm/ham10000     dermoscopy images for the image benchmark
 ├── wsi/CMU-1.svs + wsi/cmu1-tiles   whole-slide scan and derived tiles
 └── pdf/birdcraft-1907.pdf       scanned book, public domain
@@ -24,7 +24,7 @@ data/demo/
 
 ## The fake-news corpus
 
-`data/corpus_next.v1.urna` (Git LFS) is the file the regression gate measures: `measure_presets.py` rebuilds it at the other presets and `fullcheck.sh` compares the numbers with `data/measure/baseline.json`. The gate reads the file and never rebuilds it from the datasets.
+`data/corpus_next.v1.urna` (Git LFS) is the file the regression gate measures: `presetrun.py` rebuilds it at the other presets and `fullcheck.sh` compares the numbers with `data/measure/baseline.json`. The gate reads the file and never rebuilds it from the datasets.
 
 | Field | Value |
 |---|---|
@@ -39,7 +39,7 @@ The file is frozen. It was built from seven pt-BR fake-news datasets that can no
 
 The corpus is rebuilt, with every source pinned to a revision and a tree hash, in [fakenews-ptbr-urna-benchmark](https://github.com/brennercruvinel/fakenews-ptbr-urna-benchmark): the fetch, the normalization and dedup (23,335 documents), the queries with TREC qrels, builds with three example embedders and the evaluation. Its `docs/sources.md` is the license bill of materials of the seven sources. The built corpus and its `.urna` files are in the [dataset of the same name](https://huggingface.co/datasets/brennercruvinel/fakenews-ptbr-urna-benchmark).
 
-The corpus embeds political and health claims about named public figures; see the data governance section of [`docs/SECURITY.md`](../../docs/SECURITY.md#data-governance). For anything you ship broadly, prefer the CC0 `python/forge/demo_corpus`.
+The corpus embeds political and health claims about named public figures; see the data governance section of [`docs/SECURITY.md`](../../docs/SECURITY.md#data-governance). For anything you ship broadly, prefer the CC0 `demo/corpora/intro`.
 
 ## Image corpora
 
@@ -66,22 +66,22 @@ Four sources, four media regimes, which is what makes the measurement honest:
 Rebuild the benchmark (the control index is not optional: the compressed numbers mean nothing without it):
 
 ```sh
-.venv/bin/python python/tools/urna_build_image_corpus.py \
+.venv/bin/python rust/bridge/python/urna/entry/imgcorpus.py \
     --input-dir data/demo/derm/ph2/images --dataset ph2 \
     --output tmp/ph2/ph2.urna --labels data/demo/derm/ph2/PH2_simple_dataset.csv
-.venv/bin/python python/tools/urna_build_image_corpus.py \
+.venv/bin/python rust/bridge/python/urna/entry/imgcorpus.py \
     --input-dir data/demo/derm/ph2/images --dataset ph2 \
     --output tmp/ph2-control/ph2-control.urna --labels data/demo/derm/ph2/PH2_simple_dataset.csv \
     --control
-.venv/bin/python python/tools/urna_image_eval.py \
+.venv/bin/python tool/bench/imageeval.py \
     --index tmp/ph2/ph2.urna --baseline tmp/ph2-control/ph2-control.urna -k 1 5 10
 ```
 
-The full variant matrix (AV1 CRF ladder, avif444, control, dtype rungs, ordering) is one command per dataset with `python/tools/urna_image_sweep.py`; see `docs/USAGE.md` for the flags and `docs/CHANGELOG` for the measured matrix with confidence intervals.
+The full variant matrix (AV1 CRF ladder, avif444, control, dtype rungs, ordering) is one command per dataset with `tool/bench/imagerate.py`; see `docs/USAGE.md` for the flags and `docs/CHANGELOG` for the measured matrix with confidence intervals.
 
 ## Offline demo (no downloads)
 
-None of the data in this directory is needed for the one-GIF demo. `python python/forge/retrieve.py` builds a byte-identical `.urna` from the CC0 demo corpus in `python/forge/demo_corpus` using the vendored potion embedder (numpy + tokenizers, no torch, no network) and prints a cited answer in seconds. It only needs `git lfs pull` to hydrate the potion table.
+None of the data in this directory is needed for the one-GIF demo. `python rust/bridge/python/urna/reads/retrieval.py` builds a byte-identical `.urna` from the CC0 demo corpus in `demo/corpora/intro` using the vendored potion embedder (numpy + tokenizers, no torch, no network) and prints a cited answer in seconds. It only needs `git lfs pull` to hydrate the potion table.
 
 ## Licenses
 

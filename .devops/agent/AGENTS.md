@@ -12,18 +12,18 @@ Este é o ponto de partida para desenvolvedores humanos e agentes de código (CL
 
 | Preciso entender… | Onde consultar |
 | --- | --- |
-| Arquitetura, contratos e responsáveis por cada parte | [ARC.toml](../../../docs/ARC.toml) |
-| Comandos, instalação, modelos e operação das releases | [USAGE.md](../../../docs/USAGE.md) |
-| Ambiente de desenvolvimento, testes e contribuição | [CONTRIBUTING.md](../../../docs/CONTRIBUTING.md) |
-| Segurança, proveniência e relato de vulnerabilidades | [SECURITY.md](../../../docs/SECURITY.md) |
-| Mudanças entregues e histórico | [CHANGELOG](../../../docs/CHANGELOG) |
-| Decisões de arquitetura e lições de referência | [ADR](../../../docs/ADR/README.md) |
-| Revisão final e arquivos que a mudança pode afetar | [afterwork](.skills/afterwork/SKILL.md) e [specs.yaml](.skills/afterwork/specs.yaml) |
-| Compilar, rodar e dirigir o CLI e o explorer | [run-urna](.skills/run-urna/SKILL.md) |
-| Revisar o repositório inteiro contra o estado real | [factcheck](.skills/factcheck/SKILL.md) |
-| Preparar, publicar e provar uma release em todos os canais | [releaseops](.skills/releaseops/SKILL.md) |
-| Renomear pastas, crates, pacotes, scripts, workflows ou testes | [renameops](.skills/renameops/SKILL.md) |
-| Sincronizar benchmarks, datasets e repositórios externos | [benchsync](.skills/benchsync/SKILL.md) e [benches.yaml](.skills/benchsync/benches.yaml) |
+| Arquitetura, contratos e responsáveis por cada parte | [ARCHS.toml](../../docs/ARCHS.toml) |
+| Comandos, instalação, modelos e operação das releases | [USAGE.md](../../docs/USAGE.md) |
+| Ambiente de desenvolvimento, testes e contribuição | [CONTRIBUTING.md](../../docs/CONTRIBUTING.md) |
+| Segurança, proveniência e relato de vulnerabilidades | [SECURITY.md](../../docs/SECURITY.md) |
+| Mudanças entregues e histórico | [CHANGELOG](../../docs/CHANGELOG) |
+| Decisões de arquitetura e lições de referência | [ADR](../../docs/adr/README.md) |
+| Revisão final e arquivos que a mudança pode afetar | [afterwork](skill/afterwork/SKILL.md) e [specs.yaml](skill/afterwork/specs.yaml) |
+| Compilar, rodar e dirigir o CLI e o explorer | [driveurna](skill/driveurna/SKILL.md) |
+| Revisar o repositório inteiro contra o estado real | [factcheck](skill/factcheck/SKILL.md) |
+| Preparar, publicar e provar uma release em todos os canais | [releasing](skill/releasing/SKILL.md) |
+| Renomear pastas, crates, pacotes, scripts, workflows ou testes | [renameops](skill/renameops/SKILL.md) |
+| Sincronizar benchmarks, datasets e repositórios externos | [benchsync](skill/benchsync/SKILL.md) e [bench.yaml](skill/benchsync/bench.yaml) |
 
 ## Começar e conduzir o trabalho
 
@@ -47,7 +47,7 @@ Antes do primeiro commit, defina o tamanho do trabalho e procure uma issue exist
 
 Uma mudança coesa tem uma issue e um PR. Correções do mesmo assunto formam uma mudança só, mesmo quando tocam arquivos diferentes. Vários itens independentes, como uma série de renomeações ou um conjunto de skills, ganham uma épica com o objetivo e a lista dos itens, e uma sub-issue por item, ligada à épica pelo recurso de sub-issues do GitHub. Cada sub-issue tem o seu PR.
 
-Criar issues, sub-issues e labels faz parte do trabalho autorizado. Títulos e corpos usam inglês simples. O título diz o que muda no projeto, no imperativo, como `Leave every merge to the maintainer`. Ele não descreve a edição do texto (`Say…`, `Note…`, `Document…`) nem leva prefixo de área (`releaseops: …`), porque a área vai no label. A sub-issue diz o que muda, as referências que serão atualizadas e o efeito fora do repositório, quando houver.
+Criar issues, sub-issues e labels faz parte do trabalho autorizado. Títulos e corpos usam inglês simples. O título diz o que muda no projeto, no imperativo, como `Leave every merge to the maintainer`. Ele não descreve a edição do texto (`Say…`, `Note…`, `Document…`) nem leva prefixo de área (`releasing: …`), porque a área vai no label. A sub-issue diz o que muda, as referências que serão atualizadas e o efeito fora do repositório, quando houver.
 
 Associe cada issue, sub-issue e PR ao label correto antes de abri-lo; se o label ainda não existir, crie-o com uma descrição curta (`gh label create`). Siga a mesma regra para a milestone e as views do projeto, quando o repositório as tiver. O label descreve a área do produto ou o tipo de mudança, como `documentation`, `bug` ou `enhancement`.
 
@@ -59,19 +59,20 @@ Ao fechar a série, atualize o corpo da épica como histórico: cada sub-issue c
 
 ## Principais responsabilidades da aplicação
 
-- `crates/format`: formato binário, leitura, escrita e hashes.
-- `crates/engine`: mmap, índices, kernels e busca.
-- `crates/clitui`: binário `urna`, comandos e interface de terminal.
-- `crates/bridge`: extensão PyO3 distribuída na wheel.
-- `python/`: API Python, construção dos corpora, embedders e catálogo de modelos.
-- `crates/ingest` (schema `.fci` do forge) e `fuzz/`: workspaces Cargo separados; o `Cargo.toml` da raiz exclui o primeiro e comandos no workspace principal não os cobrem.
-- `packs/`, `script/` e `.github/`: empacotamento, instalação, validação e releases.
+- `rust/format`: formato binário, leitura, escrita e hashes.
+- `rust/engine`: mmap, índices, kernels e busca.
+- `rust/clitui`: binário `urna`, comandos e interface de terminal.
+- `rust/bridge`: extensão PyO3 distribuída na wheel.
+- `rust/bridge/python/urna/`: pacote `urna`, com a API Python, a construção dos corpora, os embedders e o catálogo de modelos.
+- `tool/bench/`: benchmarks e gates de medição; `tool/tests/`: as suítes Python.
+- `rust/ingest` (schema `.fci` do forge) e `fuzz/`: workspaces Cargo separados; o `Cargo.toml` da raiz exclui o primeiro e comandos no workspace principal não os cobrem.
+- `pkgs/`, `tool/tasks/` e `.github/`: empacotamento, instalação, validação e releases.
 
 Os manifests definem as versões e os requisitos das ferramentas. Consulte-os ao mudar dependências, features ou compatibilidade; o crate da CLI pode ter um MSRV diferente do restante do workspace.
 
 ## Cuidados técnicos essenciais
 
-- Antes de alterar layout, codecs ou identificadores, confira o contrato no ARC e as definições em `crates/format/src/layout/`. Teste leitura, escrita e rejeição de entradas inválidas; mudanças em decoders também pedem os testes de mutação e fuzzing pertinentes.
+- Antes de alterar layout, codecs ou identificadores, confira o contrato no ARCHS e as definições em `rust/format/src/layout/`. Teste leitura, escrita e rejeição de entradas inválidas; mudanças em decoders também pedem os testes de mutação e fuzzing pertinentes.
 - Trate dados externos com limites e aritmética checados, erros tipados e comprimentos validados em release. Documente o invariante de cada `unsafe`. Use os leitores de bytes e a ordenação de scores compartilhados, evitando duplicar essas verificações.
 - Mantenha a identidade dos modelos: dimensão compatível não basta. Na API Python, informe `expected_model_hash` ao consultar com um embedder conhecido e `query_text` quando a busca precisar do texto original. Presets, snapshots, tokenizer e arquivos baixados participam dessa identidade.
 - Preserve as garantias offline. O runtime não abre sockets, o binário não incorpora uma pilha de rede e o setup baixa arquivos pelo `curl` do sistema. Downloads de modelos e execução de código remoto seguem os consentimentos existentes.
@@ -88,9 +89,9 @@ Escolha verificações que exercitem o comportamento alterado e cumpram os check
 | Mudança | Verificação pertinente |
 | --- | --- |
 | Rust | Testes dos crates afetados, `cargo fmt --all --check` e Clippy; confira também `--no-default-features` ao tocar na CLI |
-| Python | Scripts `tests/test_*.py` e testes próximos ao módulo, mais `sh script/ruffcheck.sh` |
-| `crates/ingest/` ou `fuzz/` | Comandos no manifesto próprio, conforme CONTRIBUTING e `fuzz/README.md` |
-| Formato, busca, desempenho ou integração ampla | `./script/fullcheck.sh`, incluindo a medição quando aplicável |
+| Python | Scripts `tool/tests/test_*.py`, mais `sh tool/tasks/ruffcheck.sh` e `python tool/tasks/namecheck.py` |
+| `rust/ingest/` ou `fuzz/` | Comandos no manifesto próprio, conforme CONTRIBUTING e `fuzz/README.md` |
+| Formato, busca, desempenho ou integração ampla | `./tool/tasks/fullcheck.sh`, incluindo a medição quando aplicável |
 | Empacotamento e distribuição | Testes dos scripts afetados, coerência dos workflows gerados e ensaio de empacotamento |
 | Documentação, links ou comentários | Conferência de caminhos, exemplos e sintaxe afetados; sem repetir a medição de corpora |
 
@@ -102,9 +103,9 @@ Registre o que passou, falhou ou foi pulado e em qual commit. Um teste dispensad
 
 ## Empacotamento e release
 
-`packs/pyproject.toml` é a fonte da wheel; `packs/staging/` é gerado. Para mudar a configuração do cargo-dist, rode `dist generate` e depois `python script/rehearsal.py generate`. Edite as fontes dos geradores e confira os arquivos resultantes.
+`pkgs/wheel/pyproject.toml` é a fonte da wheel; `pkgs/stage/` é gerado. Para mudar a configuração do cargo-dist, rode `dist generate` e depois `python tool/tasks/rehearsal.py generate`. Edite as fontes dos geradores e confira os arquivos resultantes.
 
-A preparação local usa `script/releasepr.sh X.Y.Z`, com cargo-release fixado, worktree isolada e commit assinado. Tag e publicação são etapas separadas; a skill [releaseops](.skills/releaseops/SKILL.md) conduz a release do número à prova em cada canal. Preserve os metadados de citação escolhidos pelo mantenedor ao atualizar os campos versionados.
+A preparação local usa `tool/tasks/releasepr.sh X.Y.Z`, com cargo-release fixado, worktree isolada e commit assinado. Tag e publicação são etapas separadas; a skill [releasing](skill/releasing/SKILL.md) conduz a release do número à prova em cada canal. Preserve os metadados de citação escolhidos pelo mantenedor ao atualizar os campos versionados.
 
 A release constrói binários, payload e wheels antes de publicar. O PyPI recebe as mesmas wheels por um workflow de topo despachado pela release. Os testes de instalação esperam a versão exata; o relatório acompanha também execuções com falha. O USAGE contém os comandos, requisitos de origem, autenticação e recuperação de uploads parciais.
 
@@ -112,7 +113,7 @@ O ensaio anterior à tag verifica empacotamento e artefatos, sem publicar ou rec
 
 ## Organização e escrita
 
-Organize o código por responsabilidade, com nomes claros e comentários que expliquem decisões. Crates, scripts, workflows, testes e pastas novos seguem o comprimento de nome da seção Naming do CONTRIBUTING (ADR-0002). O limite é de 639 linhas por arquivo de código, incluindo comentários e linhas em branco. Ao criar ou alterar um arquivo que ultrapasse esse limite, examine suas responsabilidades, dependências e consumidores e divida-o em módulos coesos. Preserve o comportamento, atualize imports e chamadas e valide os caminhos afetados.
+Organize o código por responsabilidade, com nomes claros e comentários que expliquem decisões. Todo nome novo segue a tabela de comprimentos da seção Naming do CONTRIBUTING (ADR-0003) e o léxico de abreviações do `docs/TERMS.md`; o `tool/tasks/namecheck.py` confere os dois no CI. O limite é de 639 linhas por arquivo de código, incluindo comentários e linhas em branco. Ao criar ou alterar um arquivo que ultrapasse esse limite, examine suas responsabilidades, dependências e consumidores e divida-o em módulos coesos. Preserve o comportamento, atualize imports e chamadas e valide os caminhos afetados.
 
 O limite não se aplica à documentação, a arquivos dedicados a testes e fixtures, nem a arquivos gerados, vendorizados, dados estruturados ou lockfiles, como JSON, JSONL, TOML, YAML, CSV e RON. Essas exceções não dispensam organização. Configurações e dados escritos dentro de um arquivo de código continuam sujeitos ao limite desse arquivo.
 
@@ -120,17 +121,17 @@ Mantenha a reorganização ligada à tarefa. Use a revisão final do afterwork p
 
 Escreva estas instruções em português natural. Mantenha o idioma e as convenções dos demais documentos, com parágrafos curtos, títulos claros e exemplos úteis. Commits e PRs usam inglês simples. Os documentos existentes em maiúsculas, como `USAGE.md`, mantêm seus nomes; código segue o estilo da linguagem e `.editorconfig`.
 
-Atualize a explicação atual no documento responsável. Registre o motivo e o histórico no CHANGELOG e no PR, e uma decisão de arquitetura ou lição de referência em `docs/ADR/`. Preserve notas de migração ou contexto histórico quando forem necessárias para usar o produto corretamente.
+Atualize a explicação atual no documento responsável. Registre o motivo e o histórico no CHANGELOG e no PR, e uma decisão de arquitetura ou lição de referência em `docs/adr/`. Preserve notas de migração ou contexto histórico quando forem necessárias para usar o produto corretamente.
 
 ## Cuidados que evitam retrabalho
 
 - Busque no código do projeto com `rg` ou `git grep`, respeitando arquivos ignorados. `tools/` e `TMP/` podem conter clones de exemplos opensource, estudos e anotações da equipe de desenvolvimento.
 - Testes de instalação devem usar diretórios isolados e um binário fora de `target/`, para não encontrar acidentalmente o payload, o Python ou os modelos da máquina.
-- Atualize `python/forge/catalog.json` pelo gerador ao mudar o registry e confira `python python/forge/model_catalog.py --check`. Resolva snapshots pelas revisões fixadas e preserve a lista de arquivos usada no fingerprint.
+- Atualize `rust/bridge/python/urna/model/catalogue.json` pelo gerador ao mudar o registry e confira `python rust/bridge/python/urna/model/catalogue.py --check`. Resolva snapshots pelas revisões fixadas e preserve a lista de arquivos usada no fingerprint.
 - Ao tocar em SIMD ou Miri, confira os requisitos do compilador em `build.rs` e as limitações documentadas nos testes. Mudanças nesses caminhos precisam manter o fallback compatível.
-- Mantenha arquivos de dados e pesos nos destinos e políticas de LFS existentes. O hook `script/precommit` verifica os dados preparados para commit; a release obtém a tabela Potion pelo script com hash fixado.
+- Mantenha arquivos de dados e pesos nos destinos e políticas de LFS existentes. O hook `tool/tasks/precommit` verifica os dados preparados para commit; a release obtém a tabela Potion pelo script com hash fixado.
 
-Antes de concluir, faça a [revisão final](.skills/afterwork/SKILL.md). Entregue o resultado, as evidências e as limitações relevantes. Se depender do desenvolvedor humano, indique a ação indispensável de forma direta.
+Antes de concluir, faça a [revisão final](skill/afterwork/SKILL.md). Entregue o resultado, as evidências e as limitações relevantes. Se depender do desenvolvedor humano, indique a ação indispensável de forma direta.
 
 ## Idioma e comunicação
 - Sempre responda em português do Brasil (PT-BR) quando o desenvolvedor escrever em português. Não troque para o inglês no meio da sessão.

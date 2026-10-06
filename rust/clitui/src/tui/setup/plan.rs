@@ -108,15 +108,15 @@ pub fn plan(scan: &Scan, opts: &Opts) -> Vec<Item> {
         // another data root (or a checkout) does not count as installed.
         let missing = scan.payload.is_none();
         let fresh = format!(
-            "download ~30 MB from the v{want} release, verify sha256, unpack to {home}/forge"
+            "download ~30 MB from the v{want} release, verify sha256, unpack to {home}/python"
         );
         let detail = match (&scan.embedder, stale, missing) {
             _ if broken.is_some() => format!(
-                "installed payload is missing {}: download v{want}, verify sha256, replace {home}/forge (the venv stays)",
+                "installed payload is missing {}: download v{want}, verify sha256, replace {home}/python (the venv stays)",
                 broken.map(|p| p.missing.join(" ")).unwrap_or_default()
             ),
             (_, Some(p), _) => format!(
-                "installed payload is {}, v{want} is wanted: download it, verify sha256, replace {home}/forge (the venv stays)",
+                "installed payload is {}, v{want} is wanted: download it, verify sha256, replace {home}/python (the venv stays)",
                 p.label()
             ),
             (Some(p), None, true) => format!("{fresh}; {} resolves until then", tilde(p)),

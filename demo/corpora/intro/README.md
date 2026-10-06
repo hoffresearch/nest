@@ -30,6 +30,6 @@ tool it is running on, which is the clearest possible demo.
 
 ## intended use
 
-paired with the default static embedder (`python/forge/embed_default.py`),
+paired with the default static embedder (`rust/bridge/python/urna/embed/lexifloor.py`),
 which is offline and deterministic, this folder builds a byte-identical `.urna`
 with no network access, so the one-gif demo runs anywhere.

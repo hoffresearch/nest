@@ -253,7 +253,7 @@ def _minilm_preset_case(st_py: str, query_hash: str) -> None:
     assert preset is not None and preset.name == "minilm-multilingual", preset
     script = (
         "import json, sys; sys.path.insert(0, 'rust/bridge/python');"
-        "from forge import presetmap as mr;"
+        "from urna.model import presetmap as mr;"
         "e = mr.create_embedder('minilm-multilingual');"
         "v = e.embed_texts(['pix sem tarifa'])[0];"
         "print(json.dumps({'h': e.model_hash, 'd': e.dim, 'v': [float(x) for x in v]}))"

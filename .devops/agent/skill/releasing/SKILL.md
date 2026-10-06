@@ -1,5 +1,5 @@
 ---
-name: releaseops
+name: releasing
 description: preparar, publicar e conferir uma release do urna em todos os canais (GitHub, crates.io, PyPI, npm e Homebrew) e depois atualizar os benchmarks, os datasets e os repositórios ligados a ele; use quando pedirem release, publicação, versão nova ou envio aos registries.
 project: urna
 audience: agentes de código e contribuidores humanos
@@ -12,7 +12,7 @@ domain: workflow
 
 Uma release leva a `main` a cada canal de distribuição. Depois que ela sai, o que depende do urna passa a descrever a versão nova: o próprio repositório, os benchmarks, os datasets dos corpora e os outros repositórios que usam o urna.
 
-O detalhe de cada canal (credenciais, comandos e recuperação) está no checklist do mantenedor, no [USAGE.md](../../../../../docs/USAGE.md). As verificações por tipo de mudança estão no [AGENTS.md](../../AGENTS.md).
+O detalhe de cada canal (credenciais, comandos e recuperação) está no checklist do mantenedor, no [USAGE.md](../../../../docs/USAGE.md). As verificações por tipo de mudança estão no [AGENTS.md](../../AGENTS.md).
 
 Uma versão publicada no crates.io ou no PyPI não pode ser substituída. Confira tudo antes de cada passo sem volta.
 
@@ -35,9 +35,9 @@ Confira também as contas:
 
 Cada canal publica uma página com os metadados do pacote, e essa página só muda na versão seguinte. Revise antes da tag:
 
-- os campos `description`, `keywords`, `categories`, `readme`, `homepage` e `documentation` de cada crate em `crates/*/Cargo.toml`, e os equivalentes em `packs/pyproject.toml`;
+- os campos `description`, `keywords`, `categories`, `readme`, `homepage` e `documentation` de cada crate em `rust/*/Cargo.toml`, e os equivalentes em `pkgs/wheel/pyproject.toml`;
 - o README, que aparece no crates.io, no PyPI e no npm. Links e imagens usam URL absoluta para a `main`, então um arquivo movido depois da release quebra a página publicada até a próxima versão;
-- as imagens de `assets/image/`: se a versão mudou o que o explorer de terminal ou uma interface gráfica mostra, gere imagens novas antes da tag;
+- as imagens de `docs/img/`: se a versão mudou o que o explorer de terminal ou uma interface gráfica mostra, gere imagens novas antes da tag;
 - os nomes publicados: o binário e o CLI se chamam `urna`, e os crates levam o prefixo `urna-`. Renomear uma pasta não muda o pacote.
 
 Um crate renomeado é publicado com o nome novo, e o nome antigo fica parado na última versão. Não apague o nome antigo: versões antigas de outros pacotes ainda dependem dele, e um nome liberado pode ser registrado por outra pessoa.
@@ -47,7 +47,7 @@ Um crate renomeado é publicado com o nome novo, e o nome antigo fica parado na 
 Abra primeiro a issue da release, com o label `release`. Depois rode o script de preparação:
 
 ```sh
-script/releasepr.sh X.Y.Z
+tool/tasks/releasepr.sh X.Y.Z
 ```
 
 O script cria uma worktree e atualiza a versão do workspace, as pins, o lockfile, a seção datada do CHANGELOG e os campos versionados do `CITATION.cff`. Em seguida roda o preflight, faz um commit assinado e abre o PR.

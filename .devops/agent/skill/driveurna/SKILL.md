@@ -1,5 +1,5 @@
 ---
-name: run-urna
+name: driveurna
 description: compilar, rodar, testar e dirigir o CLI do urna e o explorer de terminal (urna tui), com capturas de tela em texto; use quando pedirem para rodar, compilar, fazer smoke test, mostrar a tela ou conferir uma mudança no urna de verdade.
 project: urna
 audience: agentes de código e contribuidores humanos
@@ -10,25 +10,25 @@ domain: workflow
 
 # Rodar e dirigir o urna
 
-O urna é um binário (`urna`, pacote `urna` em `crates/clitui`) com dois modos: verbos de linha de comando e o explorer de terminal `urna tui`. O caminho do agente é o `drive.sh` desta pasta. Ele compila, monta o corpus do quickstart, roda ask, retrieve, cite, validate e doctor com verificação e dirige o explorer dentro do tmux, salvando cada tela como texto. Os comandos abaixo partem da raiz do repositório, em macOS ou Linux.
+O urna é um binário (`urna`, pacote `urna` em `rust/clitui`) com dois modos: verbos de linha de comando e o explorer de terminal `urna tui`. O caminho do agente é o `drive.sh` desta pasta. Ele compila, monta o corpus do quickstart, roda ask, retrieve, cite, validate e doctor com verificação e dirige o explorer dentro do tmux, salvando cada tela como texto. Os comandos abaixo partem da raiz do repositório, em macOS ou Linux.
 
 ```sh
-D=.contracts/.ai/.agents/.skills/run-urna/drive.sh
+D=.devops/agent/skill/driveurna/drive.sh
 sh $D            # lista os comandos e as variáveis de ambiente
 ```
 
 ## Pré-requisitos
 
-Rust na versão que o `crates/clitui/Cargo.toml` pede (`rust-version`), `tmux` para o explorer e um Python 3.12 ou mais novo com `numpy` e `tokenizers` para o embedder offline. A tabela potion precisa ser o arquivo real, não o ponteiro do LFS:
+Rust na versão que o `rust/clitui/Cargo.toml` pede (`rust-version`), `tmux` para o explorer e um Python 3.12 ou mais novo com `numpy` e `tokenizers` para o embedder offline. A tabela potion precisa ser o arquivo real, não o ponteiro do LFS:
 
 ```sh
-sh script/getpotion.sh
+sh tool/tasks/getpotion.sh
 ```
 
-O `corpus` chama o forge, que importa a extensão `_urna`. Compile-a uma vez por checkout e de novo depois de mexer em `crates/format`, `crates/engine` ou `crates/bridge`:
+O `corpus` chama o forge, que importa a extensão `_urna`. Compile-a uma vez por checkout e de novo depois de mexer em `rust/format`, `rust/engine` ou `rust/bridge`:
 
 ```sh
-sh $D ext        # compila o urna-bridge para o python de URNA_PYTHON (padrão python3) e copia para python/_urna.so
+sh $D ext        # compila o urna-bridge para o python de URNA_PYTHON (padrão python3) e copia para rust/bridge/python/urna/_urna.so
 ```
 
 ## Agente: build, corpus e smoke
@@ -71,7 +71,7 @@ Se um `wait` estoura o prazo, ele termina com erro e indica o `shot` para ver o 
 
 ```sh
 cargo test --workspace --release
-sh $D ext && python3 tests/test_pythonapi.py
+sh $D ext && python3 tool/tests/test_pythonapi.py
 ```
 
 As suítes Python carregam a extensão, então rode o `ext` antes delas sempre que a extensão puder estar velha.

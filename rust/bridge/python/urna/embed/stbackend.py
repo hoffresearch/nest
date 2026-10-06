@@ -99,7 +99,7 @@ class STMultimodalEmbedder:
         for k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
             if allow_download:
                 # the explicit opt-in wins over the blanket offline default
-                # that importing forge (via potiontab) installs.
+                # that importing potiontab installs.
                 os.environ.pop(k, None)
             else:
                 os.environ.setdefault(k, "1")

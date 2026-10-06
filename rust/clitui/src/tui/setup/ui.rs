@@ -263,7 +263,7 @@ impl Ui {
             scan.kit = scan
                 .home
                 .as_ref()
-                .and_then(|h| super::models::Kit::at(&h.join("forge")));
+                .and_then(|h| super::models::Kit::in_home(h));
         }
         if self.offered().is_empty() {
             return;

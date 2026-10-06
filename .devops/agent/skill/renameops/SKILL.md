@@ -10,7 +10,7 @@ domain: workflow
 
 # Renomear sem quebrar
 
-Use este procedimento para trocar o nome ou o lugar de uma pasta, um crate, um pacote, um script, um workflow ou um teste. Um nome aparece em mais formas do que uma busca pelo caminho encontra, e cada forma esquecida quebra um teste, um workflow ou uma página publicada. A convenção de nomes está na seção Naming do [CONTRIBUTING.md](../../../../../docs/CONTRIBUTING.md) ([ADR-0002](../../../../../docs/ADR/STRUCTURE/0002-short-folder-names-published-package-names.md)); as referências a revisar, no [specs.yaml](../afterwork/specs.yaml). Antes de executar qualquer etapa, crie a lista de tarefas na ferramenta de tarefas do agente, conforme o fim deste arquivo.
+Use este procedimento para trocar o nome ou o lugar de uma pasta, um crate, um pacote, um script, um workflow ou um teste. Um nome aparece em mais formas do que uma busca pelo caminho encontra, e cada forma esquecida quebra um teste, um workflow ou uma página publicada. A convenção de nomes está na seção Naming do [CONTRIBUTING.md](../../../../docs/CONTRIBUTING.md) ([ADR-0002](../../../../docs/adr/structure/0002-short-folder-names-published-package-names.md)); as referências a revisar, no [specs.yaml](../afterwork/specs.yaml). Antes de executar qualquer etapa, crie a lista de tarefas na ferramenta de tarefas do agente, conforme o fim deste arquivo.
 
 ## 1. Defina o que muda
 
@@ -36,10 +36,10 @@ Abra uma sub-issue e um PR para cada item, sempre a partir da `main` atualizada 
 
 ## 4. Troque e confira
 
-Mova com `git mv` e substitua com regras que respeitem as exceções: um caminho com `crates/` não pode reescrever `crates.io/crates/`. Depois de cada troca:
+Mova com `git mv` e substitua com regras que respeitem as exceções: um caminho com `rust/` não pode reescrever `crates.io/crates/`. Depois de cada troca:
 
-- rode `cargo fmt --all` e `sh script/ruffcheck.sh`: um nome mais curto muda a quebra de linha;
-- regenere o que é gerado: `dist generate` e `python script/rehearsal.py generate`;
+- rode `cargo fmt --all` e `sh tool/tasks/ruffcheck.sh`: um nome mais curto muda a quebra de linha;
+- regenere o que é gerado: `dist generate` e `python tool/tasks/rehearsal.py generate`;
 - repita a busca pelo nome antigo em todas as formas do passo 2;
 - confira que nenhuma pasta antiga sobrou com arquivos ignorados, como um `target/`;
 - rode uma checagem rápida do que a troca toca: `cargo check` ou `cargo metadata`, os geradores com `--check`, as suítes que citam o caminho e, num módulo Python, `pyright` e `lint-imports` (comandos na seção Naming do CONTRIBUTING).

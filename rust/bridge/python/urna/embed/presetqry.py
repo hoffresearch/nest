@@ -9,7 +9,7 @@ embedding_dim, vector}. The preset resolves from --preset, else by reverse
 lookup of the manifest model name; the query is embedded with the preset's
 text_query_mode (asymmetric models treat queries and documents differently).
 A manifest model no preset names is handed to `searchtxt.py` (the
-search-text embedder, a top-level module beside `forge/`) when
+search-text embedder, beside this module in `embed/`) when
 sentence-transformers is importable, so a corpus built with any
 sentence-transformers model is askable offline.
 --mrl-dim slices+renormalizes the query and reports the truncated dim, for

@@ -10,7 +10,7 @@ domain: demos
 
 the smallest corpus that exercises the whole loop: twelve paragraphs of cc0
 prose about urna itself (`docs.jsonl`, one paragraph per row, mirrored from
-`python/forge/demo_corpus/`), the smallest spec that builds them
+`demo/corpora/intro/`), the smallest spec that builds them
 (`corpus.toml`), and the same build on the python surface (`quickstart.py`).
 everything runs offline with the bundled potion embedder: no model download,
 no torch, and the file comes out byte-identical on every machine.
@@ -18,14 +18,14 @@ no torch, and the file comes out byte-identical on every machine.
 ## cli
 
 from the repo root (spec paths resolve from the cwd, and `build` needs the
-forge under `python/`):
+forge under `rust/bridge/python/urna/`):
 
 ```
-urna build --spec demos/quickstart/corpus.toml
-urna ask demos/quickstart/out/quickstart.urna "can I use this offline" -k 1
-urna retrieve demos/quickstart/out/quickstart.urna "how do citations work" -k 2 --format jsonl
-urna cite demos/quickstart/out/quickstart.urna 'urna://<content_hash>/<chunk_id>'
-urna validate demos/quickstart/out/quickstart.urna
+urna build --spec demo/starter/corpus.toml
+urna ask demo/starter/out/quickstart.urna "can I use this offline" -k 1
+urna retrieve demo/starter/out/quickstart.urna "how do citations work" -k 2 --format jsonl
+urna cite demo/starter/out/quickstart.urna 'urna://<content_hash>/<chunk_id>'
+urna validate demo/starter/out/quickstart.urna
 ```
 
 | verb | what it does |
@@ -43,8 +43,8 @@ plan and dependency status without loading anything.
 ## python
 
 ```
-pip install "urna[embed]"          # or the dev checkout with python/_urna.so built
-python demos/quickstart/quickstart.py
+pip install "urna[embed]"          # or the dev checkout with rust/bridge/python/urna/_urna.so built
+python demo/starter/quickstart.py
 ```
 
 the script shows the two things the README snippets leave implicit: where the
@@ -56,7 +56,7 @@ with and every query is checked against).
 
 replace `docs.jsonl` with your rows and keep the spec. `source.kind` also
 takes `csv`, `sqlite` (a query) and `image_dir` (pdf pages are rendered first
-by `python/tools/urna_build_image_corpus.py --pdf`); `[[models]]` takes any
+by `rust/bridge/python/urna/entry/imgcorpus.py --pdf`); `[[models]]` takes any
 preset in the registry. the full contract, with a worked multi-model spec:
 `docs/USAGE.md` section 13.
 

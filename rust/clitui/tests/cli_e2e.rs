@@ -213,7 +213,7 @@ fn embed_python() -> Option<(String, PathBuf)> {
 /// build the cc0 demo corpus into `path` via urna.reads.retrieval.build_demo with
 /// the offline potion embedder. the toolchain was probed already, so a
 /// failure here is a real one and fails the test.
-fn build_demo_corpus(py: &str, root: &std::path::Path, path: &std::path::Path) {
+fn build_intro_corpus(py: &str, root: &std::path::Path, path: &std::path::Path) {
     let code = format!(
         "import sys; sys.path.insert(0, 'rust/bridge/python'); \
          from urna.reads.retrieval import build_demo; build_demo({:?})",
@@ -244,7 +244,7 @@ fn cli_ask_answer_is_cited_text_only_and_explain_adds_honesty_line() {
     };
     let path = tmp_path("cli_ask_demo.urna");
     let _ = std::fs::remove_file(&path);
-    build_demo_corpus(&py, &root, &path);
+    build_intro_corpus(&py, &root, &path);
 
     let bin = env!("CARGO_BIN_EXE_urna");
     let query = "can I use this offline with no network";
@@ -313,7 +313,7 @@ fn cli_retrieve_answer_pack_score_equals_search_and_cite_round_trips() {
     };
     let path = tmp_path("cli_retrieve_demo.urna");
     let _ = std::fs::remove_file(&path);
-    build_demo_corpus(&py, &root, &path);
+    build_intro_corpus(&py, &root, &path);
 
     let bin = env!("CARGO_BIN_EXE_urna");
     let query = "how do citations prove a source";

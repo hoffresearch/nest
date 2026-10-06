@@ -12,7 +12,7 @@ domain: workflow
 
 Os benchmarks públicos e outros repositórios externos usam o urna. Cada um tem um repositório de código e, quando publica dados, também um dataset. Todos citam o urna, dependem dele e têm links para arquivos do repositório dele. Esta skill mantém tudo isso de acordo com a versão publicada.
 
-O [benches.yaml](benches.yaml) é o catálogo desses repositórios. Ele informa onde cada um está, onde fixa a versão do urna, o que usa do urna e como validá-lo. Tudo o que muda com o tempo fica só no catálogo: quando entra um repositório novo ou o urna muda de estrutura, você atualiza o catálogo, e este texto continua valendo.
+O [bench.yaml](bench.yaml) é o catálogo desses repositórios. Ele informa onde cada um está, onde fixa a versão do urna, o que usa do urna e como validá-lo. Tudo o que muda com o tempo fica só no catálogo: quando entra um repositório novo ou o urna muda de estrutura, você atualiza o catálogo, e este texto continua valendo.
 
 As regras de trabalho do [AGENTS.md](../../AGENTS.md) também valem nesses repositórios.
 

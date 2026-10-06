@@ -85,7 +85,7 @@ pub fn draw(buf: &mut Buffer, body: Rect, ui: &mut Ui) {
             .clone()
             .unwrap_or_else(|| env!("CARGO_PKG_VERSION").into());
         let rows = [
-            ("payload", format!("{home}/forge")),
+            ("payload", format!("{home}/python")),
             ("python env", format!("{home}/venv")),
             ("models", "the shared hugging face cache".into()),
             (

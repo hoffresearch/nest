@@ -36,16 +36,16 @@ Ao criar, remover ou renomear algo, ajuste os consumidores e os links. Atualize 
 | --- | --- |
 | Uso, instalação, modelos e operação de releases | `docs/USAGE.md` |
 | Setup de desenvolvimento, testes e contribuição | `docs/CONTRIBUTING.md` |
-| Arquitetura, contratos, fluxos e inventário | `docs/ARC.toml` |
+| Arquitetura, contratos, fluxos e inventário | `docs/ARCHS.toml` |
 | Garantias de segurança e proveniência | `docs/SECURITY.md` |
 | Apresentação pública e demonstrações | `README.md` e exemplos pertinentes |
 | Mudança perceptível, motivo e evidência histórica | `docs/CHANGELOG` e corpo do PR |
-| Decisões de arquitetura e lições de referência | `docs/ADR/` |
-| Orientação recorrente para agentes | `.contracts/.ai/.agents/AGENTS.md`; o procedimento de revisão fica nesta skill |
+| Decisões de arquitetura e lições de referência | `docs/adr/` |
+| Orientação recorrente para agentes | `.devops/agent/AGENTS.md`; o procedimento de revisão fica nesta skill |
 
-Escreva sobre o estado atual, mantendo histórico apenas onde ajuda a compreender decisões ou migrações. Registre em `docs/ADR/` as decisões de arquitetura e as lições que precisam continuar como referência; uma lição operacional fica, de forma curta, no documento de uso correspondente. Evite copiar o mesmo procedimento para vários lugares.
+Escreva sobre o estado atual, mantendo histórico apenas onde ajuda a compreender decisões ou migrações. Registre em `docs/adr/` as decisões de arquitetura e as lições que precisam continuar como referência; uma lição operacional fica, de forma curta, no documento de uso correspondente. Evite copiar o mesmo procedimento para vários lugares.
 
-Cada ADR parte do `docs/ADR/TEMPLATE.md` e fica em `docs/ADR/<categoria>/NNNN-titulo-curto.md`, com numeração única em todo o `docs/ADR/` e todos os campos do cabeçalho YAML do modelo preenchidos. As categorias e o escopo de cada uma estão no `docs/ADR/README.md`. Um ADR aceito não é apagado nem tem o corpo reescrito: o novo o cita em `supersedes`, e no antigo só o cabeçalho muda (`status: superseded`, `superseded-by` e `last-updated`).
+Cada ADR parte do `docs/adr/TEMPLATE.md` e fica em `docs/adr/<categoria>/NNNN-titulo-curto.md`, com numeração única em todo o `docs/adr/` e todos os campos do cabeçalho YAML do modelo preenchidos. As categorias e o escopo de cada uma estão no `docs/adr/README.md`. Um ADR aceito não é apagado nem tem o corpo reescrito: o novo o cita em `supersedes`, e no antigo só o cabeçalho muda (`status: superseded`, `superseded-by` e `last-updated`).
 
 ## 5. Confira a organização dos arquivos
 
@@ -99,9 +99,9 @@ Importante: as etapas abaixo resumem as seções acima, e tudo o que elas pedem 
 
 - [ ] 3 Seguir o `specs.yaml` e rastrear imports, chamadas, links, exemplos, geradores e symlinks, ajustando os consumidores e o catálogo
 
-- [ ] 4 Atualizar a informação nos documentos responsáveis e registrar em `docs/ADR/` só as decisões de arquitetura e as lições que precisam continuar como referência, sem abrir um ADR para cada lição operacional
+- [ ] 4 Atualizar a informação nos documentos responsáveis e registrar em `docs/adr/` só as decisões de arquitetura e as lições que precisam continuar como referência, sem abrir um ADR para cada lição operacional
 
-- [ ] 5 Organizar os arquivos: remover resíduos depois de conferir os usos indiretos, conferir os nomes pelo `ARC.toml`, enxugar os comentários, respeitar o limite de 639 linhas, modularizar por responsabilidade arquivos de código que excederem esse limite, seguindo as exceções listadas no `AGENTS.md`
+- [ ] 5 Organizar os arquivos: remover resíduos depois de conferir os usos indiretos, conferir os nomes pelo `ARCHS.toml`, enxugar os comentários, respeitar o limite de 639 linhas, modularizar por responsabilidade arquivos de código que excederem esse limite, seguindo as exceções listadas no `AGENTS.md`
 
 - [ ] 6 Executar os checks e testes pertinentes, corrigir a causa dos testes reprovados, registrar no PR os testes aprovados, pulados e dispensados com o commit testado, conferir as provas de publicação e revisar o diff final
 
