@@ -21,10 +21,19 @@ cannot do that.
 from __future__ import annotations
 
 import hashlib
+import os
 from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
+
+# offline by default, the guarantee the forge package gave the image path
+# before the move: open_clip loads here without going through the registry,
+# so the same defaults as presetmap.py are set here, unless the caller opts
+# in with URNA_ALLOW_DOWNLOAD=1.
+if os.environ.get("URNA_ALLOW_DOWNLOAD") != "1":
+    for _k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
+        os.environ.setdefault(_k, "1")
 
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".tif")
 
