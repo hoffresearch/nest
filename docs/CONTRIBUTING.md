@@ -2,7 +2,7 @@
 project: urna
 audience: contributors
 status: active
-last-updated: 2026-10-05
+last-updated: 2026-10-06
 domain: contributing
 ---
 
@@ -56,6 +56,7 @@ These conventions are not aesthetic preferences. They exist to keep the repo rea
 - The docs keep their upper-case names: `docs/USAGE.md`, `docs/BENCH.md`, `docs/SECURITY.md`, `docs/CONTRIBUTING.md`, `docs/CODE_OF_CONDUCT.md`, `docs/CHANGELOG`, `docs/ARC.toml`, `docs/ADR/` and its category folders (`docs/ADR/RETRIEVAL/`).
 - Source files follow the conventions of their language (`snake_case.rs`, `snake_case.py`).
 - When proposing renames or moves, list exact `mv` commands first, execute the move, fix every touched import, and run the test suite after.
+- Tools for a Python move, configured in `pyproject.toml`: Rope moves a module and rewrites the imports in every source folder of the dev `sys.path` (`uv run --no-project --with rope`, no install); `pyright` (`uv tool install pyright`) checks that every import still resolves, and the errors it reports before the move name only the optional backends the dev venv does not install, plus `_urna` until the extension is copied to `python/_urna.so`; `lint-imports` (`pip install import-linter`), run from `python/` as `PYTHONPATH=. lint-imports --config ../pyproject.toml`, keeps `forge` from importing `python/tools`. None of them sees a module path written in a string, a docstring or a config file: search those with `rg`.
 
 ### Writing style
 

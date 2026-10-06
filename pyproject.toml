@@ -27,6 +27,11 @@ forge = [
     # image paths (image_backends, embed_image, embed_st) and the forge tests.
     "pillow>=10",
 ]
+# import-graph contracts ([tool.importlinter] below). runs from python/ with
+# the dev sys.path:  cd python && PYTHONPATH=. ../.venv/bin/lint-imports --config ../pyproject.toml
+lint = [
+    "import-linter>=2.15",
+]
 
 [tool.ruff]
 target-version = "py312"
@@ -61,3 +66,45 @@ line-ending = "lf"
 # first-party = what lives under python/ (sys.path.insert bootstrap), declared
 # so the section split never depends on which dirs exist beside pyproject.
 known-first-party = ["urna", "builder", "forge", "tools", "embed_query", "model_fingerprint", "convert_legacy", "urna_cli"]
+
+# pyright is installed globally (uv tool install pyright) and used here only as
+# an import-resolution check: type checking stays off, an unresolved import is
+# an error. extraPaths mirrors the dev sys.path bootstrap (python/, python/tools/
+# for the tests, script/). demos/ is excluded: it imports the published wheel
+# layout (urna.embed_potion), not the dev tree. the remaining errors are the
+# optional heavy backends (torch, sentence_transformers, open_clip, fitz, the
+# bench competitors) that the dev venv does not install, plus _urna until the
+# extension is built into python/_urna.so.
+[tool.pyright]
+include = ["python", "tests", "script"]
+exclude = ["**/__pycache__", "target", "TMP", "packs/staging"]
+extraPaths = ["python", "python/tools", "script"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
+typeCheckingMode = "off"
+reportMissingImports = "error"
+
+# rope is not installed; run it on demand with `uv run --no-project --with rope`.
+# source_folders mirrors the dev sys.path so a module move rewrites the imports
+# in tests/ and python/tools/ too.
+[tool.rope]
+source_folders = ["python", "python/tools", "script"]
+ignored_resources = [
+    "*.pyc", "*~", ".ropeproject", ".git", ".venv", "__pycache__",
+    "target", "TMP", "data", "docs", "fuzz", "packs/staging", "demos",
+]
+save_objectdb = false
+save_history = false
+
+# forge is the library layer, python/tools the bench/CLI layer on top of it:
+# tools may import forge, forge never imports tools.
+[tool.importlinter]
+root_packages = ["forge", "tools"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "forge does not import tools"
+type = "forbidden"
+source_modules = ["forge"]
+forbidden_modules = ["tools"]
