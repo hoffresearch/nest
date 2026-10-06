@@ -1,6 +1,13 @@
-# Mantras
+Project structure ou repository layout: a organização de pastas e arquivos de um repo.
+Directory structure / folder hierarchy: o mesmo, mais genérico.
+Naming conventions: as regras de nomes (arquivos, pastas, módulos).
 
-O que deu certo na urna e vale repetir em qualquer parte do projeto. Cada mantra saiu de uma sessão real e foi aprovado pelo dev, tech lead, CTO e agentes. Por isso, tem um nível altíssimo de confiança.
+Information architecture (IA): o nome formal quando é site, app ou docs. Sitemap é um artefato de IA.
+Taxonomy: o sistema de categorias e hierarquia em si.
+Scaffolding: o esqueleto inicial gerado de um projeto.
+Monorepo / workspace layout: quando há vários pacotes no mesmo repo, como o rust/ da urna.
+Code organization: como o código é agrupado, com dois estilos clássicos: package by layer (por camada técnica) e package by feature (por funcionalidade).
+No caso da urna
 
-## <título curto>
-<Por que funciona, em uma ou duas frases.>
+A regra de nomes curtos e de tamanho igual é uma naming convention registrada em ADR (architecture decision record).
+O conjunto todo se chama repository layout.

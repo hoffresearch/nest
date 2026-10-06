@@ -66,8 +66,8 @@ One rule: **siblings of the same kind have the same length.** A length counts le
 | `pkgs/linux/` | families | 3 (`apt`, `aur`, `dnf`) |
 | `.devops/` | folders | 5 (`agent`, `rules`) |
 | `.devops/agent/` | folders | 5 (`skill`) |
-| `.devops/agent/skill/` | skills | 9 (`afterwork`, `benchsync`, `docscheck`, `factcheck`, `releasing`) |
-| `.devops/agent/skill/<skill>/` | helper files | 5 (`specs.yaml`, `bench.yaml`) |
+| `.devops/agent/skill/` | skills | 9 (`afterwork`, `benchsync`, `docscheck`, `driveurna`, `factcheck`, `releasing`, `renameops`) |
+| `.devops/agent/skill/<skill>/` | helper files | 5 (`specs.yaml`, `bench.yaml`, `drive.sh`) |
 | `.devops/rules/` | folders | 6 (`mantra`, `taboos`) |
 | `.github/` | files | 9 (`buildprep.yml`, `trustkeys`) |
 | `.github/workflows/` | workflows | 9 (`gatecheck.yml`...) |

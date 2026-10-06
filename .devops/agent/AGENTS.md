@@ -11,8 +11,10 @@ Pockebok de boas praticas para desenvolvedores humanos e agentes de código (CLA
 | Mudanças entregues e histórico | [CHANGELOG](../../docs/CHANGELOG) |
 | Decisões de arquitetura e lições de referência | [ADR](../../docs/adr/README.md) |
 | Revisão final e arquivos que a mudança pode afetar | [afterwork](skill/afterwork/SKILL.md) e [specs.yaml](skill/afterwork/specs.yaml) |
+| Compilar, rodar e dirigir o CLI e o explorer | [driveurna](skill/driveurna/SKILL.md) |
 | Revisar o repositório inteiro contra o estado real | [factcheck](skill/factcheck/SKILL.md) |
 | Preparar, publicar e provar uma release em todos os canais | [releasing](skill/releasing/SKILL.md) |
+| Renomear pastas, crates, pacotes, scripts, workflows ou testes | [renameops](skill/renameops/SKILL.md) |
 | Sincronizar benchmarks, datasets e repositórios externos | [benchsync](skill/benchsync/SKILL.md) e [bench.yaml](skill/benchsync/bench.yaml) |
 | O que repetir e o que evitar, aprendido em sessões anteriores | [mantra.md](../rules/mantra/mantra.md) e [taboo.md](../rules/taboos/taboo.md) |
 
