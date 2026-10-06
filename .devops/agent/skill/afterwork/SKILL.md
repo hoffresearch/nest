@@ -1,13 +1,3 @@
----
-name: afterwork
-description: revisão final do trabalho, das referências afetadas e das evidências de validação.
-project: urna
-audience: agentes de código e contribuidores humanos
-status: active
-last-updated: 2026-10-05
-domain: workflow
----
-
 # Auditoria pós-sessão de trabalho
 
 Use esta revisão ao concluir uma tarefa para confirmar que o trabalho atende ao pedido e que o repositório descreve o comportamento entregue. Use o [specs.yaml](specs.yaml) para localizar arquivos que podem precisar de revisão e o [AGENTS.md](../../AGENTS.md) para as orientações de trabalho e validação. Antes de executar qualquer etapa, crie a lista de tarefas na ferramenta de tarefas do agente, conforme o fim deste arquivo.
@@ -87,10 +77,6 @@ Informe o que foi entregue, por que mudou, como foi validado e qualquer limitaç
 
 Se houver uma ação indispensável na conta do desenvolvedor atual, apresente somente essa ação e seu motivo.
 
-Com esse contexto, crie a sua lista de tarefas na ferramenta de tarefas do agente (TodoWrite, TaskCreate, update_plan ou equivalente) a partir das etapas abaixo, na ordem de execução. Se surgir algo inesperado que crie um novo item, acrescente-o à lista.
-
-Importante: as etapas abaixo resumem as seções acima, e tudo o que elas pedem deve aparecer na lista. Mantenha a execução organizada, para que o tech lead possa auditar item por item no histórico da transcrição e comparar com o pull request.
-
 ## Agora, vamos à execução: crie a lista de tarefas e execute-a
 
 - [ ] 1 Auditar a transcrição dos pedidos, o histórico do agente, a memória e os arquivos alterados ou criados
@@ -111,4 +97,35 @@ Importante: as etapas abaixo resumem as seções acima, e tudo o que elas pedem 
 
 - [ ] 9 Apresentar o relatório final de execução com todos os itens confirmados
 
-/goal : O pedido foi atendido e não há pendência sob controle do agente; o que depende de outra pessoa está nomeado com a ação necessária. O repositório descreve o comportamento entregue, cada informação no documento responsável e sem duplicação. Referências, links e arquivos gerados estão consistentes, sem imports quebrados, resíduos ou código sem uso, e o código respeita o limite de linhas. Os checks pertinentes passaram, as dispensas estão justificadas e a evidência indica o commit. Issue, épica e PR estão ligados e com labels, o PR está sem conflitos, a revisão foi pedida ao mantenedor e o relatório cobre cada item da lista.
+- [ ] 10 Se a sessão ensinou algo que vale para a urna inteira, sugerir no fim do relatório os mantras, os taboos e os ajustes no AGENTS.md, sem repetir o que já existe
+
+/goal : O pedido foi atendido e não há pendência sob controle; O repositório reflete o comportamento entregue, cada informação no documento responsável e sem duplicação. Referências, links e arquivos gerados estão consistentes, sem imports quebrados, resíduos ou código sem uso, e o código respeita o limite de no maximo 639 linhas (exeto monolitos de dados, com json e afins). Os checks pertinentes passaram, as dispensas estão justificadas e a evidência indica o commit. Issue, épica e PR estão ligados e com labels, o PR está sem conflitos, a revisão foi pedida ao mantenedor e o relatório cobre cada item da lista. Se a sessão ensinou algo, as sugestões de mantra e taboo estão no fim do relatório.
+
+
+Deixe de fora a parte que ficar vazia. Só grave nos arquivos o que o tech lead marcar.
+
+Com esse contexto, crie a sua lista de tarefas na ferramenta de tarefas do agente (TodoWrite, TaskCreate, update_plan ou equivalente) a partir das etapas abaixo, na ordem de execução. Se surgir algo inesperado que crie um novo item, acrescente-o à lista.
+
+Importante: as etapas abaixo resumem as seções acima, e tudo o que elas pedem deve aparecer na lista. Mantenha a execução organizada, para que o tech lead possa auditar item por item no histórico da transcrição e comparar com o pull request.
+
+
+## 10. mantras e taboos (APENAS SE FOR RELAMENTE RELEVANTE)
+
+Só no fim de uma sessão longa, e só se ela ensinou algo que vale para a urna inteira: algo que deu muito certo ou um erro que custou retrabalho. Se não teve nada assim, não fale nada.
+
+Leia o [mantra.md](../../../rules/mantra/mantra.md) e o [taboo.md](../../../rules/taboos/taboo.md) antes, para não repetir o que já está lá. Cada sugestão tem um título curto e uma linha de explicação das dualidade positiva e negativa dos aprendizados dde engenharia.
+
+No fim do relatório:
+
+```
+Mantras
+  [ ] <título>
+      <explicação curta>
+
+Taboos
+  [ ] <título>
+      <explicação curta>
+
+Sugestões para o AGENTS.md
+  <o que corrigir ou acrescentar>
+```
