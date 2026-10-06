@@ -1,10 +1,10 @@
 //! Lays a verified payload tarball down under the data root. The archive is
 //! unpacked into a staging dir first (entries that would escape it, `..`
 //! or absolute paths, abort the install) and checked: every file of
-//! `REQUIRED` present, nothing but `forge/` and plain files at the top (so
+//! `REQUIRED` present, nothing but `python/` and plain files at the top (so
 //! the managed venv beside them can never be overwritten). only then is it
 //! laid down, as one restorable step: the previous payload moves aside into
-//! the staging dir, the new top-level files go in, then `forge/`, then
+//! the staging dir, the new top-level files go in, then `python/`, then
 //! `VERSION` last, so a stamp only ever names a payload that is complete. a
 //! failure at any point removes what was placed and puts the previous
 //! payload back.
@@ -15,14 +15,14 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use flate2::read::GzDecoder;
 
-/// The files a payload lays down beside `forge/` (`embedpack.py`
+/// The files a payload lays down beside `python/` (`embedpack.py`
 /// writes them); `--uninstall` removes exactly these.
-pub const TOP_LEVEL: [&str; 3] = ["model_fingerprint.py", "embed_query.py", "VERSION"];
+pub const TOP_LEVEL: [&str; 1] = ["VERSION"];
 
-use crate::cmd::payload::missing;
+use crate::cmd::payload::{DIR, PACKAGE, missing};
 
 /// Unpacks `tar_gz` into `root` (the parent of `urna/`), calling
-/// `on_entry(n)` after each entry; returns the installed forge dir.
+/// `on_entry(n)` after each entry; returns the installed package dir.
 pub fn install(tar_gz: &Path, root: &Path, mut on_entry: impl FnMut(usize)) -> Result<PathBuf> {
     std::fs::create_dir_all(root).with_context(|| format!("create {}", root.display()))?;
     let staging = root.join(format!(".urna-setup-{}", std::process::id()));
@@ -79,13 +79,13 @@ fn unpack_into(tar_gz: &Path, staging: &Path, on_entry: &mut impl FnMut(usize)) 
 }
 
 /// The files at the top of the staged `urna/`, after checking that nothing
-/// else but `forge/` sits there.
+/// else but `python/` sits there.
 fn top_level_files(new_home: &Path) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     for entry in std::fs::read_dir(new_home).context("read the staged payload")? {
         let entry = entry?;
         let name = entry.file_name();
-        if name == "forge" {
+        if name == DIR {
             continue;
         }
         if !entry.file_type()?.is_file() {
@@ -133,8 +133,8 @@ fn swap(staging: &Path, root: &Path, fault: Fault) -> Result<PathBuf> {
         .filter_map(|f| f.file_name().map(|n| n.to_string_lossy().into_owned()))
         .filter(|n| n != "VERSION")
         .collect();
-    // forge after the modules it imports from, the stamp after everything.
-    names.push("forge".into());
+    // the package after the plain files, the stamp after everything.
+    names.push(DIR.into());
     names.push("VERSION".into());
     let home = root.join("urna");
     std::fs::create_dir_all(&home)?;
@@ -154,7 +154,7 @@ fn swap(staging: &Path, root: &Path, fault: Fault) -> Result<PathBuf> {
     let Err(e) = laid else {
         // the previous payload is replaced; it goes with the staging dir.
         let _ = std::fs::remove_dir_all(&previous);
-        return Ok(home.join("forge"));
+        return Ok(home.join(PACKAGE));
     };
     let lost = restore(&home, &previous, &aside, &placed, fault);
     if lost.is_empty() {
@@ -356,8 +356,8 @@ mod tests {
         std::fs::write(root.join("urna/venv/bin/python"), b"venv").unwrap();
         let tgz = pack(&d, &payload("0.5.2", &[]));
         let mut seen = 0;
-        let forge = install(&tgz, &root, |n| seen = n).unwrap();
-        assert!(forge.join("embed_query_potion.py").is_file());
+        let package = install(&tgz, &root, |n| seen = n).unwrap();
+        assert!(package.join("embed/potionqry.py").is_file());
         assert_eq!(seen, REQUIRED.len());
         assert!(missing(&root.join("urna")).is_empty());
         assert_eq!(read(&root, "VERSION"), "0.5.2\n");
@@ -381,9 +381,10 @@ mod tests {
 
     #[test]
     fn a_failed_upgrade_puts_the_previous_payload_back() {
-        // stopped after the top-level files went in, and again after forge:
-        // either way every file is 0.5.1's again and the stamp says 0.5.1.
-        for stop in ["forge", "VERSION"] {
+        // stopped after the top-level files went in, and again after the
+        // package: either way every file is 0.5.1's again and the stamp says
+        // 0.5.1.
+        for stop in ["python", "VERSION"] {
             let d = tmp(&format!("restore_{}", stop.to_lowercase()));
             let root = d.join("root");
             std::fs::create_dir_all(root.join("urna/venv")).unwrap();
@@ -405,15 +406,15 @@ mod tests {
 
     #[test]
     fn a_failed_restore_keeps_the_previous_files_and_names_where() {
-        // the upgrade stops before the stamp, and putting the previous forge/
-        // back fails too: forge/ must survive outside the staging dir, the
+        // the upgrade stops before the stamp, and putting the previous python/
+        // back fails too: python/ must survive outside the staging dir, the
         // error must say so and where, the rest must be back in place.
         let d = tmp("restore_fails");
         let root = d.join("root");
         swap_staged(&d, &root, &payload("0.5.1", &[]), None).unwrap();
         let fault = Fault {
             place: Some("VERSION"),
-            restore: Some("forge"),
+            restore: Some("python"),
             keep: false,
         };
         let err = swap_faulty(&d, &root, &payload("0.5.2", &[]), fault).unwrap_err();
@@ -422,19 +423,18 @@ mod tests {
         let kept = kept_copies(&root);
         assert_eq!(kept.len(), 1, "{kept:?}");
         assert!(
-            msg.contains("previous forge failed") && msg.contains(&kept[0].display().to_string()),
+            msg.contains("previous python failed") && msg.contains(&kept[0].display().to_string()),
             "{msg}"
         );
-        let potion = kept[0].join("forge/embed_query_potion.py");
+        let potion = kept[0].join("python/urna/embed/potionqry.py");
         assert_eq!(
             std::fs::read_to_string(potion).unwrap(),
-            "forge/embed_query_potion.py@0.5.1"
+            "python/urna/embed/potionqry.py@0.5.1"
         );
-        assert_eq!(read(&root, "embed_query.py"), "embed_query.py@0.5.1");
         assert_eq!(read(&root, "VERSION"), "0.5.1\n");
         assert!(
-            !root.join("urna/forge").exists(),
-            "the new forge must not stay half-installed"
+            !root.join("urna/python").exists(),
+            "the new package must not stay half-installed"
         );
         assert!(!root.join(STAGING).exists());
         std::fs::remove_dir_all(&d).unwrap();
@@ -447,7 +447,7 @@ mod tests {
         swap_staged(&d, &root, &payload("0.5.1", &[]), None).unwrap();
         let fault = Fault {
             place: Some("VERSION"),
-            restore: Some("forge"),
+            restore: Some("python"),
             keep: true,
         };
         let err = swap_faulty(&d, &root, &payload("0.5.2", &[]), fault).unwrap_err();
@@ -456,10 +456,10 @@ mod tests {
             format!("{err:#}").contains(&previous.display().to_string()),
             "{err:#}"
         );
-        let potion = previous.join("forge/embed_query_potion.py");
+        let potion = previous.join("python/urna/embed/potionqry.py");
         assert_eq!(
             std::fs::read_to_string(potion).unwrap(),
-            "forge/embed_query_potion.py@0.5.1"
+            "python/urna/embed/potionqry.py@0.5.1"
         );
         assert!(kept_copies(&root).is_empty());
         std::fs::remove_dir_all(&d).unwrap();
@@ -471,8 +471,7 @@ mod tests {
         let root = d.join("root");
         assert!(swap_staged(&d, &root, &payload("0.5.2", &[]), Some("VERSION")).is_err());
         assert!(!root.join("urna/VERSION").exists());
-        assert!(!root.join("urna/forge").exists());
-        assert!(!root.join("urna/embed_query.py").exists());
+        assert!(!root.join("urna/python").exists());
         std::fs::remove_dir_all(&d).unwrap();
     }
 
@@ -482,14 +481,18 @@ mod tests {
         let root = d.join("root");
         swap_staged(&d, &root, &payload("0.5.1", &[]), None).unwrap();
         let mut half = payload("0.5.2", &[]);
-        half.retain(|(n, _)| n != "urna/forge/embed_query_model.py");
+        half.retain(|(n, _)| n != "urna/python/urna/embed/presetqry.py");
         let err = swap_staged(&d, &root, &half, None).unwrap_err();
         assert!(
-            err.to_string().contains("urna/forge/embed_query_model.py"),
+            err.to_string()
+                .contains("urna/python/urna/embed/presetqry.py"),
             "{err}"
         );
         assert_eq!(read(&root, "VERSION"), "0.5.1\n");
-        assert_eq!(read(&root, "embed_query.py"), "embed_query.py@0.5.1");
+        assert_eq!(
+            read(&root, "python/urna/embed/searchtxt.py"),
+            "python/urna/embed/searchtxt.py@0.5.1"
+        );
         std::fs::remove_dir_all(&d).unwrap();
     }
 
@@ -498,8 +501,8 @@ mod tests {
         // the two the review removed by hand, each of which breaks a query:
         // the module the potion route imports and the table's tokenizer.
         for rel in [
-            "forge/embed_potion.py",
-            "forge/models/potion-base-8M/tokenizer.json",
+            "python/urna/embed/potiontab.py",
+            "python/urna/model/potionb8m/tokenizer.json",
         ] {
             let d = tmp(&format!("missing_{}", rel.len()));
             let root = d.join("root");
@@ -520,8 +523,8 @@ mod tests {
         let err = swap_staged(&d, &root, &hostile, None).unwrap_err();
         assert!(err.to_string().contains("urna/venv"), "{err}");
         assert_eq!(
-            read(&root, "model_fingerprint.py"),
-            "model_fingerprint.py@0.5.1"
+            read(&root, "python/urna/model/modelhash.py"),
+            "python/urna/model/modelhash.py@0.5.1"
         );
         assert!(!root.join("urna/venv").exists());
         std::fs::remove_dir_all(&d).unwrap();
@@ -531,12 +534,12 @@ mod tests {
     fn rejects_path_traversal_and_leaves_the_old_payload() {
         let d = tmp("evil");
         let root = d.join("root");
-        std::fs::create_dir_all(root.join("urna/forge")).unwrap();
-        std::fs::write(root.join("urna/forge/keep"), b"old").unwrap();
+        std::fs::create_dir_all(root.join("urna/python")).unwrap();
+        std::fs::write(root.join("urna/python/keep"), b"old").unwrap();
         let tgz = tarball(&d, &[("../../escaped", b"x")]);
         assert!(install(&tgz, &root, |_| {}).is_err());
         assert!(!d.join("escaped").exists());
-        assert!(root.join("urna/forge/keep").is_file());
+        assert!(root.join("urna/python/keep").is_file());
         std::fs::remove_dir_all(&d).unwrap();
     }
 }

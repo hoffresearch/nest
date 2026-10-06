@@ -1,8 +1,8 @@
 //! The one model install `urna setup` and the explorer share: the catalog
-//! the payload ships (`forge/catalog.json`, generated from the registry),
+//! the payload ships (`urna/model/catalogue.json`, generated from the registry),
 //! and the install of one entry. packages go into the managed venv (uv when
 //! it is on PATH, else that env's pip); then the payload's
-//! `forge/install_model.py`, run by the same interpreter, fetches the pinned
+//! `urna/model/installer.py`, run by the same interpreter, fetches the pinned
 //! revision into the hugging face cache and proves its model_hash. the
 //! download needs `Consent::download`, a model that runs repo code also
 //! `Consent::remote_code`; without them nothing is installed or fetched.
@@ -85,7 +85,7 @@ impl Catalog {
     }
 }
 
-/// The installer a payload carries: `forge/install_model.py` and the
+/// The installer a payload carries: `urna/model/installer.py` and the
 /// catalog beside it.
 #[derive(Clone, Debug)]
 pub struct Kit {
@@ -94,10 +94,10 @@ pub struct Kit {
 }
 
 impl Kit {
-    /// The kit in a payload's `forge/` dir, when both files are there.
-    pub fn at(forge: &Path) -> Option<Kit> {
-        let text = std::fs::read_to_string(forge.join("catalog.json")).ok()?;
-        let script = forge.join("install_model.py");
+    /// The kit in a package's `model/` dir, when both files are there.
+    pub fn at(dir: &Path) -> Option<Kit> {
+        let text = std::fs::read_to_string(dir.join("catalogue.json")).ok()?;
+        let script = dir.join("installer.py");
         let catalog = Catalog::parse(&text).ok()?;
         script.is_file().then_some(Kit { script, catalog })
     }
@@ -105,8 +105,13 @@ impl Kit {
     /// The kit the query embedders resolve to (the checkout's, then each
     /// data root's payload): the one the explorer offers from.
     pub fn resolve() -> Option<Kit> {
-        let script = crate::cmd::embed_gate::installed_script_in(&["forge", "install_model.py"]);
+        let script = crate::cmd::embed_gate::installed_script_in(&["model", "installer.py"]);
         Kit::at(script.parent()?)
+    }
+
+    /// The kit of the payload laid down in `home` (`<root>/urna`).
+    pub fn in_home(home: &Path) -> Option<Kit> {
+        Kit::at(&home.join(crate::cmd::payload::PACKAGE).join("model"))
     }
 }
 
@@ -118,7 +123,7 @@ pub struct Consent {
     pub remote_code: bool,
 }
 
-/// What an install still has to do, read off `install_model.py plan`.
+/// What an install still has to do, read off `installer.py plan`.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 pub struct Plan {
     pub missing_bytes: u64,

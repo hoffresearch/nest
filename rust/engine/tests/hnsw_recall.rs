@@ -13,7 +13,7 @@
 //! Recall here is set overlap between approximate and exact top-k.
 //! Queries are sampled from a different seed than the corpus so they
 //! are out-of-distribution (not chunks-of-corpus). This is the strict
-//! production workload - `measure_presets.py` complements with
+//! production workload - `presetrun.py` complements with
 //! near-corpus auto-queries on the real PT-BR data.
 //!
 //! Today's HNSW impl reaches recall@10 ≥ 0.95 at default `m=16,

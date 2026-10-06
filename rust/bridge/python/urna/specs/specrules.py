@@ -1,13 +1,13 @@
 """Validation rules over a parsed CorpusSpec (RFC-1): every violation is a
 SpecError naming the offending key, and the emitted-space enumeration both
-sides (pipeline and validator) share. Split from build_spec (the dataclass
+sides (pipeline and validator) share. Split from specparse (the dataclass
 contract + parser) along the schema/rules seam.
 """
 
 from __future__ import annotations
 
-from forge import model_registry
-from forge.build_spec import MAX_SPACES, CorpusSpec, ModelSpec, SpecError
+from urna.model import presetmap
+from urna.specs.specparse import MAX_SPACES, CorpusSpec, ModelSpec, SpecError
 
 
 def emitted_spaces(spec: CorpusSpec) -> list[tuple[ModelSpec, str, int | None, str]]:
@@ -38,12 +38,12 @@ def validate(spec: CorpusSpec, *, allow_heavy: bool = False) -> None:
     need(bool(spec.chunker_version), "corpus.chunker_version: required")
     kinds = {"sqlite", "image_dir", "csv", "jsonl"}
     if spec.source.kind == "pdf_dir":
-        # pdf pages are rendered by python/tools/urna_build_image_corpus.py
+        # pdf pages are rendered by rust/bridge/python/urna/entry/imgcorpus.py
         # --pdf, not by the declarative build; the kind used to pass here and
         # fail at row loading, every time.
         raise SpecError(
             "source.kind: pdf_dir is not a declarative source; render the pages with "
-            "python/tools/urna_build_image_corpus.py --pdf, or point image_dir at the "
+            "rust/bridge/python/urna/entry/imgcorpus.py --pdf, or point image_dir at the "
             f"rendered pages (kinds: {sorted(kinds)})"
         )
     need(spec.source.kind in kinds, f"source.kind: must be one of {sorted(kinds)}")
@@ -74,7 +74,7 @@ def validate(spec: CorpusSpec, *, allow_heavy: bool = False) -> None:
     for m in spec.models:
         need(m.preset not in seen, f"models: duplicate preset '{m.preset}'")
         seen.add(m.preset)
-        preset = model_registry.get_preset(m.preset)  # RegistryError lists valid names
+        preset = presetmap.get_preset(m.preset)  # RegistryError lists valid names
         need(m.text in ("default", "space", "none"), f"models.{m.preset}.text: default|space|none")
         need(m.image in ("space", "none"), f"models.{m.preset}.image: space|none")
         need(
@@ -123,7 +123,7 @@ def validate(spec: CorpusSpec, *, allow_heavy: bool = False) -> None:
 
     if spec.media is not None:
         m = spec.media
-        from forge.build_spec import MEDIA_PROFILES
+        from urna.specs.specparse import MEDIA_PROFILES
 
         need(
             m.profile in ("", *MEDIA_PROFILES),
@@ -197,7 +197,7 @@ def _validate_utility(q, gate: str, need) -> None:
         'media.quality.utility_query_template: must contain "{label}"',
     )
     need(0.0 <= q.utility_tol <= 1.0, "media.quality.utility_tol: must be within 0..1")
-    preset = model_registry.get_preset(gate)
+    preset = presetmap.get_preset(gate)
     need(
         "text" in preset.modalities,
         f"media.quality.utility_floor_hit1: gate model '{gate}' has no text tower",

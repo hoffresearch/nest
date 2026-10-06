@@ -1,8 +1,8 @@
 [workspace]
-members = ["crates/*"]
-# crates/ingest is its own workspace (forge ingestion deps stay out of the
+members = ["rust/*"]
+# rust/ingest is its own workspace (forge ingestion deps stay out of the
 # sovereign crates); it shares the directory, not the lockfile or the build.
-exclude = ["crates/ingest"]
+exclude = ["rust/ingest"]
 resolver = "3"
 
 [workspace.package]
@@ -38,20 +38,20 @@ half = { version = "2", features = ["bytemuck"] }
 bytemuck = { version = "1", features = ["derive"] }
 # path for the workspace, version for crates.io: `cargo publish` strips the
 # path and keeps the version, so both move with every release bump.
-urna-format = { path = "crates/format", version = "0.5.4" }
-urna-engine = { path = "crates/engine", version = "0.5.4" }
+urna-format = { path = "rust/format", version = "0.5.4" }
+urna-engine = { path = "rust/engine", version = "0.5.4" }
 
 # distribution backbone for the `urna` cli binary (issue #75): per-platform
 # tarballs + sha256 checksums + the homebrew tap formula, the npm package
 # and the crates.io publish, all driven from tags on main. the documented
-# one-liner installer is script/installer.sh
+# one-liner installer is tool/tasks/installer.sh
 # (it also lays down the offline embedder payload, which dist installers do
 # not model), so dist's own shell/powershell installers stay disabled.
 [workspace.metadata.dist]
 cargo-dist-version = "0.32.0"
 ci = ["github"]
 # npm ships the same release archive behind `npm i -g @urna/cli` (the
-# package fetches the binary on install; name set in crates/clitui). npm
+# package fetches the binary on install; name set in rust/clitui). npm
 # refuses the bare name `urna` (too similar to url, lerna, ora), so it lives
 # in the `urna` org.
 npm-scope = "@urna"
@@ -98,7 +98,7 @@ github-attestations = true
 # can read the dependency tree out of the executable.
 cargo-cyclonedx = true
 cargo-auditable = true
-# the tag check (signature + script/preflight.py, tagverify.yml)
+# the tag check (signature + tool/tasks/preflight.py, tagverify.yml)
 # runs as the first job of wheelmake.yml, not as a plan job: when a plan
 # job fails, the builds that need it are skipped, and dist's host job runs
 # on skipped builds (`always()`, "skipped is fine"), so a refused tag would
@@ -119,7 +119,7 @@ source-tarball = false
 # from its upstream and checks it against the lfs pointer (no git-lfs).
 github-build-setup = "../buildprep.yml"
 
-# the offline embedder payload (staged by script/embedpack.py
+# the offline embedder payload (staged by tool/tasks/embedpack.py
 # and packed as one artifact) ships next to the binary archives so the
 # one-liner installer can lay it down under the data dir and a released
 # binary passes `urna doctor` with no network and no repo checkout.
@@ -129,7 +129,7 @@ github-build-setup = "../buildprep.yml"
 build = [
     "sh",
     "-c",
-    "sh script/getpotion.sh && python3 script/embedpack.py target/dist-payload --tar target/urna-embedder-payload.tar.gz",
+    "sh tool/tasks/getpotion.sh && python3 tool/tasks/embedpack.py target/dist-payload --tar target/urna-embedder-payload.tar.gz",
 ]
 artifacts = [
     "target/urna-embedder-payload.tar.gz",

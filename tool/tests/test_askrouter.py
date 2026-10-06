@@ -1,15 +1,15 @@
 """Prove the query-embedder ROUTING (RFC-4): a manifest whose
 embedding_model is a registry model routes ask/retrieve through
-embed_query_model.py (observable: the fake preset's env gate error surfaces
+presetqry.py (observable: the fake preset's env gate error surfaces
 when the env var is missing, and the query succeeds when it is set); a
 corpus built with mrl_dim gets --mrl-dim so the truncated-dim gate passes;
-and the sentence-transformers path (embed_query.py, behind search-text)
+and the sentence-transformers path (searchtxt.py, behind search-text)
 slices a query the same way the registry does. A manifest model no preset
-names falls through to embed_query.py, so ask works on a corpus built with
+names falls through to searchtxt.py, so ask works on a corpus built with
 any sentence-transformers model (cases 6 to 9).
 The three-layer gate itself is covered by test_hashguard.py.
 
-Run: .venv/bin/python tests/test_askrouter.py
+Run: .venv/bin/python tool/tests/test_askrouter.py
 """
 
 import json
@@ -19,8 +19,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "python"))
+REPO = Path(__file__).resolve().parents[2]
+SEARCHTXT = REPO / "rust" / "bridge" / "python" / "urna" / "embed" / "searchtxt.py"
+sys.path.insert(0, str(REPO / "rust" / "bridge" / "python"))
 CLI = REPO / "target" / "release" / "urna"
 if not CLI.exists():
     raise SystemExit("build the CLI first: cargo build --release --workspace")
@@ -28,7 +29,7 @@ if not CLI.exists():
 os.environ["URNA_ENABLE_FAKE_PRESET"] = "1"
 
 import urna
-from forge import model_registry as mr
+from urna.model import presetmap as mr
 
 
 def _build(out: str, mrl_dim: int | None) -> None:
@@ -85,7 +86,7 @@ def main() -> None:
 
         rc, _, err = _ask(corpus, env_fake=False)
         assert rc != 0 and "URNA_ENABLE_FAKE_PRESET" in err, (
-            "the failure must come from embed_query_model.py's registry path, "
+            "the failure must come from presetqry.py's registry path, "
             f"proving the routing; got: {err}"
         )
         print("case 2 (routing observable via registry error): OK")
@@ -113,20 +114,20 @@ def main() -> None:
 
         # the search-text embedder slices the same way (one geometry for both
         # query paths), and refuses an out-of-range dim.
-        import embed_query
+        from urna.embed import searchtxt
 
         full = [float(x) for x in emb.embed_texts(["fake chunk number 2"])[0]]
-        st_q = embed_query.slice_renorm(full, 4)
+        st_q = searchtxt.slice_renorm(full, 4)
         assert len(st_q) == 4
         assert all(abs(a - float(b)) < 1e-6 for a, b in zip(st_q, q, strict=True))
         assert db.search(st_q, k=1)[0].score > 0.999
         proc = subprocess.run(
-            [sys.executable, str(REPO / "python" / "embed_query.py"), "--help"],
+            [sys.executable, str(SEARCHTXT), "--help"],
             capture_output=True,
             text=True,
         )
         assert proc.returncode == 0 and "--mrl-dim" in proc.stdout, proc.stdout
-        print("case 5 (embed_query.slice_renorm == registry slice_renorm): OK")
+        print("case 5 (searchtxt.slice_renorm == registry slice_renorm): OK")
 
         _st_fallback_cases(tmp)
 
@@ -134,7 +135,7 @@ def main() -> None:
 
 
 ST_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-MODEL_SCRIPT = REPO / "python" / "forge" / "embed_query_model.py"
+MODEL_SCRIPT = REPO / "rust" / "bridge" / "python" / "urna" / "embed" / "presetqry.py"
 
 
 def _has_st(py: str) -> bool:
@@ -160,7 +161,7 @@ def _offline_env() -> dict:
 
 def _st_fallback_cases(tmp: str) -> None:
     """The MiniLM corpus and any other sentence-transformers model go through
-    python/embed_query.py, so they are askable with the model_hash they were
+    rust/bridge/python/urna/embed/searchtxt.py, so they are askable with the model_hash they were
     built with. The st cases skip on exactly two named conditions: no
     interpreter with sentence-transformers, or the embedder reporting the
     model outside the local cache (its `urna-fetch:` line). Any other failure
@@ -251,8 +252,8 @@ def _minilm_preset_case(st_py: str, query_hash: str) -> None:
     preset = mr.preset_for_embedding_model(ST_MODEL)
     assert preset is not None and preset.name == "minilm-multilingual", preset
     script = (
-        "import json, sys; sys.path.insert(0, 'python');"
-        "from forge import model_registry as mr;"
+        "import json, sys; sys.path.insert(0, 'rust/bridge/python');"
+        "from forge import presetmap as mr;"
         "e = mr.create_embedder('minilm-multilingual');"
         "v = e.embed_texts(['pix sem tarifa'])[0];"
         "print(json.dumps({'h': e.model_hash, 'd': e.dim, 'v': [float(x) for x in v]}))"
@@ -268,7 +269,7 @@ def _minilm_preset_case(st_py: str, query_hash: str) -> None:
             st_py, "--preset", "minilm-multilingual", ST_MODEL, "pix sem tarifa"
         ),
         "search-text": subprocess.run(
-            [st_py, str(REPO / "python" / "embed_query.py"), ST_MODEL, "pix sem tarifa"],
+            [st_py, str(SEARCHTXT), ST_MODEL, "pix sem tarifa"],
             capture_output=True,
             text=True,
             cwd=REPO,
@@ -285,9 +286,9 @@ def _minilm_preset_case(st_py: str, query_hash: str) -> None:
     built = REPO / "data" / "measure" / "corpus_hybrid.urna"
     if built.exists():
         assert urna.open(str(built)).inspect()["manifest"]["model_hash"] == adapter["h"]
-        print("case 10 (minilm-multilingual preset == embed_query.py == the benchmark corpus): OK")
+        print("case 10 (minilm-multilingual preset == searchtxt.py == the benchmark corpus): OK")
     else:
-        print("case 10 (minilm-multilingual preset == embed_query.py): OK; corpus_hybrid not built")
+        print("case 10 (minilm-multilingual preset == searchtxt.py): OK; corpus_hybrid not built")
 
 
 if __name__ == "__main__":

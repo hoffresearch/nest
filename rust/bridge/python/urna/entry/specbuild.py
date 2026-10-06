@@ -1,6 +1,6 @@
-"""urna_forge.py - declarative corpus builds from a TOML/JSON spec (RFC-1).
+"""specbuild.py - declarative corpus builds from a TOML/JSON spec (RFC-1).
 
-  python python/tools/urna_forge.py --spec corpus.toml [--sample N] [--models a,b]
+  python rust/bridge/python/urna/entry/specbuild.py --spec corpus.toml [--sample N] [--models a,b]
       [--out-dir D] [--cache-dir C] [--resume] [--rebuild-only] [--strict-env]
       [--allow-heavy] [--dry-run [--json]]
 
@@ -16,23 +16,17 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO / "python"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # holds urna/
 
-from forge import model_registry  # noqa: E402
-from forge.build_spec import (  # noqa: E402
-    SpecError,
-    default_model,
-    emitted_spaces,
-    load_spec,
-    validate,
-)
-from forge.forge_cache import cache_root  # noqa: E402
+from urna.model import presetmap  # noqa: E402
+from urna.pipes.vectcache import cache_root  # noqa: E402
+from urna.specs.specparse import SpecError, default_model, emitted_spaces, load_spec, validate
 
 
 def dry_run_report(spec, allow_heavy: bool) -> dict:
     models = []
     for ms in spec.models:
-        preset = model_registry.PRESETS.get(ms.preset)
+        preset = presetmap.PRESETS.get(ms.preset)
         entry: dict = {"preset": ms.preset, "text": ms.text, "image": ms.image, "dims": ms.dims}
         if preset is None:
             entry["status"] = "unknown-preset"
@@ -43,12 +37,12 @@ def dry_run_report(spec, allow_heavy: bool) -> dict:
             entry["remote_code_allowed"] = (
                 not preset.trust_remote_code or ms.preset in spec.output.allow_remote_code
             )
-            model_dir = model_registry.resolve_model_dir(preset, ms.model_path or None)
+            model_dir = presetmap.resolve_model_dir(preset, ms.model_path or None)
             entry["model_dir"] = str(model_dir) if model_dir else None
             try:
-                model_registry.check_deps(preset)
+                presetmap.check_deps(preset)
                 entry["deps"] = "ok"
-            except model_registry.RegistryError as e:
+            except presetmap.RegistryError as e:
                 entry["deps"] = str(e)
         models.append(entry)
     outputs = []
@@ -59,7 +53,7 @@ def dry_run_report(spec, allow_heavy: bool) -> dict:
         outputs.extend(
             f"{spec.name}-{m.preset}.urna"
             for m in spec.models
-            # mirror forge_emit: in pure per-model mode the default text model
+            # mirror emitblobs: in pure per-model mode the default text model
             # alone would duplicate the single file's core, so emit skips it.
             if not (m.preset == dm.preset and m.image == "none" and spec.output.mode == "per-model")
         )
@@ -125,7 +119,7 @@ def main() -> int:
             report = dry_run_report(spec, args.allow_heavy)
             print(json.dumps(report, indent=2) if args.json else _pretty(report))
             return 0
-        from forge.forge_pipeline import build
+        from urna.pipes.buildflow import build
 
         result = build(
             spec,
@@ -142,7 +136,7 @@ def main() -> int:
     except SpecError as e:
         print(f"spec error: {e}", file=sys.stderr)
         return 2
-    except model_registry.RegistryError as e:
+    except presetmap.RegistryError as e:
         print(f"registry error: {e}", file=sys.stderr)
         return 4
 

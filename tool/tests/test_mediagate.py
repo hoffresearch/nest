@@ -11,7 +11,7 @@ for non-JPEG sources.
 
 Skips cleanly without ffmpeg / ssimulacra2 / cjxl.
 
-Run: .venv/bin/python tests/test_mediagate.py
+Run: .venv/bin/python tool/tests/test_mediagate.py
 """
 
 import shutil
@@ -21,13 +21,13 @@ import tempfile
 from dataclasses import replace
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "python"))
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "rust" / "bridge" / "python"))
 
 import numpy as np
 
-from forge.build_spec import MediaSpec, QualitySpec
-from forge.image_encode_still import encode_jxl_dir
+from urna.image.encstills import encode_jxl_dir
+from urna.specs.specparse import MediaSpec, QualitySpec
 
 HAVE = all(shutil.which(t) for t in ("ffmpeg", "ssimulacra2", "cjxl", "djxl"))
 
@@ -123,7 +123,7 @@ def _media(**q) -> MediaSpec:
 
 
 def test_gate_structure_and_choice(base: Path) -> None:
-    from forge.quality_gate import choose_crf
+    from urna.gates.crfpicker import choose_crf
 
     paths = _images(base)
     m = _media(visual_floor_p10=-1e9, visual_floor_min=-1e9, drift_floor_p10=-2)
@@ -137,7 +137,7 @@ def test_gate_structure_and_choice(base: Path) -> None:
 
 
 def test_visual_floor_rejects(base: Path) -> None:
-    from forge.quality_gate import choose_crf
+    from urna.gates.crfpicker import choose_crf
 
     paths = _images(base)
     m = _media(visual_floor_p10=101, visual_floor_min=-1e9, drift_floor_p10=-2)
@@ -147,7 +147,7 @@ def test_visual_floor_rejects(base: Path) -> None:
 
 
 def test_drift_floor_rejects_alone(base: Path) -> None:
-    from forge.quality_gate import choose_crf
+    from urna.gates.crfpicker import choose_crf
 
     paths = _images(base)
     m = _media(visual_floor_p10=-1e9, visual_floor_min=-1e9, drift_floor_p10=1.01)
@@ -158,7 +158,7 @@ def test_drift_floor_rejects_alone(base: Path) -> None:
 
 
 def test_utility_floor_passes(base: Path) -> None:
-    from forge.quality_gate import choose_crf
+    from urna.gates.crfpicker import choose_crf
 
     paths, labels = _block_images(base)
     m = _media(
@@ -188,7 +188,7 @@ def test_utility_floor_passes(base: Path) -> None:
 
 
 def test_utility_floor_rejects_alone(base: Path) -> None:
-    from forge.quality_gate import choose_crf
+    from urna.gates.crfpicker import choose_crf
 
     paths, labels = _block_images(base)
     m = _media(
@@ -209,8 +209,8 @@ def test_utility_floor_rejects_alone(base: Path) -> None:
 
 
 def test_utility_needs_text_tower(base: Path) -> None:
-    from forge.build_spec import SpecError
-    from forge.quality_gate import choose_crf
+    from urna.gates.crfpicker import choose_crf
+    from urna.specs.specparse import SpecError
 
     paths, labels = _block_images(base)
     m = _media(visual_floor_p10=-1e9, visual_floor_min=-1e9, utility_floor_hit1=0.0)
@@ -257,7 +257,7 @@ def test_jxl_transcode_roundtrip(base: Path) -> None:
     # the read side goes through a ppm intermediate now; lossless jxl must
     # still come back as the exact source pixels, and the transcoded jpeg
     # as the exact pixels PIL decodes from the original jpeg
-    from forge.image_decode import decode_jxl
+    from urna.image.decframes import decode_jxl
 
     src_png = np.asarray(Image.open(png).convert("RGB"))
     got = decode_jxl(base / "jxl-ll" / "000000.jxl")
@@ -272,7 +272,7 @@ def test_jxl_transcode_roundtrip(base: Path) -> None:
 
 
 def test_cluster_order_deterministic() -> None:
-    from forge.image_order import cluster_order
+    from urna.image.sequencer import cluster_order
 
     rng = np.random.default_rng(9)
     a, b = rng.standard_normal(8), rng.standard_normal(8)
@@ -293,8 +293,8 @@ def test_cluster_order_deterministic() -> None:
 
 
 def test_gate_labels_fall_back_to_canonical_text() -> None:
-    from forge.corpus_sources import Row
-    from forge.forge_media_stage import gate_labels
+    from urna.pipes.mediastep import gate_labels
+    from urna.pipes.rowloader import Row
 
     def row(ordinal: int, label: str | None) -> Row:
         return Row(

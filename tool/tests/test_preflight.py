@@ -1,6 +1,6 @@
 """Prove the release preflight agrees with the tree and refuses every drift.
 
-`script/preflight.py` runs on every pull request (tree mode) and
+`tool/tasks/preflight.py` runs on every pull request (tree mode) and
 on the release tag after its signature check (tag mode). this suite runs it
 against the real checkout, then against temp copies of the files a release
 names (the manifests, the lockfile, CITATION.cff, the changelog), one field
@@ -17,7 +17,7 @@ changed per case, and against throwaway git repos for the tag checks:
   missing from the tag's commit;
 - edge case: a pin that drifts only in Cargo.lock (the manifests agree).
 
-Run: python tests/test_preflight.py
+Run: python tool/tests/test_preflight.py
 """
 
 import importlib.util
@@ -29,8 +29,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-SCRIPT = REPO / "script" / "preflight.py"
+REPO = Path(__file__).resolve().parents[2]
+SCRIPT = REPO / "tool" / "tasks" / "preflight.py"
 spec = importlib.util.spec_from_file_location("preflight", SCRIPT)
 preflight = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(preflight)
@@ -42,7 +42,7 @@ GIT += ["-c", "tag.gpgsign=false"]
 
 
 def copy_tree(dst: Path) -> Path:
-    for rel in FILES + [str(p.relative_to(REPO)) for p in REPO.glob("crates/*/Cargo.toml")]:
+    for rel in FILES + [str(p.relative_to(REPO)) for p in REPO.glob("rust/*/Cargo.toml")]:
         (dst / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO / rel, dst / rel)
     return dst
@@ -79,11 +79,11 @@ def test_checkout_passes() -> None:
 
 def test_each_drift_is_named() -> None:
     other = bump(VERSION)
-    pin = f'"crates/engine", version = "{VERSION}"'
+    pin = f'"rust/engine", version = "{VERSION}"'
     cases = [
         ("Cargo.toml", pin, pin.replace(VERSION, other), "urna-engine pins"),
         (
-            "crates/clitui/Cargo.toml",
+            "rust/clitui/Cargo.toml",
             "version.workspace = true",
             f'version = "{other}"',
             "inherits",

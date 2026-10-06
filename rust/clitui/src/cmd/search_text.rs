@@ -1,5 +1,5 @@
 //! `urna search-text <file> "query" -k K` - embed the query via
-//! `python/embed_query.py`, validate model_hash against the manifest
+//! `rust/bridge/python/urna/embed/searchtxt.py`, validate model_hash against the manifest
 //! (the shared three-layer gate in `embed_gate`), route by capability
 //! (bm25 -> hybrid, hnsw -> ann, else exact). Keeps
 //! `--skip-model-hash-check` for legacy placeholder corpora.

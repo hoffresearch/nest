@@ -1,8 +1,8 @@
-"""Latency-bench helpers used by `measure_presets.py`.
+"""Latency-bench helpers used by `presetrun.py`.
 
 Pure functions over a `urna.UrnaFile` plus a list of `(qvec, qtext)`
 queries - no `.urna` I/O, no result formatting. Internal to
-`python/tools/`.
+`tool/bench/`.
 """
 
 from __future__ import annotations
@@ -152,12 +152,12 @@ def build_variant(chunks, meta, preset: str, out_path: Path):
     on the next build of the same preset, and the temporary of a run that
     is still building is left alone.
 
-    Imports `urna` lazily because `_bench_runner` is meant to be cheap
+    Imports `urna` lazily because `benchtime` is meant to be cheap
     to import (unlike the PyO3 extension load, which pulls a 1.6 MB .so).
     """
     import sys
 
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rust" / "bridge" / "python"))
     import urna
 
     _label, variant_kwargs = parse_variant(preset)

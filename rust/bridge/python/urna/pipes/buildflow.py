@@ -4,7 +4,7 @@ Transactional (RFC-0 N7): each expensive stage records completion + a params
 hash under `<out>/.forge-state/`; outputs are written to `<out>/.tmp/` and
 committed by atomic rename; `resume=True` skips stages whose params match and
 whose artifacts verify. Embedding caches are their own state: content-
-addressed by the triad under a shared root (forge_cache.cache_root), so they
+addressed by the triad under a shared root (vectcache.cache_root), so they
 live outside `<out>` and are reused across specs and output dirs. Rows are
 cheap and always recomputed; their corpus_input_hash is what the other
 stages key on.
@@ -21,11 +21,13 @@ from pathlib import Path
 
 import numpy as np
 
-from forge import forge_recipe, image_media, model_registry
-from forge.build_spec import CorpusSpec, SpecError, validate
-from forge.corpus_sources import Row, corpus_input_hash, load_rows
-from forge.forge_cache import EmbedCache, cache_root, canonical_hash
-from forge.forge_media_stage import media_stage
+from urna.image import mediabase
+from urna.model import presetmap
+from urna.pipes import recipekey
+from urna.pipes.mediastep import media_stage
+from urna.pipes.rowloader import Row, corpus_input_hash, load_rows
+from urna.pipes.vectcache import EmbedCache, cache_root, canonical_hash
+from urna.specs.specparse import CorpusSpec, SpecError, validate
 
 
 class ForgeError(RuntimeError):
@@ -93,10 +95,10 @@ def build(
 
     media_stage(ctx, resume=resume or rebuild_only)
     _embed_stage(ctx, rebuild_only=rebuild_only)
-    from forge import forge_emit
+    from urna.pipes import emitblobs
 
-    result = forge_emit._emit(ctx)
-    forge_emit._finalize(ctx, result, strict_env=strict_env, rebuild_only=rebuild_only)
+    result = emitblobs._emit(ctx)
+    emitblobs._finalize(ctx, result, strict_env=strict_env, rebuild_only=rebuild_only)
     return result
 
 
@@ -131,15 +133,15 @@ def _dedup(ctx: _Ctx) -> None:
 def _embed_stage(ctx: _Ctx, *, rebuild_only: bool) -> None:
     spec = ctx.spec
     for ms in spec.models:
-        preset = model_registry.get_preset(ms.preset)
+        preset = presetmap.get_preset(ms.preset)
         adapter = None
-        recipe = forge_recipe.recipe(spec, ctx.media, ms, preset)
+        recipe = recipekey.recipe(spec, ctx.media, ms, preset)
         recipe_hash = canonical_hash(recipe)
 
         def get_adapter(ms=ms, recipe=recipe):
             nonlocal adapter
             if adapter is None:
-                adapter = model_registry.create_embedder(
+                adapter = presetmap.create_embedder(
                     ms.preset,
                     model_path=ms.model_path or None,
                     device=ms.device or None,
@@ -150,7 +152,7 @@ def _embed_stage(ctx: _Ctx, *, rebuild_only: bool) -> None:
                 )
             return adapter
 
-        model_hash = forge_recipe.probe_model_hash(ctx.cache_dir, preset, ms, get_adapter)
+        model_hash = recipekey.probe_model_hash(ctx.cache_dir, preset, ms, get_adapter)
         want_text = ms.text in ("default", "space")
         want_image = ms.image == "space"
         triad = {
@@ -194,7 +196,7 @@ def _embed_stage(ctx: _Ctx, *, rebuild_only: bool) -> None:
             # model swap). rewrite it and key the entry by the real hash.
             if adapter.model_hash != model_hash:
                 model_hash = adapter.model_hash
-                forge_recipe.write_probe(ctx.cache_dir, preset, ms, model_hash)
+                recipekey.write_probe(ctx.cache_dir, preset, ms, model_hash)
                 triad["model_hash"] = model_hash
                 cache = EmbedCache(ctx.cache_dir, ms.preset, triad)
             cache.store(arrays)
@@ -213,13 +215,13 @@ def _embed_images(ctx: _Ctx, adapter) -> np.ndarray:
     paths = [r.image_path for r in ctx.unique]
     if mode == "source" or ctx.media is None:
         return adapter.embed_paths(paths)
-    from forge import image_backends
-    from forge.image_corpus import _embed_compressed
+    from urna.image import orchestra
+    from urna.image.assembler import _embed_compressed
 
-    media_dir = image_media.media_dir_for(ctx.out_dir / f"{ctx.spec.name}.urna")
-    frames_fn = image_backends.decoded_frames_fn(media_dir, ctx.media, ctx.frame_uris)
+    media_dir = mediabase.media_dir_for(ctx.out_dir / f"{ctx.spec.name}.urna")
+    frames_fn = orchestra.decoded_frames_fn(media_dir, ctx.media, ctx.frame_uris)
     vecs, _hashes = _embed_compressed(adapter, frames_fn, len(ctx.unique))
     perm = ctx.media.get("order_permutation")
-    if perm:  # stream order -> item order (same inverse as image_corpus.build_corpus)
+    if perm:  # stream order -> item order (same inverse as assembler.build_corpus)
         vecs = vecs[np.argsort(np.asarray(perm))]
     return vecs

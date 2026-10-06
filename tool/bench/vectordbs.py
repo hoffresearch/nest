@@ -1,4 +1,4 @@
-"""adapters for bench_competitors.py: one class per system, same four verbs.
+"""adapters for vectorcmp.py: one class per system, same four verbs.
 
 every adapter builds from the SAME float32 rows, persists to `path`, reports
 the bytes on disk, answers `search(q, k) -> list[int]` (row indices), and can
@@ -98,13 +98,17 @@ class UrnaSystem:
         return [self.order[h.chunk_id] for h in hits]
 
     def validate(self) -> str:
-        return "yes (sha256: header and section prefixes, footer digest)" if self.db.validate() else "FAILED"
+        return (
+            "yes (sha256: header and section prefixes, footer digest)"
+            if self.db.validate()
+            else "FAILED"
+        )
 
     def content_hash(self) -> str:
         return self.db.content_hash
 
     reopen_snippet = (
-        "import sys; sys.path.insert(0, 'python'); import urna, json; "
+        "import sys; sys.path.insert(0, 'rust/bridge/python'); import urna, json; "
         "db = urna.open(PATH); db.search(Q, 10)"
     )
 

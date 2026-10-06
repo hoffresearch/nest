@@ -9,7 +9,7 @@ pub fn home(s: &str) -> String {
     }
 }
 
-/// `s` cut to `w` columns keeping its end (`…/share/urna/forge`), which
+/// `s` cut to `w` columns keeping its end (`…/share/urna/python`), which
 /// is the informative half of a path or a hash.
 pub fn tail(s: &str, w: usize) -> String {
     let n = s.chars().count();
@@ -60,7 +60,7 @@ mod tests {
 
     #[test]
     fn tail_keeps_the_end_of_long_values() {
-        assert_eq!(tail("/a/b/c/forge", 6), "…forge");
+        assert_eq!(tail("/a/b/c/python", 7), "…python");
         assert_eq!(tail("short", 10), "short");
         assert_eq!(tail("abc", 0), "");
     }

@@ -12,12 +12,13 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from forge import image_media, model_registry
-from forge.build_spec import CorpusSpec
-from forge.forge_cache import atomic_write_json, canonical_hash
+from urna.image import mediabase
+from urna.model import presetmap
+from urna.pipes.vectcache import atomic_write_json, canonical_hash
+from urna.specs.specparse import CorpusSpec
 
 if TYPE_CHECKING:
-    from forge.forge_pipeline import _Ctx
+    from urna.pipes.buildflow import _Ctx
 
 
 def _media_params(ctx: _Ctx) -> str:
@@ -30,7 +31,7 @@ def media_stage(ctx: _Ctx, *, resume: bool) -> None:
         return
     missing = [r.key for r in ctx.rows if r.image_path is None]
     if missing:
-        from forge.forge_pipeline import ForgeError  # lazy: pipeline imports this module
+        from urna.pipes.buildflow import ForgeError  # lazy: pipeline imports this module
 
         raise ForgeError(
             f"media enabled but {len(missing)} rows have no image (first: {missing[0]})"
@@ -38,7 +39,7 @@ def media_stage(ctx: _Ctx, *, resume: bool) -> None:
 
     state_file = ctx.state_dir / "media.json"
     params = _media_params(ctx)
-    media_dir = image_media.media_dir_for(ctx.out_dir / f"{spec.name}.urna")
+    media_dir = mediabase.media_dir_for(ctx.out_dir / f"{spec.name}.urna")
     if resume and state_file.is_file():
         st = json.loads(state_file.read_text())
         if st.get("params") == params and _media_files_ok(media_dir, st["media"], st["frame_uris"]):
@@ -71,7 +72,7 @@ def _media_files_ok(media_dir: Path, media: dict, frame_uris: list[str]) -> bool
         p = media_dir / seg["uri"]
         if not p.is_file():
             return False
-        if seg.get("media_sha256") and image_media.sha256_file(p) != seg["media_sha256"]:
+        if seg.get("media_sha256") and mediabase.sha256_file(p) != seg["media_sha256"]:
             return False
     return True
 
@@ -79,10 +80,10 @@ def _media_files_ok(media_dir: Path, media: dict, frame_uris: list[str]) -> bool
 def _gate_adapter(ctx: _Ctx, preset_name: str):
     ms = next((m for m in ctx.spec.models if m.preset == preset_name), None)
     if ms is None:  # validate() mirrors this; keep the crash typed regardless
-        from forge.forge_pipeline import ForgeError
+        from urna.pipes.buildflow import ForgeError
 
         raise ForgeError(f"media gate/cluster model '{preset_name}' is not a spec model")
-    return model_registry.create_embedder(
+    return presetmap.create_embedder(
         preset_name,
         model_path=ms.model_path or None,
         device=ms.device or None,
@@ -101,34 +102,34 @@ def gate_labels(rows) -> list[str]:
 
 
 def _encode_media(ctx: _Ctx, media_dir: Path) -> tuple[dict, list[str]]:
-    from forge import image_backends
+    from urna.image import orchestra
 
     m = ctx.spec.media
     paths = [r.image_path for r in ctx.unique]
-    canvas = image_media.canvas_size(paths, m.width)
+    canvas = mediabase.canvas_size(paths, m.width)
 
     crf = m.crf
     quality_report = None
     if crf == "auto":
-        from forge import quality_gate
+        from urna.gates import crfpicker
 
         gate = _gate_adapter(ctx, m.quality.gate_model or first_image_preset(ctx.spec))
         labels = gate_labels(ctx.unique)  # utility queries, one per frame
-        crf, quality_report = quality_gate.choose_crf(paths, canvas, m, gate, labels=labels)
+        crf, quality_report = crfpicker.choose_crf(paths, canvas, m, gate, labels=labels)
 
     order = None
     if m.order in ("similarity", "cluster"):
-        from forge import image_order
+        from urna.image import sequencer
 
         gate = _gate_adapter(ctx, m.cluster.space or first_image_preset(ctx.spec))
         vecs = gate.embed_paths(paths)
         order = (
-            image_order.similarity_order(vecs)
+            sequencer.similarity_order(vecs)
             if m.order == "similarity"
-            else image_order.cluster_order(vecs, m.cluster.threshold)
+            else sequencer.cluster_order(vecs, m.cluster.threshold)
         )
 
-    built = image_backends.build_media(
+    built = orchestra.build_media(
         paths,
         ctx.out_dir / f"{ctx.spec.name}.urna",
         ctx.spec.name,

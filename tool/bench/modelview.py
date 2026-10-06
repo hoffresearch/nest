@@ -1,6 +1,6 @@
-"""The terminal report of urna_model_bench.py: one block per tier, never
+"""The terminal report of modelrank.py: one block per tier, never
 one number across tiers (T1 is inflated by construction, T2 is a cost,
-T3 is the utility ruler). Split out of urna_model_bench.py, which runs
+T3 is the utility ruler). Split out of modelrank.py, which runs
 the tiers.
 """
 

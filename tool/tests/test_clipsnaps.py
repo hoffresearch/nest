@@ -1,6 +1,6 @@
 """Prove the siglip2 query path offline against its pinned hub snapshot.
 
-Each case runs python/forge/embed_query_model.py in a child process with the
+Each case runs rust/bridge/python/urna/embed/presetqry.py in a child process with the
 hub offline and HF_HOME pointed at a temporary cache that holds only
 `snapshots/<revision>` (links to the real files): no refs/main and no
 .no_exist markers, so nothing but the pinned files can be read.
@@ -15,7 +15,7 @@ Needs torch, open_clip, transformers and the pinned snapshot in the local hf
 cache (hf download timm/ViT-B-16-SigLIP2 <files> --revision <pin>); skips
 without them.
 
-Run: .venv/bin/python python/forge/test_open_clip_snapshot.py
+Run: .venv/bin/python tool/tests/test_clipsnaps.py
 """
 
 import importlib.util
@@ -26,12 +26,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-PYTHON = Path(__file__).resolve().parents[1]
+PYTHON = Path(__file__).resolve().parents[2] / "rust" / "bridge" / "python"
 sys.path.insert(0, str(PYTHON))
 
-from forge import model_registry as mr  # noqa: E402
+from urna.model import presetmap as mr  # noqa: E402
 
-SCRIPT = PYTHON / "forge" / "embed_query_model.py"
+SCRIPT = PYTHON / "urna" / "embed" / "presetqry.py"
 PRESET = mr.PRESETS["siglip2"]
 # model_hash of the siglip2 space in the mtg-urna-benchmark release
 # v0.3/stills-5models (built 2026-09-12 to 14 with the load by tag)
@@ -82,7 +82,7 @@ def main() -> None:
     real = _real_snapshot()
     if missing or real is None:
         why = f"missing {', '.join(missing)}" if missing else "pinned snapshot not cached"
-        print(f"test_open_clip_snapshot: SKIP ({why})")
+        print(f"test_clipsnaps: SKIP ({why})")
         return
 
     with tempfile.TemporaryDirectory() as tmp:

@@ -14,7 +14,7 @@ vector-for-vector (verified against the model2vec reference), but ships none of
 its torch-adjacent dependency surface.
 
 it is offline by construction: the table and tokenizer are read from local files
-under models/potion-base-8M/, the hugging face offline flags are forced on, and
+under model/potionb8m/, the hugging face offline flags are forced on, and
 no code path here ever opens a socket. the same StaticEmbedder interface and the
 same model_hash convention as the floor apply, so it is a drop-in swap; the
 brought sentence-transformers model stays the quality ceiling.
@@ -38,9 +38,9 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 MODEL_ID = "minishlab/potion-base-8M"
 POTION_VERSION = "1"
-MODEL_DIR = Path(__file__).resolve().parent / "models" / "potion-base-8M"
+MODEL_DIR = Path(__file__).resolve().parents[1] / "model" / "potionb8m"
 # the files that actually affect inference output; the model_hash fingerprints
-# their bytes, mirroring model_fingerprint.RELEVANT_FILES.
+# their bytes, mirroring modelhash.RELEVANT_FILES.
 RELEVANT_FILES: tuple[str, ...] = ("config.json", "tokenizer.json", "model.safetensors")
 
 
@@ -154,7 +154,7 @@ class PotionEmbedder:
 
     def model_hash(self) -> str:
         """l`sha256:<hex>` of the canonical-json fingerprint, the SAME convention
-        as model_fingerprint.fingerprint_to_model_hash and the floor."""
+        as modelhash.fingerprint_to_model_hash and the floor."""
         if self._hash is None:
             canonical = json.dumps(self.fingerprint(), sort_keys=True, separators=(",", ":"))
             self._hash = "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
@@ -190,5 +190,5 @@ def potion_embedder(model_dir: Path | str = MODEL_DIR) -> PotionEmbedder:
 
 
 # forge's DEFAULT embedder is now the real semantic table. the lexical floor in
-# embed_default.py stays available as the zero-dependency fallback.
+# lexifloor.py stays available as the zero-dependency fallback.
 default_embedder = potion_embedder

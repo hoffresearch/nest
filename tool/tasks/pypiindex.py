@@ -17,8 +17,8 @@ one there with another sha256 fails, the rest go to ``--out``. A rerun after
 a partial upload therefore sends only what is missing. The count lands in
 ``$GITHUB_OUTPUT`` as ``upload=N``.
 
-    python script/pypiindex.py source --index pypi --run 123 --repo o/r --sha abc
-    python script/pypiindex.py plan --index pypi --dir dist --version 0.5.4 --out upload
+    python tool/tasks/pypiindex.py source --index pypi --run 123 --repo o/r --sha abc
+    python tool/tasks/pypiindex.py plan --index pypi --dir dist --version 0.5.4 --out upload
 """
 
 from __future__ import annotations

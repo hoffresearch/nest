@@ -22,8 +22,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO / "python"))
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "rust" / "bridge" / "python"))
 import urna  # noqa: E402
 
 # Path to the release CLI binary.

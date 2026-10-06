@@ -61,7 +61,7 @@ class InstallSpec:
     """A validated install: the hub revision, the exact files fetched at it
     (path, bytes), the `model_hash` those files fingerprint to, and the pip
     specs its backend needs. a preset carries one only after an install of
-    exactly this was run end to end and its hash checked; `model_catalog`
+    exactly this was run end to end and its hash checked; `catalogue`
     exposes only those. the file list is part of the identity: the
     fingerprint hashes every relevant file present, so fetching one more
     weights file (a pytorch_model.bin beside model.safetensors) would change
@@ -235,8 +235,8 @@ PRESETS: dict[str, ModelPreset] = {
             encode_kwargs=(("task", "retrieval"),),
         ),
         # the multilingual MiniLM the pt-br corpora were built with, before
-        # the registry existed. kind st_text loads it through python/
-        # embed_query.py's own functions, so a corpus built then keeps its
+        # the registry existed. kind st_text loads it through rust/bridge/python/urna/
+        # searchtxt.py's own functions, so a corpus built then keeps its
         # model_hash. no transformers pin: the st pin above is wemm's.
         ModelPreset(
             name="minilm-multilingual",
@@ -328,7 +328,7 @@ def resolve_model_dir(preset: ModelPreset, model_path: str | os.PathLike | None 
         if local.is_dir():
             return local
     if preset.kind == "st_multimodal":
-        from model_fingerprint import hf_cache_snapshot
+        from urna.model.modelhash import hf_cache_snapshot
 
         try:
             return hf_cache_snapshot(preset.model_id)
@@ -371,8 +371,8 @@ def pinned_snapshot(preset: ModelPreset, model_path: str | os.PathLike | None = 
 
 def _fetch_snapshot(preset: ModelPreset) -> Path:
     """Download the preset's pinned files: the explicit URNA_ALLOW_DOWNLOAD=1 opt-in."""
-    # importing forge (embed_potion) defaults the hub offline; the opt-in wins,
-    # as in embed_st. huggingface_hub reads the flag when it is first imported.
+    # importing forge (potiontab) defaults the hub offline; the opt-in wins,
+    # as in stbackend. huggingface_hub reads the flag when it is first imported.
     for k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
         os.environ.pop(k, None)
     from huggingface_hub import hf_hub_download
@@ -435,19 +435,19 @@ def create_embedder(
             f'explicitly with allow_remote_code = ["{name}"] in the spec'
         )
     check_deps(preset)
-    from forge import model_adapters as _adapters
+    from urna.model import embedders as _adapters
 
     if preset.kind == "fake":
         return _adapters._FakeAdapter(preset)
     if preset.kind == "potion":
-        from forge import embed_potion
+        from urna.embed import potiontab
 
-        return _adapters._PotionAdapter(preset, embed_potion.PotionEmbedder())
+        return _adapters._PotionAdapter(preset, potiontab.PotionEmbedder())
     if preset.kind == "open_clip":
-        from forge import embed_image
+        from urna.embed import visionemb
 
         snapshot = pinned_snapshot(preset, model_path) if preset.revision else None
-        inner = embed_image.ImageEmbedder(
+        inner = visionemb.ImageEmbedder(
             model_id=preset.model_id,
             pretrained=preset.pretrained,
             device=device,

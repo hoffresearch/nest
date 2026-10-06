@@ -8,7 +8,7 @@ sys.modules is not enough). So each st_multimodal adapter owns a worker
 process with exactly one model - no collision, and the model's memory is
 returned to the OS when the adapter closes.
 
-Protocol (parent = model_registry._SubprocessSTAdapter):
+Protocol (parent = presetmap._SubprocessSTAdapter):
   argv: --preset NAME [--model-path P] [--batch-size N] [--usage-json J]
   stdin: one task-file path per line; task json:
      {"op": "texts"|"paths"|"arrays", "role": "...", "texts": [...],
@@ -23,7 +23,9 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# the folder that holds urna/ (rust/bridge/python/ or the payload python/)
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 
 def main() -> int:
@@ -38,14 +40,15 @@ def main() -> int:
 
     import numpy as np
 
-    from forge import embed_st, model_registry
+    from urna.embed import stbackend
+    from urna.model import presetmap
 
-    preset = model_registry.get_preset(args.preset)
-    model_dir = model_registry.resolve_model_dir(preset, args.model_path)
+    preset = presetmap.get_preset(args.preset)
+    model_dir = presetmap.resolve_model_dir(preset, args.model_path)
     if model_dir is not None and preset.remote_code_hashes:
-        model_registry.verify_remote_code(preset, model_dir)
+        presetmap.verify_remote_code(preset, model_dir)
     usage = json.loads(args.usage_json)
-    emb = embed_st.STMultimodalEmbedder(
+    emb = stbackend.STMultimodalEmbedder(
         preset,
         model_dir=model_dir,
         batch_size=args.batch_size,

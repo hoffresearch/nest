@@ -1,4 +1,4 @@
-"""offline retrieve convenience + the one-gif flagship demo over demo_corpus.
+"""offline retrieve convenience + the one-gif flagship demo over demo/corpora/intro.
 
 this is the agent-native flagship end to end, OFFLINE and deterministic:
 
@@ -13,9 +13,9 @@ two entry points:
 
   - retrieve(urnafile, query, k, embedder=None): the convenience wrapper. embeds
     `query` with potion, calls UrnaFile.retrieve, returns the RetrieveHit list.
-  - build_demo(out_path) + main(): build a .urna from python/forge/demo_corpus
+  - build_demo(out_path) + main(): build a .urna from demo/corpora/intro
     with the potion embedder, ask a question, print the cited answer + citation.
-    run: python python/forge/retrieve.py
+    run: python rust/bridge/python/urna/reads/retrieval.py
 """
 
 from __future__ import annotations
@@ -23,14 +23,17 @@ from __future__ import annotations
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # python/
+# the folder that holds urna/ (rust/bridge/python/ or the payload python/)
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import urna  # noqa: E402
-from builder import BuildConfig, Pipeline, chunk_text  # noqa: E402
+from urna.embed.potiontab import potion_embedder  # noqa: E402
+from urna.pipes.buildfile import BuildConfig, Pipeline, chunk_text  # noqa: E402
 
-from forge.embed_potion import potion_embedder  # noqa: E402
-
-CORPUS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_corpus")
+CORPUS = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), *[".."] * 5, "demo", "corpora", "intro"
+)
 
 
 def retrieve(urnafile, query: str, k: int = 5, embedder=None, verify_model: bool = True):
@@ -79,7 +82,7 @@ def build_demo(out_path: str) -> str:
 def main() -> None:
     import tempfile
 
-    out = os.path.join(tempfile.mkdtemp(prefix="urna-demo-"), "demo_corpus.urna")
+    out = os.path.join(tempfile.mkdtemp(prefix="urna-demo-"), "intro.urna")
     build_demo(out)
     db = urna.open(out)
     print(f"built {out} ({db.n_embeddings} chunks, dim={db.embedding_dim}, dtype={db.dtype})")

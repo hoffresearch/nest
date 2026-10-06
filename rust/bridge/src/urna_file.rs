@@ -97,7 +97,7 @@ impl UrnaFile {
     /// unused). every hit carries the tier-1 stored canonical `text`, the
     /// verifying hashes, the stable citation_id, and the rerank-source
     /// precision marker. embed the query OFFLINE first (see
-    /// python/forge/retrieve.py for the potion path) and pass the same text
+    /// rust/bridge/python/urna/reads/retrieval.py for the potion path) and pass the same text
     /// as `query_text` so the lexical leg of a hybrid file runs.
     #[pyo3(signature = (query, k, candidates=None, hops=1, ef=100, expected_model_hash=None, query_text=None))]
     // the python keyword surface is the api; every argument is a documented kwarg.

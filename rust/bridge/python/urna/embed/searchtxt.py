@@ -47,8 +47,10 @@ if os.environ.get("URNA_ALLOW_DOWNLOAD") != "1":
     for _k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
         os.environ.setdefault(_k, "1")
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from model_fingerprint import (  # noqa: E402
+# the folder that holds urna/ (rust/bridge/python/ or the payload python/)
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from urna.model.modelhash import (
     compute_model_fingerprint,
     fingerprint_to_model_hash,
     hf_cache_snapshot,
@@ -76,7 +78,7 @@ def load(model_name_or_path: str):
 
 def encode(model, texts: list[str]) -> list[list[float]]:
     """L2-normalized vectors, the encode every MiniLM-era corpus was built
-    with; `forge.model_adapters._STTextAdapter` calls this same function."""
+    with; `urna.model.embedders._STTextAdapter` calls this same function."""
     out = []
     for vec in model.encode(texts, normalize_embeddings=True, convert_to_numpy=True):
         # defensive re-normalize (some sentence-transformers versions skip it

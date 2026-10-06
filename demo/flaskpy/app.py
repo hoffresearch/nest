@@ -16,9 +16,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-import urna
 from flask import Flask, jsonify, request
-from urna.embed_potion import potion_embedder
+
+import urna
+from urna.embed.potiontab import potion_embedder
 
 URNA_FILE = Path(os.environ.get("URNA_FILE", "demo_flask.urna"))
 

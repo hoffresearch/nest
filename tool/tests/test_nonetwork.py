@@ -2,7 +2,7 @@
 OFFLINE by default, and honor URNA_ALLOW_DOWNLOAD=1 as the explicit opt-in
 (audit findings S5 / P1).
 
-Importing `embed_query` must set HF_HUB_OFFLINE=1 before any hub access, so a
+Importing `searchtxt` must set HF_HUB_OFFLINE=1 before any hub access, so a
 hostile/misconfigured corpus model name can never trigger a download mid-run
 (e.g. while the box is handling PHI). Runs in a subprocess with a clean env so
 the module-load-time guard is observed in isolation.
@@ -15,10 +15,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-PYDIR = str(Path(__file__).resolve().parent.parent / "python")
+PYDIR = str(Path(__file__).resolve().parents[2] / "rust" / "bridge" / "python")
 SNIPPET = (
     "import os, sys; sys.path.insert(0, os.environ['PYDIR']); "
-    "import embed_query; print(os.environ.get('HF_HUB_OFFLINE'))"
+    "import urna.embed.searchtxt; print(os.environ.get('HF_HUB_OFFLINE'))"
 )
 
 

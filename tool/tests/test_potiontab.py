@@ -1,9 +1,9 @@
 """Self-test for the forge REAL static embedder (#10, model2vec/potion-base-8M).
 
-run: python python/forge/test_embed_potion.py   (or: pytest this file)
+run: python tool/tests/test_potiontab.py   (or: pytest this file)
 
-unlike the floor's test_embed_default.py (stdlib only), this one needs numpy +
-tokenizers and the vendored table under models/potion-base-8M/ (git-lfs). it
+unlike the floor's test_lexifloor.py (stdlib only), this one needs numpy +
+tokenizers and the vendored table under model/potionb8m/ (git-lfs). it
 proves the decisive claim: potion separates synonyms from unrelated words by
 MEANING (car ~ automobile >> car ~ banana) where the lexical floor cannot, and
 that the embedder is deterministic, f32-stable, normalized, offline (no socket
@@ -18,10 +18,10 @@ import socket
 import struct
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # python/
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "rust", "bridge", "python"))
 
-from forge.embed_default import default_embedder as lexical_embedder
-from forge.embed_potion import MODEL_DIR, PotionEmbedder, potion_embedder
+from urna.embed.lexifloor import default_embedder as lexical_embedder
+from urna.embed.potiontab import MODEL_DIR, PotionEmbedder, potion_embedder
 
 _EMB = potion_embedder()
 
@@ -98,9 +98,9 @@ def test_no_network_at_embed() -> None:
     import numpy  # noqa: F401  warm the c-extensions before blocking
     import tokenizers  # noqa: F401
 
-    from forge import embed_potion
+    from urna.embed import potiontab
 
-    embed_potion._load_table.cache_clear()  # force a fresh table load under the block
+    potiontab._load_table.cache_clear()  # force a fresh table load under the block
 
     real_conn, real_gai, real_cc = (
         socket.socket.connect,

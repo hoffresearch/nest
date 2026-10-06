@@ -1,6 +1,6 @@
 //! `urna build --spec <file>` - launcher for the declarative build (RFC-0
 //! N13: the build IS a python frontend; this verb resolves the interpreter
-//! and the `urna_forge.py` tool, streams its output, and propagates the
+//! and the `specbuild.py` tool, streams its output, and propagates the
 //! exit code). The heavy lifting (spec validation, media, embedding, emit)
 //! lives in python where torch/ffmpeg are; migration of spec validation to
 //! rust is a registered future path, not this verb's job.
@@ -9,10 +9,10 @@ use anyhow::Result;
 use std::path::PathBuf;
 use std::process::Command as ProcCommand;
 
-/// Resolve python/tools/urna_forge.py through the one shared script
+/// Resolve rust/bridge/python/urna/entry/specbuild.py through the one shared script
 /// ladder (repo layout, installed data dir, `<exe>/../share`).
 fn forge_tool_path() -> PathBuf {
-    super::super::embed_gate::installed_script_in(&["tools", "urna_forge.py"])
+    super::super::embed_gate::installed_script_in(&["entry", "specbuild.py"])
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -33,7 +33,7 @@ pub fn run(
         // checkout of the repo (the installed payload has the query
         // embedder only).
         anyhow::bail!(
-            "urna_forge.py not found ({}); `urna build` runs from a checkout of the repo: \
+            "specbuild.py not found ({}); `urna build` runs from a checkout of the repo: \
              git clone https://github.com/hoffresearch/urna && cd urna && urna build --spec ...",
             tool.display()
         );

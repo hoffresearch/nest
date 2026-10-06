@@ -1,11 +1,11 @@
 # maturin project for the official `urna` wheel (issue #75).
 #
-# script/wheelprep.py copies this file VERBATIM into packs/staging/;
-# every relative path below resolves from staging/, not from packs/.
+# tool/tasks/wheelprep.py copies this file VERBATIM into pkgs/stage/;
+# every relative path below resolves from stage/, not from pkgs/wheel/.
 # the dev flow is unchanged: `cargo build --release -p urna-bridge --features
 # pyo3/extension-module`, then copy target/release/lib_urna.dylib (macos) or
-# lib_urna.so (linux) to python/_urna.so; this file only feeds the published
-# package.
+# lib_urna.so (linux) to rust/bridge/python/urna/_urna.so; this file only
+# feeds the published package.
 
 [build-system]
 requires = ["maturin>=1.4,<2.0"]
@@ -29,7 +29,7 @@ classifiers = [
 ]
 dynamic = ["version"]
 
-# offline text embedding with the bundled potion table (urna.embed_potion).
+# offline text embedding with the bundled potion table (urna.embed.potiontab).
 # optional: the core library surface (open/search/validate/...) needs nothing
 # beyond the wheel itself.
 [project.optional-dependencies]
@@ -43,12 +43,12 @@ Issues = "https://github.com/hoffresearch/urna/issues"
 
 # `uvx --from urna urna ...` / `pipx run`: read-only verbs (validate,
 # inspect, stats, search) over the library api. the full cli (ask, retrieve,
-# doctor, ...) is the rust binary from script/installer.sh.
+# doctor, ...) is the rust binary from tool/tasks/installer.sh.
 [project.scripts]
-urna = "urna._cli:main"
+urna = "urna.entry.clidriver:main"
 
 [tool.maturin]
-manifest-path = "../../crates/bridge/Cargo.toml"
+manifest-path = "../../rust/bridge/Cargo.toml"
 module-name = "urna._urna"
 python-source = "."
 features = ["pyo3/extension-module"]

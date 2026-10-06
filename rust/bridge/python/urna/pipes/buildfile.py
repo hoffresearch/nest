@@ -20,11 +20,9 @@ from __future__ import annotations
 import os
 import sqlite3
 import struct
-import sys
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import urna
 
 
@@ -180,8 +178,8 @@ class BuildConfig:
     with_graph: bool = False
     graph_top_m: int = 8
     # opt-in chunk_overlap drop (text reclaim): implies with_graph (read-side
-    # graph_context.neighbor_context rebuilds context). gate on a recall@10-vs-
-    # baseline check (graph_recall_gate.py) before shipping a dropped corpus.
+    # neighbors.neighbor_context rebuilds context). gate on a recall@10-vs-
+    # baseline check (graphgate.py) before shipping a dropped corpus.
     drop_overlap: bool = False
     hnsw_m: int = 16
     hnsw_ef_construction: int = 400

@@ -2,7 +2,7 @@
 answer. offline, deterministic, no torch. the same flow as `urna build` +
 `urna ask`, on the python surface.
 
-run from the repo root:   python demos/quickstart/quickstart.py
+run from the repo root:   python demo/starter/quickstart.py
 after `pip install "urna[embed]"` the two imports at the top are all it needs.
 """
 
@@ -14,12 +14,12 @@ import sys
 
 try:  # installed wheel: `pip install "urna[embed]"`
     import urna
-    from urna.embed_potion import potion_embedder
-except ImportError:  # dev checkout: python/urna.py + python/_urna.so + python/forge/
+    from urna.embed.potiontab import potion_embedder
+except ImportError:  # dev checkout: the urna package under rust/bridge/python/, _urna.so built
     _repo = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-    sys.path.insert(0, os.path.join(_repo, "python"))
+    sys.path.insert(0, os.path.join(_repo, "rust", "bridge", "python"))
     import urna
-    from forge.embed_potion import potion_embedder
+    from urna.embed.potiontab import potion_embedder
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "out", "quickstart.urna")

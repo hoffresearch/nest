@@ -14,10 +14,10 @@ from pathlib import Path
 
 import numpy as np
 
-from . import image_media
-from .image_backends_av1 import build_av1
-from .image_decode import decode_avif, decode_frames, decode_jxl
-from .image_encode_still import encode_avif, encode_jxl_dir
+from urna.image import mediabase
+from urna.image.av1stream import build_av1
+from urna.image.decframes import decode_avif, decode_frames, decode_jxl
+from urna.image.encstills import encode_avif, encode_jxl_dir
 
 
 def _png_frames(png_dir: Path, batch_size: int = 32) -> Iterator[list[np.ndarray]]:
@@ -45,7 +45,7 @@ def _letterbox_all(
         out = out_dir / f"{i:06d}.png"
         if not out.exists():
             with Image.open(path) as img:
-                image_media.letterbox(img, canvas).save(out)
+                mediabase.letterbox(img, canvas).save(out)
         written.append(out)
     return written
 
@@ -59,7 +59,7 @@ def _control(render_paths, output_path, dataset_name, canvas) -> dict:
     files (the avif path keeps its letterboxed png sum apart as
     `letterboxed_input_bytes`), so `compression_ratio` is the same quantity
     across them."""
-    png_dir = image_media.media_dir_for(output_path) / f"{dataset_name}-png"
+    png_dir = mediabase.media_dir_for(output_path) / f"{dataset_name}-png"
     written = _letterbox_all(render_paths, canvas, png_dir)
     media = {
         "backend": "png-lossless",
@@ -77,7 +77,7 @@ def _avif(render_paths, output_path, dataset_name, canvas, pix_fmt, avif_quality
     yuv444 (CP-0.6 asks for it on medical corpora), not compression: the
     stream won the size-matched matrix. Letterboxed onto the same canvas,
     so the corpus contract holds across backends."""
-    avif_dir = image_media.media_dir_for(output_path) / f"{dataset_name}-avif"
+    avif_dir = mediabase.media_dir_for(output_path) / f"{dataset_name}-avif"
     # the encoder reads letterboxed pngs from a tempdir; the manifest must
     # still account the ORIGINAL files, or the ratio is against a lossless
     # re-encode of the decoded canvas (5.4x inflated on the 38k card corpus).
@@ -164,7 +164,7 @@ def _jxl(render_paths, output_path, dataset_name, transcode: bool, policy) -> di
     embed pass handles; the uniform-canvas contract belongs to the lossy
     stream backends.
     """
-    jxl_dir = image_media.media_dir_for(output_path) / f"{dataset_name}-jxl"
+    jxl_dir = mediabase.media_dir_for(output_path) / f"{dataset_name}-jxl"
     media = encode_jxl_dir(
         render_paths,
         jxl_dir,

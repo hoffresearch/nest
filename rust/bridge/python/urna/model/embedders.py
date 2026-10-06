@@ -1,4 +1,4 @@
-"""Adapter classes behind `model_registry.create_embedder`.
+"""Adapter classes behind `presetmap.create_embedder`.
 
 One duck-typed surface over four backends: embed_texts/embed_paths/
 embed_arrays -> (n, dim) float32 L2, plus `dim`, `model_hash` and
@@ -6,7 +6,7 @@ embed_arrays -> (n, dim) float32 L2, plus `dim`, `model_hash` and
 the fake adapter is the deterministic no-ML test double; the st adapter
 runs each sentence-transformers model in its own persistent worker
 process (two trust_remote_code models in one process collide in
-transformers' dynamic-module machinery; measured, see embed_st_worker).
+transformers' dynamic-module machinery; measured, see stprocess).
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from pathlib import Path
 
 import numpy as np
 
-from forge.model_registry import CapabilityError, ModelPreset, RegistryError
+from urna.model.presetmap import CapabilityError, ModelPreset, RegistryError
 
 
 class _PotionAdapter:
@@ -49,19 +49,19 @@ class _PotionAdapter:
 
 class _STTextAdapter:
     """A plain sentence-transformers text model, in-process, through the very
-    functions of `python/embed_query.py` (load, encode, fingerprint): the
+    functions of `rust/bridge/python/urna/embed/searchtxt.py` (load, encode, fingerprint): the
     vectors and the model_hash match the query path and every corpus built
     with the model before the preset existed."""
 
     def __init__(self, preset: ModelPreset, model_path: str | None = None):
-        import embed_query
+        from urna.embed import searchtxt
 
         self.preset = preset
         self.embedding_model = preset.embedding_model
         self.batch_size = 32
-        self._eq = embed_query
-        self._model, local = embed_query.load(model_path or preset.model_id)
-        self._fp = embed_query.fingerprint(local, preset.embedding_model)
+        self._eq = searchtxt
+        self._model, local = searchtxt.load(model_path or preset.model_id)
+        self._fp = searchtxt.fingerprint(local, preset.embedding_model)
 
     @property
     def dim(self) -> int:
@@ -69,7 +69,7 @@ class _STTextAdapter:
 
     @property
     def model_hash(self) -> str:
-        from model_fingerprint import fingerprint_to_model_hash
+        from urna.model.modelhash import fingerprint_to_model_hash
 
         return fingerprint_to_model_hash(self._fp)
 
@@ -186,23 +186,23 @@ class _SubprocessSTAdapter:
         return int(self.embed_texts(["dim probe"]).shape[1])
 
     def _dtype_policy(self) -> str:
-        from forge import embed_st
+        from urna.embed import stbackend
 
         device = self.usage.get("device_class")
         if device in (None, "", "auto"):
-            device = embed_st._default_device()  # what the worker will actually use
-        return self.usage.get("model_dtype") or embed_st._default_dtype(device)
+            device = stbackend._default_device()  # what the worker will actually use
+        return self.usage.get("model_dtype") or stbackend._default_dtype(device)
 
     def fingerprint(self) -> dict:
-        from forge import embed_st
+        from urna.embed import stbackend
 
         model_dir = self.model_dir
         if model_dir is None:
-            from model_fingerprint import hf_cache_snapshot
+            from urna.model.modelhash import hf_cache_snapshot
 
             model_dir = hf_cache_snapshot(self.preset.model_id)
         normalize = self.usage.get("normalize", self.preset.normalize)
-        return embed_st.fingerprint_for(self.preset, model_dir, normalize, self._dtype_policy())
+        return stbackend.fingerprint_for(self.preset, model_dir, normalize, self._dtype_policy())
 
     @property
     def model_hash(self) -> str:
@@ -222,7 +222,7 @@ class _SubprocessSTAdapter:
         import tempfile
 
         self._tmp = self._tmp or tempfile.mkdtemp(prefix=f"urna-st-{self.preset.name}-")
-        worker = Path(__file__).parent / "embed_st_worker.py"
+        worker = Path(__file__).resolve().parents[1] / "embed" / "stprocess.py"
         cmd = [
             _sys.executable,
             str(worker),

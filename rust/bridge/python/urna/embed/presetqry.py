@@ -1,14 +1,14 @@
-"""embed_query_model.py - registry-backed query embedder for the rust CLI.
+"""presetqry.py - registry-backed query embedder for the rust CLI.
 
-argv (matching embed_query_potion.py, additively):
-  <interp> embed_query_model.py [--model-path P] [--preset NAME] [--mrl-dim N]
+argv (matching potionqry.py, additively):
+  <interp> presetqry.py [--model-path P] [--preset NAME] [--mrl-dim N]
       <manifest_embedding_model> <query>
 
 stdout: one-line JSON {model_hash, fingerprint, embedding_model,
 embedding_dim, vector}. The preset resolves from --preset, else by reverse
 lookup of the manifest model name; the query is embedded with the preset's
 text_query_mode (asymmetric models treat queries and documents differently).
-A manifest model no preset names is handed to `embed_query.py` (the
+A manifest model no preset names is handed to `searchtxt.py` (the
 search-text embedder, a top-level module beside `forge/`) when
 sentence-transformers is importable, so a corpus built with any
 sentence-transformers model is askable offline.
@@ -28,7 +28,9 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# the folder that holds urna/ (rust/bridge/python/ or the payload python/)
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 
 NEEDS = "urna-needs:"
@@ -53,21 +55,21 @@ def _missing_specs(requires: tuple[tuple[str, str], ...]) -> list[str]:
 
 
 def _st_query(args: argparse.Namespace) -> int:
-    """Embed through `python/embed_query.py`, the search-text embedder: the
+    """Embed through `rust/bridge/python/urna/embed/searchtxt.py`, the search-text embedder: the
     path of a `st_text` preset (minilm-multilingual) and of any other
     sentence-transformers model no preset names. same encode, same
     fingerprint, offline unless URNA_ALLOW_DOWNLOAD=1, so the model_hash is
     the one the corpus was built with."""
-    import embed_query
+    from urna.embed import searchtxt
 
     argv = [args.model, args.query]
     if args.model_path:
         argv[:0] = ["--model-path", args.model_path]
     if args.mrl_dim:
         argv[:0] = ["--mrl-dim", str(args.mrl_dim)]
-    # embed_query reports a missing package and a model outside the cache
+    # searchtxt reports a missing package and a model outside the cache
     # itself, with the same urna-needs / urna-fetch lines.
-    return embed_query.main(argv)
+    return searchtxt.main(argv)
 
 
 def main() -> int:
@@ -82,7 +84,7 @@ def main() -> int:
         print("error: query required", file=sys.stderr)
         return 2
 
-    from forge import model_registry as mr
+    from urna.model import presetmap as mr
 
     if args.preset:
         try:

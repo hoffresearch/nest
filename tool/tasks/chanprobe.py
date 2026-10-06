@@ -25,7 +25,7 @@ Endpoints (overridable for tests through the environment):
 - Homebrew: ``$RAW_GITHUB/hoffresearch/homebrew-urna/main/Formula/urna.rb``;
 - GitHub: ``$GITHUB_API_URL`` (release, run, jobs, tag ref), ``GH_TOKEN``.
 
-    python script/chanprobe.py wait --channel npm --version 0.5.3
+    python tool/tasks/chanprobe.py wait --channel npm --version 0.5.3
 """
 
 from __future__ import annotations

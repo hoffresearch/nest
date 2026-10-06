@@ -213,7 +213,7 @@ mod tests {
     fn explain_names_each_cause_and_its_fix() {
         let typed = |f: EmbedFailure| explain(&anyhow::Error::new(f));
         let script = typed(EmbedFailure::ScriptMissing {
-            script: "/d/urna/forge/embed_query_model.py".into(),
+            script: "/d/urna/python/urna/embed/presetqry.py".into(),
         });
         assert!(
             script.contains("not installed") && script.contains("setup"),

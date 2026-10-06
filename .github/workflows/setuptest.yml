@@ -46,7 +46,7 @@ jobs:
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
     steps:
-      - uses: actions/checkout@v6 # script/ + golden fixture (not lfs)
+      - uses: actions/checkout@v6 # tool/tasks/ + golden fixture (not lfs)
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -57,19 +57,19 @@ jobs:
         if: runner.os != 'Windows'
         env:
           URNA_RELEASE_BASE: https://github.com/hoffresearch/urna/releases/download/${{ env.TAG }}
-        run: sh script/installer.sh
+        run: sh tool/tasks/installer.sh
 
       - name: install urna from the release (windows)
         if: runner.os == 'Windows'
         shell: pwsh
         env:
           URNA_RELEASE_BASE: https://github.com/hoffresearch/urna/releases/download/${{ env.TAG }}
-        run: ./script/installer.ps1
+        run: ./tool/tasks/installer.ps1
 
       - name: validate the golden fixture (unix)
         if: runner.os != 'Windows'
         # from outside the checkout: in the repo the embedder resolves to
-        # python/forge first, whose potion table is an lfs pointer here.
+        # rust/bridge/python/urna first, whose potion table is an lfs pointer here.
         working-directory: ${{ runner.temp }}
         env:
           URNA_PYTHON: python
@@ -145,7 +145,7 @@ jobs:
             binstall) channel=crates ;;
             *) channel=npm ;;
           esac
-          python script/chanprobe.py wait --channel "$channel" --version "${TAG#v}" --timeout 900
+          python tool/tasks/chanprobe.py wait --channel "$channel" --version "${TAG#v}" --timeout 900
       - name: install (homebrew)
         if: matrix.channel == 'homebrew'
         run: |
@@ -233,15 +233,15 @@ jobs:
         run: python -m pip install uv
       - name: wait for the exact version on pypi
         shell: bash
-        run: python script/chanprobe.py wait --channel pypi --version "${TAG#v}" --timeout 900
+        run: python tool/tasks/chanprobe.py wait --channel pypi --version "${TAG#v}" --timeout 900
       - name: pip install urna and validate
         shell: bash
         run: |
           python -m pip install "urna==${TAG#v}"
           python -c "import importlib.metadata as m, sys; v = m.version('urna'); assert v == sys.argv[1], v" "${TAG#v}"
           python -c "import urna; assert urna.potion_model_path(), 'potion table must be bundled'"
-          python -c "import urna; urna.open('crates/format/tests/fixtures/golden_v1_minimal.urna').validate(); print('validate ok')"
-          urna validate crates/format/tests/fixtures/golden_v1_minimal.urna
+          python -c "import urna; urna.open('rust/format/tests/fixtures/golden_v1_minimal.urna').validate(); print('validate ok')"
+          urna validate rust/format/tests/fixtures/golden_v1_minimal.urna
       - name: uvx entry point
         shell: bash
-        run: uvx --from "urna==${TAG#v}" urna validate crates/format/tests/fixtures/golden_v1_minimal.urna
+        run: uvx --from "urna==${TAG#v}" urna validate rust/format/tests/fixtures/golden_v1_minimal.urna

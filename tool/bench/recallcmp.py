@@ -1,6 +1,6 @@
-"""Recall harness: the real potion table vs the lexical floor on demo_corpus.
+"""Recall harness: the real potion table vs the lexical floor on demo/corpora/intro.
 
-run: python python/forge/recall_harness.py
+run: python tool/bench/recallcmp.py
 
 each query is a PARAPHRASE of one demo doc that avoids the doc's literal
 keywords, so a lexical embedder (shared-token cosine) has little to grab while a
@@ -17,12 +17,14 @@ import math
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # python/
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "rust", "bridge", "python"))
 
-from forge.embed_default import default_embedder as lexical_embedder
-from forge.embed_potion import potion_embedder
+from urna.embed.lexifloor import default_embedder as lexical_embedder
+from urna.embed.potiontab import potion_embedder
 
-CORPUS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_corpus")
+CORPUS = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "demo", "corpora", "intro"
+)
 
 # (query, gold doc number 1..4). the queries deliberately use synonyms and
 # rephrasings, not the gold doc's own words.
@@ -88,7 +90,7 @@ def _eval(name: str, emb, passages) -> tuple[float, float, float]:
 
 def main() -> None:
     passages = _passages()
-    print(f"demo_corpus: {len(passages)} passages from 4 docs, {len(QUERIES)} paraphrase queries")
+    print(f"intro: {len(passages)} passages from 4 docs, {len(QUERIES)} paraphrase queries")
     p1, p3, pm = _eval("potion (semantic, real table)", potion_embedder(), passages)
     f1, f3, fm = _eval("floor (lexical bag-of-words)", lexical_embedder(), passages)
     print("\n=== summary (recall@1 / recall@3 / mrr) ===")

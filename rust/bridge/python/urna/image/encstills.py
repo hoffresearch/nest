@@ -1,6 +1,6 @@
 """Per-image (still) encoders of the image corpus media: avif and jxl.
 
-Carved out of `forge/image_encode.py` (which keeps the av1 stream encoder
+Carved out of `urna/image/encstream.py` (which keeps the av1 stream encoder
 and the shared provenance record). Both encoders here write one file per
 source image and report the same manifest shape as the stream backend:
 `source_bytes` is the byte size of the ORIGINAL source files for every
@@ -15,7 +15,7 @@ import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
-from .image_encode import _tool_version, provenance_sha256
+from urna.image.encstream import _tool_version, provenance_sha256
 
 AVIF_JOBS = 8  # see encode_avif: >= 2 is one byte-identical class, 1 is another
 

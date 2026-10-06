@@ -1,37 +1,26 @@
 """stage the offline embedder payload for release archives and installers.
 
 the `urna` binary embeds queries OFFLINE by shelling out to a query
-embedder script: `forge/embed_query_potion.py` with its vendored table for
-potion corpora, `forge/embed_query_model.py` (the model registry) for
+embedder script: `urna/embed/potionqry.py` with its vendored table for
+potion corpora, `urna/embed/presetqry.py` (the model registry) for
 corpora whose default model is a registry model (wemm, clip, jina). a
 released binary has no repo around it, so the release archives and the
 one-liner installer carry this payload and lay it down where the cli looks
-(`<exe>/../share/urna/forge/` or `$XDG_DATA_HOME/urna/forge/`; see
-crates/clitui/src/cmd/embed_gate.rs `installed_script_in`).
+(`<exe>/../share/urna/python/` or `$XDG_DATA_HOME/urna/python/`; see
+rust/clitui/src/cmd/embed_gate.rs `installed_script_in`). the payload keeps
+the package layout of rust/bridge/python/urna/, so each script puts the
+`python/` dir that holds `urna/` on sys.path and imports `urna.<sub>.<mod>`.
 
 the registry path ships its scripts only, not its model dependencies: the
-setup venv has numpy and tokenizers, and `embed_query_model.py` names the
+setup venv has numpy and tokenizers, and `presetqry.py` names the
 exact `pip install` line for what a registry model still needs (torch,
 sentence-transformers, open_clip), exit 4.
 
-usage:  python script/embedpack.py <dest> [--tar <out.tar.gz>]
-writes: <dest>/urna/model_fingerprint.py          (imported by the registry)
-        <dest>/urna/embed_query.py                (st models outside the registry)
-        <dest>/urna/VERSION                       (the workspace version: setup
-                                                   replaces a payload of another release)
-        <dest>/urna/forge/__init__.py
-        <dest>/urna/forge/embed_default.py
-        <dest>/urna/forge/embed_potion.py
-        <dest>/urna/forge/embed_query_potion.py
-        <dest>/urna/forge/embed_query_model.py      (the registry embedder)
-        <dest>/urna/forge/model_registry.py
-        <dest>/urna/forge/model_adapters.py
-        <dest>/urna/forge/embed_st.py
-        <dest>/urna/forge/embed_st_worker.py
-        <dest>/urna/forge/embed_image.py
-        <dest>/urna/forge/catalog.json              (the installable models, from the registry)
-        <dest>/urna/forge/install_model.py          (fetches one into the hf cache, verified)
-        <dest>/urna/forge/models/potion-base-8M/...
+usage:  python tool/tasks/embedpack.py <dest> [--tar <out.tar.gz>]
+writes: <dest>/urna/VERSION       (the workspace version: setup replaces a
+                                   payload of another release)
+        <dest>/urna/python/urna/  (the modules below, PKG-relative, and
+                                   model/potionb8m/...)
 
 with --tar, also packs the staged `urna/` tree as a single gzipped tarball
 (the release artifact the one-liner installer downloads and extracts into
@@ -47,37 +36,36 @@ import sys
 import tarfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-FORGE = ROOT / "python" / "forge"
+ROOT = Path(__file__).resolve().parents[2]
+PKG = ROOT / "rust" / "bridge" / "python" / "urna"
 
 MODULES = [
+    # the package root: the extension loads on first use, so the payload
+    # imports it without _urna.
     "__init__.py",
-    "embed_default.py",
-    "embed_potion.py",
-    "embed_query_potion.py",
+    "embed/__init__.py",
+    "embed/lexifloor.py",
+    "embed/potiontab.py",
+    "embed/potionqry.py",
     # the registry query path (`ask`/`retrieve` on a wemm, clip or jina
     # corpus): the embedder, the registry, its adapters and the two model
     # backends the adapters import lazily.
-    "embed_query_model.py",
-    "model_registry.py",
-    "model_adapters.py",
-    "embed_st.py",
-    "embed_st_worker.py",
-    "embed_image.py",
-    # the models setup and the explorer offer to install (generated from the
-    # registry by model_catalog.py; a stale copy fails the stage).
-    "catalog.json",
-    # the fetch half of the model install setup and the explorer share.
-    "install_model.py",
-]
-
-# `python/` modules the registry imports as top-level names (the scripts put
-# their grandparent dir, `<dest>/urna/`, on sys.path).
-TOP_LEVEL_MODULES = [
-    "model_fingerprint.py",
+    "embed/presetqry.py",
+    "embed/stbackend.py",
+    "embed/stprocess.py",
+    "embed/visionemb.py",
     # the sentence-transformers query embedder: `search-text`'s default and
-    # the fallback of `embed_query_model.py` for a model no preset names.
-    "embed_query.py",
+    # the fallback of `presetqry.py` for a model no preset names.
+    "embed/searchtxt.py",
+    "model/__init__.py",
+    "model/presetmap.py",
+    "model/embedders.py",
+    "model/modelhash.py",
+    # the models setup and the explorer offer to install (generated from the
+    # registry by catalogue.py; a stale copy fails the stage).
+    "model/catalogue.json",
+    # the fetch half of the model install setup and the explorer share.
+    "model/installer.py",
 ]
 
 
@@ -102,17 +90,17 @@ def workspace_version(manifest: Path | None = None) -> str:
 
 
 def catalog_drift() -> str | None:
-    """An error when python/forge/catalog.json is not what the registry
-    generates now: the payload must offer exactly the validated presets."""
-    sys.path.insert(0, str(ROOT / "python"))
-    from forge import model_catalog
+    """An error when model/catalogue.json is not what the registry generates
+    now: the payload must offer exactly the validated presets."""
+    sys.path.insert(0, str(PKG.parent))
+    from urna.model import catalogue
 
-    want = model_catalog.render(model_catalog.build())
-    have = (FORGE / "catalog.json").read_text() if (FORGE / "catalog.json").is_file() else ""
+    path = PKG / "model" / "catalogue.json"
+    want = catalogue.render(catalogue.build())
+    have = path.read_text() if path.is_file() else ""
     if have != want:
-        return (
-            "python/forge/catalog.json is stale: run python python/forge/model_catalog.py --write"
-        )
+        rel = path.relative_to(ROOT)
+        return f"{rel} is stale: run python {rel.with_suffix('.py')} --write"
     return None
 
 
@@ -130,25 +118,25 @@ def main() -> None:
         del args[i : i + 2]
     if len(args) != 1:
         fail("usage: embedpack.py <dest> [--tar <out.tar.gz>]")
-    sources = [(FORGE / n, Path(n)) for n in MODULES]
-    sources += [(ROOT / "python" / n, Path("..") / n) for n in TOP_LEVEL_MODULES]
-    for src, _ in sources:
+    sources = [PKG / n for n in MODULES]
+    for src in sources:
         if not src.is_file():
             fail(f"missing source: {src}")
     stale = catalog_drift()
     if stale:
         fail(stale)
-    dest = Path(args[0]).resolve() / "urna" / "forge"
-    if dest.exists():
-        shutil.rmtree(dest)
-    dest.mkdir(parents=True)
-    for src, rel in sources:
-        shutil.copyfile(src, (dest / rel).resolve())
-    (dest.parent / "VERSION").write_text(workspace_version() + "\n")
-    model_src = FORGE / "models" / "potion-base-8M"
+    home = Path(args[0]).resolve() / "urna"
+    dest = home / "python" / "urna"
+    if dest.parent.exists():
+        shutil.rmtree(dest.parent)
+    for rel in MODULES:
+        (dest / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(PKG / rel, dest / rel)
+    home.joinpath("VERSION").write_text(workspace_version() + "\n")
+    model_src = PKG / "model" / "potionb8m"
     if not model_src.is_dir():
         fail(f"missing model dir: {model_src}")
-    shutil.copytree(model_src, dest / "models" / "potion-base-8M")
+    shutil.copytree(model_src, dest / "model" / "potionb8m")
     for f in sorted(dest.rglob("*")):
         if f.is_file():
             with f.open("rb") as fh:
@@ -159,7 +147,7 @@ def main() -> None:
     if tar_out is not None:
         tar_out.parent.mkdir(parents=True, exist_ok=True)
         with tarfile.open(tar_out, "w:gz") as tar:
-            tar.add(dest.parent, arcname="urna")
+            tar.add(home, arcname="urna")
         # the one-liner installer verifies this against the downloaded file,
         # in the same `<hex> *<name>` format sha256sum emits.
         import hashlib

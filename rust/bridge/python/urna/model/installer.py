@@ -1,12 +1,12 @@
-"""install_model.py - fetch one catalog model into the local hugging face cache.
+"""installer.py - fetch one catalog model into the local hugging face cache.
 
 the second half of the one install operation `urna setup` and the explorer
-share (`crates/clitui/src/tui/setup/models.rs`): the rust side installs the
+share (`rust/clitui/src/tui/setup/models.rs`): the rust side installs the
 packages into the managed venv, then runs this script with that venv's
 python to fetch the weights and prove them.
 
-  <py> install_model.py plan  <name|embedding_model> [--expect-hash H]
-  <py> install_model.py fetch <name|embedding_model> [--expect-hash H]
+  <py> installer.py plan  <name|embedding_model> [--expect-hash H]
+  <py> installer.py fetch <name|embedding_model> [--expect-hash H]
                                                   [--allow-remote-code]
 
 plan prints one JSON line: the entry, the bytes still to fetch, whether the
@@ -40,9 +40,9 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[1]))  # holds urna/
 
-CATALOG = HERE / "catalog.json"
+CATALOG = HERE / "catalogue.json"
 
 
 class Refused(Exception):
@@ -69,7 +69,7 @@ def find(catalog: dict, name: str) -> dict:
 
 
 def hub_dir() -> Path:
-    """The cache the query embedders read (model_fingerprint.hf_cache_snapshot):
+    """The cache the query embedders read (modelhash.hf_cache_snapshot):
     $HF_HOME/hub, else ~/.cache/huggingface/hub."""
     home = os.environ.get("HF_HOME") or str(Path.home() / ".cache" / "huggingface")
     return Path(home) / "hub"
@@ -216,7 +216,7 @@ def verify(entry: dict) -> str:
         got = hashlib.sha256((snap / pin["path"]).read_bytes()).hexdigest()
         if got != pin["sha256"]:
             raise Refused(6, f"{pin['path']} sha256 {got} is not the reviewed {pin['sha256']}")
-    from model_fingerprint import compute_model_fingerprint, fingerprint_to_model_hash
+    from urna.model.modelhash import compute_model_fingerprint, fingerprint_to_model_hash
 
     fp = compute_model_fingerprint(snap, model_id=entry["embedding_model"])
     got = fingerprint_to_model_hash(fp)

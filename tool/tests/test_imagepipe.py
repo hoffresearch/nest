@@ -10,7 +10,7 @@ checkpoint to prove. A stub embedder that reduces pixels to a small
 deterministic vector exercises every one of them.
 
 Needs ffmpeg with libsvtav1 for the compressed cases; those skip cleanly
-when it is absent. Run: python tests/test_imagepipe.py
+when it is absent. Run: python tool/tests/test_imagepipe.py
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "rust", "bridge", "python"))
 
 import numpy as np
 
@@ -141,7 +141,7 @@ class ImageCorpusTest(unittest.TestCase):
         src=None,
         speed=8,
     ) -> dict:
-        from tools import urna_build_image_corpus as builder
+        from urna.entry import imgcorpus as builder
 
         return builder.build_corpus(
             all_intra=all_intra,
@@ -206,15 +206,15 @@ class ImageCorpusTest(unittest.TestCase):
         """The alignment guard leans on this count, so it is checked directly."""
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
-        from forge import image_decode, image_encode, image_media
+        from urna.image import decframes, encstream, mediabase
 
         paths = sorted(self.src.glob("*.png"))
-        canvas = image_media.canvas_size(paths, 256)
+        canvas = mediabase.canvas_size(paths, 256)
         out = self.tmp / "probe.mp4"
-        info = image_encode.encode_av1(paths, out, canvas=canvas)
+        info = encstream.encode_av1(paths, out, canvas=canvas)
         self.assertEqual(info["frame_count"], len(paths))
-        self.assertEqual(image_media.probe_frame_count(out), len(paths))
-        decoded = sum(len(b) for b in image_decode.decode_frames(out, canvas, batch_size=5))
+        self.assertEqual(mediabase.probe_frame_count(out), len(paths))
+        decoded = sum(len(b) for b in decframes.decode_frames(out, canvas, batch_size=5))
         self.assertEqual(decoded, len(paths), "decode yielded a different frame count")
 
     def test_sampling_renumbers_ordinals_densely(self):
@@ -227,7 +227,7 @@ class ImageCorpusTest(unittest.TestCase):
         """
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
-        from forge import image_media
+        from urna.image import mediabase
 
         result = self._build("sampled", compress=True, sample=6)
         manifest = json.loads(Path(result["manifest"]).read_text())
@@ -236,7 +236,7 @@ class ImageCorpusTest(unittest.TestCase):
         self.assertEqual(result["media"]["frame_count"], 6)
         self.assertEqual([i["ordinal"] for i in manifest["items"]], list(range(6)))
         for item in manifest["items"]:
-            _, frame = image_media.parse_media_uri(item["source_uri"])
+            _, frame = mediabase.parse_media_uri(item["source_uri"])
             self.assertEqual(frame, item["ordinal"])
         # the subset is drawn from the source and keeps the sorted order
         origins = [i["origin"] for i in manifest["items"]]
@@ -300,7 +300,7 @@ class ImageCorpusTest(unittest.TestCase):
     def test_corpus_is_relocatable(self):
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
-        from forge import image_decode, image_media
+        from urna.image import decframes, mediabase
 
         result = self._build("portable", compress=True)
         manifest = json.loads(Path(result["manifest"]).read_text())
@@ -311,10 +311,10 @@ class ImageCorpusTest(unittest.TestCase):
         moved = self.tmp / "elsewhere"
         moved.mkdir()
         shutil.copy(result["urna"], moved / "portable.urna")
-        shutil.copytree(image_media.media_dir_for(Path(result["urna"])), moved / "portable.media")
-        name, ordinal = image_media.parse_media_uri(manifest["items"][3]["source_uri"])
-        frame = image_decode.decode_frame(
-            image_media.media_dir_for(moved / "portable.urna") / name,
+        shutil.copytree(mediabase.media_dir_for(Path(result["urna"])), moved / "portable.media")
+        name, ordinal = mediabase.parse_media_uri(manifest["items"][3]["source_uri"])
+        frame = decframes.decode_frame(
+            mediabase.media_dir_for(moved / "portable.urna") / name,
             tuple(manifest["media"]["canvas"]),
             ordinal,
         )
@@ -352,10 +352,10 @@ class ImageCorpusTest(unittest.TestCase):
             import fitz
         except ImportError:
             self.skipTest("PyMuPDF not available")
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
-        import urna_image_eval as ev
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bench"))
+        import imageeval as ev
 
-        from tools import urna_build_image_corpus as builder
+        from urna.entry import imgcorpus as builder
 
         pdf_dir = self.tmp / "pdfs"
         pdf_dir.mkdir()
@@ -388,16 +388,16 @@ class ImageCorpusTest(unittest.TestCase):
     def test_canvas_is_even_and_letterbox_does_not_distort(self):
         from PIL import Image
 
-        from forge import image_media
+        from urna.image import mediabase
 
         paths = sorted(self.src.glob("*.png"))
-        canvas = image_media.canvas_size(paths, 256)
+        canvas = mediabase.canvas_size(paths, 256)
         self.assertEqual(canvas[0] % 2, 0)
         self.assertEqual(canvas[1] % 2, 0)
         # a wildly off-aspect image must be padded into the canvas, never
         # stretched to fill it.
         tall = Image.new("RGB", (40, 400), (255, 0, 0))
-        padded = image_media.letterbox(tall, canvas)
+        padded = mediabase.letterbox(tall, canvas)
         self.assertEqual(padded.size, canvas)
         corner = padded.getpixel((1, canvas[1] // 2))
         self.assertEqual(corner, (0, 0, 0), "expected padding, got stretched content")
@@ -410,8 +410,8 @@ class ImageCorpusTest(unittest.TestCase):
         was not distinguishable from noise. The harness now reports the
         interval and says so, so the same claim cannot be made twice.
         """
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
-        import urna_image_eval as ev
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bench"))
+        import imageeval as ev
 
         rng = np.random.default_rng(0)
         same = rng.normal(0.6, 0.2, 400)
@@ -438,14 +438,14 @@ class ImageCorpusTest(unittest.TestCase):
         the 1024 default sat above a 765-wide source and cost 33 percent of
         the file for zero information.
         """
-        from forge import image_media
+        from urna.image import mediabase
 
         paths = sorted(self.src.glob("*.png"))  # the fixture is 320x240
-        canvas = image_media.canvas_size(paths, 4096)
+        canvas = mediabase.canvas_size(paths, 4096)
         self.assertLessEqual(canvas[0], 320, "canvas widened past the source")
         self.assertLessEqual(canvas[1], 240)
         # below the source it still downscales, which is a real size lever.
-        self.assertEqual(image_media.canvas_size(paths, 160)[0], 160)
+        self.assertEqual(mediabase.canvas_size(paths, 160)[0], 160)
 
     def test_canvas_cap_survives_mixed_source_sizes(self):
         """A few large images must not drag the whole canvas up.
@@ -455,14 +455,14 @@ class ImageCorpusTest(unittest.TestCase):
         """
         from PIL import Image
 
-        from forge import image_media
+        from urna.image import mediabase
 
         mixed = self.tmp / "mixed"
         mixed.mkdir()
         for i in range(9):
             Image.new("RGB", (200, 150), (i * 20, 0, 0)).save(mixed / f"s{i}.png")
         Image.new("RGB", (4000, 3000), (0, 0, 255)).save(mixed / "huge.png")
-        canvas = image_media.canvas_size(sorted(mixed.glob("*.png")), 1024)
+        canvas = mediabase.canvas_size(sorted(mixed.glob("*.png")), 1024)
         self.assertLessEqual(canvas[0], 200, f"one outlier set the canvas: {canvas}")
 
     # ---- F2.1: random access is seek, and it returns the same frame ----
@@ -478,16 +478,16 @@ class ImageCorpusTest(unittest.TestCase):
         """
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
-        from forge import image_decode
+        from urna.image import decframes
 
         for name, intra in (("seekgop", False), ("seekintra", True)):
             result = self._build(name, compress=True, all_intra=intra)
             media = result["media"]
             video = self.tmp / name / f"{name}.media" / f"{name}-av1.mp4"
             canvas = tuple(media["canvas"])
-            sequential = [f for batch in image_decode.decode_frames(video, canvas) for f in batch]
+            sequential = [f for batch in decframes.decode_frames(video, canvas) for f in batch]
             for ordinal in (0, 5, 11):
-                sought = image_decode.decode_frame(video, canvas, ordinal)
+                sought = decframes.decode_frame(video, canvas, ordinal)
                 np.testing.assert_array_equal(
                     sought, sequential[ordinal], f"{name} frame {ordinal} diverged"
                 )
@@ -496,7 +496,7 @@ class ImageCorpusTest(unittest.TestCase):
         """One invocation resolves k ordinals, and the frames are the right ones."""
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
-        from forge import image_decode
+        from urna.image import decframes
 
         result = self._build("batch", compress=True)
         video = self.tmp / "batch" / "batch.media" / "batch-av1.mp4"
@@ -507,10 +507,10 @@ class ImageCorpusTest(unittest.TestCase):
         # write when the reader is done, and closing the pipe must not
         # turn into a raised broken-pipe error.
         for wanted in ([1, 5, 11], [1, 5]):
-            frames = image_decode.decode_frames_at(video, canvas, wanted)
+            frames = decframes.decode_frames_at(video, canvas, wanted)
             self.assertEqual(len(frames), len(wanted))
             for ordinal, frame in zip(wanted, frames, strict=True):
-                single = image_decode.decode_frame(video, canvas, ordinal)
+                single = decframes.decode_frame(video, canvas, ordinal)
                 np.testing.assert_array_equal(frame, single, f"batch frame {ordinal} diverged")
 
     # ---- F2.2: the codec toolchain is part of provenance ----
@@ -531,7 +531,7 @@ class ImageCorpusTest(unittest.TestCase):
         self.assertIn("ffmpeg", media["toolchain"])
         self.assertTrue(media["provenance_sha256"].startswith("sha256:"))
 
-        from tools import urna_build_image_corpus as builder
+        from urna.entry import imgcorpus as builder
 
         second = builder.build_corpus(
             input_dir=self.src,
@@ -554,7 +554,7 @@ class ImageCorpusTest(unittest.TestCase):
         """Counting frames catches loss, not reordering; hashes catch both."""
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
-        from forge import image_decode, image_media
+        from urna.image import decframes, mediabase
 
         result = self._build("hashed", compress=True)
         manifest = json.loads(Path(result["manifest"]).read_text())
@@ -562,14 +562,14 @@ class ImageCorpusTest(unittest.TestCase):
         self.assertEqual(len(hashes), result["n_items"])
         self.assertTrue(all(h.startswith("sha256:") for h in hashes))
 
-        video = image_media.media_dir_for(Path(result["urna"])) / "hashed-av1.mp4"
+        video = mediabase.media_dir_for(Path(result["urna"])) / "hashed-av1.mp4"
         canvas = tuple(manifest["media"]["canvas"])
-        image_decode.verify_frame_hashes(video, canvas, hashes)
+        decframes.verify_frame_hashes(video, canvas, hashes)
 
         tampered = list(hashes)
         tampered[3] = tampered[5]
         with self.assertRaises(ValueError):
-            image_decode.verify_frame_hashes(video, canvas, tampered)
+            decframes.verify_frame_hashes(video, canvas, tampered)
 
     # ---- F2.4: pix_fmt is verified, and 444 really carries more chroma ----
 
@@ -582,12 +582,12 @@ class ImageCorpusTest(unittest.TestCase):
         """
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
-        from forge import image_encode, image_media
+        from urna.image import encstream, mediabase
 
         paths = sorted(self.src.glob("*.png"))
-        canvas = image_media.canvas_size(paths, 256)
+        canvas = mediabase.canvas_size(paths, 256)
         with self.assertRaises(RuntimeError):
-            image_encode.encode_av1(paths, self.tmp / "x444.mp4", canvas=canvas, pix_fmt="yuv444p")
+            encstream.encode_av1(paths, self.tmp / "x444.mp4", canvas=canvas, pix_fmt="yuv444p")
 
     def test_444_preserves_more_chroma_than_420(self):
         """Red edge on black: chroma subsampling blurs it, 444 blurs less."""
@@ -595,7 +595,7 @@ class ImageCorpusTest(unittest.TestCase):
             self.skipTest("avifenc/avifdec not available")
         from PIL import Image
 
-        from forge import image_decode, image_encode_still
+        from urna.image import decframes, encstills
 
         pattern = self.tmp / "edge.png"
         img = Image.new("RGB", (128, 128), (0, 0, 0))
@@ -608,9 +608,9 @@ class ImageCorpusTest(unittest.TestCase):
         err = {}
         for yuv in ("420", "444"):
             out_dir = self.tmp / f"avif{yuv}"
-            image_encode_still.encode_avif([pattern], out_dir, quality=40, yuv=yuv)
+            encstills.encode_avif([pattern], out_dir, quality=40, yuv=yuv)
             avif = sorted(out_dir.glob("*.avif"))[0]
-            decoded = image_decode.decode_avif(avif)
+            decoded = decframes.decode_avif(avif)
             err[yuv] = float(np.abs(decoded.astype(np.int16) - src).mean())
             # the uncompressed-png intermediate must hand back the same
             # pixels avifdec's default png does
@@ -634,14 +634,14 @@ class ImageCorpusTest(unittest.TestCase):
             self.skipTest("avifenc/avifdec not available")
         from PIL import Image
 
-        from forge import image_encode_still
+        from urna.image import encstills
 
         png = self.tmp / "pinned.png"
         rng = np.random.default_rng(3)
         Image.fromarray(rng.integers(0, 255, (96, 128, 3), dtype=np.uint8)).save(png)
         out_dir = self.tmp / "pinned-avif"
-        media = image_encode_still.encode_avif([png], out_dir, quality=40, yuv="420", speed=9)
-        self.assertEqual(media["toolchain"]["params"]["jobs"], image_encode_still.AVIF_JOBS)
+        media = encstills.encode_avif([png], out_dir, quality=40, yuv="420", speed=9)
+        self.assertEqual(media["toolchain"]["params"]["jobs"], encstills.AVIF_JOBS)
         ref = self.tmp / "pinned-j2.avif"
         # fmt: off
         subprocess.run(
@@ -662,21 +662,19 @@ class ImageCorpusTest(unittest.TestCase):
         """
         if not have_avif():
             self.skipTest("avifenc/avifdec not available")
-        from forge import image_encode_still
+        from urna.image import encstills
 
         pattern = sorted(self.src.glob("*.png"))[0]
         png_bytes = pattern.stat().st_size
 
-        given = image_encode_still.encode_avif(
+        given = encstills.encode_avif(
             [pattern], self.tmp / "avif-given", quality=40, yuv="420", source_bytes=123
         )
         self.assertEqual(given["source_bytes"], 123)
         self.assertEqual(given["letterboxed_input_bytes"], png_bytes)
         self.assertEqual(given["compression_ratio"], round(123 / given["output_bytes"], 2))
 
-        plain = image_encode_still.encode_avif(
-            [pattern], self.tmp / "avif-plain", quality=40, yuv="420"
-        )
+        plain = encstills.encode_avif([pattern], self.tmp / "avif-plain", quality=40, yuv="420")
         self.assertEqual(plain["source_bytes"], png_bytes)
         self.assertEqual(plain["letterboxed_input_bytes"], png_bytes)
         self.assertEqual(plain["compression_ratio"], round(png_bytes / plain["output_bytes"], 2))
@@ -712,7 +710,7 @@ class ImageCorpusTest(unittest.TestCase):
         db.validate()
 
         # a hit resolves to real pixels out of the per-image media
-        from tools import urna_search_image as search
+        from urna.entry import imgsearch as search
 
         out_dir = self.tmp / "hits"
         saved = search.save_frame(
@@ -732,12 +730,12 @@ class ImageCorpusTest(unittest.TestCase):
         if not have_ffmpeg():
             self.skipTest("PIL decode only, but keep the skip symmetric")
         import urna
-        from forge import image_media
+        from urna.image import mediabase
 
         result = self._build("ctrlcorpus", compress=True, control=True)
         manifest = json.loads(Path(result["manifest"]).read_text())
         self.assertEqual(manifest["media"]["backend"], "png-lossless")
-        media_dir = image_media.media_dir_for(Path(result["urna"]))
+        media_dir = mediabase.media_dir_for(Path(result["urna"]))
         pngs = sorted(media_dir.rglob("*.png"))
         self.assertEqual(len(pngs), result["n_items"])
 
@@ -746,7 +744,7 @@ class ImageCorpusTest(unittest.TestCase):
 
         canvas = tuple(manifest["media"]["canvas"])
         with Image.open(manifest["items"][4]["render_path"]) as img:
-            query = image_media.letterbox(img, canvas)
+            query = mediabase.letterbox(img, canvas)
         vec = StubEmbedder()._vector(query).tolist()
         hits = urna.open(result["urna"]).search(vec, 3)
         self.assertEqual(hits[0].offset_start, 4)
@@ -754,8 +752,8 @@ class ImageCorpusTest(unittest.TestCase):
     # ---- F2.6: the text tower is plumbed through the search cli ----
 
     def test_query_text_and_query_image_are_exclusive(self):
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
-        import urna_search_image as search
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bench"))
+        from urna.entry import imgsearch as search
 
         with self.assertRaises(SystemExit):
             search.parse_args(
@@ -787,7 +785,7 @@ class ImageCorpusTest(unittest.TestCase):
         """
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
-        from forge import image_encode
+        from urna.image import encstream
 
         result = self._build("gopauto", compress=True)
         media = result["media"]
@@ -797,7 +795,7 @@ class ImageCorpusTest(unittest.TestCase):
         self.assertGreater(gop["intra_bytes"], 0)
         self.assertGreater(gop["inter_bytes"], 0)
         self.assertGreater(gop["n_samples"], 1)
-        expected_keyint = 1 if gop["decision"] == "intra" else image_encode.INTER_KEYINT
+        expected_keyint = 1 if gop["decision"] == "intra" else encstream.INTER_KEYINT
         self.assertEqual(media["keyint"], expected_keyint)
 
     def test_auto_gop_policy_finds_redundancy(self):
@@ -814,7 +812,7 @@ class ImageCorpusTest(unittest.TestCase):
             draw.rectangle([40 + i, 60, 100 + i, 120], fill=(0, 0, 0))
             img.save(src / f"frame{i:03d}.png")
 
-        from forge import image_encode
+        from urna.image import encstream
 
         result = self._build("gopred", compress=True, src=src)
         gop = result["media"]["gop"]
@@ -822,16 +820,16 @@ class ImageCorpusTest(unittest.TestCase):
         self.assertLess(gop["inter_bytes"], gop["intra_bytes"])
         # inter ships with the bounded gop (INTER_KEYINT), never the encoder
         # default: measured 2026-08-31, and it caps random-access decode cost.
-        self.assertEqual(result["media"]["keyint"], image_encode.INTER_KEYINT)
+        self.assertEqual(result["media"]["keyint"], encstream.INTER_KEYINT)
 
     def test_gop_policy_inter_forces_the_default_gop(self):
         """`inter` is the lever for material the probe has not seen."""
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
-        from forge import image_encode
+        from urna.image import encstream
 
         result = self._build("gopinter", compress=True, gop_policy="inter")
-        self.assertEqual(result["media"]["keyint"], image_encode.INTER_KEYINT)
+        self.assertEqual(result["media"]["keyint"], encstream.INTER_KEYINT)
         self.assertEqual(result["media"]["gop"]["decision"], "inter")
         self.assertEqual(result["media"]["frame_count"], result["n_items"])
 
@@ -846,20 +844,20 @@ class ImageCorpusTest(unittest.TestCase):
         """
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
-        from forge import image_decode, image_media
+        from urna.image import decframes, mediabase
 
         result = self._build("ordered", compress=True, order_similarity=True)
         manifest = json.loads(Path(result["manifest"]).read_text())
         media = manifest["media"]
-        media_dir = image_media.media_dir_for(Path(result["urna"]))
+        media_dir = mediabase.media_dir_for(Path(result["urna"]))
         canvas = tuple(media["canvas"])
         frame_ids = []
         for item in manifest["items"]:
-            name, ordinal = image_media.parse_media_uri(item["source_uri"])
+            name, ordinal = mediabase.parse_media_uri(item["source_uri"])
             frame_ids.append(ordinal)
-            frame = image_decode.decode_frame(media_dir / name, canvas, ordinal)
+            frame = decframes.decode_frame(media_dir / name, canvas, ordinal)
             self.assertEqual(
-                image_decode.frame_sha256(frame),
+                decframes.frame_sha256(frame),
                 manifest["frame_sha256"][item["ordinal"]],
                 f"item {item['ordinal']} resolved to another item's frame",
             )
@@ -874,7 +872,7 @@ class ImageCorpusTest(unittest.TestCase):
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
         import urna
-        from forge import image_decode, image_media
+        from urna.image import decframes, mediabase
 
         result = self._build("sharded", compress=True, shard_size=5)
         manifest = json.loads(Path(result["manifest"]).read_text())
@@ -883,16 +881,16 @@ class ImageCorpusTest(unittest.TestCase):
         self.assertEqual(len(segments), 3, "12 frames at shard_size 5")
         self.assertEqual(sum(s["n_frames"] for s in segments), result["n_items"])
         self.assertEqual(media["frame_count"], result["n_items"])
-        media_dir = image_media.media_dir_for(Path(result["urna"]))
+        media_dir = mediabase.media_dir_for(Path(result["urna"]))
         canvas = tuple(media["canvas"])
         for seg in segments:
             self.assertTrue((media_dir / seg["uri"]).exists(), seg["uri"])
             self.assertTrue(seg["media_sha256"].startswith("sha256:"))
         for item in manifest["items"]:
-            name, ordinal = image_media.parse_media_uri(item["source_uri"])
-            frame = image_decode.decode_frame(media_dir / name, canvas, ordinal)
+            name, ordinal = mediabase.parse_media_uri(item["source_uri"])
+            frame = decframes.decode_frame(media_dir / name, canvas, ordinal)
             self.assertEqual(
-                image_decode.frame_sha256(frame),
+                decframes.frame_sha256(frame),
                 manifest["frame_sha256"][item["ordinal"]],
                 f"item {item['ordinal']} resolved to another item's frame",
             )
@@ -904,21 +902,21 @@ class ImageCorpusTest(unittest.TestCase):
         """Both levers together: the mapping contract must still hold."""
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
-        from forge import image_decode, image_media
+        from urna.image import decframes, mediabase
 
         result = self._build("both", compress=True, shard_size=5, order_similarity=True)
         manifest = json.loads(Path(result["manifest"]).read_text())
         media = manifest["media"]
         self.assertEqual(len(media["segments"]), 3)
-        media_dir = image_media.media_dir_for(Path(result["urna"]))
+        media_dir = mediabase.media_dir_for(Path(result["urna"]))
         canvas = tuple(media["canvas"])
         seen = []
         for item in manifest["items"]:
-            name, ordinal = image_media.parse_media_uri(item["source_uri"])
+            name, ordinal = mediabase.parse_media_uri(item["source_uri"])
             seen.append((name, ordinal))
-            frame = image_decode.decode_frame(media_dir / name, canvas, ordinal)
+            frame = decframes.decode_frame(media_dir / name, canvas, ordinal)
             self.assertEqual(
-                image_decode.frame_sha256(frame),
+                decframes.frame_sha256(frame),
                 manifest["frame_sha256"][item["ordinal"]],
             )
         self.assertEqual(len(set(seen)), result["n_items"])
@@ -935,7 +933,7 @@ class ImageCorpusTest(unittest.TestCase):
         """
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
-        from forge import image_encode
+        from urna.image import encstream
 
         result = self._build("gopseg", compress=True, shard_size=5)
         media = result["media"]
@@ -945,7 +943,7 @@ class ImageCorpusTest(unittest.TestCase):
         self.assertIn(gop["decision"], ("intra", "inter", "mixed"))
         self.assertEqual(len(gop["segments"]), len(media["segments"]))
         for seg, probe in zip(media["segments"], gop["segments"], strict=True):
-            expected = 1 if probe["decision"] == "intra" else image_encode.INTER_KEYINT
+            expected = 1 if probe["decision"] == "intra" else encstream.INTER_KEYINT
             self.assertEqual(seg["keyint"], expected)
             self.assertGreater(probe["intra_bytes"], 0)
             self.assertGreater(probe["inter_bytes"], 0)
@@ -959,20 +957,20 @@ class ImageCorpusTest(unittest.TestCase):
         (recorded as tune_resolved=None), never hard-error the encode."""
         if not have_ffmpeg():
             self.skipTest("ffmpeg with libsvtav1 not available")
-        from forge import image_encode
+        from urna.image import encstream
 
         paths = sorted(self.src.glob("*.png"))[:4]
-        info = image_encode.encode_av1(
+        info = encstream.encode_av1(
             paths,
             self.tmp / "interstill.mp4",
             canvas=(256, 256),
             preset=12,
-            keyint=image_encode.INTER_KEYINT,
+            keyint=encstream.INTER_KEYINT,
             tune="still",
         )
         self.assertIsNone(info["toolchain"]["params"]["tune_resolved"])
-        self.assertEqual(info["keyint"], image_encode.INTER_KEYINT)
-        intra = image_encode.encode_av1(
+        self.assertEqual(info["keyint"], encstream.INTER_KEYINT)
+        intra = encstream.encode_av1(
             paths,
             self.tmp / "intrastill.mp4",
             canvas=(256, 256),
@@ -1008,14 +1006,14 @@ class ImageCorpusTest(unittest.TestCase):
             draw.rectangle([40 + i, 60, 100 + i, 120], fill=(0, 0, 0))
             img.save(src / f"frame{i:03d}.png")
 
-        from forge import image_encode
+        from urna.image import encstream
 
         result = self._build("gopredshard", compress=True, src=src, shard_size=5)
         media = result["media"]
         self.assertEqual(len(media["segments"]), 2)
         for seg in media["segments"]:
-            self.assertEqual(seg["keyint"], image_encode.INTER_KEYINT)
-        self.assertEqual(media["keyint"], image_encode.INTER_KEYINT)
+            self.assertEqual(seg["keyint"], encstream.INTER_KEYINT)
+        self.assertEqual(media["keyint"], encstream.INTER_KEYINT)
         self.assertEqual(media["gop"]["decision"], "inter")
         self.assertTrue(media["gop"]["per_segment"])
 
@@ -1030,8 +1028,8 @@ class ImageCorpusTest(unittest.TestCase):
 
     def test_sweep_dtype_ladder_and_gop_kinds(self):
         """`dtype:` variants isolate quantization; av1 kinds pin the policy."""
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
-        import urna_image_sweep as sweep
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bench"))
+        import imagerate as sweep
 
         variants = sweep.parse_variants("dtype:f16,int8,int4")
         self.assertEqual([v["dtype"] for v in variants], ["float16", "int8", "int4"])
@@ -1052,8 +1050,8 @@ class ImageCorpusTest(unittest.TestCase):
         A paired sign test is assumption-free: identical samples must give
         p=1, and a consistent 30-point drop on every query must clear 0.05.
         """
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
-        import _image_metrics as met
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bench"))
+        import imagestat as met
 
         rng = np.random.default_rng(0)
         same = rng.normal(0.6, 0.2, 200)
@@ -1063,8 +1061,8 @@ class ImageCorpusTest(unittest.TestCase):
 
     def test_ranking_agreement_reads_identity_and_reversal(self):
         """overlap@k counts shared hits; kendall tau-b reads their order."""
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
-        import _image_metrics as met
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bench"))
+        import imagestat as met
 
         a = [[3, 1, 4, 0, 2], [0, 1, 2, 3, 4]]
         same = met.ranking_agreement(a, a, k=3)
@@ -1076,8 +1074,8 @@ class ImageCorpusTest(unittest.TestCase):
 
     def test_cosine_drift_distribution(self):
         """Per-image drift between source-pixel and decoded-frame vectors."""
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
-        import _image_metrics as met
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bench"))
+        import imagestat as met
 
         rng = np.random.default_rng(0)
         base = rng.normal(size=(50, 32)).astype(np.float32)
@@ -1090,8 +1088,8 @@ class ImageCorpusTest(unittest.TestCase):
 
     def test_per_class_floor_catches_a_collapsed_class(self):
         """CP-0.6: a mean can hide one destroyed class; the floor cannot."""
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
-        import _image_metrics as met
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bench"))
+        import imagestat as met
 
         labels = ["nev"] * 80 + ["mel"] * 20
         rng = np.random.default_rng(0)
@@ -1108,10 +1106,10 @@ class ImageCorpusTest(unittest.TestCase):
         """One model load, a control and two variants, the full battery out."""
         if not have_avif() or not have_ffmpeg():
             self.skipTest("sweep needs ffmpeg+libsvtav1 and avifenc/avifdec")
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python", "tools"))
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bench"))
         import argparse
 
-        import urna_image_sweep as sweep
+        import imagerate as sweep
 
         labels_csv = self.tmp / "labels.csv"
         labels_csv.write_text(

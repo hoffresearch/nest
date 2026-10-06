@@ -21,9 +21,9 @@ writes them as PNGs. That is also the end-to-end check that the media and
 the index still agree.
 
 Usage:
-    python/tools/urna_search_image.py --index tmp/ph2/ph2.urna \
+    rust/bridge/python/urna/entry/imgsearch.py --index tmp/ph2/ph2.urna \
         --query-image lesion.jpg -k 5 --save-frames tmp/hits
-    python/tools/urna_search_image.py --index tmp/ph2/ph2.urna \
+    rust/bridge/python/urna/entry/imgsearch.py --index tmp/ph2/ph2.urna \
         --query-text "dark irregular lesion with blue-white veil" -k 5
 """
 
@@ -35,12 +35,13 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))  # holds urna/
 
 import numpy as np
 
 import urna
-from forge import embed_image, image_decode, image_media
+from urna.embed import visionemb
+from urna.image import decframes, mediabase
 
 
 def load_manifest(index_path: Path) -> dict | None:
@@ -55,17 +56,17 @@ def save_frame(index_path: Path, manifest: dict, source_uri: str, out_dir: Path)
     media = manifest.get("media")
     if not media or not source_uri.startswith("media://"):
         return None
-    name, ordinal = image_media.parse_media_uri(source_uri)
-    media_path = image_media.media_dir_for(index_path) / name
+    name, ordinal = mediabase.parse_media_uri(source_uri)
+    media_path = mediabase.media_dir_for(index_path) / name
     if not media_path.exists():
         raise FileNotFoundError(f"corpus media missing: {media_path}")
     if name.endswith(".avif"):
-        frame = image_decode.decode_avif(media_path)
+        frame = decframes.decode_avif(media_path)
     elif name.endswith(".png"):
         with Image.open(media_path) as img:
             frame = np.asarray(img.convert("RGB"))
     else:
-        frame = image_decode.decode_frame(
+        frame = decframes.decode_frame(
             media_path, tuple(media["canvas"]), ordinal, fps=int(media.get("fps", 1))
         )
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -98,7 +99,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def embed_query(args: argparse.Namespace, embedder, manifest: dict | None):
+def searchtxt(args: argparse.Namespace, embedder, manifest: dict | None):
     """The query vector, from pixels or from the text tower."""
     if args.query_text:
         return embedder.embed_texts([args.query_text])[0].tolist()
@@ -111,7 +112,7 @@ def embed_query(args: argparse.Namespace, embedder, manifest: dict | None):
         from PIL import Image
 
         with Image.open(args.query_image) as img:
-            boxed = image_media.letterbox(img, tuple(media["canvas"]))
+            boxed = mediabase.letterbox(img, tuple(media["canvas"]))
         return embedder.embed_arrays([np.asarray(boxed)])[0].tolist()
     return embedder.embed_one(args.query_image).tolist()
 
@@ -119,11 +120,11 @@ def embed_query(args: argparse.Namespace, embedder, manifest: dict | None):
 def main() -> int:
     args = parse_args()
 
-    embedder = embed_image.ImageEmbedder(
+    embedder = visionemb.ImageEmbedder(
         model_id=args.model, pretrained=args.pretrained, device=args.device
     )
     manifest = load_manifest(args.index)
-    qvec = embed_query(args, embedder, manifest)
+    qvec = searchtxt(args, embedder, manifest)
 
     db = urna.open(str(args.index))
     expected = None if args.skip_model_check else embedder.model_hash

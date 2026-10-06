@@ -2,7 +2,7 @@
 
 The corpus contract: every image is normalized onto one fixed canvas before
 encoding, so `frame[i]` stays bound to `image[i]` by construction. Encode
-lives in `forge/image_encode.py`, decode in `forge/image_decode.py`; this
+lives in `urna/image/encstream.py`, decode in `urna/image/decframes.py`; this
 module keeps only what both sides (and the read-side tooling) share.
 
 Letterboxing (fit inside the canvas, pad the remainder) is used instead of

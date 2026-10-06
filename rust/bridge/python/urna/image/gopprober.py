@@ -1,6 +1,6 @@
 """The gop probe behind `gop_policy=auto`: encode a sample both ways, decide.
 
-Carved out of `forge/image_encode.py`; both arms go through `encode_av1`
+Carved out of `urna/image/encstream.py`; both arms go through `encode_av1`
 there, so the frame-count and pix_fmt guards apply to the probe exactly as
 they do to the build. `resolve_keyint` turns a gop_policy into the keyint the
 stream backend ships, running the probe only for `auto`.
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import numpy as np
 
-from . import image_media
-from .image_encode import INTER_KEYINT, encode_av1
+from urna.image import mediabase
+from urna.image.encstream import INTER_KEYINT, encode_av1
 
 # inter must not buy bytes with quality: at the SAME crf SVT quantizes
 # P-frames far coarser, and a bytes-only probe is blind to it (measured
@@ -140,14 +140,14 @@ def _probe_arm_quality(sample: Sequence[Path], canvas, tmp: Path) -> dict:
         return {"quality": "unmeasured (ssimulacra2 not on PATH)"}
     from PIL import Image
 
-    from .image_decode import decode_frames
-    from .quality_gate import _ssimulacra2
+    from urna.gates.crfpicker import _ssimulacra2
+    from urna.image.decframes import decode_frames
 
     src_pngs = []
     for i, p in enumerate(sample):
         out = tmp / f"src{i:04d}.png"
         with Image.open(p) as img:
-            image_media.letterbox(img, canvas).save(out)
+            mediabase.letterbox(img, canvas).save(out)
         src_pngs.append(out)
     scores = {}
     for arm in ("intra", "inter"):

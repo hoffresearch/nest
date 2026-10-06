@@ -5,10 +5,10 @@ import os
 import sys
 import tempfile
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "rust", "bridge", "python"))
 
 import urna
-from builder import BuildConfig, EmbeddingCache, Pipeline, chunk_text
+from urna.pipes.buildfile import BuildConfig, EmbeddingCache, Pipeline, chunk_text
 
 
 def _toy_embed(specs):

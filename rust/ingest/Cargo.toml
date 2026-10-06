@@ -1,11 +1,11 @@
-# urna-ingest is a SEPARATE cargo workspace. it lives under crates/ but
+# urna-ingest is a SEPARATE cargo workspace. it lives under rust/ but
 # the root manifest excludes it from the sovereign workspace, so the
 # (eventually heavy, possibly non-deterministic) forge ingestion deps --
 # pdf, ocr, clip, fonttools -- never enter urna-format / urna-engine.
 # this crate is FORGE-0a: the frozen .fci schema only. build/test it from
 # the repo root:
-#   cargo build --manifest-path crates/ingest/Cargo.toml
-#   cargo test  --manifest-path crates/ingest/Cargo.toml
+#   cargo build --manifest-path rust/ingest/Cargo.toml
+#   cargo test  --manifest-path rust/ingest/Cargo.toml
 [package]
 name = "urna-ingest"
 version = "0.1.0"

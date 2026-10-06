@@ -9,7 +9,7 @@ proves the one-gif demo path is sovereign and honest:
     real corpus)
 
 run with the forge deps (numpy + tokenizers + the vendored potion table):
-  .venv/bin/python python/forge/test_retrieve.py
+  .venv/bin/python tool/tests/test_retrieval.py
 
 not run by fullcheck.sh (same as the other forge self-tests).
 """
@@ -21,12 +21,11 @@ import socket
 import sys
 import tempfile
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # python/
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "rust", "bridge", "python"))
 
 import urna  # noqa: E402
-
-from forge.embed_potion import potion_embedder  # noqa: E402
-from forge.retrieve import build_demo, retrieve  # noqa: E402
+from urna.embed.potiontab import potion_embedder  # noqa: E402
+from urna.reads.retrieval import build_demo, retrieve  # noqa: E402
 
 
 def test_no_socket_on_build_and_retrieve() -> None:

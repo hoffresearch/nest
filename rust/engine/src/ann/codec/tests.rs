@@ -1,7 +1,7 @@
 //! Negative-decode tests for the HNSW payload.
 //!
 //! A crafted payload must yield a typed `Err`, never a panic or a giant
-//! allocation. These live beside the codec (not under `crates/*/tests/`)
+//! allocation. These live beside the codec (not under `rust/*/tests/`)
 //! because they exercise the private decode helpers through
 //! `HnswIndex::from_bytes`.
 

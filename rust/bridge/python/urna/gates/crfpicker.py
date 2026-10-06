@@ -7,7 +7,7 @@ Two floors, never traded against each other:
   the gate model. An image can look fine to humans and still move in
   embedding space, which is what retrieval actually serves. A negative
   floor disables the leg (recorded as drift_pass = true).
-- optional third leg (quality_utility): text-to-image hit@1 of the sample
+- optional third leg (taskscore): text-to-image hit@1 of the sample
   must stay within utility_tol of the lossless source and above
   utility_floor_hit1. Enabled by a non-negative floor; it is what a
   retrieval-only profile gates on once drift is disabled.
@@ -27,10 +27,10 @@ from pathlib import Path
 
 import numpy as np
 
-from forge import image_media
-from forge.image_decode import decode_frames
-from forge.image_encode import encode_av1
-from forge.quality_utility import UtilityGate
+from urna.gates.taskscore import UtilityGate
+from urna.image import mediabase
+from urna.image.decframes import decode_frames
+from urna.image.encstream import encode_av1
 
 BUCKET_HEURISTICS_VERSION = 1
 
@@ -111,7 +111,7 @@ def choose_crf(
     q = media_spec.quality
     use_utility = q.utility_floor_hit1 >= 0
     if use_utility and (labels is None or len(labels) != len(paths)):
-        from forge.build_spec import SpecError
+        from urna.specs.specparse import SpecError
 
         raise SpecError("media.quality.utility_floor_hit1: needs one label per item")
     idx = stratified_sample(paths, q.buckets, q.sample_per_bucket)
@@ -124,7 +124,7 @@ def choose_crf(
         src_pngs: list[Path] = []
         for i, p in enumerate(sample):
             with Image.open(p) as img:
-                arr = np.asarray(image_media.letterbox(img, canvas), dtype=np.uint8)
+                arr = np.asarray(mediabase.letterbox(img, canvas), dtype=np.uint8)
             src_arrays.append(arr)
             png = tmp / f"src-{i:04d}.png"
             Image.fromarray(arr).save(png)

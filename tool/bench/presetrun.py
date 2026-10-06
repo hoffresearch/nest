@@ -18,7 +18,7 @@ Pipeline:
 
 Output: a markdown table to stdout. With `--json`, the table goes to
 stderr and a structured dump goes to stdout (used by
-`python/tools/compare_measure.py` for regression gates).
+`tool/bench/benchgate.py` for regression gates).
 
 WEAK RULER: queries are corpus vectors plus tiny noise (self-perturbation),
 so recall@10 here measures rank-stability under quantization, NOT real-query
@@ -27,8 +27,8 @@ real-query (mteb-style) ruler is gate-zero; see the ruler note in
 docs/CHANGELOG.
 
 Helpers live in private siblings:
-  `_baseline_decoder.py`  - section-table parser
-  `_bench_runner.py`      - percentile / build_variant / run_bench
+  `baselines.py`  - section-table parser
+  `benchtime.py`      - percentile / build_variant / run_bench
 """
 
 from __future__ import annotations
@@ -42,10 +42,10 @@ from statistics import mean
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(REPO / "python"))
+sys.path.insert(0, str(REPO / "rust" / "bridge" / "python"))
 
-from _baseline_decoder import DEFAULT_BASELINE, OUT_DIR, decode_baseline  # noqa: E402
-from _bench_runner import build_variant, percentile, run_bench  # noqa: E402
+from baselines import DEFAULT_BASELINE, OUT_DIR, decode_baseline  # noqa: E402
+from benchtime import build_variant, percentile, run_bench  # noqa: E402
 
 import urna  # noqa: E402
 

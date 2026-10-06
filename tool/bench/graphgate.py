@@ -8,7 +8,7 @@ degrade recall if the neighbor reconstruction is wrong, so it MUST stay gated
 check"). this harness is measure-style: deterministic synthetic vectors, no
 sentence-transformers, no network.
 
-run: python python/tools/graph_recall_gate.py [--n 400] [--threshold 0.90]
+run: python tool/bench/graphgate.py [--n 400] [--threshold 0.90]
 
 exit 0 if recall@10 >= threshold, non-zero otherwise (so a release gate can
 shell out and fail the build before a dropped corpus ships).
@@ -22,7 +22,7 @@ import os
 import sys
 import tempfile
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "rust", "bridge", "python"))
 import urna  # noqa: E402
 
 
@@ -113,9 +113,7 @@ def main() -> int:
     assert base.content_hash == dropped.content_hash, "content_hash changed by the drop"
 
     qrng = _lcg(0xABCDEF)
-    queries = [
-        _unit([next(qrng) - 0.5 for _ in range(args.dim)]) for _ in range(args.queries)
-    ]
+    queries = [_unit([next(qrng) - 0.5 for _ in range(args.dim)]) for _ in range(args.queries)]
     truth = [{h.chunk_id for h in base.search(q, args.k)} for q in queries]
 
     recall = _recall_at_k(dropped, truth, queries, args.k, args.hops, args.ef)

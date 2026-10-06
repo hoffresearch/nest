@@ -1,6 +1,6 @@
 //! PyO3 bindings for `urna_engine`. Exposes `UrnaFile.open(path)`,
 //! search variants, plus `build()` for emitting `.urna` files from
-//! pre-embedded chunks. See `python/urna.py` for the Python wrapper.
+//! pre-embedded chunks. See `rust/bridge/python/urna/__init__.py` for the Python wrapper.
 
 use pyo3::prelude::*;
 

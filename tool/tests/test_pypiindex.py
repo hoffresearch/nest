@@ -1,6 +1,6 @@
 """Prove the PyPI upload takes the right wheels from the right run, once.
 
-`script/pypiindex.py` is what pypiindex.yml runs before its upload. this
+`tool/tasks/pypiindex.py` is what pypiindex.yml runs before its upload. this
 suite serves controlled answers from a local HTTP server, standing in for
 the GitHub runs API and the index's JSON API, over real wheel-shaped files
 with real sha256 sidecars:
@@ -17,7 +17,7 @@ with real sha256 sidecars:
   only the other two, and a complete one plans none; a clash on the last
   wheel copies nothing for upload.
 
-Run: python tests/test_pypiindex.py
+Run: python tool/tests/test_pypiindex.py
 """
 
 import hashlib
@@ -31,8 +31,8 @@ import tempfile
 import threading
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("pypiindex", REPO / "script" / "pypiindex.py")
+REPO = Path(__file__).resolve().parents[2]
+spec = importlib.util.spec_from_file_location("pypiindex", REPO / "tool" / "tasks" / "pypiindex.py")
 pypi = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pypi)
 

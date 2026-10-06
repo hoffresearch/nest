@@ -171,22 +171,24 @@ fn cli_cite_resolves_citation() {
 /// the vendored potion table is real bytes, not the git-lfs pointer a clone
 /// without `git lfs pull` carries.
 fn potion_table_present(root: &std::path::Path) -> bool {
-    let table = root.join("python/forge/models/potion-base-8M/model.safetensors");
+    let table = root.join("rust/bridge/python/urna/model/potionb8m/model.safetensors");
     std::fs::read(&table).is_ok_and(|b| !b.starts_with(b"version https://git-lfs"))
 }
 
-/// resolve a python interpreter that can import forge.embed_potion (numpy +
+/// resolve a python interpreter that can import urna.embed.potiontab (numpy +
 /// tokenizers + the vendored table). prefers $URNA_PYTHON, then .venv at the
 /// repo root, then `python3`. returns None, with the reason printed, when
 /// the toolchain to build the demo is absent.
-fn forge_python() -> Option<(String, PathBuf)> {
-    // repo root: this test file is crates/clitui/tests/, go up three.
+fn embed_python() -> Option<(String, PathBuf)> {
+    // repo root: this test file is rust/clitui/tests/, go up three.
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())
         .map(PathBuf::from)?;
     if !potion_table_present(&root) {
-        eprintln!("the potion table is an lfs pointer: run `git lfs pull` or script/getpotion.sh");
+        eprintln!(
+            "the potion table is an lfs pointer: run `git lfs pull` or tool/tasks/getpotion.sh"
+        );
         return None;
     }
     let mut candidates: Vec<String> = Vec::new();
@@ -208,13 +210,13 @@ fn forge_python() -> Option<(String, PathBuf)> {
     None
 }
 
-/// build the cc0 demo corpus into `path` via forge.retrieve.build_demo with
+/// build the cc0 demo corpus into `path` via urna.reads.retrieval.build_demo with
 /// the offline potion embedder. the toolchain was probed already, so a
 /// failure here is a real one and fails the test.
 fn build_demo_corpus(py: &str, root: &std::path::Path, path: &std::path::Path) {
     let code = format!(
-        "import sys; sys.path.insert(0, 'python'); \
-         from forge.retrieve import build_demo; build_demo({:?})",
+        "import sys; sys.path.insert(0, 'rust/bridge/python'); \
+         from urna.reads.retrieval import build_demo; build_demo({:?})",
         path.to_string_lossy()
     );
     let out = Command::new(py)
@@ -236,7 +238,7 @@ fn build_demo_corpus(py: &str, root: &std::path::Path, path: &std::path::Path) {
 
 #[test]
 fn cli_ask_answer_is_cited_text_only_and_explain_adds_honesty_line() {
-    let Some((py, root)) = forge_python() else {
+    let Some((py, root)) = embed_python() else {
         eprintln!("skip cli_ask: no python with numpy+tokenizers+potion table");
         return;
     };
@@ -305,8 +307,8 @@ fn cli_ask_answer_is_cited_text_only_and_explain_adds_honesty_line() {
 
 #[test]
 fn cli_retrieve_answer_pack_score_equals_search_and_cite_round_trips() {
-    let Some((py, root)) = forge_python() else {
-        eprintln!("skip cli_retrieve: no python with forge deps");
+    let Some((py, root)) = embed_python() else {
+        eprintln!("skip cli_retrieve: no python with the embed deps");
         return;
     };
     let path = tmp_path("cli_retrieve_demo.urna");

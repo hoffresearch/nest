@@ -1,6 +1,6 @@
 """embed a single text query OFFLINE with the default potion static table.
 
-the offline twin of python/embed_query.py: that one loads sentence-transformers
+the offline twin of rust/bridge/python/urna/embed/searchtxt.py: that one loads sentence-transformers
 (network on first use, breaks offline-by-construction), this one uses the
 vendored model2vec/potion-base-8M table (numpy + tokenizers only, no torch, no
 socket). the flagship verbs `urna ask` / `urna retrieve` shell out to THIS
@@ -8,7 +8,7 @@ script so an offline corpus built with the default embedder gets a cited answer
 with no network.
 
 output: a single-line json document on stdout with the SAME shape
-python/embed_query.py emits, so the rust caller can reuse the search_text.rs
+rust/bridge/python/urna/embed/searchtxt.py emits, so the rust caller can reuse the search_text.rs
 model_hash gate verbatim:
 
     {
@@ -32,8 +32,10 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # python/
-from forge.embed_potion import potion_embedder  # noqa: E402
+# the folder that holds urna/ (rust/bridge/python/ or the payload python/)
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from urna.embed.potiontab import potion_embedder  # noqa: E402
 
 
 def main() -> int:

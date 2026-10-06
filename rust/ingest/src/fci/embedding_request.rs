@@ -29,15 +29,15 @@ pub enum PayloadRef {
 /// One named-space embedding request for one chunk (by index into the
 /// bundle's `chunks`). a chunk carries several of these (text + image +
 /// glyph + ...) to be embedded into distinct spaces; the determinism
-/// anchor is the canonical text plus each space's `model_fingerprint`.
+/// anchor is the canonical text plus each space's `modelhash`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EmbeddingRequest {
     /// Index into `FciBundle::chunks` this request embeds.
     pub chunk_index: u64,
     pub space: SpaceTag,
     /// The producing model's identity, `sha256:<hex>` (see
-    /// python/model_fingerprint.py). recorded so a build is reproducible
+    /// rust/bridge/python/urna/model/modelhash.py). recorded so a build is reproducible
     /// given the same canonical text plus the same fingerprints.
-    pub model_fingerprint: String,
+    pub modelhash: String,
     pub payload_ref: PayloadRef,
 }

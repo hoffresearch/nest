@@ -14,9 +14,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from forge import model_registry
-from forge.build_spec import CorpusSpec, ModelSpec
-from forge.forge_cache import atomic_write_json, canonical_hash
+from urna.model import presetmap
+from urna.pipes.vectcache import atomic_write_json, canonical_hash
+from urna.specs.specparse import CorpusSpec, ModelSpec
 
 ADAPTER_VERSION = 1
 
@@ -25,7 +25,7 @@ def model_dir_fingerprint(preset, model_path: str | None) -> str | None:
     """Cheap identity of the resolved model dir: sorted (relpath, size)
     pairs, hashed. Catches a swapped snapshot without reading weights;
     None for presets with no on-disk dir (vendored potion, fake)."""
-    d = model_registry.resolve_model_dir(preset, model_path)
+    d = presetmap.resolve_model_dir(preset, model_path)
     if d is None or not Path(d).is_dir():
         return None
     listing = sorted(
@@ -64,7 +64,7 @@ def recipe(spec: CorpusSpec, media: dict | None, ms: ModelSpec, preset) -> dict:
 
 
 def probe_knobs(ms: ModelSpec) -> dict:
-    """The spec knobs that enter an st model_hash (embed_st.fingerprint_for:
+    """The spec knobs that enter an st model_hash (stbackend.fingerprint_for:
     normalize + dtype policy, the latter resolved from the device) plus the
     model path. Two specs that differ on any of these have different
     model_hashes for the same preset, so they must not share a probe."""

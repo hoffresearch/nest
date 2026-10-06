@@ -4,7 +4,7 @@ heavy flag), the pinned hub snapshot of an open_clip preset (the revision,
 never refs/main; a missing file named), deterministic fake embeddings, and
 slice_renorm equivalence with the engine's mrl_dim truncate-then-renormalize.
 
-Run: .venv/bin/python python/forge/test_model_registry.py
+Run: .venv/bin/python tool/tests/test_presetmap.py
 """
 
 import hashlib
@@ -13,11 +13,11 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "rust", "bridge", "python"))
 
 import numpy as np
 
-from forge import model_registry as mr
+from urna.model import presetmap as mr
 
 
 def test_preset_table() -> None:

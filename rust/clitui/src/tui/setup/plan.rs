@@ -308,7 +308,7 @@ mod tests {
     fn a_ready_machine_only_verifies_unless_forced() {
         let mut s = bare();
         s.embedder = Some(PathBuf::from(
-            "/h/.local/share/urna/forge/embed_query_potion.py",
+            "/h/.local/share/urna/python/urna/embed/potionqry.py",
         ));
         s.payload = Some(Payload {
             version: Some("0.5.0".into()),
@@ -330,7 +330,7 @@ mod tests {
     fn installed(version: Option<&str>) -> Scan {
         let mut s = bare();
         s.embedder = Some(PathBuf::from(
-            "/h/.local/share/urna/forge/embed_query_potion.py",
+            "/h/.local/share/urna/python/urna/embed/potionqry.py",
         ));
         s.payload = Some(Payload {
             version: version.map(String::from),
@@ -361,12 +361,12 @@ mod tests {
         // step runs and names the file; the venv step stays off.
         let mut s = installed(Some("0.5.0"));
         if let Some(p) = s.payload.as_mut() {
-            p.missing = vec!["embed_query.py".into()];
+            p.missing = vec!["searchtxt.py".into()];
         }
         let p = plan(&s, &Opts::default());
         assert!(p[0].runs(), "{}", p[0].detail);
         assert!(
-            p[0].detail.contains("missing embed_query.py"),
+            p[0].detail.contains("missing searchtxt.py"),
             "{}",
             p[0].detail
         );
@@ -384,7 +384,7 @@ mod tests {
         // sits in ~/.local/share: setup installs into its own dir.
         let mut s = bare();
         s.embedder = Some(PathBuf::from(
-            "/h/.local/share/urna/forge/embed_query_potion.py",
+            "/h/.local/share/urna/python/urna/embed/potionqry.py",
         ));
         s.home = Some(PathBuf::from("/tmp/data/urna"));
         s.deps = true;
@@ -455,7 +455,7 @@ mod tests {
     fn with_models(models: &[&str], allow: &[&str]) -> (Scan, Opts) {
         let mut s = bare();
         s.kit = Some(models::Kit {
-            script: PathBuf::from("/h/.local/share/urna/forge/install_model.py"),
+            script: PathBuf::from("/h/.local/share/urna/python/urna/model/installer.py"),
             catalog: models::tests::sample(),
         });
         let o = Opts {

@@ -3,12 +3,12 @@
 # target for SECONDS each (default 3600), corpus under fuzz/corpus/<target>
 # (gitignored, accumulates across runs). run it after any decoder change,
 # before the pr. a crash lands in fuzz/artifacts/<target>/; turn it into a
-# crates/*/tests/negative_*.rs regression and a fuzz/seeds/regress-*.bin
+# rust/*/tests/negative_*.rs regression and a fuzz/seeds/regress-*.bin
 # seed before fixing.
 #
-#   sh script/fuzzsweep.sh            # 1 hour per target
-#   sh script/fuzzsweep.sh 600        # 10 minutes per target
-#   URNA_FUZZ_TARGETS="section-decoders" sh script/fuzzsweep.sh 300
+#   sh tool/tasks/fuzzsweep.sh            # 1 hour per target
+#   sh tool/tasks/fuzzsweep.sh 600        # 10 minutes per target
+#   URNA_FUZZ_TARGETS="section-decoders" sh tool/tasks/fuzzsweep.sh 300
 #
 # needs the nightly toolchain and cargo-fuzz (`cargo install cargo-fuzz`).
 
@@ -16,13 +16,13 @@ set -eu
 
 SECONDS_PER_TARGET="${1:-3600}"
 TARGETS="${URNA_FUZZ_TARGETS:-urna-view section-decoders runtime-indexes mmap-open-search}"
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT/fuzz"
 
 for t in $TARGETS; do
     mkdir -p "corpus/$t"
     if [ -z "$(ls -A "corpus/$t")" ]; then
-        cp seeds/*.bin ../crates/format/tests/fixtures/golden_v1_minimal.urna "corpus/$t/"
+        cp seeds/*.bin ../rust/format/tests/fixtures/golden_v1_minimal.urna "corpus/$t/"
     fi
     echo "fuzzsweep: $t for ${SECONDS_PER_TARGET}s"
     cargo +nightly fuzz run "$t" -- \

@@ -1,8 +1,8 @@
 # urna installer for windows (issue #75). one-liner:
 #
-#   irm https://raw.githubusercontent.com/hoffresearch/urna/main/script/installer.ps1 | iex
+#   irm https://raw.githubusercontent.com/hoffresearch/urna/main/tool/tasks/installer.ps1 | iex
 #
-# mirrors script/installer.sh: downloads the windows release zip, verifies
+# mirrors tool/tasks/installer.sh: downloads the windows release zip, verifies
 # its sha256 against the release checksum file, installs the binary to
 # ~\.local\bin, and lays down the offline embedder payload under
 # $env:LOCALAPPDATA\urna. after install the product never touches the

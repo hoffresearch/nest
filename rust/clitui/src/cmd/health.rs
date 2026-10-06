@@ -144,17 +144,17 @@ pub fn collect() -> Vec<Row> {
     rows
 }
 
-/// the potion table dir lives next to the embedder script
-/// (`<root>/forge/embed_query_potion.py` -> `<root>/forge/models/...`).
+/// the potion table dir lives in the same package as the embedder script
+/// (`<pkg>/embed/potionqry.py` -> `<pkg>/model/potionb8m/...`).
 /// rejects a git-lfs pointer so a fresh clone without `git lfs pull` fails
 /// loudly instead of embedding garbage later.
 fn potion_table(embedder: &Path) -> Row {
     let fail = |d: String| Row::new(Level::Fail(codes::POTION_TABLE_MISSING), "potion table", d);
-    let Some(table) = embedder.parent().map(|p| {
-        p.join("models")
-            .join("potion-base-8M")
-            .join("model.safetensors")
-    }) else {
+    let Some(table) = embedder
+        .parent()
+        .and_then(Path::parent)
+        .map(|p| p.join("model").join("potionb8m").join("model.safetensors"))
+    else {
         return fail("embedder has no parent dir".into());
     };
     match std::fs::read(&table) {

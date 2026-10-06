@@ -5,8 +5,8 @@ Tree mode (every pull request, ``gatecheck.yml``): the workspace version in
 
 - the ``urna-format`` and ``urna-engine`` pins in ``[workspace.dependencies]``
   (``cargo publish`` keeps the version and strips the path);
-- every crate under ``crates/`` inherits it (``version.workspace = true``),
-  except one that is its own workspace (``crates/ingest``, excluded at the root);
+- every crate under ``rust/`` inherits it (``version.workspace = true``),
+  except one that is its own workspace (``rust/ingest``, excluded at the root);
 - ``Cargo.lock`` carries it for urna, urna-format, urna-engine, urna-bridge;
 - ``CITATION.cff``: ``version``, the versioned ``repository-artifact`` and
   release URLs, and a ``date-released`` equal to the changelog's date;
@@ -17,15 +17,15 @@ signature check): the same checks on the files of the tag's own commit,
 read through git and never from the working tree, plus the tag names that
 commit's version, the commit is on the protected ``main`` and the release
 date is not after the day the tag was made. Both days are UTC days: the
-release date comes from cargo-release (``script/releasepr.sh``), which
+release date comes from cargo-release (``tool/tasks/releasepr.sh``), which
 dates in UTC, so a tag made at 22:30 in Brasilia (01:30 UTC the next day) the
 evening a release was prepared fits it, and a release dated after the tag's
 UTC day is still refused.
 
 Needs Python 3.11+ (tomllib); the jobs that run it are on ubuntu-24.04.
 
-    python script/preflight.py
-    python script/preflight.py --tag v0.5.3 --main-ref origin/main
+    python tool/tasks/preflight.py
+    python tool/tasks/preflight.py --tag v0.5.3 --main-ref origin/main
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 PINNED = ("urna-format", "urna-engine")
 LOCKED = ("urna", "urna-format", "urna-engine", "urna-bridge")
 CRATES_URL = "https://crates.io/crates/urna/{v}"
@@ -79,13 +79,13 @@ class Tree:
 
     def crate_manifests(self) -> list[str]:
         if self.commit is None:
-            paths = (p.relative_to(self.root) for p in self.root.glob("crates/*/Cargo.toml"))
+            paths = (p.relative_to(self.root) for p in self.root.glob("rust/*/Cargo.toml"))
             return sorted(p.as_posix() for p in paths)
-        listed = _git(self.root, "ls-tree", "-r", "--name-only", self.commit, "--", "crates")
+        listed = _git(self.root, "ls-tree", "-r", "--name-only", self.commit, "--", "rust")
         return sorted(
             rel
             for rel in listed.stdout.splitlines()
-            if re.fullmatch(r"crates/[^/]+/Cargo\.toml", rel)
+            if re.fullmatch(r"rust/[^/]+/Cargo\.toml", rel)
         )
 
 
@@ -128,7 +128,7 @@ def _check_manifests(tree: Tree, v: str) -> list[str]:
     for rel in tree.crate_manifests():
         manifest = _toml(tree.read(rel))
         if "workspace" in manifest:
-            continue  # its own workspace (crates/ingest), excluded by the root manifest
+            continue  # its own workspace (rust/ingest), excluded by the root manifest
         version = manifest["package"].get("version")
         if version != {"workspace": True} and version != v:
             errors.append(f"{rel}: version {version!r} neither inherits nor equals {v!r}")

@@ -57,13 +57,13 @@ mod tests {
         b.embedding_requests.push(EmbeddingRequest {
             chunk_index: 0,
             space: SpaceTag::Text,
-            model_fingerprint: format!("sha256:{}", "0".repeat(64)),
+            modelhash: format!("sha256:{}", "0".repeat(64)),
             payload_ref: PayloadRef::InlineText,
         });
         b.embedding_requests.push(EmbeddingRequest {
             chunk_index: 1,
             space: SpaceTag::Image,
-            model_fingerprint: format!("sha256:{}", "1".repeat(64)),
+            modelhash: format!("sha256:{}", "1".repeat(64)),
             payload_ref: PayloadRef::BlobHash([7u8; 32]),
         });
         b.entities.push(Entity {
@@ -132,7 +132,7 @@ mod tests {
         b.embedding_requests.push(EmbeddingRequest {
             chunk_index: 0,
             space: SpaceTag::Text,
-            model_fingerprint: "sha256:x".into(),
+            modelhash: "sha256:x".into(),
             payload_ref: PayloadRef::InlineText,
         });
         assert!(

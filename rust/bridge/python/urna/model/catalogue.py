@@ -5,13 +5,13 @@ fingerprint to) and whose packages do not contradict another offered
 model's. every other preset is listed under `excluded` with the reason, so
 the installer can say why a model is not offered instead of hiding it.
 
-the catalog ships in the payload as `forge/catalog.json`; no remote index.
-`python/forge/catalog.json` is this module's output, checked in:
-`script/embedpack.py` and `tests/test_embedpack.py` refuse a stale copy.
+the catalog ships in the payload as `urna/model/catalogue.json`; no remote index.
+`rust/bridge/python/urna/model/catalogue.json` is this module's output, checked in:
+`tool/tasks/embedpack.py` and `tool/tests/test_embedpack.py` refuse a stale copy.
 
-usage:  python python/forge/model_catalog.py            print the catalog
-        python python/forge/model_catalog.py --write    rewrite catalog.json
-        python python/forge/model_catalog.py --check    exit 1 when stale
+usage:  python rust/bridge/python/urna/model/catalogue.py            print the catalog
+        python rust/bridge/python/urna/model/catalogue.py --write    rewrite catalogue.json
+        python rust/bridge/python/urna/model/catalogue.py --check    exit 1 when stale
 """
 
 from __future__ import annotations
@@ -21,12 +21,14 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# the folder that holds urna/ (rust/bridge/python/ or the payload python/)
 
-from forge.model_registry import PRESETS, ModelPreset  # noqa: E402
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+
+from urna.model.presetmap import PRESETS, ModelPreset  # noqa: E402
 
 SCHEMA = 1
-CATALOG = Path(__file__).resolve().with_name("catalog.json")
+CATALOG = Path(__file__).resolve().with_name("catalogue.json")
 
 
 def exclusion(preset: ModelPreset) -> str | None:
@@ -135,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
     if args == ["--check"]:
         if not CATALOG.is_file() or CATALOG.read_text() != text:
             print(
-                f"{CATALOG} is stale: run python python/forge/model_catalog.py --write",
+                f"{CATALOG} is stale: run python {Path(__file__).resolve()} --write",
                 file=sys.stderr,
             )
             return 1

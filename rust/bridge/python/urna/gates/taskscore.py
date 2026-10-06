@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from forge.build_spec import SpecError
+from urna.specs.specparse import SpecError
 
 KEY = "media.quality.utility_floor_hit1"
 

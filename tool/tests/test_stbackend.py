@@ -4,7 +4,7 @@ the adapter owns a worker), dim/norm contracts, model_hash stability across
 constructions, and cross-modal sanity. Skips cleanly when the deps or the
 local snapshot are absent. NOT run by fullcheck.sh (loads a 2B model).
 
-Run: .venv/bin/python python/forge/test_embed_st.py
+Run: .venv/bin/python tool/tests/test_stbackend.py
 """
 
 import importlib.util
@@ -12,11 +12,11 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "rust", "bridge", "python"))
 
 import numpy as np
 
-from forge import model_registry as mr
+from urna.model import presetmap as mr
 
 WEMM = mr.PRESETS["wemm-2b"]
 HAVE_DEPS = all(importlib.util.find_spec(m) is not None for m, _ in WEMM.requires)
@@ -73,7 +73,7 @@ def main() -> None:
     for fn in tests:
         globals()[fn]()
         print(f"{fn}: OK")
-    print("all embed_st tests passed")
+    print("all stbackend tests passed")
 
 
 if __name__ == "__main__":

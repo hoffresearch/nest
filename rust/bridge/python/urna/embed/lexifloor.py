@@ -112,7 +112,7 @@ class StaticEmbedder:
 
     def fingerprint(self) -> dict:
         """lThe inference-relevant config. there are no model files to hash, so
-        the fingerprint is over this config (mirroring model_fingerprint.py's
+        the fingerprint is over this config (mirroring modelhash.py's
         idea: identify exactly what produced the embeddings)."""
         return {
             "embedder": MODEL_ID,
@@ -127,7 +127,7 @@ class StaticEmbedder:
 
     def model_hash(self) -> str:
         """l`sha256:<hex>` of the canonical-json fingerprint, the SAME
-        convention as model_fingerprint.fingerprint_to_model_hash, so the
+        convention as modelhash.fingerprint_to_model_hash, so the
         manifest model_hash gate treats it uniformly. recorded in provenance
         so byte-identical builds are provable."""
         canonical = json.dumps(self.fingerprint(), sort_keys=True, separators=(",", ":"))

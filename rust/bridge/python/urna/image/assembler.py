@@ -14,9 +14,9 @@ stream would report a quality the corpus does not have.
 A corpus is a directory: `corpus.urna` next to `corpus.media/`. Frame URIs
 are relative to that pair, so the corpus can be copied elsewhere and still
 resolve. `corpus.manifest.json` records what went in, for audit and for
-`urna_image_eval.py`.
+`imageeval.py`.
 
-The CLI wrapper is `python/tools/urna_build_image_corpus.py`.
+The CLI wrapper is `rust/bridge/python/urna/entry/imgcorpus.py`.
 """
 
 from __future__ import annotations
@@ -28,10 +28,10 @@ from tempfile import TemporaryDirectory
 
 import numpy as np
 
-from builder import BuildConfig, ChunkSpec, Pipeline
-
-from . import embed_image, image_backends, image_items, image_media, image_order
-from .image_decode import frame_sha256
+from urna.embed import visionemb
+from urna.image import discovery, mediabase, orchestra, sequencer
+from urna.image.decframes import frame_sha256
+from urna.pipes.buildfile import BuildConfig, ChunkSpec, Pipeline
 
 CHUNKER_VERSION = "image-v1"
 
@@ -59,7 +59,7 @@ def build_corpus(
     output_path: Path,
     dataset_name: str,
     *,
-    embedder: embed_image.ImageEmbedder,
+    embedder: visionemb.ImageEmbedder,
     is_pdf: bool = False,
     compress: bool = True,
     labels: dict[str, str] | None = None,
@@ -90,10 +90,10 @@ def build_corpus(
             # the rendered pages must outlive the encode and the embed, so the
             # temp dir is bound to the whole build, not to the render call.
             tmp_dir = Path(stack.enter_context(TemporaryDirectory(prefix="urna-pdf-")))
-            items = image_items.render_pdf_pages(input_dir, tmp_dir)
+            items = discovery.render_pdf_pages(input_dir, tmp_dir)
         else:
-            items = image_items.collect_images(input_dir, labels)
-        items = image_items.subsample(items, sample, seed)
+            items = discovery.collect_images(input_dir, labels)
+        items = discovery.subsample(items, sample, seed)
         if not items:
             raise RuntimeError(f"no input found under {input_dir}")
 
@@ -101,13 +101,13 @@ def build_corpus(
         media_info = None
         frame_hashes: list[str] = []
         if compress:
-            canvas = image_media.canvas_size(render_paths, width)
+            canvas = mediabase.canvas_size(render_paths, width)
             order = None
             if order_similarity and backend == "av1" and not control:
                 # ordering buys little on unrelated images (fase 0: +6.6%),
                 # so it is opt-in; wsi tiles are where fase 6 measures it.
-                order = image_order.similarity_order(embedder.embed_paths(render_paths))
-            built = image_backends.build_media(
+                order = sequencer.similarity_order(embedder.embed_paths(render_paths))
+            built = orchestra.build_media(
                 render_paths,
                 output_path,
                 dataset_name,
@@ -195,7 +195,7 @@ def build_corpus(
         "model": {"id": embedder.model_id, "dim": embedder.dim, "hash": embedder.model_hash},
         # one content hash per decoded frame. the count guard catches a lost
         # frame; only these catch a reordered one. verify with
-        # forge.image_decode.verify_frame_hashes.
+        # urna.image.decframes.verify_frame_hashes.
         "frame_sha256": frame_hashes,
         "items": [
             {

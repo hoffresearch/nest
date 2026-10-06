@@ -1,7 +1,7 @@
 #!/bin/sh
 # urna installer (issue #75). one-liner:
 #
-#   curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/script/installer.sh | sh
+#   curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/tool/tasks/installer.sh | sh
 #
 # downloads the release tarball for this platform, verifies its sha256
 # against the release's checksum file, installs the binary to
@@ -75,7 +75,7 @@ ARCH="$(uname -m)"
 case "$OS" in
     Linux) OS_PART="unknown-linux-musl" ;;
     Darwin) OS_PART="apple-darwin" ;;
-    *) die "unsupported os: $OS (use script/installer.ps1 on windows)" ;;
+    *) die "unsupported os: $OS (use tool/tasks/installer.ps1 on windows)" ;;
 esac
 case "$ARCH" in
     x86_64 | amd64) ARCH_PART="x86_64" ;;

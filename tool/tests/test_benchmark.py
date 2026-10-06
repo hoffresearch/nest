@@ -1,7 +1,7 @@
 """Prove the benchmark rebuild never destroys the corpus it replaces.
 
-`measure_presets.py` (and through it `fullcheck.sh`) rebuilds
-`data/measure/corpus_<preset>.urna` with `_bench_runner.build_variant`,
+`presetrun.py` (and through it `fullcheck.sh`) rebuilds
+`data/measure/corpus_<preset>.urna` with `benchtime.build_variant`,
 which builds under a temporary name in the same directory, validates, and
 renames over the old file only at the end, so an interrupted gate never
 leaves the corpus gone:
@@ -14,7 +14,7 @@ leaves the corpus gone:
   one of a run still building is kept, and a first build with no corpus
   yet creates it.
 
-Run: .venv/bin/python tests/test_benchmark.py
+Run: .venv/bin/python tool/tests/test_benchmark.py
 """
 
 import subprocess
@@ -22,11 +22,11 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "python"))
-sys.path.insert(0, str(REPO / "python" / "tools"))
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "rust" / "bridge" / "python"))
+sys.path.insert(0, str(REPO / "tool" / "bench"))
 
-from _bench_runner import build_variant
+from benchtime import build_variant
 
 import urna
 
@@ -104,7 +104,7 @@ def test_stale_temporaries_go_and_a_first_build_creates(d: Path) -> None:
 
 
 def test_a_running_build_keeps_its_temporary(d: Path) -> None:
-    # another measure_presets still building the same preset: its temporary
+    # another presetrun still building the same preset: its temporary
     # is in use and must survive this build. the stand-in process blocks on
     # its stdin until the test closes it.
     other = subprocess.Popen(

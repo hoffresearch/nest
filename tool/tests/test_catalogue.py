@@ -1,6 +1,6 @@
 """Prove the model catalog setup and the explorer offer is the registry's.
 
-`python/forge/model_catalog.py` generates `python/forge/catalog.json` from
+`urna/model/catalogue.py` generates `urna/model/catalogue.json` from
 the registry and the payload ships it; the installer reads nothing else.
 
 - happy path: the checked-in catalog is exactly what the registry
@@ -13,7 +13,7 @@ the registry and the payload ships it; the installer reads nothing else.
   keep only the first;
 - edge: the test-only fake preset is in neither list.
 
-Run: .venv/bin/python tests/test_catalogue.py
+Run: .venv/bin/python tool/tests/test_catalogue.py
 """
 
 import dataclasses
@@ -23,11 +23,11 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "python"))
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "rust" / "bridge" / "python"))
 
-from forge import model_catalog as mc
-from forge import model_registry as mr
+from urna.model import catalogue as mc
+from urna.model import presetmap as mr
 
 MINILM = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 MINILM_HASH = "sha256:97a500de1ad2dc9ffb41fbe3dec27d4fd26ddaa13143aa50f905d3d1f6eff0af"
@@ -35,10 +35,10 @@ MINILM_HASH = "sha256:97a500de1ad2dc9ffb41fbe3dec27d4fd26ddaa13143aa50f905d3d1f6
 
 def test_checked_in_catalog_is_the_registrys() -> None:
     have = json.loads(mc.CATALOG.read_text())
-    assert have == mc.build(), "python/forge/catalog.json is stale"
+    assert have == mc.build(), "rust/bridge/python/urna/model/catalogue.json is stale"
     assert mc.main(["--check"]) == 0
     # the release's stage step runs under a python3 without numpy.
-    script = str(mc.CATALOG.with_name("model_catalog.py"))
+    script = str(mc.CATALOG.with_name("catalogue.py"))
     blocked = subprocess.run(
         [
             sys.executable,
@@ -50,7 +50,7 @@ def test_checked_in_catalog_is_the_registrys() -> None:
         text=True,
     )
     assert blocked.returncode == 0, blocked.stderr
-    print("happy path (catalog.json == registry output, generated without numpy): OK")
+    print("happy path (catalogue.json == registry output, generated without numpy): OK")
 
 
 def test_minilm_is_offered_pinned() -> None:
@@ -89,7 +89,7 @@ def test_every_other_preset_says_why() -> None:
 
 def test_a_stale_catalog_fails_the_check() -> None:
     with tempfile.TemporaryDirectory(prefix="urna-catalog-") as tmp:
-        stale = Path(tmp) / "catalog.json"
+        stale = Path(tmp) / "catalogue.json"
         stale.write_text(mc.render({"schema": 1, "models": [], "excluded": []}))
         saved = mc.CATALOG
         mc.CATALOG = stale

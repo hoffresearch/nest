@@ -21,10 +21,11 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import urna
 from fastapi import FastAPI
 from pydantic import BaseModel
-from urna.embed_potion import potion_embedder
+
+import urna
+from urna.embed.potiontab import potion_embedder
 
 URNA_FILE = Path(os.environ.get("URNA_FILE", "demo_fastapi.urna"))
 

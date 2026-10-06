@@ -109,19 +109,19 @@ fn payload(scan: &Scan, version: &str, tx: &Sender<Ev>) -> Result<String, Failur
     }
     let _ = tx.send(Ev::Log(format!("sha256 ok {got}")));
     let _ = tx.send(Ev::Note(t, "unpacking".into()));
-    let forge = unpack::install(&tmp, &root, |n| {
+    let package = unpack::install(&tmp, &root, |n| {
         if n % 8 == 0 {
             let _ = tx.send(Ev::Note(t, format!("unpacking · {n} files")));
         }
     });
     let _ = std::fs::remove_file(&tmp);
-    let forge = forge.map_err(fail(codes::UNPACK))?;
-    let _ = tx.send(Ev::Log(format!("unpacked into {}", forge.display())));
+    let package = package.map_err(fail(codes::UNPACK))?;
+    let _ = tx.send(Ev::Log(format!("unpacked into {}", package.display())));
     Ok(format!(
         "{:.1} MB · sha256 {}… · {}",
         size as f64 / 1e6,
         &got[..12],
-        tilde(&forge)
+        tilde(&package)
     ))
 }
 
@@ -171,7 +171,7 @@ fn python(scan: &Scan, tx: &Sender<Ev>) -> Result<String, Failure> {
 fn install_models(scan: &Scan, opts: &Opts, tx: &Sender<Ev>) -> Result<String, Failure> {
     let t = Task::Models;
     let home = paths::urna_home().ok_or((codes::BLOCKED, "no data dir".into()))?;
-    let kit = Kit::at(&home.join("forge")).ok_or((
+    let kit = Kit::in_home(&home).ok_or((
         codes::MODEL,
         "the installed payload carries no model catalog; install the payload first".into(),
     ))?;
@@ -236,13 +236,13 @@ mod tests {
         let d = std::env::temp_dir().join(format!("urna_sweep_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(d.join(".urna-setup-42/urna")).unwrap();
-        std::fs::create_dir_all(d.join("urna/forge")).unwrap();
+        std::fs::create_dir_all(d.join("urna/python")).unwrap();
         std::fs::write(d.join(".urna-payload-42.tar.gz"), b"partial").unwrap();
         std::fs::write(d.join("keep.txt"), b"x").unwrap();
         sweep(&d);
         assert!(!d.join(".urna-setup-42").exists());
         assert!(!d.join(".urna-payload-42.tar.gz").exists());
-        assert!(d.join("urna/forge").is_dir() && d.join("keep.txt").is_file());
+        assert!(d.join("urna/python").is_dir() && d.join("keep.txt").is_file());
         std::fs::remove_dir_all(&d).unwrap();
     }
 }

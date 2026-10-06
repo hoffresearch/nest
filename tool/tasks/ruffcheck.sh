@@ -1,82 +1,82 @@
 #!/bin/sh
-# script/ruffcheck.sh -- ruff lint + format check on the python files we own.
+# tool/tasks/ruffcheck.sh -- ruff lint + format check on the python files we own.
 #
-# ONE list, used by script/fullcheck.sh (best-effort, skipped when ruff
+# ONE list, used by tool/tasks/fullcheck.sh (best-effort, skipped when ruff
 # is not importable) and by .github/workflows/gatecheck.yml (mandatory). files not
 # on the list are legacy / vendored / generated and are tracked separately;
 # when you touch a python module, add it here and make it clean.
 #
-#   URNA_PYTHON=.venv/bin/python sh script/ruffcheck.sh
+#   URNA_PYTHON=.venv/bin/python sh tool/tasks/ruffcheck.sh
 set -eu
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 PY="${URNA_PYTHON:-python3}"
 TARGETS="
-python/embed_query.py
-python/model_fingerprint.py
-python/builder.py
-python/tools/measure_presets.py
-python/tools/_bench_runner.py
-python/tools/compare_measure.py
-python/forge/embed_image.py
-python/forge/test_open_clip_snapshot.py
-python/forge/image_items.py
-python/forge/image_media.py
-python/forge/image_encode.py
-python/forge/image_encode_still.py
-python/forge/image_gop_probe.py
-python/forge/image_decode.py
-python/forge/image_backends.py
-python/forge/image_backends_av1.py
-python/forge/image_order.py
-python/forge/image_corpus.py
-python/tools/urna_build_image_corpus.py
-demos/quickstart/quickstart.py
-python/tools/urna_search_image.py
-python/tools/urna_image_eval.py
-python/tools/_image_metrics.py
-python/tools/urna_image_sweep.py
-tests/test_hashguard.py
-tests/test_imagepipe.py
-tests/test_mediablob.py
-tests/test_spaceband.py
-python/forge/model_registry.py
-python/forge/embed_st.py
-python/forge/build_spec.py
-python/forge/spec_paths.py
-python/forge/corpus_sources.py
-python/forge/forge_pipeline.py
-python/forge/forge_cache.py
-python/forge/forge_recipe.py
-python/forge/forge_media_stage.py
-python/forge/forge_manifest.py
-python/forge/quality_gate.py
-python/forge/quality_utility.py
-python/forge/media_profiles.py
-python/forge/embed_query_model.py
-python/forge/model_catalog.py
-python/forge/install_model.py
-python/tools/urna_forge.py
-python/tools/urna_model_bench.py
-python/tools/_model_bench_report.py
-python/tools/urna_ui_bridge.py
-tests/test_forgespec.py
-tests/test_mediagate.py
-tests/test_clispaces.py
-tests/test_askrouter.py
-tests/test_embedpack.py
-tests/test_benchmark.py
-tests/test_catalogue.py
-tests/test_modelpull.py
-script/embedpack.py
-script/preflight.py
-tests/test_preflight.py
-script/pypiindex.py
-tests/test_pypiindex.py
-script/rehearsal.py
-tests/test_rehearsal.py
-script/chanprobe.py
-tests/test_chanprobe.py
-tests/test_releasepr.py
+rust/bridge/python/urna/embed/searchtxt.py
+rust/bridge/python/urna/model/modelhash.py
+rust/bridge/python/urna/pipes/buildfile.py
+tool/bench/presetrun.py
+tool/bench/benchtime.py
+tool/bench/benchgate.py
+rust/bridge/python/urna/embed/visionemb.py
+tool/tests/test_clipsnaps.py
+rust/bridge/python/urna/image/discovery.py
+rust/bridge/python/urna/image/mediabase.py
+rust/bridge/python/urna/image/encstream.py
+rust/bridge/python/urna/image/encstills.py
+rust/bridge/python/urna/image/gopprober.py
+rust/bridge/python/urna/image/decframes.py
+rust/bridge/python/urna/image/orchestra.py
+rust/bridge/python/urna/image/av1stream.py
+rust/bridge/python/urna/image/sequencer.py
+rust/bridge/python/urna/image/assembler.py
+rust/bridge/python/urna/entry/imgcorpus.py
+demo/starter/quickstart.py
+rust/bridge/python/urna/entry/imgsearch.py
+tool/bench/imageeval.py
+tool/bench/imagestat.py
+tool/bench/imagerate.py
+tool/tests/test_hashguard.py
+tool/tests/test_imagepipe.py
+tool/tests/test_mediablob.py
+tool/tests/test_spaceband.py
+rust/bridge/python/urna/model/presetmap.py
+rust/bridge/python/urna/embed/stbackend.py
+rust/bridge/python/urna/specs/specparse.py
+rust/bridge/python/urna/specs/specpaths.py
+rust/bridge/python/urna/pipes/rowloader.py
+rust/bridge/python/urna/pipes/buildflow.py
+rust/bridge/python/urna/pipes/vectcache.py
+rust/bridge/python/urna/pipes/recipekey.py
+rust/bridge/python/urna/pipes/mediastep.py
+rust/bridge/python/urna/pipes/manifests.py
+rust/bridge/python/urna/gates/crfpicker.py
+rust/bridge/python/urna/gates/taskscore.py
+rust/bridge/python/urna/image/mediaplan.py
+rust/bridge/python/urna/embed/presetqry.py
+rust/bridge/python/urna/model/catalogue.py
+rust/bridge/python/urna/model/installer.py
+rust/bridge/python/urna/entry/specbuild.py
+tool/bench/modelrank.py
+tool/bench/modelview.py
+rust/bridge/python/urna/entry/uibackend.py
+tool/tests/test_specrules.py
+tool/tests/test_mediagate.py
+tool/tests/test_clispaces.py
+tool/tests/test_askrouter.py
+tool/tests/test_embedpack.py
+tool/tests/test_benchmark.py
+tool/tests/test_catalogue.py
+tool/tests/test_modelpull.py
+tool/tasks/embedpack.py
+tool/tasks/preflight.py
+tool/tests/test_preflight.py
+tool/tasks/pypiindex.py
+tool/tests/test_pypiindex.py
+tool/tasks/rehearsal.py
+tool/tests/test_rehearsal.py
+tool/tasks/chanprobe.py
+tool/tests/test_chanprobe.py
+tool/tests/test_releasepr.py
 "
 # shellcheck disable=SC2086
 "$PY" -m ruff check $TARGETS

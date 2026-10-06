@@ -1,4 +1,4 @@
-"""Compare two `measure_presets.py --json` dumps against the project's
+"""Compare two `presetrun.py --json` dumps against the project's
 regression gates and exit non-zero on any failure.
 
 Gates (all required to pass):
@@ -23,11 +23,11 @@ recall. these are real cosine AT THE STORED int4/int8 precision (the 0x09
 embeddings_fp source is not wired), disclosed via dtype + mrl_dim/full_dim.
 
 Tolerant of the legacy first-line print bug that lived in
-`measure_presets.py` between Phase 0 and Phase 2: we strip any leading
+`presetrun.py` between Phase 0 and Phase 2: we strip any leading
 non-JSON lines before parsing.
 
 Usage:
-    python python/tools/compare_measure.py BASELINE.json POST.json
+    python tool/bench/benchgate.py BASELINE.json POST.json
     echo $?   # 0 = all gates pass, 1 = any gate failed
 
 The "baseline" file is also used as the reference for exact.p95_ms.
@@ -44,7 +44,7 @@ from pathlib import Path
 
 
 def load_metrics(path: Path) -> dict:
-    """Load a measure_presets JSON dump.
+    """Load a presetrun JSON dump.
 
     Tolerates the Phase-0 bug where the script printed `baseline: ...`
     to stdout before the JSON document, which corrupted the output.
@@ -68,11 +68,9 @@ def fmt(val: float | int | None, width: int = 8, prec: int = 4) -> str:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(
-        description="Validate measure_presets output against regression gates."
-    )
-    ap.add_argument("baseline", type=Path, help="reference measure_presets JSON")
-    ap.add_argument("post", type=Path, help="new measure_presets JSON to validate")
+    ap = argparse.ArgumentParser(description="Validate presetrun output against regression gates.")
+    ap.add_argument("baseline", type=Path, help="reference presetrun JSON")
+    ap.add_argument("post", type=Path, help="new presetrun JSON to validate")
     ap.add_argument(
         "--p95-headroom",
         type=float,

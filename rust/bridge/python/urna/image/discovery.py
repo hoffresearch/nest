@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import embed_image
+from urna.embed import visionemb
 
 
 @dataclass
@@ -87,7 +87,7 @@ def render_page(pdf_path: Path, page: int, out_dir: Path, dpi: int = 150) -> Pat
 def collect_images(input_dir: Path, labels: dict[str, str] | None = None) -> list[Item]:
     labels = labels or {}
     items: list[Item] = []
-    for path in embed_image.list_images(input_dir):
+    for path in visionemb.list_images(input_dir):
         rel = str(path.relative_to(input_dir))
         items.append(
             Item(

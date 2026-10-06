@@ -1,4 +1,4 @@
-"""Prove script/releasepr.sh prepares a release and nothing else.
+"""Prove tool/tasks/releasepr.sh prepares a release and nothing else.
 
 every case runs the real script, with the pinned cargo-release, in a scratch
 repository built from this checkout's tracked files (git-lfs files left out,
@@ -18,7 +18,7 @@ runs with --no-push, so nothing leaves the machine:
 skips when the pinned cargo-release is not installed (the script names the
 install command).
 
-Run: python tests/test_releasepr.py
+Run: python tool/tests/test_releasepr.py
 """
 
 import datetime as dt
@@ -30,8 +30,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-SCRIPT = "script/releasepr.sh"
+REPO = Path(__file__).resolve().parents[2]
+SCRIPT = "tool/tasks/releasepr.sh"
 PINNED = re.search(r"^CARGO_RELEASE_VERSION=(\S+)$", (REPO / SCRIPT).read_text(), re.M).group(1)
 FILES = ["CITATION.cff", "Cargo.lock", "Cargo.toml", "docs/CHANGELOG"]
 CITED = ("version:", "date-released:", "repository-artifact:", "    value:", "    description:")
@@ -110,7 +110,7 @@ def case_happy(repo: Path, signers: Path, tmp: Path):
 
     assert workspace_version(wt) == new
     manifest = (wt / "Cargo.toml").read_text()
-    for pin, path in (("urna-format", "crates/format"), ("urna-engine", "crates/engine")):
+    for pin, path in (("urna-format", "rust/format"), ("urna-engine", "rust/engine")):
         assert f'{pin} = {{ path = "{path}", version = "{new}" }}' in manifest, pin
     lock = (wt / "Cargo.lock").read_text()
     for name in ("urna", "urna-format", "urna-engine", "urna-bridge"):
@@ -137,7 +137,7 @@ def case_happy(repo: Path, signers: Path, tmp: Path):
     names = git(wt, "diff", "--name-only", f"{base}..HEAD").stdout.split()
     assert sorted(names) == FILES, names
     assert git(wt, "status", "--porcelain").stdout == "", "left uncommitted changes"
-    run([sys.executable, "script/preflight.py"], wt)
+    run([sys.executable, "tool/tasks/preflight.py"], wt)
     assert git(repo, "rev-parse", "main").stdout.strip() == base, "main moved"
     assert git(repo, "tag", "--list").stdout == "", "a tag was created"
     assert git(repo, "status", "--porcelain").stdout == "", "the checkout changed"

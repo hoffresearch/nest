@@ -1,8 +1,8 @@
 """Encode side of image corpus media: the av1 stream encoder.
 
-Backend selection and the control corpus live in `forge/image_backends.py`;
-the per-image encoders (avif, jxl) in `forge/image_encode_still.py`; the
-gop probe in `forge/image_gop_probe.py`. This module keeps the stream
+Backend selection and the control corpus live in `urna/image/orchestra.py`;
+the per-image encoders (avif, jxl) in `urna/image/encstills.py`; the
+gop probe in `urna/image/gopprober.py`. This module keeps the stream
 encoder and the shared provenance record.
 
 Provenance is recorded on every encode: the decoded pixels depend on the
@@ -25,7 +25,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import image_media
+from urna.image import mediabase
 
 
 def _tool_version(cmd: list[str]) -> str:
@@ -149,7 +149,7 @@ def encode_av1(
     try:
         for path in image_paths:
             with Image.open(path) as img:
-                frame = image_media.letterbox(img, canvas)
+                frame = mediabase.letterbox(img, canvas)
             proc.stdin.write(np.asarray(frame, dtype=np.uint8).tobytes())
         proc.stdin.close()
         failure = "ffmpeg encode failed" if proc.wait() != 0 else None
@@ -161,7 +161,7 @@ def encode_av1(
     if failure:
         raise RuntimeError(f"{failure}: {stderr}")
 
-    actual_fmt = image_media.probe_pix_fmt(output_path)
+    actual_fmt = mediabase.probe_pix_fmt(output_path)
     if actual_fmt != pix_fmt:
         output_path.unlink(missing_ok=True)
         raise RuntimeError(
@@ -169,7 +169,7 @@ def encode_av1(
             "silently. use the avif backend for 444, or drop the flag"
         )
 
-    frames = image_media.probe_frame_count(output_path)
+    frames = mediabase.probe_frame_count(output_path)
     if frames != len(image_paths):
         raise RuntimeError(
             f"encoded {frames} frames for {len(image_paths)} images; "
@@ -205,7 +205,7 @@ def encode_av1(
         "source_bytes": source_bytes,
         "output_bytes": output_bytes,
         "compression_ratio": round(source_bytes / output_bytes, 2) if output_bytes else 0.0,
-        "media_sha256": image_media.sha256_file(output_path),
+        "media_sha256": mediabase.sha256_file(output_path),
         "toolchain": toolchain,
         "provenance_sha256": provenance_sha256(toolchain),
     }

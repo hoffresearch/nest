@@ -8,7 +8,7 @@ overridable, and all of it lives in the embedding_recipe_hash - never
 hidden in free-form kwargs.
 
 model_hash identifies THE MODEL: weights/tokenizer/processor fingerprint
-(model_fingerprint convention) + sha256 of every remote-code file that
+(modelhash convention) + sha256 of every remote-code file that
 affects inference + pooling/normalize/dtype policy. Changing any of those
 changes the hash and the gate fails loudly.
 
@@ -99,7 +99,7 @@ class STMultimodalEmbedder:
         for k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
             if allow_download:
                 # the explicit opt-in wins over the blanket offline default
-                # that importing forge (via embed_potion) installs.
+                # that importing forge (via potiontab) installs.
                 os.environ.pop(k, None)
             else:
                 os.environ.setdefault(k, "1")
@@ -187,7 +187,7 @@ class STMultimodalEmbedder:
     def _resolved_dir(self) -> Path:
         if self.model_dir is not None:
             return self.model_dir
-        from model_fingerprint import hf_cache_snapshot
+        from urna.model.modelhash import hf_cache_snapshot
 
         return hf_cache_snapshot(self.preset.model_id)
 
@@ -207,7 +207,7 @@ def fingerprint_for(preset, model_dir: Path, normalize: bool, dtype_policy: str)
     fingerprint + remote-code hashes + pooling/normalize/dtype policy. Shared
     by the in-process embedder and the subprocess adapter (the parent computes
     the triad without paying a model load when the cache is warm)."""
-    from model_fingerprint import compute_model_fingerprint
+    from urna.model.modelhash import compute_model_fingerprint
 
     fp = compute_model_fingerprint(model_dir, model_id=preset.model_id).to_dict()
     code_hashes = {}
@@ -216,7 +216,7 @@ def fingerprint_for(preset, model_dir: Path, normalize: bool, dtype_policy: str)
             code_hashes[f.name] = hashlib.sha256(f.read_bytes()).hexdigest()
     return {
         "embedder": "st_multimodal",
-        "model_fingerprint": fp,
+        "modelhash": fp,
         "remote_code_sha256": code_hashes,
         "pooling": "model-native",
         "normalize": "l2" if normalize else "none",

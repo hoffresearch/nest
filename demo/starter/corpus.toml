@@ -3,7 +3,7 @@
 # emitted as ONE self-contained .urna. paths resolve from the CWD, so run
 # it from the repo root:
 #
-#   urna build --spec demos/quickstart/corpus.toml
+#   urna build --spec demo/starter/corpus.toml
 #
 # the full contract (sqlite/csv/image sources, media, several models):
 # docs/USAGE.md section 13.
@@ -14,7 +14,7 @@ chunker_version = "quickstart/1"   # changes => every chunk_id (citation) change
 
 [source]
 kind = "jsonl"
-path = "demos/quickstart/docs.jsonl"
+path = "demo/starter/docs.jsonl"
 order_by = ["id"]                    # must be a total order (verified at build)
 
 [source.text]
@@ -26,4 +26,4 @@ text = "default"
 
 [output]
 mode = "single"
-dir = "demos/quickstart/out"
+dir = "demo/starter/out"

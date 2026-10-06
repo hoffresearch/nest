@@ -1,4 +1,4 @@
-"""urna_model_bench.py: three-tier model comparison over a multi-space .urna
+"""modelrank.py: three-tier model comparison over a multi-space .urna
 (RFC-5). Tiers are measured and reported SEPARATELY, never aggregated:
 
   T1 pipeline stability : identity self-retrieval@k with fresh SOURCE-image
@@ -13,7 +13,7 @@
       expected/negative ids (hit@k, MRR, negative leakage).
 
 Usage:
-  urna_model_bench.py --index out/mtgdataset/mtgdataset.urna -k 1 5 10
+  modelrank.py --index out/mtgdataset/mtgdataset.urna -k 1 5 10
       [--queries 100] [--seed 42] [--text-query-template "artwork of {label}"]
       [--queries-file q.json] [--out bench.json]
 """
@@ -28,14 +28,14 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO / "python"))
+sys.path.insert(0, str(REPO / "rust" / "bridge" / "python"))
 
 import numpy as np
-from _model_bench_report import print_table
+from modelview import print_table
 
 import urna
-from forge import model_registry
-from forge.forge_manifest import manifest_items
+from urna.model import presetmap
+from urna.pipes.manifests import manifest_items
 
 
 def load_sidecars(index: Path) -> dict:
@@ -64,7 +64,7 @@ def make_adapter(manifest: dict, preset: str):
     allowed = frozenset(
         p.strip() for p in os.environ.get("URNA_ALLOW_REMOTE_CODE", "").split(",") if p.strip()
     )
-    return model_registry.create_embedder(
+    return presetmap.create_embedder(
         preset,
         allow_remote_code=allowed,
         allow_heavy=True,
@@ -135,7 +135,7 @@ def bench_model(
     chunk_ids = db.chunk_ids()
     for space in spaces:
         name, dim = space["name"], space["dim"]
-        q = model_registry.slice_renorm(src_vecs, dim) if dim else src_vecs
+        q = presetmap.slice_renorm(src_vecs, dim) if dim else src_vecs
         # T1: identity self-retrieval with source queries through the codec
         identity = {k: 0 for k in ks}
         drifts = []
@@ -167,9 +167,9 @@ def bench_model(
         }
         # T3: text->image name ruler (weak labels, declared as such)
         labels = [it.get("label") for it in items]
-        if template and all(labels) and "text" in model_registry.get_preset(preset).modalities:
+        if template and all(labels) and "text" in presetmap.get_preset(preset).modalities:
             tq = adapter.embed_texts([template.format(label=lb) for lb in labels], role="query")
-            tq = model_registry.slice_renorm(tq, dim) if dim else tq
+            tq = presetmap.slice_renorm(tq, dim) if dim else tq
             t3 = {k: 0 for k in ks}
             for i, it in enumerate(items):
                 ranked = [h.chunk_id for h in db.search_space(name, tq[i].tolist(), max(ks))]
@@ -191,7 +191,7 @@ def bench_queries_file(db, manifest: dict, qfile: Path, ks: list[int]) -> dict:
         if s["modality"] != "image":
             continue
         preset = s["preset"]
-        if "text" not in model_registry.get_preset(preset).modalities:
+        if "text" not in presetmap.get_preset(preset).modalities:
             continue
         adapter = make_adapter(manifest, preset)
         hitk = {k: 0.0 for k in ks}
@@ -202,7 +202,7 @@ def bench_queries_file(db, manifest: dict, qfile: Path, ks: list[int]) -> dict:
             if not expected:
                 continue
             v = adapter.embed_texts([q["query"]], role="query")
-            v = model_registry.slice_renorm(v, s["dim"])[0] if s["dim"] else v[0]
+            v = presetmap.slice_renorm(v, s["dim"])[0] if s["dim"] else v[0]
             ranked = [h.chunk_id for h in db.search_space(s["name"], v.tolist(), max(ks))]
             n += 1
             for k in ks:

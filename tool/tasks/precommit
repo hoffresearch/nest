@@ -1,5 +1,5 @@
 #!/bin/sh
-# script/precommit - defense-in-depth against committing PHI / data artifacts.
+# tool/tasks/precommit - defense-in-depth against committing PHI / data artifacts.
 #
 # Clinical data MUST live OUTSIDE this repo (e.g. /Volumes/<redacted>/dat/psy/work).
 # The .gitignore already ignores *.urna / *.sidecar.jsonl / **/pairs/ (a catch-all
@@ -9,16 +9,16 @@
 # sanctioned public corpora below - catching a `git add -f` that bypasses gitignore.
 #
 # Install once per clone (it lives outside .git/hooks so it is version-tracked).
-# Copy it in rather than `core.hooksPath script`, which would DISABLE the git-lfs
+# Copy it in rather than `core.hooksPath tool/tasks`, which would DISABLE the git-lfs
 # hooks (LFS uses post-commit/pre-push, not pre-commit, so the two coexist):
-#   cp script/precommit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+#   cp tool/tasks/precommit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 #
 set -eu
 
 # Explicit allow-list: the only tracked data artifacts permitted. These are
 # public, non-PHI benchmark/demo/fixture files. Anything else (any new .urna,
 # any cohort_*, any sidecar, anything under pairs/) is blocked.
-ALLOW='^(data/corpus_next\.v1\.urna|crates/format/tests/fixtures/golden_v1_minimal\.urna)$'
+ALLOW='^(data/corpus_next\.v1\.urna|rust/format/tests/fixtures/golden_v1_minimal\.urna)$'
 
 staged=$(git diff --cached --name-only --diff-filter=ACM)
 [ -n "$staged" ] || exit 0
@@ -34,7 +34,7 @@ if [ -n "$violations" ]; then
   printf >&2 '\nBLOCKED: data / PHI artifact(s) staged for commit:\n'
   printf >&2 '  %s\n' $violations
   printf >&2 '\nClinical data must live OUTSIDE this repo (e.g. /Volumes/<redacted>/dat/psy/work).\n'
-  printf >&2 'If a file is legitimately tracked, add it to ALLOW in script/precommit.\n\n'
+  printf >&2 'If a file is legitimately tracked, add it to ALLOW in tool/tasks/precommit.\n\n'
   exit 1
 fi
 exit 0

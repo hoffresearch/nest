@@ -24,7 +24,7 @@ import sys
 import time
 
 # Force HF/sentence-transformers OFFLINE by default (opt in with
-# URNA_ALLOW_DOWNLOAD=1) before any hub access. model_fingerprint also sets
+# URNA_ALLOW_DOWNLOAD=1) before any hub access. modelhash also sets
 # this on import; kept here too so the guarantee is explicit at the entry point.
 if os.environ.get("URNA_ALLOW_DOWNLOAD") != "1":
     for _k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
@@ -33,9 +33,11 @@ if os.environ.get("URNA_ALLOW_DOWNLOAD") != "1":
 import numpy as np
 import zstandard as zstd
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# the folder that holds urna/ (rust/bridge/python/ or the payload python/)
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 import urna
-from model_fingerprint import (
+from urna.model.modelhash import (
     PLACEHOLDER_HASH,
     compute_model_fingerprint,
     fingerprint_to_model_hash,

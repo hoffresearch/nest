@@ -371,7 +371,7 @@ mod tests {
         let entry = catalog.models[usize::from(remote)].clone();
         Ready {
             kit: Kit {
-                script: "/d/urna/forge/install_model.py".into(),
+                script: "/d/urna/python/urna/model/installer.py".into(),
                 catalog,
             },
             entry,

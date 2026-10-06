@@ -1,6 +1,6 @@
 """Prove the release rehearsal is the release's build, publishes nothing, and judges right.
 
-`script/rehearsal.py` generates `.github/workflows/rehearsal.yml`
+`tool/tasks/rehearsal.py` generates `.github/workflows/rehearsal.yml`
 from the `release.yml` dist writes, decides whether a change needs it, checks
 the artifacts a release would upload and gives the required check's verdict:
 
@@ -19,7 +19,7 @@ the artifacts a release would upload and gives the required check's verdict:
   the generated workflow has no write permission, no secret but the run's own
   token, no attestation step and none of the jobs that host or publish.
 
-Run: python tests/test_rehearsal.py
+Run: python tool/tests/test_rehearsal.py
 """
 
 import copy
@@ -35,8 +35,8 @@ from pathlib import Path
 
 import yaml
 
-REPO = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("rehearsal", REPO / "script" / "rehearsal.py")
+REPO = Path(__file__).resolve().parents[2]
+spec = importlib.util.spec_from_file_location("rehearsal", REPO / "tool" / "tasks" / "rehearsal.py")
 rh = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rh)
 
@@ -137,15 +137,15 @@ def test_unknown_shapes_are_refused() -> None:
 
 def test_what_needs_the_rehearsal() -> None:
     needs = [
-        "python/forge/embed_query_model.py",
-        "python/forge/catalog.json",
-        "python/forge/models/potion-base-8M/model.safetensors",
-        "python/embed_query.py",
-        "script/embedpack.py",
-        "script/wheelprep.py",
-        "python/urna_cli.py",
-        "packs/pyproject.toml",
-        "crates/clitui/src/main.rs",
+        "rust/bridge/python/urna/embed/presetqry.py",
+        "rust/bridge/python/urna/model/catalogue.json",
+        "rust/bridge/python/urna/model/potionb8m/model.safetensors",
+        "rust/bridge/python/urna/embed/searchtxt.py",
+        "tool/tasks/embedpack.py",
+        "tool/tasks/wheelprep.py",
+        "rust/bridge/python/urna/entry/clidriver.py",
+        "pkgs/wheel/pyproject.toml",
+        "rust/clitui/src/main.rs",
         "Cargo.lock",
         "README.md",
         "LICENSE",
@@ -155,20 +155,23 @@ def test_what_needs_the_rehearsal() -> None:
         assert rh.touches_release([path]) == [path], path
     for path in [
         "docs/USAGE.md",
-        "tests/test_pythonapi.py",
-        "crates/ingest/src/lib.rs",
+        "tool/tests/test_pythonapi.py",
+        "rust/ingest/src/lib.rs",
         ".github/workflows/setuptest.yml",
     ]:
         assert rh.touches_release([path]) == [], path
     assert rh.changed("0" * 40, "HEAD") is None and rh.changed("", "HEAD") is None
-    # real history, when the checkout has it: #278 was docs only, #279 a payload module.
+    # a module of the urna package the release does not ship stays out.
+    assert rh.touches_release(["rust/bridge/python/urna/pipes/buildflow.py"]) == []
+    # real history, when the checkout has it: #278 was docs only; the #479
+    # move put every payload module at its new path.
     known = subprocess.run(
-        ["git", "-C", str(REPO), "cat-file", "-e", "feb827e0^{commit}"], capture_output=True
+        ["git", "-C", str(REPO), "cat-file", "-e", "62ddc83c^{commit}"], capture_output=True
     )
     if known.returncode == 0:
         assert rh.touches_release(rh.changed("7a417e1e", "577ab85b")) == []
-        assert "python/forge/install_model.py" in rh.touches_release(
-            rh.changed("577ab85b", "feb827e0")
+        assert "rust/bridge/python/urna/model/installer.py" in rh.touches_release(
+            rh.changed("62ddc83c^", "62ddc83c")
         )
     print("happy/error (payload, models, staging, wheels, crates need it; docs, tests do not): OK")
 
@@ -270,7 +273,7 @@ def test_a_real_binary_against_the_golden_fixture() -> None:
     if not binary.is_file():
         print("binary case skipped: no target/release/urna (cargo build --release)")
         return
-    golden = REPO / "crates/format/tests/fixtures/golden_v1_minimal.urna"
+    golden = REPO / "rust/format/tests/fixtures/golden_v1_minimal.urna"
     with tempfile.TemporaryDirectory() as tmp:
         d = Path(tmp)
         with tarfile.open(d / "urna-host.tar.xz", "w:xz") as tar:

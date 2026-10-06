@@ -1,4 +1,4 @@
-"""CLI for `forge.image_corpus.build_corpus` (re-exported here for callers).
+"""CLI for `urna.image.assembler.build_corpus` (re-exported here for callers).
 
     images (or rendered pdf pages)
       -> one fixed canvas
@@ -7,7 +7,7 @@
       -> .urna, one chunk per image or page
 
 Usage:
-    python/tools/urna_build_image_corpus.py \\
+    rust/bridge/python/urna/entry/imgcorpus.py \\
         --input-dir data/demo/derm/ph2/images --dataset ph2 \\
         --output tmp/ph2/ph2.urna --labels tmp/ph2/labels.json
 """
@@ -20,10 +20,11 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))  # holds urna/
 
-from forge import embed_image, image_items  # noqa: E402
-from forge.image_corpus import build_corpus  # noqa: E402,F401
+from urna.embed import visionemb
+from urna.image import discovery  # noqa: E402
+from urna.image.assembler import build_corpus  # noqa: E402,F401
 
 
 def main() -> int:
@@ -91,7 +92,7 @@ def main() -> int:
     parser.add_argument("--labels", type=Path, help="json map or csv of image id to label")
     args = parser.parse_args()
 
-    embedder = embed_image.ImageEmbedder(
+    embedder = visionemb.ImageEmbedder(
         model_id=args.model,
         pretrained=args.pretrained,
         device=args.device,
@@ -106,7 +107,7 @@ def main() -> int:
                 embedder=embedder,
                 is_pdf=args.pdf,
                 compress=not args.no_compress,
-                labels=image_items.load_labels(args.labels),
+                labels=discovery.load_labels(args.labels),
                 sample=args.sample,
                 seed=args.seed,
                 width=args.width,

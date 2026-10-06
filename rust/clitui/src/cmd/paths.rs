@@ -1,5 +1,5 @@
 //! Where an installed urna keeps its data: the embedder payload
-//! (`<root>/urna/forge/...`) and the python env `urna setup` creates
+//! (`<root>/urna/python/urna/...`) and the python env `urna setup` creates
 //! (`<root>/urna/venv`). One ladder for every reader and for the installer,
 //! so what `urna setup` writes is exactly what `doctor`, `ask` and
 //! `retrieve` find.

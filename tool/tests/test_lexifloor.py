@@ -1,6 +1,6 @@
 """Self-test for the forge default static embedder (#04).
 
-run: python python/forge/test_embed_default.py
+run: python tool/tests/test_lexifloor.py
 
 a plain script (no pytest), matching the repo's tests/ convention. proves the
 embedder is deterministic, offline (stdlib only), f32-stable, normalized,
@@ -14,9 +14,9 @@ import os
 import struct
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # python/
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "rust", "bridge", "python"))
 
-from forge.embed_default import DEFAULT_DIM, StaticEmbedder, default_embedder, embed_one
+from urna.embed.lexifloor import DEFAULT_DIM, StaticEmbedder, default_embedder, embed_one
 
 
 def _cos(a: list[float], b: list[float]) -> float:
@@ -69,9 +69,11 @@ def main() -> None:
     assert StaticEmbedder(seed="other").model_hash() != emb.model_hash(), "seed must change it"
 
     # demo corpus ships at least one document.
-    corpus = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_corpus")
+    corpus = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "..", "demo", "corpora", "intro"
+    )
     docs = [f for f in os.listdir(corpus) if f.endswith((".md", ".txt")) and f != "README.md"]
-    assert docs, "demo_corpus must ship at least one doc"
+    assert docs, "demo/corpora/intro must ship at least one doc"
 
     print(
         f"ok: static embedder deterministic, f32-stable, dim={DEFAULT_DIM}, "

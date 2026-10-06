@@ -28,7 +28,7 @@ RUN rustup target add ${TARGET} \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
-COPY crates ./crates
+COPY rust ./rust
 RUN cargo build --locked --profile dist -p urna --no-default-features --target ${TARGET}
 
 FROM scratch

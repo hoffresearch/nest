@@ -15,7 +15,7 @@ claims L3 (the lock never records the cache location), `<out>/.cache` is
 never created, a conflicting model_hash probe is corrected by the loaded
 model, and an unusable cache root is a SpecError naming the setting.
 
-Run: .venv/bin/python tests/test_forgespec.py
+Run: .venv/bin/python tool/tests/test_specrules.py
 """
 
 import json
@@ -26,15 +26,15 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "python"))
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "rust" / "bridge" / "python"))
 os.environ["URNA_ENABLE_FAKE_PRESET"] = "1"
 
 import numpy as np
 
 import urna
-from forge.build_spec import SpecError, load_spec, validate
-from forge.forge_pipeline import build
+from urna.pipes.buildflow import build
+from urna.specs.specparse import SpecError, load_spec, validate
 
 HAVE_FFMPEG = shutil.which("ffmpeg") is not None
 CACHE_ROOT = Path()  # set by main(): the suite's own URNA_CACHE_DIR, inside its tmp dir
@@ -180,14 +180,14 @@ def test_validation_errors(base: Path) -> None:
     fake = '[[models]]\npreset="fake-test"\ntext="default"\n'
     pdf = MINIMAL.format(models=fake, extra="").replace('kind = "jsonl"', 'kind = "pdf_dir"')
     assert pdf != MINIMAL.format(models=fake, extra=""), "the fixture must declare kind"
-    _expect_spec_error(pdf, "urna_build_image_corpus.py --pdf", base)
+    _expect_spec_error(pdf, "imgcorpus.py --pdf", base)
     _expect_spec_error(pdf, "image_dir", base)
     print("test_validation_errors: OK")
 
 
 def test_media_profiles(base: Path) -> None:
     """media.profile resolves measured knob defaults; explicit keys win."""
-    from forge.build_spec import MEDIA_PROFILES
+    from urna.specs.specparse import MEDIA_PROFILES
 
     models = '[[models]]\npreset="potion"\ntext="default"\n'
 
@@ -271,7 +271,7 @@ def test_quality_defaults(base: Path) -> None:
     """the gate floors default to values a real corpus reaches (the mtg cards
     at 488x680: crf30 p10 65.3 passes, crf35 p10 55.7 fails), and a spec
     still overrides each floor and the ladder under [media.quality]."""
-    from forge.build_spec import QualitySpec
+    from urna.specs.specparse import QualitySpec
 
     q = QualitySpec()
     assert (q.visual_floor_p10, q.visual_floor_min, q.drift_floor_p10) == (60.0, 45.0, 0.95)
@@ -366,7 +366,7 @@ dir = "{d / "out"}"
         else:
             raise AssertionError(f"a ${{VAR}} that {state} must be a SpecError, never a silent '$'")
     # no expanduser mid-string, bare $ untouched, and ~/ still expands
-    from forge.spec_paths import expand_paths
+    from urna.specs.specpaths import expand_paths
 
     os.environ["URNA_FORGE_TEST_DATA"] = "/x"
     out = expand_paths(
@@ -387,11 +387,11 @@ dir = "{d / "out"}"
         assert str(e).startswith("models[1].model_path:"), str(e)
     else:
         raise AssertionError("dotted key path must reach into lists")
-    # the module must import on its own in a fresh interpreter (build_spec
+    # the module must import on its own in a fresh interpreter (specparse
     # imports it at its bottom; SpecError is resolved lazily at raise time)
     probe = subprocess.run(
-        [sys.executable, "-c", "from forge.spec_paths import expand_paths"],
-        cwd=REPO / "python",
+        [sys.executable, "-c", "from urna.specs.specpaths import expand_paths"],
+        cwd=REPO / "rust" / "bridge" / "python",
         capture_output=True,
         text=True,
     )
@@ -471,7 +471,7 @@ def test_provenance_minimal(base: Path) -> None:
     if not HAVE_FFMPEG:
         print("test_provenance_minimal: SKIP (no ffmpeg)")
         return
-    from forge.forge_manifest import frame_resolver, manifest_items
+    from urna.pipes.manifests import frame_resolver, manifest_items
 
     d = base / "prov"
     d.mkdir()
@@ -521,7 +521,7 @@ def test_provenance_minimal(base: Path) -> None:
         proc = subprocess.run(
             [
                 sys.executable,
-                str(REPO / "python" / "tools" / "urna_ui_bridge.py"),
+                str(REPO / "rust" / "bridge" / "python" / "urna" / "entry" / "uibackend.py"),
                 str(d / out / "faketest.urna"),
                 "browse",
                 "--limit",
@@ -760,20 +760,20 @@ def test_probe_conflict(base: Path) -> None:
     and a planted probe that disagrees with the loaded model is corrected,
     not fatal: the second spec still builds and the entry is keyed by the
     real hash."""
-    from forge import forge_recipe
-    from forge.build_spec import ModelSpec
+    from urna.pipes import recipekey
+    from urna.specs.specparse import ModelSpec
 
     a = ModelSpec(preset="potion", text="default")
     b = ModelSpec(preset="potion", text="default", normalize=False)
     c = ModelSpec(preset="potion", text="default", dtype="float16")
-    paths = {forge_recipe.probe_path(CACHE_ROOT, m) for m in (a, b, c)}
+    paths = {recipekey.probe_path(CACHE_ROOT, m) for m in (a, b, c)}
     assert len(paths) == 3, "normalize and dtype must select different probes"
     assert all(p.name.startswith("model_hash.potion.") for p in paths)
 
     d = base / "probe"
     d.mkdir()
     spec_p = _fixture(d, with_media=False, mode="single", salt=" probe")
-    probe = forge_recipe.probe_path(CACHE_ROOT, a)
+    probe = recipekey.probe_path(CACHE_ROOT, a)
     assert probe.is_file(), "earlier builds must have written the default-knob potion probe"
     real = json.loads(probe.read_text())["model_hash"]
     # plant a conflicting probe with a matching dir fingerprint (potion is

@@ -7,7 +7,7 @@
 # left alone.
 set -eu
 
-FILE="python/forge/models/potion-base-8M/model.safetensors"
+FILE="rust/bridge/python/urna/model/potionb8m/model.safetensors"
 REV="bf8b056651a2c21b8d2565580b8569da283cab23"
 URL="https://huggingface.co/minishlab/potion-base-8M/resolve/$REV/model.safetensors"
 

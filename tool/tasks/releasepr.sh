@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # releasepr.sh - open the pull request that prepares a release.
 #
-#   script/releasepr.sh X.Y.Z [--base REF] [--worktree DIR] [--no-push]
+#   tool/tasks/releasepr.sh X.Y.Z [--base REF] [--worktree DIR] [--no-push]
 #
 # works in a new worktree of origin/main (never the current checkout) on the
 # branch release-X.Y.Z:
@@ -9,15 +9,15 @@
 #      the urna-format and urna-engine pins and the lockfile (`cargo release
 #      version`), then the changelog section and the versioned fields of
 #      CITATION.cff (`cargo release replace`, the list in
-#      crates/clitui/Cargo.toml); the rest of CITATION.cff does not move;
-#   2. script/preflight.py checks the result, and nothing outside
+#      rust/clitui/Cargo.toml); the rest of CITATION.cff does not move;
+#   2. tool/tasks/preflight.py checks the result, and nothing outside
 #      those four files may have changed;
 #   3. a signed commit, an explicit push of that one branch, the pull request.
 # the tag and the publication are separate steps after the merge (usage,
 # maintainer checklist step 8): nothing here tags, publishes or touches main.
 #
 # --base and --worktree pick another start and place; --no-push stops after
-# the signed commit (tests/test_releasepr.py runs it that way).
+# the signed commit (tool/tests/test_releasepr.py runs it that way).
 
 set -euo pipefail
 
@@ -72,7 +72,7 @@ GIT_LFS_SKIP_SMUDGE=1 git -C "$repo" worktree add --quiet -b "$branch" "$worktre
 cd "$worktree"
 cargo release version "$version" --execute --no-confirm
 cargo release replace --execute --no-confirm
-python3 script/preflight.py
+python3 tool/tasks/preflight.py
 
 # untracked files count too: anything cargo-release created is a change.
 changed="$(git status --porcelain | awk '{print $2}' | LC_ALL=C sort | tr '\n' ' ')"
@@ -81,13 +81,13 @@ git add -- "${FILES[@]}"
 date="$(sed -n 's/^date-released: "\(.*\)"$/\1/p' CITATION.cff)"
 git commit --quiet -S -m "Release $version" -m "The workspace version, the urna-format and urna-engine pins, the lockfile,
 the changelog section dated $date and the versioned fields of CITATION.cff,
-prepared by script/releasepr.sh with cargo-release $CARGO_RELEASE_VERSION."
+prepared by tool/tasks/releasepr.sh with cargo-release $CARGO_RELEASE_VERSION."
 echo "releasepr: $branch at $(git rev-parse --short HEAD) in $worktree, release date $date (UTC)"
 
 if [[ "$push" == 0 ]]; then
   exit 0
 fi
 git push --quiet origin "refs/heads/$branch:refs/heads/$branch"
-gh pr create --base main --head "$branch" --title "Release $version" --body "Prepares $version: the workspace version, the urna-format and urna-engine pins, the lockfile, the changelog section dated $date and the versioned fields of \`CITATION.cff\`, by \`script/releasepr.sh\` (cargo-release $CARGO_RELEASE_VERSION). The preflight passed on this tree.
+gh pr create --base main --head "$branch" --title "Release $version" --body "Prepares $version: the workspace version, the urna-format and urna-engine pins, the lockfile, the changelog section dated $date and the versioned fields of \`CITATION.cff\`, by \`tool/tasks/releasepr.sh\` (cargo-release $CARGO_RELEASE_VERSION). The preflight passed on this tree.
 
 After CI and the required \`rehearsal\` check pass and this merges, the release is the signed tag on that merge commit, a separate step (\`docs/USAGE.md\`, maintainer checklist step 8). The tag's UTC day must not be before $date."

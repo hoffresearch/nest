@@ -13,7 +13,7 @@ and re-exports a stable surface:
         section, exact otherwise; score IS the exact-cosine rerank value, each
         hit carries the tier-1 stored canonical text + verifying hashes + the
         urna:// citation_id + the rerank_source precision marker. embed the
-        query OFFLINE first; see python/forge/retrieve.py for the potion path.)
+        query OFFLINE first; see rust/bridge/python/urna/reads/retrieval.py for the potion path.)
   - UrnaFile.embedding_dim
   - UrnaFile.n_embeddings
   - UrnaFile.dtype                       ("float32" | "float16" | "int8")
@@ -34,13 +34,10 @@ import os
 def _load_extension():
     """Load the `_urna` PyO3 extension.
 
-    Two layouts share this file:
-      - installed wheel: `urna` is a package and `_urna` is a proper
-        submodule (`urna._urna`, named `_urna.abi3.so`), so a relative
-        import resolves it.
-      - dev repo: `urna.py` is a top-level module under `python/` and the
-        extension sits next to it as `_urna.so` (see README > install);
-        the relative import fails and we fall back to file-based loading.
+    `_urna` is a submodule of the package in both layouts: the installed
+    wheel names it `_urna.abi3.so`, the dev repo has the cargo build copied
+    to `rust/bridge/python/urna/_urna.so` (see README > install). a build
+    left under another name (`lib_urna.dylib`) is loaded from its file.
     """
     try:
         from . import _urna
@@ -59,35 +56,54 @@ def _load_extension():
     raise ImportError(
         "Cannot find _urna extension. Run "
         "`cargo build --release -p urna-bridge && "
-        "cp target/release/lib_urna.dylib python/_urna.so` "
+        "cp target/release/lib_urna.dylib rust/bridge/python/urna/_urna.so` "
         "from the repo root."
     )
 
 
-_mod = _load_extension()
+# the extension loads on first use, not on `import urna`: the query embedders
+# under urna/embed and urna/model run in the release payload, which carries
+# no extension, and importing them imports this package first.
+_EXPORTS = {
+    "UrnaFile": "UrnaFile",
+    "SearchHit": "SearchHitPy",
+    "RetrieveHit": "RetrieveHitPy",
+    "build": "build",
+    "chunk_id": "chunk_id",
+}
+_ext = None
 
-UrnaFile = _mod.UrnaFile
-SearchHit = _mod.SearchHitPy
-RetrieveHit = _mod.RetrieveHitPy
-build = _mod.build
-chunk_id = _mod.chunk_id
+
+def _extension():
+    global _ext
+    if _ext is None:
+        _ext = _load_extension()
+    return _ext
+
+
+def __getattr__(name: str):
+    if name in _EXPORTS:
+        value = getattr(_extension(), _EXPORTS[name])
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def open(path: str):
     """Open a .urna file for read-only mmap-backed search."""
-    return UrnaFile.open(path)
+    return _extension().UrnaFile.open(path)
 
 
 def potion_model_path() -> str | None:
     """Path to the bundled potion-base-8M model dir, or None.
 
     The wheel bundles the offline potion static table under
-    `urna/models/potion-base-8M/` so `ask`/`retrieve`-style embedding works
-    with no network after install. the dev repo keeps the table at
-    `python/forge/models/potion-base-8M/` (git-lfs) and this returns None.
+    `urna/model/potionb8m/` so `ask`/`retrieve`-style embedding works
+    with no network after install. the dev repo keeps it at the same place
+    in the package (git-lfs), so a checkout returns its path too.
     """
     base = os.path.dirname(os.path.abspath(__file__))
-    candidate = os.path.join(base, "models", "potion-base-8M")
+    candidate = os.path.join(base, "model", "potionb8m")
     return candidate if os.path.isdir(candidate) else None
 
 

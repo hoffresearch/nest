@@ -3,8 +3,8 @@ mode, with hits enriched (label, media frame) so the browser renders cards,
 never terminal text.
 
 usage:
-  urna_ui_bridge.py FILE browse --offset N --limit M
-  urna_ui_bridge.py FILE search --query Q --k K [--space NAME]
+  uibackend.py FILE browse --offset N --limit M
+  uibackend.py FILE search --query Q --k K [--space NAME]
                     [--mode exact|ann|hybrid|graph] [--hops N]
 """
 
@@ -16,11 +16,10 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO / "python"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # holds urna/
 
-import _urna  # noqa: E402
-
-from forge.forge_manifest import frame_resolver, manifest_items  # noqa: E402
+from urna import _urna  # noqa: E402
+from urna.pipes.manifests import frame_resolver, manifest_items  # noqa: E402
 
 
 def load_manifest(index: Path) -> dict:
@@ -83,20 +82,20 @@ def cmd_browse(db, manifest, args) -> dict:
     return {"total": len(items), "offset": args.offset, "items": page}
 
 
-def embed_query(preset_name: str, dim: int, query: str):
+def searchtxt(preset_name: str, dim: int, query: str):
     import os
 
-    from forge import model_registry
+    from urna.model import presetmap
 
     allowed = frozenset(
         p.strip() for p in os.environ.get("URNA_ALLOW_REMOTE_CODE", "").split(",") if p.strip()
     )
-    adapter = model_registry.create_embedder(
+    adapter = presetmap.create_embedder(
         preset_name, allow_remote_code=allowed, allow_heavy=True, batch_size=4
     )
     vec = adapter.embed_texts([query], role="query")
     if dim:
-        vec = model_registry.slice_renorm(vec, dim)
+        vec = presetmap.slice_renorm(vec, dim)
     return vec[0].tolist()
 
 
@@ -109,10 +108,10 @@ def cmd_search(db, manifest, args) -> dict:
     if args.space:
         preset = args.space.split("@")[0].removesuffix("-text")
         dim = int(args.space.split("@")[1]) if "@" in args.space else 0
-        vec = embed_query(preset, dim, args.query)
+        vec = searchtxt(preset, dim, args.query)
         hits = db.search_space(args.space, vec, args.k)
     else:
-        vec = embed_query("potion", 0, args.query)
+        vec = searchtxt("potion", 0, args.query)
         if args.mode == "ann":
             hits = db.search_ann(vec, args.k, 100)
         elif args.mode == "hybrid":

@@ -19,9 +19,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "rust", "bridge", "python"))
 
-import _urna  # noqa: E402
+from urna import _urna  # noqa: E402
 
 TEXT_DIM = 4
 VIS_DIM = 2

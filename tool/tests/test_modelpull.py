@@ -1,5 +1,5 @@
 """Prove the model fetch setup and the explorer share
-(`python/forge/install_model.py`) downloads only what was confirmed, only
+(`rust/bridge/python/urna/model/installer.py`) downloads only what was confirmed, only
 the pinned files, and only keeps a model whose fingerprint is the one the
 catalog promised.
 
@@ -22,7 +22,7 @@ one; they skip, by name, only when huggingface.co does not answer.
   file (reconstructed and transferred bytes) print monotonic lines capped
   at the file's size.
 
-Run: .venv/bin/python tests/test_modelpull.py
+Run: .venv/bin/python tool/tests/test_modelpull.py
 """
 
 import json
@@ -33,8 +33,8 @@ import tempfile
 import urllib.request
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-SCRIPT = REPO / "python" / "forge" / "install_model.py"
+REPO = Path(__file__).resolve().parents[2]
+SCRIPT = REPO / "rust" / "bridge" / "python" / "urna" / "model" / "installer.py"
 
 TINY = "sentence-transformers-testing/stsb-bert-tiny-safetensors"
 TINY_REV = "f3cb857cba53019a20df283396bcca179cf051a4"
@@ -136,7 +136,7 @@ def test_two_bars_for_one_file_never_go_back() -> None:
     import importlib.util
     import io
 
-    spec = importlib.util.spec_from_file_location("install_model", SCRIPT)
+    spec = importlib.util.spec_from_file_location("installer", SCRIPT)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     base, size, total = 5048, 17547912, 18497794

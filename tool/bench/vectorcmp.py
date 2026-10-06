@@ -5,7 +5,7 @@ measured here, including the ones that make urna look ordinary. synthetic
 l2-normalized rows (seeded) so anyone can reproduce it without a dataset;
 the recall ruler is brute-force top-k over the same rows.
 
-    .venv/bin/python python/tools/bench_competitors.py --n 100000 --dim 384 \
+    .venv/bin/python tool/bench/vectorcmp.py --n 100000 --dim 384 \
         --queries 200 --out docs/BENCH.md
 
 columns: build time, bytes on disk, cold open + first query in a fresh
@@ -30,10 +30,10 @@ from importlib.metadata import version as pkg_version
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "rust", "bridge", "python"))
 sys.path.insert(0, os.path.dirname(__file__))
 
-import _bench_systems as systems  # noqa: E402
+import vectordbs as systems  # noqa: E402
 
 # one note per line; wrapped here only for the 100-column rule.
 NOTES = (
@@ -237,7 +237,7 @@ def main() -> None:
         f"thread, n={args.n:,} synthetic clustered L2-normalized rows x {args.dim} dims "
         f"({max(8, args.n // 50)} centers), "
         f"{args.queries} queries, k={args.k}, seed {args.seed}. Reproduce: "
-        f"`.venv/bin/python python/tools/bench_competitors.py --n {args.n} --dim {args.dim} "
+        f"`.venv/bin/python tool/bench/vectorcmp.py --n {args.n} --dim {args.dim} "
         f"--queries {args.queries}`."
     )
     notes = NOTES.format(same_citation=same_citation).strip("\n").splitlines()

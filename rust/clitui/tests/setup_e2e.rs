@@ -46,28 +46,30 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The files a complete payload holds besides the stamp (mirrors
 /// `unpack::REQUIRED`, which this binary-crate test cannot import; a drift
 /// fails the install below).
-const REQUIRED: [&str; 21] = [
-    "model_fingerprint.py",
-    "embed_query.py",
-    "forge/__init__.py",
-    "forge/catalog.json",
-    "forge/embed_default.py",
-    "forge/embed_image.py",
-    "forge/embed_potion.py",
-    "forge/embed_query_model.py",
-    "forge/embed_query_potion.py",
-    "forge/embed_st.py",
-    "forge/embed_st_worker.py",
-    "forge/install_model.py",
-    "forge/model_adapters.py",
-    "forge/model_registry.py",
-    "forge/models/potion-base-8M/README.md",
-    "forge/models/potion-base-8M/config.json",
-    "forge/models/potion-base-8M/model.safetensors",
-    "forge/models/potion-base-8M/modules.json",
-    "forge/models/potion-base-8M/special_tokens_map.json",
-    "forge/models/potion-base-8M/tokenizer.json",
-    "forge/models/potion-base-8M/tokenizer_config.json",
+const REQUIRED: [&str; 23] = [
+    "python/urna/__init__.py",
+    "python/urna/embed/__init__.py",
+    "python/urna/embed/lexifloor.py",
+    "python/urna/embed/potionqry.py",
+    "python/urna/embed/potiontab.py",
+    "python/urna/embed/presetqry.py",
+    "python/urna/embed/searchtxt.py",
+    "python/urna/embed/stbackend.py",
+    "python/urna/embed/stprocess.py",
+    "python/urna/embed/visionemb.py",
+    "python/urna/model/__init__.py",
+    "python/urna/model/catalogue.json",
+    "python/urna/model/embedders.py",
+    "python/urna/model/installer.py",
+    "python/urna/model/modelhash.py",
+    "python/urna/model/presetmap.py",
+    "python/urna/model/potionb8m/README.md",
+    "python/urna/model/potionb8m/config.json",
+    "python/urna/model/potionb8m/model.safetensors",
+    "python/urna/model/potionb8m/modules.json",
+    "python/urna/model/potionb8m/special_tokens_map.json",
+    "python/urna/model/potionb8m/tokenizer.json",
+    "python/urna/model/potionb8m/tokenizer_config.json",
 ];
 
 /// A release dir with a complete payload stamped with this binary's
@@ -113,8 +115,9 @@ fn release_at(
 
 /// A stub file's body; the catalog is the real one, since setup reads it.
 fn body(f: &str, version: &str) -> Vec<u8> {
-    if f == "forge/catalog.json" {
-        let real = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../python/forge/catalog.json");
+    if f == "python/urna/model/catalogue.json" {
+        let real = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../rust/bridge/python/urna/model/catalogue.json");
         return std::fs::read(real).unwrap();
     }
     format!("{f}@{version}").into_bytes()
@@ -152,9 +155,15 @@ fn setup_yes_installs_the_payload_from_the_release() {
     let out = urna(&d, &rel, &["setup", "--yes", "--force", "--no-python"]);
     let s = text(&out);
     assert!(s.contains("ok embedder payload"), "{s}");
-    assert!(d.join("data/urna/forge/embed_query_potion.py").is_file());
-    assert!(d.join("data/urna/model_fingerprint.py").is_file(), "{s}");
-    assert!(d.join("data/urna/embed_query.py").is_file(), "{s}");
+    assert!(d.join("data/urna/python/urna/embed/potionqry.py").is_file());
+    assert!(
+        d.join("data/urna/python/urna/model/modelhash.py").is_file(),
+        "{s}"
+    );
+    assert!(
+        d.join("data/urna/python/urna/embed/searchtxt.py").is_file(),
+        "{s}"
+    );
     assert!(d.join("data/urna/venv/bin/marker").is_file(), "{s}");
     // the stub payload has no potion table, so verify fails with a doctor
     // code (2..=6), never a setup code: the steps themselves succeeded.
@@ -170,11 +179,10 @@ fn an_upgraded_binary_replaces_an_older_payload_and_keeps_the_venv() {
         return;
     }
     let d = scratch("upgrade");
-    // the state a 0.5.1 install leaves: forge/ only (0.5.1's setup dropped the
-    // top-level files and its payload had no stamp), and a venv.
-    let forge = d.join("data/urna/forge");
-    std::fs::create_dir_all(&forge).unwrap();
-    std::fs::write(forge.join("embed_query_potion.py"), b"0.5.1").unwrap();
+    // an older payload without the stamp (0.5.1's had none), and a venv.
+    let embed = d.join("data/urna/python/urna/embed");
+    std::fs::create_dir_all(&embed).unwrap();
+    std::fs::write(embed.join("potionqry.py"), b"0.5.1").unwrap();
     std::fs::create_dir_all(d.join("data/urna/venv/bin")).unwrap();
     std::fs::write(d.join("data/urna/venv/bin/marker"), b"keep").unwrap();
 
@@ -185,7 +193,7 @@ fn an_upgraded_binary_replaces_an_older_payload_and_keeps_the_venv() {
     assert!(s.contains("ok embedder payload"), "{s}");
     let stamp = std::fs::read_to_string(d.join("data/urna/VERSION")).unwrap();
     assert_eq!(stamp.trim(), VERSION);
-    assert!(d.join("data/urna/embed_query.py").is_file());
+    assert!(d.join("data/urna/python/urna/embed/searchtxt.py").is_file());
     assert!(d.join("data/urna/venv/bin/marker").is_file());
 
     // the payload matches the binary now: nothing to replace.
@@ -214,9 +222,9 @@ fn setup_repairs_a_payload_missing_a_required_file() {
     // each of these breaks a query when gone: search-text's embedder, the
     // module the potion route imports, the potion table's tokenizer.
     for gone in [
-        "embed_query.py",
-        "forge/embed_potion.py",
-        "forge/models/potion-base-8M/tokenizer.json",
+        "python/urna/embed/searchtxt.py",
+        "python/urna/embed/potiontab.py",
+        "python/urna/model/potionb8m/tokenizer.json",
     ] {
         std::fs::remove_file(d.join("data/urna").join(gone)).unwrap();
         // same release, no --force: the missing file alone makes setup reinstall.
@@ -248,19 +256,19 @@ fn an_incomplete_release_fails_and_keeps_the_installed_payload() {
         "half",
         None,
         VERSION,
-        Some("forge/embed_query_model.py"),
+        Some("python/urna/embed/presetqry.py"),
     );
     let out = urna(&d, &half, &["setup", "--yes", "--no-python"]);
     assert_eq!(out.status.code(), Some(12), "{}", text(&out));
     assert!(
-        text(&out).contains("forge/embed_query_model.py"),
+        text(&out).contains("python/urna/embed/presetqry.py"),
         "{}",
         text(&out)
     );
     let stamp = std::fs::read_to_string(d.join("data/urna/VERSION")).unwrap();
     assert_eq!(stamp.trim(), "0.0.1");
-    let model = std::fs::read(d.join("data/urna/forge/embed_query_model.py")).unwrap();
-    assert_eq!(model, b"forge/embed_query_model.py@0.0.1");
+    let model = std::fs::read(d.join("data/urna/python/urna/embed/presetqry.py")).unwrap();
+    assert_eq!(model, b"python/urna/embed/presetqry.py@0.0.1");
 }
 
 #[test]
@@ -273,7 +281,7 @@ fn a_tampered_checksum_exits_11_and_installs_nothing() {
     let rel = release(&d, Some(&"0".repeat(64)));
     let out = urna(&d, &rel, &["setup", "--yes", "--force", "--no-python"]);
     assert_eq!(out.status.code(), Some(11), "{}", text(&out));
-    assert!(!d.join("data/urna/forge").exists());
+    assert!(!d.join("data/urna/python").exists());
     assert!(text(&out).contains("does not match the release checksum"));
 }
 
@@ -301,14 +309,12 @@ fn uninstall_removes_the_payload_and_keeps_the_binary() {
     let d = scratch("rm");
     let rel = release(&d, None);
     urna(&d, &rel, &["setup", "--yes", "--force", "--no-python"]);
-    assert!(d.join("data/urna/forge").is_dir());
-    assert!(d.join("data/urna/embed_query.py").is_file());
+    assert!(d.join("data/urna/python").is_dir());
+    assert!(d.join("data/urna/VERSION").is_file());
     let out = urna(&d, &rel, &["setup", "--uninstall"]);
     assert_eq!(out.status.code(), Some(0));
-    assert!(!d.join("data/urna/forge").exists());
-    for f in ["model_fingerprint.py", "embed_query.py", "VERSION"] {
-        assert!(!d.join("data/urna").join(f).exists(), "{f} left behind");
-    }
+    assert!(!d.join("data/urna/python").exists());
+    assert!(!d.join("data/urna/VERSION").exists(), "VERSION left behind");
     assert!(Path::new(env!("CARGO_BIN_EXE_urna")).is_file());
 }
 
@@ -381,7 +387,7 @@ fn setup_refuses_models_the_catalog_or_the_consent_does_not_cover() {
     let coded = r#"{"schema": 1, "excluded": [], "models": [{"name": "coded",
         "embedding_model": "org/coded", "repo": "org/coded", "revision": "cccccccc",
         "bytes": 1000000, "model_hash": "sha256:c", "packages": [], "remote_code": true}]}"#;
-    std::fs::write(d.join("data/urna/forge/catalog.json"), coded).unwrap();
+    std::fs::write(d.join("data/urna/python/urna/model/catalogue.json"), coded).unwrap();
     let out = urna(
         &d,
         &rel,

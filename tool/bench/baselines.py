@@ -7,7 +7,7 @@ want the raw f32 vectors, the canonical text strings, and the byte
 spans - values the runtime intentionally hides behind its public
 search API.
 
-Internal to `python/tools/`. Not a public Python module.
+Internal to `tool/bench/`. Not a public Python module.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO / "python"))
+sys.path.insert(0, str(REPO / "rust" / "bridge" / "python"))
 import urna  # noqa: E402  (sys.path inserted above)
 
 

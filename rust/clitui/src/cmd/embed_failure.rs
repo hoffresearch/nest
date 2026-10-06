@@ -247,7 +247,7 @@ mod tests {
 
     #[test]
     fn a_payload_module_that_does_not_import_is_never_a_pip_package() {
-        for module in ["forge.embed_potion", "embed_query", "model_fingerprint"] {
+        for module in ["urna.embed.potiontab", "urna.model.modelhash", "urna"] {
             let tb = format!("ModuleNotFoundError: No module named '{module}'\n");
             let f = read(&tb);
             assert!(
@@ -284,7 +284,7 @@ mod tests {
     #[test]
     fn every_message_names_its_fix() {
         let s = EmbedFailure::ScriptMissing {
-            script: "/d/urna/embed_query.py".into(),
+            script: "/d/urna/searchtxt.py".into(),
         };
         assert!(s.to_string().starts_with("embedder script not found"));
         assert!(s.to_string().contains("urna setup") && s.short().contains("setup"));

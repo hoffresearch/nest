@@ -11,7 +11,7 @@ import json
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 
-from forge.media_profiles import MEDIA_PROFILES, merge_profile
+from urna.image.mediaplan import MEDIA_PROFILES, merge_profile
 
 
 class SpecError(ValueError):
@@ -109,12 +109,12 @@ class JxlTranscodeSpec:
 
 @dataclass
 class MediaSpec:
-    profile: str = ""  # "" | a MEDIA_PROFILES name (media_profiles.py)
+    profile: str = ""  # "" | a MEDIA_PROFILES name (mediaplan.py)
     backend: str = "av1"  # av1 | avif | jxl | jxl-transcode | control
     width: int = 1024
     crf: int | str = 35  # int | "auto"; the avif backend maps it to avifenc -q
     # still | default. svt-av1's still-picture tune, probed against the local
-    # encoder (image_encode.probe_tune_still). measured 2026-09-12 on 2048
+    # encoder (encstream.probe_tune_still). measured 2026-09-12 on 2048
     # cards at crf 35: ssimulacra2 p50 62.7 against 51.8 for the default
     # tune, for +10% bytes. every av1 profile already set it; the bare
     # default follows. asdict(media) enters the media state key, so an av1
@@ -276,11 +276,11 @@ def _parse(data: dict, spec_path: str) -> CorpusSpec:
     return spec
 
 
-# re-exported rules: callers import the whole contract from build_spec.
-# spec_rules imports SpecError from here, so it loads last; spec_paths
+# re-exported rules: callers import the whole contract from specparse.
+# specrules imports SpecError from here, so it loads last; specpaths
 # resolves SpecError lazily and stays importable on its own.
-from forge.spec_paths import expand_paths  # noqa: E402
-from forge.spec_rules import default_model, emitted_spaces, validate  # noqa: E402
+from urna.specs.specpaths import expand_paths  # noqa: E402
+from urna.specs.specrules import default_model, emitted_spaces, validate  # noqa: E402
 
 __all__ = [
     "CorpusSpec",

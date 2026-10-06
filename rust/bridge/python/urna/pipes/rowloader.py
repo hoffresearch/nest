@@ -25,7 +25,7 @@ import string
 from dataclasses import dataclass
 from pathlib import Path
 
-from forge.build_spec import CorpusSpec, SpecError
+from urna.specs.specparse import CorpusSpec, SpecError
 
 
 @dataclass
@@ -200,11 +200,11 @@ def _load_csv_jsonl(spec: CorpusSpec) -> list[Row]:
 
 
 def _load_image_dir(spec: CorpusSpec) -> list[Row]:
-    from forge import image_items
+    from urna.image import discovery
 
     src = spec.source
-    labels = image_items.load_labels(Path(src.labels)) if src.labels else None
-    items = image_items.collect_images(Path(src.input_dir), labels)
+    labels = discovery.load_labels(Path(src.labels)) if src.labels else None
+    items = discovery.collect_images(Path(src.input_dir), labels)
     rows = []
     for item in items:
         p = Path(item.render_path)

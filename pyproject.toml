@@ -2,33 +2,34 @@
 #
 # The DEV flow does NOT install a Python package: the PyO3 extension is
 # built by `cargo build --release -p urna-bridge --features
-# pyo3/extension-module` and copied into `python/_urna.so` (the feature
-# keeps libpython out of the cdylib). The Python source under `python/` and `tests/` is
-# imported directly by adding `python/` to `sys.path`.
+# pyo3/extension-module` and copied into `rust/bridge/python/urna/_urna.so`
+# (the feature keeps libpython out of the cdylib). The `urna` package under
+# `rust/bridge/python/` and the scripts under `tool/` import it directly by
+# adding `rust/bridge/python/` to `sys.path`.
 #
 # The PUBLISHED package is the `urna` wheel, a maturin project owned by
-# `packs/pyproject.toml` and staged by `script/wheelprep.py` (see
+# `pkgs/wheel/pyproject.toml` and staged by `tool/tasks/wheelprep.py` (see
 # the reference section of docs/USAGE.md). This root file stays the dev-tooling config: it exists
 # so `ruff` (and any other PEP 518 tool) finds a canonical config at the
 # workspace root.
 #
 # The one exception to "no install path" is the forge SEMANTIC default
-# embedder (python/forge/embed_potion.py): it loads a vendored, offline
+# embedder (urna/embed/potiontab.py): it loads a vendored, offline
 # model2vec/potion table and needs numpy + tokenizers at runtime (no
 # torch, no network). They are declared as a PEP 735 dependency group so
 # the requirement is recorded without claiming a publishable package.
 # Install with:  uv pip install numpy tokenizers   (or: uv sync --group forge)
-# The lexical floor (python/forge/embed_default.py) stays stdlib-only.
+# The lexical floor (urna/embed/lexifloor.py) stays stdlib-only.
 
 [dependency-groups]
 forge = [
     "numpy>=1.26",
     "tokenizers>=0.20",
-    # image paths (image_backends, embed_image, embed_st) and the forge tests.
+    # image paths (orchestra, visionemb, stbackend) and the forge tests.
     "pillow>=10",
 ]
-# import-graph contracts ([tool.importlinter] below). runs from python/ with
-# the dev sys.path:  cd python && PYTHONPATH=. ../.venv/bin/lint-imports --config ../pyproject.toml
+# import-graph contracts ([tool.importlinter] below). runs from rust/bridge/python/:
+#   cd rust/bridge/python && ../../../.venv/bin/lint-imports --config ../../../pyproject.toml
 lint = [
     "import-linter>=2.15",
 ]
@@ -37,7 +38,7 @@ lint = [
 target-version = "py312"
 line-length = 100
 extend-exclude = [
-    "python/__pycache__",
+    "rust/bridge/python/urna/__pycache__",
     "**/_urna.so",
     "**/*.dylib",
     "**/*.dll",
@@ -63,22 +64,23 @@ indent-style = "space"
 line-ending = "lf"
 
 [tool.ruff.lint.isort]
-# first-party = what lives under python/ (sys.path.insert bootstrap), declared
-# so the section split never depends on which dirs exist beside pyproject.
-known-first-party = ["urna", "builder", "forge", "tools", "embed_query", "model_fingerprint", "convert_legacy", "urna_cli"]
+# first-party = the urna package under rust/bridge/python/ (sys.path.insert
+# bootstrap), declared so the section split never depends on which dirs exist
+# beside pyproject.
+known-first-party = ["urna"]
 
 # pyright is installed globally (uv tool install pyright) and used here only as
 # an import-resolution check: type checking stays off, an unresolved import is
-# an error. extraPaths mirrors the dev sys.path bootstrap (python/, python/tools/
-# for the tests, script/). demos/ is excluded: it imports the published wheel
-# layout (urna.embed_potion), not the dev tree. the remaining errors are the
-# optional heavy backends (torch, sentence_transformers, open_clip, fitz, the
-# bench competitors) that the dev venv does not install, plus _urna until the
-# extension is built into python/_urna.so.
+# an error. extraPaths mirrors the dev sys.path bootstrap (rust/bridge/python/,
+# tool/bench/ for the tests, tool/tasks/). demo/ stays out: it imports the
+# published wheel. the remaining errors are the optional heavy backends (torch,
+# sentence_transformers, open_clip, fitz, the bench competitors) that the dev
+# venv does not install, plus _urna until the extension is built into
+# rust/bridge/python/urna/_urna.so.
 [tool.pyright]
-include = ["python", "tests", "script"]
-exclude = ["**/__pycache__", "target", "TMP", "packs/staging"]
-extraPaths = ["python", "python/tools", "script"]
+include = ["rust/bridge/python", "tool"]
+exclude = ["**/__pycache__", "target", "TMP", "pkgs/stage"]
+extraPaths = ["rust/bridge/python", "tool/bench", "tool/tasks"]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.12"
@@ -87,24 +89,28 @@ reportMissingImports = "error"
 
 # rope is not installed; run it on demand with `uv run --no-project --with rope`.
 # source_folders mirrors the dev sys.path so a module move rewrites the imports
-# in tests/ and python/tools/ too.
+# in tool/tests/ and tool/bench/ too.
 [tool.rope]
-source_folders = ["python", "python/tools", "script"]
+source_folders = ["rust/bridge/python", "tool/bench", "tool/tasks"]
 ignored_resources = [
     "*.pyc", "*~", ".ropeproject", ".git", ".venv", "__pycache__",
-    "target", "TMP", "data", "docs", "fuzz", "packs/staging", "demos",
+    "target", "TMP", "data", "docs", "fuzz", "pkgs/stage", "demo",
 ]
 save_objectdb = false
 save_history = false
 
-# forge is the library layer, python/tools the bench/CLI layer on top of it:
-# tools may import forge, forge never imports tools.
+# urna is the library, tool/bench the benchmarks on top of it: the benchmarks
+# may import urna, urna never imports a benchmark. tool/bench/ is not a
+# package, so its modules are top-level names; a new one joins the list.
 [tool.importlinter]
-root_packages = ["forge", "tools"]
+root_packages = ["urna"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "forge does not import tools"
+name = "urna does not import tool/bench"
 type = "forbidden"
-source_modules = ["forge"]
-forbidden_modules = ["tools"]
+source_modules = ["urna"]
+forbidden_modules = [
+    "baselines", "benchgate", "benchtime", "graphgate", "imageeval", "imagerate", "imagestat",
+    "modelrank", "modelview", "presetrun", "recallcmp", "vectorcmp", "vectordbs",
+]

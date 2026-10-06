@@ -1,6 +1,6 @@
 """Emit side of the declarative build: blob tables, space payloads,
 the per-output `urna.build` calls (atomic commit), manifest v1 and
-build.lock.json. Split from forge_pipeline (stages) along the
+build.lock.json. Split from buildflow (stages) along the
 orchestrate/emit seam to honor the file-size contract.
 """
 
@@ -11,16 +11,17 @@ import os
 import time
 from pathlib import Path
 
-from forge import image_media, model_registry
-from forge.build_spec import default_model, emitted_spaces
-from forge.forge_cache import atomic_write_json
-from forge.forge_manifest import build_lock, check_lock, redact_path, write_manifest
+from urna.image import mediabase
+from urna.model import presetmap
+from urna.pipes.manifests import build_lock, check_lock, redact_path, write_manifest
+from urna.pipes.vectcache import atomic_write_json
+from urna.specs.specparse import default_model, emitted_spaces
 
 
 def _blob_tables(ctx) -> tuple[list[dict] | None, list[dict] | None, list[str] | None]:
     if ctx.media is None:
         return None, None, None
-    media_dir = image_media.media_dir_for(ctx.out_dir / f"{ctx.spec.name}.urna")
+    media_dir = mediabase.media_dir_for(ctx.out_dir / f"{ctx.spec.name}.urna")
     embed = ctx.spec.output.embed_media
     refs: list[dict] = []
     paths: list[str] = []
@@ -32,7 +33,7 @@ def _blob_tables(ctx) -> tuple[list[dict] | None, list[dict] | None, list[str] |
             index_of[rel] = len(refs)
             refs.append(
                 {
-                    "content_hash": (sha or image_media.sha256_file(p)).removeprefix("sha256:"),
+                    "content_hash": (sha or mediabase.sha256_file(p)).removeprefix("sha256:"),
                     "original_uri": f"media://{rel}",
                     "byte_len": p.stat().st_size,
                     "inlined": embed,
@@ -73,7 +74,7 @@ def _spaces_payload(ctx, only_preset: str | None = None) -> list[dict]:
         else:
             vecs = arrays["text"]
         if dim is not None:
-            vecs = model_registry.slice_renorm(vecs, dim)
+            vecs = presetmap.slice_renorm(vecs, dim)
         spaces.append(
             {
                 "name": name,
@@ -90,7 +91,7 @@ def _emit(ctx) -> dict:
 
     spec = ctx.spec
     dm = default_model(spec)
-    d_preset = model_registry.get_preset(dm.preset)
+    d_preset = presetmap.get_preset(dm.preset)
     text_vecs = ctx.vectors[dm.preset]["text"]
     blob_refs, chunk_spans, blob_paths = _blob_tables(ctx)
     chunks = [
@@ -174,7 +175,7 @@ def _finalize(ctx, result: dict, *, strict_env: bool, rebuild_only: bool) -> Non
         if diffs:
             msg = "build.lock divergence (L3 not claimable): " + "; ".join(diffs[:8])
             if strict_env:
-                from forge.forge_pipeline import ForgeError
+                from urna.pipes.buildflow import ForgeError
 
                 raise ForgeError(msg)
             rebuilt = ctx.out_dir / f"{spec.name}.build.lock.rebuild.json"

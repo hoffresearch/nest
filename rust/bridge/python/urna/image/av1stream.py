@@ -1,10 +1,10 @@
 """The av1 stream backend of the image corpus: one (or sharded) mp4 per corpus.
 
-Carved out of `forge/image_backends.py`, which keeps the dispatcher
+Carved out of `urna/image/orchestra.py`, which keeps the dispatcher
 (`build_media`), the per-image backends (control, avif, jxl) and the
 resume-path frames iterator. The stream is the only backend with an
 ordering permutation, so it lives here; the gop decision (`resolve_keyint`)
-sits next to the probe in `image_gop_probe.py`.
+sits next to the probe in `gopprober.py`.
 """
 
 from __future__ import annotations
@@ -13,10 +13,10 @@ from collections.abc import Iterator
 
 import numpy as np
 
-from . import image_media
-from .image_decode import decode_frames
-from .image_encode import INTER_KEYINT, encode_av1, provenance_sha256
-from .image_gop_probe import probe_gop, resolve_keyint
+from urna.image import mediabase
+from urna.image.decframes import decode_frames
+from urna.image.encstream import INTER_KEYINT, encode_av1, provenance_sha256
+from urna.image.gopprober import probe_gop, resolve_keyint
 
 
 def _av1_sharded(
@@ -46,7 +46,7 @@ def _av1_sharded(
     where inter pays (measured 2026-08-31: -29% on same-artwork reprints)
     while unique-image segments keep O(1) all-intra access.
     """
-    media_dir = image_media.media_dir_for(output_path)
+    media_dir = mediabase.media_dir_for(output_path)
     segments = []
     probes: list[dict] = []
     first: dict | None = None
@@ -145,7 +145,7 @@ def build_av1(
         keyint, gop_record = resolve_keyint(
             paths, canvas, crf, speed, pix_fmt, gop_policy, all_intra, tune, ordered
         )
-    media_dir = image_media.media_dir_for(output_path)
+    media_dir = mediabase.media_dir_for(output_path)
     if sharded:
         media = _av1_sharded(
             paths,

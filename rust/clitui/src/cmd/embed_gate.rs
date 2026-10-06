@@ -4,7 +4,7 @@
 //!
 //! Routing: a manifest whose `embedding_model` starts with the potion
 //! prefix keeps the offline potion script; any other model routes to
-//! `forge/embed_query_model.py`, the registry-backed embedder, passing
+//! `urna/embed/presetqry.py`, the registry-backed embedder, passing
 //! `--mrl-dim` when the manifest records a truncated default space
 //! (`full_dim` present).
 
@@ -32,24 +32,24 @@ pub struct EmbedderOutput {
 pub const PLACEHOLDER_MODEL_HASH: &str =
     "sha256:0000000000000000000000000000000000000000000000000000000000000000";
 
-/// Find the sentence-transformers embedder (`python/embed_query.py`, the
+/// Find the sentence-transformers embedder (`urna/embed/searchtxt.py`, the
 /// path `search-text` keeps as its default): repo layout, then the data
-/// roots, where the payload lays it down beside `forge/`.
+/// roots, where the payload lays it down beside the potion one.
 pub fn default_embedder_path() -> PathBuf {
-    installed_script_in(&["embed_query.py"])
+    installed_script("searchtxt.py")
 }
 
-/// Find the OFFLINE potion embedder (`python/forge/embed_query_potion.py`):
+/// Find the OFFLINE potion embedder (`urna/embed/potionqry.py`):
 /// repo layout, then the installed data dir, then `<exe>/../share` (the
 /// installer/tarball layouts, issue #75).
 pub fn default_potion_embedder_path() -> PathBuf {
-    installed_script("embed_query_potion.py")
+    installed_script("potionqry.py")
 }
 
-/// Find the registry-backed embedder (`python/forge/embed_query_model.py`),
+/// Find the registry-backed embedder (`urna/embed/presetqry.py`),
 /// same resolution ladder as the potion script.
 pub fn default_registry_embedder_path() -> PathBuf {
-    installed_script("embed_query_model.py")
+    installed_script("presetqry.py")
 }
 
 fn repo_script(rel: &Path) -> Option<PathBuf> {
@@ -77,7 +77,7 @@ fn repo_script(rel: &Path) -> Option<PathBuf> {
 pub(crate) fn exe_repo_root() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let repo = exe.parent()?.parent()?.parent()?;
-    if repo.join("python").is_dir() {
+    if repo.join(package()).is_dir() {
         Some(repo.to_path_buf())
     } else {
         None
@@ -85,25 +85,31 @@ pub(crate) fn exe_repo_root() -> Option<PathBuf> {
 }
 
 fn installed_script(name: &str) -> PathBuf {
-    installed_script_in(&["forge", name])
+    installed_script_in(&["embed", name])
+}
+
+/// The `urna` python package in a checkout (`rust/bridge/python/urna`).
+fn package() -> PathBuf {
+    ["rust", "bridge", "python", "urna"].iter().collect()
 }
 
 /// One resolution ladder for every shipped python script, `rel` being its
-/// path under `python/`: repo layout (`python/<rel>` walking up from cwd,
-/// then beside the exe), then `<root>/urna/<rel>` for every data root in
+/// path in the `urna` package: repo layout (`rust/bridge/python/urna/<rel>`
+/// walking up from cwd, then beside the exe), then the payload's
+/// `<root>/urna/python/urna/<rel>` for every data root in
 /// `paths::data_roots` (issue #75 layouts).
 pub(crate) fn installed_script_in(rel: &[&str]) -> PathBuf {
     let rel: PathBuf = rel.iter().collect();
-    if let Some(p) = repo_script(&Path::new("python").join(&rel)) {
+    if let Some(p) = repo_script(&package().join(&rel)) {
         return p;
     }
     for base in super::paths::data_roots() {
-        let c = base.join("urna").join(&rel);
+        let c = base.join("urna").join("python").join("urna").join(&rel);
         if c.exists() {
             return c;
         }
     }
-    Path::new("python").join(rel)
+    package().join(rel)
 }
 
 /// Spawn the embedder script and parse its one-line JSON payload.

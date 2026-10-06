@@ -1,7 +1,8 @@
 //! `ask`, `retrieve` and `search-text` find their python embedders outside a
-//! checkout: the payload lays `embed_query.py` down at `<data root>/urna/`
-//! and the registry embedder at `<data root>/urna/forge/`, and the one
-//! resolution ladder (`embed_gate::installed_script_in`) reaches both there.
+//! checkout: the payload lays the `urna` package down at
+//! `<data root>/urna/python/urna/`, `searchtxt.py` and the registry embedder
+//! in its `embed/`, and the one resolution ladder
+//! (`embed_gate::installed_script_in`) reaches both there.
 //! the binary is copied out of `target/` first, because a dev-built binary
 //! also resolves against its own checkout and would always find the repo's
 //! copy; the cwd is a temp dir, never the repo.
@@ -39,7 +40,7 @@ fn detached_binary(dir: &Path) -> PathBuf {
 /// `dir`; the interpreter is a path that does not exist, so the run stops
 /// right after the embedder is resolved and names it. returns stderr.
 fn run(bin: &Path, dir: &Path, cwd: &Path, verb: &str) -> String {
-    let fixture = repo().join("crates/format/tests/fixtures/golden_v1_minimal.urna");
+    let fixture = repo().join("rust/format/tests/fixtures/golden_v1_minimal.urna");
     let out = output(
         Command::new(bin)
             .args([verb, fixture.to_str().unwrap(), "q"])
@@ -54,13 +55,23 @@ fn run(bin: &Path, dir: &Path, cwd: &Path, verb: &str) -> String {
     String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
-/// The payload's two query entry points under `urna_home`, the layout
-/// `urna setup` lays down: `embed_query.py` at the top, the registry
-/// embedder in `forge/`.
-fn lay_down(urna_home: &Path) {
-    std::fs::create_dir_all(urna_home.join("forge")).unwrap();
-    for rel in ["embed_query.py", "forge/embed_query_model.py"] {
-        std::fs::copy(repo().join("python").join(rel), urna_home.join(rel)).unwrap();
+/// The checkout's `urna` package.
+fn package() -> PathBuf {
+    repo()
+        .join("rust")
+        .join("bridge")
+        .join("python")
+        .join("urna")
+}
+
+/// The package's two query entry points under `package_dir`: the payload
+/// lays them down at `<home>/python/urna/embed/`, a checkout keeps them at
+/// `rust/bridge/python/urna/embed/`.
+fn lay_down(package_dir: &Path) {
+    std::fs::create_dir_all(package_dir.join("embed")).unwrap();
+    for name in ["searchtxt.py", "presetqry.py"] {
+        let rel = Path::new("embed").join(name);
+        std::fs::copy(package().join(&rel), package_dir.join(&rel)).unwrap();
     }
 }
 
@@ -80,20 +91,29 @@ fn output(cmd: &mut Command) -> std::process::Output {
     cmd.output().unwrap()
 }
 
+/// The checkout's package, relative to the repository root.
+const PKG: &str = "rust/bridge/python/urna";
+
 fn tail(parts: &[&str]) -> String {
-    parts.iter().collect::<PathBuf>().display().to_string()
+    parts
+        .iter()
+        .flat_map(|p| p.split('/'))
+        .collect::<PathBuf>()
+        .display()
+        .to_string()
 }
 
 #[test]
 fn every_query_verb_finds_its_embedder_in_the_data_root() {
     let dir = scratch("data_root");
     let bin = detached_binary(&dir);
-    lay_down(&dir.join("data").join("urna"));
-    let home = dir.join("data").join("urna");
+    let embed = dir.join("data").join("urna").join("python").join("urna");
+    lay_down(&embed);
+    let embed = embed.join("embed");
     let cases = [
-        ("search-text", home.join("embed_query.py")),
-        ("ask", home.join("forge").join("embed_query_model.py")),
-        ("retrieve", home.join("forge").join("embed_query_model.py")),
+        ("search-text", embed.join("searchtxt.py")),
+        ("ask", embed.join("presetqry.py")),
+        ("retrieve", embed.join("presetqry.py")),
     ];
     for (verb, script) in cases {
         let err = run(&bin, &dir, &dir, verb);
@@ -112,12 +132,9 @@ fn without_a_payload_every_verb_names_the_missing_script() {
     let dir = scratch("missing");
     let bin = detached_binary(&dir);
     for (verb, script) in [
-        ("search-text", tail(&["python", "embed_query.py"])),
-        ("ask", tail(&["python", "forge", "embed_query_model.py"])),
-        (
-            "retrieve",
-            tail(&["python", "forge", "embed_query_model.py"]),
-        ),
+        ("search-text", tail(&[PKG, "embed", "searchtxt.py"])),
+        ("ask", tail(&[PKG, "embed", "presetqry.py"])),
+        ("retrieve", tail(&[PKG, "embed", "presetqry.py"])),
     ] {
         let err = run(&bin, &dir, &dir, verb);
         assert!(err.contains("embedder script not found"), "{verb}: {err}");
@@ -130,19 +147,16 @@ fn without_a_payload_every_verb_names_the_missing_script() {
 fn a_checkout_in_the_cwd_wins_over_the_data_root() {
     let dir = scratch("checkout");
     let bin = detached_binary(&dir);
-    lay_down(&dir.join("data").join("urna"));
+    lay_down(&dir.join("data").join("urna").join("python").join("urna"));
     let checkout = dir.join("checkout");
-    lay_down(&checkout.join("python"));
+    lay_down(&checkout.join(tail(&[PKG])));
     // the cwd comes back canonical (/private/var on macos): match the tail.
     for (verb, rel) in [
         (
             "search-text",
-            tail(&["checkout", "python", "embed_query.py"]),
+            tail(&["checkout", PKG, "embed", "searchtxt.py"]),
         ),
-        (
-            "ask",
-            tail(&["checkout", "python", "forge", "embed_query_model.py"]),
-        ),
+        ("ask", tail(&["checkout", PKG, "embed", "presetqry.py"])),
     ] {
         let err = run(&bin, &dir, &checkout, verb);
         assert!(
@@ -155,30 +169,32 @@ fn a_checkout_in_the_cwd_wins_over_the_data_root() {
 
 /// The files of a complete payload (mirrors `cmd::payload::REQUIRED`, which
 /// this binary-crate test cannot import; the payload test pins that list to
-/// what `script/embedpack.py` ships).
-const REQUIRED: [&str; 22] = [
+/// what `tool/tasks/embedpack.py` ships).
+const REQUIRED: [&str; 24] = [
     "VERSION",
-    "model_fingerprint.py",
-    "embed_query.py",
-    "forge/__init__.py",
-    "forge/catalog.json",
-    "forge/embed_default.py",
-    "forge/embed_image.py",
-    "forge/embed_potion.py",
-    "forge/embed_query_model.py",
-    "forge/embed_query_potion.py",
-    "forge/embed_st.py",
-    "forge/embed_st_worker.py",
-    "forge/install_model.py",
-    "forge/model_adapters.py",
-    "forge/model_registry.py",
-    "forge/models/potion-base-8M/README.md",
-    "forge/models/potion-base-8M/config.json",
-    "forge/models/potion-base-8M/model.safetensors",
-    "forge/models/potion-base-8M/modules.json",
-    "forge/models/potion-base-8M/special_tokens_map.json",
-    "forge/models/potion-base-8M/tokenizer.json",
-    "forge/models/potion-base-8M/tokenizer_config.json",
+    "python/urna/__init__.py",
+    "python/urna/embed/__init__.py",
+    "python/urna/embed/lexifloor.py",
+    "python/urna/embed/potionqry.py",
+    "python/urna/embed/potiontab.py",
+    "python/urna/embed/presetqry.py",
+    "python/urna/embed/searchtxt.py",
+    "python/urna/embed/stbackend.py",
+    "python/urna/embed/stprocess.py",
+    "python/urna/embed/visionemb.py",
+    "python/urna/model/__init__.py",
+    "python/urna/model/catalogue.json",
+    "python/urna/model/embedders.py",
+    "python/urna/model/installer.py",
+    "python/urna/model/modelhash.py",
+    "python/urna/model/presetmap.py",
+    "python/urna/model/potionb8m/README.md",
+    "python/urna/model/potionb8m/config.json",
+    "python/urna/model/potionb8m/model.safetensors",
+    "python/urna/model/potionb8m/modules.json",
+    "python/urna/model/potionb8m/special_tokens_map.json",
+    "python/urna/model/potionb8m/tokenizer.json",
+    "python/urna/model/potionb8m/tokenizer_config.json",
 ];
 
 /// A complete payload under `home`, built from the checkout's own files
@@ -191,7 +207,7 @@ fn lay_down_payload(home: &Path, drop: &str) {
             std::fs::write(&dst, format!("{}\n", env!("CARGO_PKG_VERSION"))).unwrap();
             continue;
         }
-        let src = repo().join("python").join(rel);
+        let src = repo().join("rust").join("bridge").join(rel);
         if std::fs::hard_link(&src, &dst).is_err() {
             std::fs::copy(&src, &dst).unwrap();
         }
@@ -212,8 +228,8 @@ fn a_payload_missing_a_module_names_the_files_and_setup_not_pip() {
     let dir = scratch("broken_payload");
     let bin = detached_binary(&dir);
     let home = dir.join("data").join("urna");
-    lay_down_payload(&home, "forge/model_registry.py");
-    let fixture = repo().join("crates/format/tests/fixtures/golden_v1_minimal.urna");
+    lay_down_payload(&home, "python/urna/model/presetmap.py");
+    let fixture = repo().join("rust/format/tests/fixtures/golden_v1_minimal.urna");
     let out = output(
         Command::new(&bin)
             .args(["ask", fixture.to_str().unwrap(), "q"])
@@ -230,7 +246,7 @@ fn a_payload_missing_a_module_names_the_files_and_setup_not_pip() {
         err.contains("payload") && err.contains("is incomplete"),
         "{err}"
     );
-    assert!(err.contains("forge/model_registry.py"), "{err}");
+    assert!(err.contains("python/urna/model/presetmap.py"), "{err}");
     assert!(err.contains(&home.display().to_string()), "{err}");
     assert!(err.contains("urna setup"), "{err}");
     assert!(!err.contains("pip install"), "{err}");

@@ -18,7 +18,7 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-from forge.forge_cache import atomic_write_bytes
+from urna.pipes.vectcache import atomic_write_bytes
 
 MANIFEST_SCHEMA_VERSION = 1
 _REQUIRED = (

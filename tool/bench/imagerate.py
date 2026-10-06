@@ -2,7 +2,7 @@
 
 Builds the letterbox-lossless control once, embeds the queries once, then
 builds and measures every requested variant in-process. Every number the
-sweep reports carries the full battery from `_image_metrics.py`: paired
+sweep reports carries the full battery from `imagestat.py`: paired
 bootstrap interval, sign test, per-class floor (CP-0.6: the mean is not the
 gate, the worst class is), cosine drift distribution, and ranking agreement.
 
@@ -14,7 +14,7 @@ DermLIP is not mrl-trained, so prefix truncation degrades more than on an
 mrl model; pca is the fallback lever if int4/int8 collapse.
 
 Usage:
-    python/tools/urna_image_sweep.py --input-dir data/demo/derm/ph2/images \
+    tool/bench/imagerate.py --input-dir data/demo/derm/ph2/images \
         --labels data/demo/derm/ph2/PH2_simple_dataset.csv --dataset ph2 \
         --out-dir tmp/sweep-ph2 --variants "av1-inter:30,35,40;avif:35"
 """
@@ -29,12 +29,10 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "rust", "bridge", "python"))
 
-from forge import embed_image, image_items  # noqa: E402
-from tools import urna_build_image_corpus as builder  # noqa: E402
-from tools import urna_image_eval as ev  # noqa: E402
-from tools._image_metrics import (  # noqa: E402
+import imageeval as ev  # noqa: E402
+from imagestat import (
     bootstrap_delta,
     class_floor_ok,
     cosine_drift,
@@ -42,6 +40,10 @@ from tools._image_metrics import (  # noqa: E402
     ranking_agreement,
     sign_test,
 )
+
+from urna.embed import visionemb
+from urna.entry import imgcorpus as builder  # noqa: E402
+from urna.image import discovery  # noqa: E402
 
 _DTYPES = {"f32": "float32", "f16": "float16", "int8": "int8", "int4": "int4"}
 
@@ -148,7 +150,7 @@ def run_sweep(args: argparse.Namespace, embedder) -> dict:
         "dataset_name": args.dataset,
         "embedder": embedder,
         "is_pdf": args.pdf,
-        "labels": image_items.load_labels(args.labels),
+        "labels": discovery.load_labels(args.labels),
         "sample": args.sample,
         "seed": args.seed,
         "width": args.width,
@@ -233,7 +235,7 @@ def main() -> int:
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
 
-    embedder = embed_image.ImageEmbedder(
+    embedder = visionemb.ImageEmbedder(
         model_id=args.model, pretrained=args.pretrained, device=args.device
     )
     report = run_sweep(args, embedder)

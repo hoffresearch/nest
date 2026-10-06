@@ -2,7 +2,7 @@
 and typed errors, the stats spaces block, inspect --json spaces[], and
 benchmark --space. Corpus built via urna.build spaces= (as test_spaceband).
 
-Run: .venv/bin/python tests/test_clispaces.py  (needs target/release/urna)
+Run: .venv/bin/python tool/tests/test_clispaces.py  (needs target/release/urna)
 """
 
 import json
@@ -11,8 +11,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "python"))
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "rust" / "bridge" / "python"))
 CLI = REPO / "target" / "release" / "urna"
 if not CLI.exists():
     raise SystemExit("build the CLI first: cargo build --release --workspace")

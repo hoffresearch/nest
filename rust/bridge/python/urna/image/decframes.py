@@ -19,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .image_media import _read_exact
+from urna.image.mediabase import _read_exact
 
 
 def decode_frames(

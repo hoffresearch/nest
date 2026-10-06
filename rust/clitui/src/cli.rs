@@ -18,14 +18,14 @@ const AFTER_HELP: &str = concat!(
     help_footer!(),
     "  setup   setup, tui  (the installer every channel ends in, and the terminal explorer)\n\n",
     "first run: urna setup (a bare `urna` on a terminal opens the explorer)\n",
-    "a corpus to try: demos/quickstart/ in the repo (urna build --spec demos/quickstart/corpus.toml)"
+    "a corpus to try: demo/starter/ in the repo (urna build --spec demo/starter/corpus.toml)"
 );
 
 #[cfg(not(feature = "tui"))]
 const AFTER_HELP: &str = concat!(
     help_footer!(),
     "\nthis build has no terminal ui (`setup`, `tui`): it was compiled without the `tui` feature\n",
-    "a corpus to try: demos/quickstart/ in the repo (urna build --spec demos/quickstart/corpus.toml)"
+    "a corpus to try: demo/starter/ in the repo (urna build --spec demo/starter/corpus.toml)"
 );
 
 /// Two products share one binary and one engine. The ENGINE verbs take a
@@ -98,8 +98,8 @@ pub enum Commands {
         query: String,
         #[arg(short, long, default_value = "10")]
         k: i32,
-        /// Override the embedder script. Default: `python/embed_query.py` in a
-        /// checkout, else the installed payload's `<data root>/urna/embed_query.py`.
+        /// Override the embedder script. Default: `rust/bridge/python/urna/embed/searchtxt.py` in a
+        /// checkout, else the installed payload's `<data root>/urna/searchtxt.py`.
         #[arg(long)]
         embedder: Option<PathBuf>,
         /// `ef` (HNSW) / candidates-per-path (hybrid). Default: 4*k or 64.
@@ -168,7 +168,7 @@ pub enum Commands {
         expect_model_hash: Option<String>,
     },
     /// [agent] Declarative corpus build from a TOML/JSON spec (launcher over
-    /// python/tools/urna_forge.py; the build is officially a python
+    /// rust/bridge/python/urna/entry/specbuild.py; the build is officially a python
     /// frontend). Streams the tool's output and propagates its exit code.
     #[command(display_order = 20)]
     Build {

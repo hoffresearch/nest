@@ -22,7 +22,7 @@ uncompressed control index to get the delta, which is the actual finding:
 what the codec cost.
 
 Usage:
-    python/tools/urna_image_eval.py --index tmp/ph2/ph2.urna \\
+    tool/bench/imageeval.py --index tmp/ph2/ph2.urna \\
         --baseline tmp/ph2-raw/ph2-raw.urna -k 1 5 10
 """
 
@@ -38,12 +38,13 @@ from tempfile import TemporaryDirectory
 
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "rust", "bridge", "python"))
 
-from _image_metrics import bootstrap_delta
+from imagestat import bootstrap_delta
 
 import urna
-from forge import embed_image, image_items
+from urna.embed import visionemb
+from urna.image import discovery
 
 __all__ = ["bootstrap_delta"]
 
@@ -52,7 +53,7 @@ def load_manifest(index_path: Path) -> dict:
     manifest_path = Path(index_path).with_suffix(".manifest.json")
     if not manifest_path.exists():
         raise FileNotFoundError(
-            f"{manifest_path} not found; it is written by urna_build_image_corpus.py "
+            f"{manifest_path} not found; it is written by imgcorpus.py "
             "and carries the ordinals and labels this harness measures against"
         )
     return json.loads(manifest_path.read_text())
@@ -155,7 +156,7 @@ def query_image(item: dict, manifest: dict, scratch: Path) -> Path:
         raise FileNotFoundError(f"source image gone: {source}")
     if not source.exists():
         raise FileNotFoundError(f"source pdf gone: {source}")
-    return image_items.render_page(source, item["page"], scratch)
+    return discovery.render_page(source, item["page"], scratch)
 
 
 def attach_vectors(embedder, queries: list[dict], items: list[dict], manifest: dict) -> None:
@@ -190,7 +191,7 @@ def main() -> int:
     manifest = load_manifest(args.index)
     items = manifest["items"]
     queries = pick_queries(items, args.queries, args.seed)
-    embedder = embed_image.ImageEmbedder(
+    embedder = visionemb.ImageEmbedder(
         model_id=args.model, pretrained=args.pretrained, device=args.device
     )
     attach_vectors(embedder, queries, items, manifest)

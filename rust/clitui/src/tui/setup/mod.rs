@@ -47,7 +47,7 @@ pub fn uninstall() -> anyhow::Result<i32> {
     let Some(home) = crate::cmd::paths::urna_home() else {
         anyhow::bail!("no data dir (set URNA_DATA_DIR)");
     };
-    for sub in ["forge", "venv"] {
+    for sub in [crate::cmd::payload::DIR, "venv"] {
         let p = home.join(sub);
         if p.exists() {
             std::fs::remove_dir_all(&p)?;

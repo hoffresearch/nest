@@ -50,7 +50,7 @@ impl Channel {
     }
 }
 
-/// The payload setup manages (`<home>/forge`), the release it came from,
+/// The payload setup manages (`<home>/python`), the release it came from,
 /// read from `<home>/VERSION` (`None` for a payload laid down before the
 /// stamp existed, 0.5.1 and older), and the required files it lacks.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -62,7 +62,7 @@ pub struct Payload {
 
 impl Payload {
     pub fn read(home: &Path) -> Option<Payload> {
-        if !home.join("forge").is_dir() {
+        if !home.join(crate::cmd::payload::DIR).is_dir() {
             return None;
         }
         let version = std::fs::read_to_string(home.join("VERSION"))
@@ -188,7 +188,7 @@ impl Scan {
             uv: which("uv"),
             curl: which("curl"),
             simd: urna_engine::simd::detect_backend().name(),
-            kit: paths::urna_home().and_then(|h| super::models::Kit::at(&h.join("forge"))),
+            kit: paths::urna_home().and_then(|h| super::models::Kit::in_home(&h)),
         }
     }
 

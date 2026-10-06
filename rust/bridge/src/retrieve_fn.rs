@@ -5,7 +5,7 @@
 //! attached so an agent gets a citeable answer in one call.
 //!
 //! the query is a pre-embedded vector (the python convenience
-//! `forge/retrieve.py` does the offline potion embed first, keeping
+//! `urna/reads/retrieval.py` does the offline potion embed first, keeping
 //! sentence-transformers off the path). routing is by what the file
 //! carries (`MmapUrnaFile::search_routed`): hybrid when a bm25 section is
 //! present and the caller passed `query_text`, hnsw when an hnsw section
@@ -72,7 +72,7 @@ pub fn retrieve(
     // used for `query`, reject a corpus built with a different model. A bare
     // query vector carries no model identity, so the runtime cannot gate
     // unconditionally the way the CLI does - the caller opts in by passing the
-    // hash (forge/retrieve.py does so by default). Without it, behaviour is
+    // hash (urna/reads/retrieval.py does so by default). Without it, behaviour is
     // unchanged, but a mismatch would silently return cosine-valid, wrong hits.
     if let Some(expected) = &expected_model_hash {
         let actual = rt.model_hash();
