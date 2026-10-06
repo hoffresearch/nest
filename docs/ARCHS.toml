@@ -3126,7 +3126,7 @@ links = [".github/workflows/tagverify.yml", ".github/workflows/gatecheck.yml", "
 [[inventory.distribution]]
 path = "tool/tasks/namecheck.py"
 kind = "python-source"
-purpose = "The naming convention of ADR-0003 against the tracked files (git ls-files): the length of each folder's children by the table in LEVELS, the names fixed by a tool, a channel or a project convention, the temporary script/ installer stubs, and the docs/TERMS.md lexicon (one meaning per abbreviation, every cited name in the tree); in fullcheck.sh and gatecheck.yml"
+purpose = "The naming convention of ADR-0003 against the tracked files (git ls-files): the length of each folder's children by the table in LEVELS, the names fixed by a tool, a channel or a project convention, each exempt only at its own path, the temporary script/ that holds only the two installer stubs, and the docs/TERMS.md lexicon (one meaning per abbreviation, every cited name in the tree); in fullcheck.sh and gatecheck.yml"
 links = ["docs/TERMS.md", "tool/tests/test_namecheck.py", ".github/workflows/gatecheck.yml", "tool/tasks/fullcheck.sh"]
 
 [[inventory.distribution]]

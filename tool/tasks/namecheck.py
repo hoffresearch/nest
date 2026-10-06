@@ -66,70 +66,23 @@ LEVELS = [
     Level(".github/workflows", "files", 9),
 ]
 
-# names fixed by a tool, a distribution channel or a project convention.
-EXCEPTIONS = {
+# names outside the rule, each held to the place where it is fixed: a name
+# is exempt only at the path its tool, channel or convention puts it, never
+# by its name alone. levels the table does not check need no entry here.
+EXCEPTIONS = [
     # tools
-    "Cargo.toml",
-    "Cargo.lock",
-    "build.rs",
-    "src",
-    "clippy.toml",
-    "rustfmt.toml",
-    "deny.toml",
-    "release.toml",
-    "pyproject.toml",
-    "Dockerfile",
-    "README.md",
-    "LICENSE",
-    "CHANGELOG",
-    "CITATION.cff",
-    "CODE_OF_CONDUCT.md",
-    "CONTRIBUTING.md",
-    "SECURITY.md",
-    "release.yml",
-    "pull_request_template.md",
-    "AGENTS.md",
-    "SKILL.md",
-    "__init__.py",
-    "_urna.so",
-    "python",
-    "urna",
-    "fuzz_targets",
-    ".gitkeep",
-    # project convention
-    "TEMPLATE.md",
-    "seeds",
-}
-# names fixed by a distribution channel, inside pkgs/ only.
-CHANNEL = {
-    "urna.nuspec",
-    "tools",
-    "chocolateyInstall.ps1",
-    "recipe.yaml",
-    "debian",
-    "control",
-    "rules",
-    "changelog",
-    "copyright",
-    "source",
-    "format",
-    "PKGBUILD",
-    "urna.spec",
-    "nfpm.yaml",
-    "package.nix",
-    "urna.json",
-    "HoffResearch.Urna.installer.yaml",
-    "HoffResearch.Urna.locale.en-US.yaml",
-    "HoffResearch.Urna.yaml",
-}
-# fixed paths: the upstream model's own file names, the ADR records.
-EXCEPTION_PATTERNS = [
-    re.compile(r"^rust/bridge/python/urna/model/potionb8m/"),
-    re.compile(r"^docs/adr/[a-z]+/\d{4}-[a-z0-9-]+\.md$"),
+    (re.compile(r"^rust/bridge/python/urna/[a-z]+/__init__\.py$"), "python package marker"),
+    (re.compile(r"^docs/(CHANGELOG|CODE_OF_CONDUCT\.md|CONTRIBUTING\.md|SECURITY\.md)$"), "GitHub"),
+    (re.compile(r"^\.github/pull_request_template\.md$"), "GitHub"),
+    (re.compile(r"^\.github/workflows/release\.yml$"), "cargo-dist"),
+    (re.compile(r"^\.devops/agent/skill/[a-z]+/SKILL\.md$"), "agent skills"),
+    (re.compile(r"^\.devops/agent/skill/[a-z]+/\.gitkeep$"), "git keeps an empty folder"),
+    (re.compile(r"^\.zed$"), "the Zed editor's project settings"),
 ]
-# temporary: the installer stubs the published pages still fetch. remove the
-# folder and this line in the first release after the move (#479).
-TEMPORARY = {"script"}
+# temporary: the installer stubs the published pages still fetch, and only
+# them. remove the folder and this entry in the first release after the
+# move (#479).
+TEMPORARY = {"script": {"installer.sh", "installer.ps1"}}
 
 
 def tracked(root: Path) -> list[str]:
@@ -166,10 +119,19 @@ def matches(pattern: str, folder: str) -> bool:
     return len(a) == len(b) and all(x in ("*", y) for x, y in zip(a, b, strict=True))
 
 
-def is_exception(path: str, name: str) -> bool:
-    if name in EXCEPTIONS or (path.startswith("pkgs/") and name in CHANNEL):
-        return True
-    return any(p.match(path) for p in EXCEPTION_PATTERNS)
+def is_exception(path: str) -> bool:
+    return any(pattern.match(path) for pattern, _ in EXCEPTIONS)
+
+
+def check_temporary(paths: list[str]) -> list[str]:
+    problems = []
+    for p in paths:
+        top, _, rest = p.partition("/")
+        allowed = TEMPORARY.get(top)
+        if allowed is not None and rest not in allowed:
+            names = " and ".join(sorted(allowed))
+            problems.append(f"{p}: {top}/ is temporary and holds only {names}")
+    return problems
 
 
 def check_lengths(paths: list[str]) -> list[str]:
@@ -187,7 +149,7 @@ def check_lengths(paths: list[str]) -> list[str]:
                 names = {d for d in dirs if not d.startswith(".")}
             for name in sorted(names):
                 path = f"{folder}/{name}" if folder else name
-                if is_exception(path, name) or (folder == "" and name in TEMPORARY):
+                if is_exception(path) or (folder == "" and name in TEMPORARY):
                     continue
                 size = measure(name, level.kind, level.prefix)
                 if size != level.length:
@@ -250,7 +212,7 @@ def check_lexicon(paths: list[str], text: str) -> list[str]:
 def main(root: Path = ROOT) -> int:
     paths = tracked(root)
     terms = root / TERMS
-    problems = check_lengths(paths)
+    problems = check_lengths(paths) + check_temporary(paths)
     if terms.is_file():
         problems += check_lexicon(paths, terms.read_text(encoding="utf-8"))
     else:

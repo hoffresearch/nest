@@ -76,10 +76,12 @@ Names outside the rule:
 
 | Kind | Names |
 | --- | --- |
-| Fixed by a tool | `Cargo.toml`, `Cargo.lock`, `build.rs`, `src/`, `clippy.toml`, `rustfmt.toml`, `deny.toml`, `release.toml`, `pyproject.toml`, `Dockerfile`, `README.md`, `LICENSE`, `CHANGELOG`, `CITATION.cff`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `SECURITY.md`, `release.yml` (cargo-dist), `pull_request_template.md`, `AGENTS.md`, `SKILL.md`, `__init__.py`, `_urna.so` (maturin `module-name`), `python/` (maturin `python-source`), `urna/` (the published `import urna`), `fuzz_targets/` (cargo-fuzz), `.github/workflows/` (GitHub Actions), `.gitkeep`, the files inside `potionb8m/` (the upstream model's names) |
+| Fixed by a tool | `.zed/` (the Zed editor's project settings), `Cargo.toml`, `Cargo.lock`, `build.rs`, `src/`, `clippy.toml`, `rustfmt.toml`, `deny.toml`, `release.toml`, `pyproject.toml`, `Dockerfile`, `README.md`, `LICENSE`, `CHANGELOG`, `CITATION.cff`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `SECURITY.md`, `release.yml` (cargo-dist), `pull_request_template.md`, `AGENTS.md`, `SKILL.md`, `__init__.py`, `_urna.so` (maturin `module-name`), `python/` (maturin `python-source`), `urna/` (the published `import urna`), `fuzz_targets/` (cargo-fuzz), `.github/workflows/` (GitHub Actions), `.gitkeep`, the files inside `potionb8m/` (the upstream model's names) |
 | Fixed by a distribution channel | `urna.nuspec`, `tools/chocolateyInstall.ps1`, `recipe.yaml`, `debian/` and its `control`, `rules`, `changelog`, `copyright`, `source/format`, `PKGBUILD`, `urna.spec`, `nfpm.yaml`, `package.nix`, `urna.json`, the three `HoffResearch.Urna.*.yaml` winget manifests |
 | Project convention | `docs/adr/TEMPLATE.md`, `docs/adr/README.md`, ADR records (`NNNN-slug.md`), `fuzz/seeds/` |
-| Temporary | `script/` at the root, holding only the two installer stubs the published pages still fetch; removed with its exception in the first release after the move |
+| Temporary | `script/` at the root, holding only `installer.sh` and `installer.ps1`, the stubs the published pages still fetch; removed with its exception in the first release after the move |
+
+An exception is a place, not a name: `namecheck.py` exempts a name only at the path its tool, channel or convention puts it (`SKILL.md` inside a skill, `release.yml` in `.github/workflows/`), and the same name anywhere else is held to the rule.
 
 `docs/TERMS.md` holds the abbreviation lexicon, with three rules: one abbreviation, one meaning; no synonym invented to fill characters, the project's vocabulary first; a new abbreviation enters `TERMS.md` in the pull request that creates the name.
 

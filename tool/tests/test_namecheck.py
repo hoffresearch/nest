@@ -10,8 +10,10 @@ from a small tree, one drift per case:
   length; a project doc in lowercase; an abbreviation listed twice; a
   lexicon entry citing a name that is not in the tree or does not contain it;
 - edge case: hyphens, underscores, extensions, the leading dot and the
-  `test_` prefix do not count; a name fixed by a tool or a channel is exempt
-  (a channel's name only inside pkgs/); untracked files are out of scope.
+  `test_` prefix do not count; a name fixed by a tool is exempt only at the
+  path its tool puts it (`SKILL.md` in a skill, `release.yml` in workflows),
+  never by name elsewhere; `script/` holds only the two installer stubs;
+  untracked files are out of scope.
 
 Run: python tool/tests/test_namecheck.py
 """
@@ -68,7 +70,7 @@ def problems(extra: dict[str, str] | None = None, drop: tuple[str, ...] = ()) ->
     files.update(extra or {})
     root = tree(files)
     paths = namecheck.tracked(root)
-    out = namecheck.check_lengths(paths)
+    out = namecheck.check_lengths(paths) + namecheck.check_temporary(paths)
     return out + namecheck.check_lexicon(paths, (root / "docs/TERMS.md").read_text())
 
 
@@ -114,10 +116,42 @@ def test_project_docs_are_uppercase():
 
 
 def test_exceptions_hold_only_where_they_belong():
-    assert problems({"rust/bridge/build.rs": "", "pkgs/linux/aur/PKGBUILD": ""}) == []
-    # a channel's fixed name is not an exception outside pkgs/.
-    found = problems({"tool/tasks/recipe.yaml": ""})
-    assert found == ["tool/tasks/recipe.yaml: 6 characters, files of tool/tasks/ have 9"], found
+    fixed = {
+        "rust/bridge/build.rs": "",
+        "pkgs/linux/aur/PKGBUILD": "",
+        "rust/bridge/python/urna/embed/__init__.py": "",
+        ".devops/agent/skill/afterwork/SKILL.md": "",
+        ".github/pull_request_template.md": "",
+        "docs/CHANGELOG": "",
+    }
+    assert problems(fixed) == [], problems(fixed)
+    # the same names anywhere else are held to the rule: an exception is a
+    # place, not a name.
+    found = problems(
+        {
+            "tool/tasks/recipe.yaml": "",
+            "tool/bench/__init__.py": "",
+            "tool/tasks/SKILL.md": "",
+            ".github/release.yml": "",
+        }
+    )
+    assert sorted(found) == [
+        ".github/release.yml: 7 characters, files of .github/ have 9",
+        "tool/bench/__init__.py: 4 characters, files of tool/bench/ have 9",
+        "tool/tasks/SKILL.md: 5 characters, files of tool/tasks/ have 9",
+        "tool/tasks/SKILL.md: files of tool/tasks/ are lowercase",
+        "tool/tasks/recipe.yaml: 6 characters, files of tool/tasks/ have 9",
+    ], found
+
+
+def test_script_holds_only_the_two_installer_stubs():
+    stubs = {"script/installer.sh": "", "script/installer.ps1": ""}
+    assert problems(stubs) == [], problems(stubs)
+    found = problems({**stubs, "script/fullcheck.sh": "", "script/tools/x.py": ""})
+    assert found == [
+        "script/fullcheck.sh: script/ is temporary and holds only installer.ps1 and installer.sh",
+        "script/tools/x.py: script/ is temporary and holds only installer.ps1 and installer.sh",
+    ], found
 
 
 def test_untracked_files_are_out_of_scope():
