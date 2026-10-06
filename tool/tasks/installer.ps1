@@ -86,6 +86,10 @@ try {
     Copy-Item $Exe.FullName (Join-Path $BinDir "urna.exe")
     # the payload is a .tar.gz; tar ships with windows 10 1803+.
     tar -xzf (Join-Path $Tmp $Payload) -C $DataDir
+    # the layout until 0.5.4, as `urna setup` removes it (unpack.rs LEGACY)
+    foreach ($Old in "forge", "embed_query.py", "model_fingerprint.py", "__pycache__") {
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $PayloadDir $Old)
+    }
 
     Write-Output "urna-install: installed $BinDir\urna.exe"
     Write-Output "urna-install: embedder payload at $PayloadDir"

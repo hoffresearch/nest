@@ -12,8 +12,7 @@ from a small tree, one drift per case:
 - edge case: hyphens, underscores, extensions, the leading dot and the
   `test_` prefix do not count; a name fixed by a tool is exempt only at the
   path its tool puts it (`SKILL.md` in a skill, `release.yml` in workflows),
-  never by name elsewhere; `script/` holds only the two installer stubs;
-  untracked files are out of scope.
+  never by name elsewhere; untracked files are out of scope.
 
 Run: python tool/tests/test_namecheck.py
 """
@@ -70,7 +69,7 @@ def problems(extra: dict[str, str] | None = None, drop: tuple[str, ...] = ()) ->
     files.update(extra or {})
     root = tree(files)
     paths = namecheck.tracked(root)
-    out = namecheck.check_lengths(paths) + namecheck.check_temporary(paths)
+    out = namecheck.check_lengths(paths)
     return out + namecheck.check_lexicon(paths, (root / "docs/TERMS.md").read_text())
 
 
@@ -141,16 +140,6 @@ def test_exceptions_hold_only_where_they_belong():
         "tool/tasks/SKILL.md: 5 characters, files of tool/tasks/ have 9",
         "tool/tasks/SKILL.md: files of tool/tasks/ are lowercase",
         "tool/tasks/recipe.yaml: 6 characters, files of tool/tasks/ have 9",
-    ], found
-
-
-def test_script_holds_only_the_two_installer_stubs():
-    stubs = {"script/installer.sh": "", "script/installer.ps1": ""}
-    assert problems(stubs) == [], problems(stubs)
-    found = problems({**stubs, "script/extra.sh": "", "script/tools/x.py": ""})
-    assert found == [
-        "script/extra.sh: script/ is temporary and holds only installer.ps1 and installer.sh",
-        "script/tools/x.py: script/ is temporary and holds only installer.ps1 and installer.sh",
     ], found
 
 

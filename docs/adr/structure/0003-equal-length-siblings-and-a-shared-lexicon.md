@@ -79,7 +79,6 @@ Names outside the rule:
 | Fixed by a tool | `.zed/` (the Zed editor's project settings), `Cargo.toml`, `Cargo.lock`, `build.rs`, `src/`, `clippy.toml`, `rustfmt.toml`, `deny.toml`, `release.toml`, `pyproject.toml`, `Dockerfile`, `README.md`, `LICENSE`, `CHANGELOG`, `CITATION.cff`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `SECURITY.md`, `release.yml` (cargo-dist), `pull_request_template.md`, `AGENTS.md`, `SKILL.md`, `__init__.py`, `_urna.so` (maturin `module-name`), `python/` (maturin `python-source`), `urna/` (the published `import urna`), `fuzz_targets/` (cargo-fuzz), `.github/workflows/` (GitHub Actions), `.gitkeep`, the files inside `potionb8m/` (the upstream model's names) |
 | Fixed by a distribution channel | `urna.nuspec`, `tools/chocolateyInstall.ps1`, `recipe.yaml`, `debian/` and its `control`, `rules`, `changelog`, `copyright`, `source/format`, `PKGBUILD`, `urna.spec`, `nfpm.yaml`, `package.nix`, `urna.json`, the three `HoffResearch.Urna.*.yaml` winget manifests |
 | Project convention | `docs/adr/TEMPLATE.md`, `docs/adr/README.md`, ADR records (`NNNN-slug.md`), `fuzz/seeds/` |
-| Temporary | `script/` at the root, holding only `installer.sh` and `installer.ps1`, the stubs the published pages still fetch; removed with its exception in the first release after the move |
 
 An exception is a place, not a name: `namecheck.py` exempts a name only at the path its tool, channel or convention puts it (`SKILL.md` inside a skill, `release.yml` in `.github/workflows/`), and the same name anywhere else is held to the rule.
 
@@ -102,15 +101,14 @@ An exception is a place, not a name: `namecheck.py` exempts a name only at the p
 
 ### Negative or accepted trade-offs
 
-- An existing install needs `urna setup` again: the payload moves from `<root>/urna/forge/` and the top-level modules to `<root>/urna/python/urna/`, and setup does not delete the old files.
+- An existing install needs `urna setup` again: the payload moves from `<root>/urna/forge/` and the top-level modules to `<root>/urna/python/urna/`; setup and the one-liner installers remove the old files.
 - The wheel's module paths follow the package at the next release: `urna.embed_potion` is `urna.embed.potiontab`, and the console script runs `urna.entry.clidriver`.
 - `import urna` succeeds without the extension; a missing `_urna` surfaces at the first `urna.open` or `urna.UrnaFile`, with the same message as before.
 - Abbreviations (`qry`, `emb`, `cmp`) have to be learned once; the lexicon is where they are.
-- The README, crates.io, PyPI and npm pages of 0.5.4 fetch `script/installer.sh` until the next release; the stubs there forward to `tool/tasks/`.
+- The README, crates.io, PyPI and npm pages of 0.5.4 print `script/installer.sh`, which answers 404 until the next release replaces those pages; `script/` left with this move, without forwarding stubs.
 
 ### Follow-up
 
-- Remove `script/` and its exception in `namecheck.py` in the first release after the move.
 - Decide the name of `docscheck` (check if it only verifies, sync if it writes, as `benchsync`) when its `SKILL.md` is written, inside the nine-character rule.
 - Fill the manifests of `pkgs/` (choco, conda, linux, nixos, scoop, wingt), in their own issue.
 

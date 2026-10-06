@@ -320,13 +320,24 @@ fn uninstall_removes_the_payload_and_keeps_the_binary() {
 
 /// The payload an install up to 0.5.4 laid down under `<data root>/urna`
 /// (layout until 0.5.4; remove with `unpack::LEGACY` in the release after next).
-const LEGACY: [&str; 3] = ["forge", "embed_query.py", "model_fingerprint.py"];
+const LEGACY: [&str; 4] = [
+    "forge",
+    "embed_query.py",
+    "model_fingerprint.py",
+    "__pycache__",
+];
 
 fn lay_down_legacy(home: &Path) {
     std::fs::create_dir_all(home.join("forge/models")).unwrap();
     std::fs::write(home.join("forge/potion.py"), b"0.5.4").unwrap();
     std::fs::write(home.join("embed_query.py"), b"0.5.4").unwrap();
     std::fs::write(home.join("model_fingerprint.py"), b"0.5.4").unwrap();
+    std::fs::create_dir_all(home.join("__pycache__")).unwrap();
+    std::fs::write(
+        home.join("__pycache__/embed_query.cpython-313.pyc"),
+        b"0.5.4",
+    )
+    .unwrap();
 }
 
 #[test]

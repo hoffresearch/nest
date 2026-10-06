@@ -79,10 +79,6 @@ EXCEPTIONS = [
     (re.compile(r"^\.devops/agent/skill/[a-z]+/\.gitkeep$"), "git keeps an empty folder"),
     (re.compile(r"^\.zed$"), "the Zed editor's project settings"),
 ]
-# temporary: the installer stubs the published pages still fetch, and only
-# them. remove the folder and this entry in the first release after the
-# move (#479).
-TEMPORARY = {"script": {"installer.sh", "installer.ps1"}}
 
 
 def tracked(root: Path) -> list[str]:
@@ -123,17 +119,6 @@ def is_exception(path: str) -> bool:
     return any(pattern.match(path) for pattern, _ in EXCEPTIONS)
 
 
-def check_temporary(paths: list[str]) -> list[str]:
-    problems = []
-    for p in paths:
-        top, _, rest = p.partition("/")
-        allowed = TEMPORARY.get(top)
-        if allowed is not None and rest not in allowed:
-            names = " and ".join(sorted(allowed))
-            problems.append(f"{p}: {top}/ is temporary and holds only {names}")
-    return problems
-
-
 def check_lengths(paths: list[str]) -> list[str]:
     tree = children(paths)
     problems = []
@@ -149,7 +134,7 @@ def check_lengths(paths: list[str]) -> list[str]:
                 names = {d for d in dirs if not d.startswith(".")}
             for name in sorted(names):
                 path = f"{folder}/{name}" if folder else name
-                if is_exception(path) or (folder == "" and name in TEMPORARY):
+                if is_exception(path):
                     continue
                 size = measure(name, level.kind, level.prefix)
                 if size != level.length:
@@ -212,7 +197,7 @@ def check_lexicon(paths: list[str], text: str) -> list[str]:
 def main(root: Path = ROOT) -> int:
     paths = tracked(root)
     terms = root / TERMS
-    problems = check_lengths(paths) + check_temporary(paths)
+    problems = check_lengths(paths)
     if terms.is_file():
         problems += check_lexicon(paths, terms.read_text(encoding="utf-8"))
     else:

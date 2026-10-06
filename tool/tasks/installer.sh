@@ -128,6 +128,9 @@ tar -xJf "$TMP/$ARCHIVE" -C "$TMP"
 cp "$TMP/urna-$TARGET/urna" "$BIN_DIR/urna"
 chmod +x "$BIN_DIR/urna"
 tar -xzf "$TMP/$PAYLOAD" -C "$DATA_DIR"
+# the layout until 0.5.4, as `urna setup` removes it (unpack.rs LEGACY)
+rm -rf "$PAYLOAD_DIR/forge" "$PAYLOAD_DIR/embed_query.py" \
+    "$PAYLOAD_DIR/model_fingerprint.py" "$PAYLOAD_DIR/__pycache__"
 
 say "urna-install: installed $BIN_DIR/urna"
 say "urna-install: embedder payload at $PAYLOAD_DIR"

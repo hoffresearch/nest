@@ -23,7 +23,13 @@ pub const TOP_LEVEL: [&str; 1] = ["VERSION"];
 /// an install of the new payload and `--uninstall` remove it, so an upgrade
 /// leaves no stale copy behind.
 // layout until 0.5.4; remove in the release after next
-pub const LEGACY: [&str; 3] = ["forge", "embed_query.py", "model_fingerprint.py"];
+// `__pycache__` holds the bytecode python wrote beside embed_query.py.
+pub const LEGACY: [&str; 4] = [
+    "forge",
+    "embed_query.py",
+    "model_fingerprint.py",
+    "__pycache__",
+];
 
 /// Removes the pre-0.5.5 payload from `home`; returns the paths it removed
 /// and the ones still there (a removal that failed, on permissions say).
