@@ -1,7 +1,7 @@
 project: urna
 audience: agentes de código e contribuidores humanos
 status: active
-last-updated: 2026-10-05
+last-updated: 2026-10-06
 domain: workflow
 description: >
   Catálogo de referências para a revisão final descrita no SKILL.md desta
@@ -78,7 +78,8 @@ groups:
       - path: release.toml
         when: mudar a configuração da preparação com cargo-release.
       - path: pyproject.toml
-        when: mudarem dependências de desenvolvimento, grupos Python ou configuração do Ruff.
+        when: mudarem dependências de desenvolvimento, grupos Python ou a configuração do Ruff, do pyright, do Rope ou do import-linter.
+        rule: os caminhos de pyright, Rope e import-linter seguem o sys.path de desenvolvimento e mudam junto com ele.
       - path: packs/pyproject.toml
         when: mudarem metadados, dependências, compatibilidade, entry point ou conteúdo da wheel.
       - path: deny.toml

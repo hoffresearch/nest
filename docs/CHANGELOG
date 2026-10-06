@@ -2,7 +2,7 @@
 project: urna
 audience: users and contributors
 status: active
-last-updated: 2026-10-05
+last-updated: 2026-10-06
 domain: release-history
 ---
 
@@ -20,6 +20,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - `factcheck`, an agent skill for reviewing the whole repository against verified facts: a fact sheet of current names and released state, the `specs.yaml` catalog split into groups, one read-only reviewer per group in parallel, each finding confirmed before it is fixed in the owning doc. It is the method that found, after the 0.5.4 release, what path sweeps could not: bare suite names, log prefixes, stale counts, a `.gitignore` rule hiding `python/tools/`. The afterwork skill points to it for repository-wide changes.
 - `releaseops`, an agent skill for a release from the version number to the proof in every channel: readiness and account checks (token scopes for a new crate, publisher and environment), a review of what each registry will show (crate and package descriptions, the rendered README, published names), `script/releasepr.sh`, the signed tag, a proof per channel by service, recovery without moving a published tag, and the docs brought to the released state. It records the 0.5.4 lessons: `fuzz/Cargo.lock` is outside the preparation, a renamed crate's old name stays published, and a pull request's head must be the pushed commit before its checks are trusted.
 - `benchsync`, an agent skill for the public benchmarks and the other external repositories that use urna, with their datasets: what changed since the version each one uses, the repository and dataset review, the fixes and a validation against the released version. `benches.yaml` is its catalog, with each repository's dataset, pins, the parts of urna it uses and the command that validates it from a clean clone.
+- Refactoring tools for Python moves, configured in `pyproject.toml`: `[tool.pyright]` checks only that imports resolve, with the dev `sys.path` (`python/`, `python/tools/`, `script/`) as extra paths; `[tool.rope]` gives Rope the same source folders so a module move rewrites the imports in `tests/` and `python/tools/`; `[tool.importlinter]` and the `lint` dependency group add a contract that `forge` never imports `python/tools`. CONTRIBUTING has the commands and the renameops skill runs them in its quick check.
 - `renameops`, an agent skill for renames and moves, from the #296 series: separate the folder name from the published name and ask which one changes, map every form a name takes (`\` paths in Windows steps, `../sibling` paths, bare names in suite labels and log prefixes, package names, registry URLs, generated files), one pull request per item from the updated `main`, `cargo fmt` and ruff after each change, the generators rerun, and the full gate once at the end with every check watched, not only the required one.
 
 ### Changed
