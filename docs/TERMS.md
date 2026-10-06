@@ -45,7 +45,7 @@ Three rules keep the lexicon useful:
 | `intro` | introduction | `demo/corpora/intro/` |
 | `lexi` | lexical | `lexifloor.py` |
 | `medic` | medical | `demo/corpora/medic/` |
-| `ops` | operations | `.devops/`, `.secops/`, `aiops/`, `renameops/` |
+| `ops` | operations | `.devops/`, `.secops/`, `aiops/` |
 | `osint` | open-source intelligence | `demo/corpora/osint/` |
 | `pd` | product and design (product and UX guidelines) | `.pdteam/` |
 | `pkgs` | packages, the distribution channels | `pkgs/` |

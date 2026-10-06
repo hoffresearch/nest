@@ -28,11 +28,6 @@ groups:
       - path: .devops/agent/skill/releasing/SKILL.md
         when: mudarem a preparação, a tag, os canais, as credenciais, as provas de publicação ou a recuperação de uma release.
         rule: manter os comandos alinhados ao checklist do mantenedor no USAGE, que guarda o detalhe de cada canal.
-      - path: .devops/agent/skill/renameops/SKILL.md
-        when: mudarem a convenção de nomes, as formas em que um nome aparece ou o fluxo de PR das renomeações.
-      - path: .devops/agent/skill/driveurna/
-        when: mudarem o build do CLI, os verbos do ciclo (build, ask, retrieve, cite, validate, doctor), o quickstart ou as teclas e abas do explorer.
-        rule: rodar o drive.sh de novo (smoke e tui) e manter só comandos que funcionaram.
 
   - name: instruções dos agentes
     files:
