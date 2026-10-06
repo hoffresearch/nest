@@ -157,6 +157,20 @@ step "python tool/tests/test_embedpack.py"
 "$PY" tool/tests/test_embedpack.py
 ok "embedpack: embedder payload (3 cases)"
 
+# the st_multimodal model_hash of a synthetic snapshot is the value the code
+# had before the move to the urna package: the fingerprint's key names are
+# data hashed into model_hash. needs numpy only; the model cases skip
+# without the local WeMM-2B snapshot.
+step "python tool/tests/test_stbackend.py"
+"$PY" tool/tests/test_stbackend.py
+ok "stbackend: pinned model_hash"
+
+# importing the search-text embedder, the model registry and the image path
+# forces the hub offline unless URNA_ALLOW_DOWNLOAD=1.
+step "python tool/tests/test_nonetwork.py"
+"$PY" tool/tests/test_nonetwork.py
+ok "nonetwork: offline by default and the opt-in (6 cases)"
+
 # the model catalog setup offers is the registry's validated presets, with a
 # reason for every preset it leaves out.
 step "python tool/tests/test_catalogue.py"

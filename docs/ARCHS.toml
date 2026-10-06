@@ -2644,7 +2644,7 @@ links = ["rust/bridge/python/urna/embed/potiontab.py"]
 [[inventory.data_docs_python_script_tests]]
 path = "tool/tests/test_stbackend.py"
 kind = "python-test"
-purpose = "Manual ST-backend self-test against the local wemm-2b snapshot: worker isolation, dim/norm contracts, model_hash stability, cross-modal sanity; skips without the deps or the snapshot, not run by fullcheck.sh (loads a 2b model)"
+purpose = "ST-backend self-test: the model_hash of a synthetic snapshot pinned to its pre-move value (the fingerprint key names are hashed; numpy only, always runs, in fullcheck.sh and gatecheck.yml), then against the local wemm-2b snapshot worker isolation, dim/norm contracts, model_hash stability and cross-modal sanity, which skip without the deps or the snapshot"
 links = [
     "rust/bridge/python/urna/embed/stbackend.py",
     "rust/bridge/python/urna/embed/stprocess.py",
@@ -2941,7 +2941,7 @@ links = [
 [[inventory.data_docs_python_script_tests]]
 path = "tool/tests/test_nonetwork.py"
 kind = "python-test"
-purpose = "The offline guard: blocked sockets stay blocked across build and query paths"
+purpose = "The offline guard: importing the search-text embedder, the model registry and the image path (visionemb, imgcorpus, imgsearch) forces HF_HUB_OFFLINE and its siblings unless URNA_ALLOW_DOWNLOAD=1; in fullcheck.sh and gatecheck.yml"
 links = ["rust/bridge/python/urna/__init__.py"]
 
 [[inventory.data_docs_python_script_tests]]

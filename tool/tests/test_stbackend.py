@@ -3,7 +3,8 @@ subprocess isolation (the jina+wemm dynamic-module collision is the reason
 the adapter owns a worker), dim/norm contracts, model_hash stability across
 constructions, and cross-modal sanity. Skips cleanly when the deps or the
 local snapshot are absent, except the pinned model_hash of a synthetic
-snapshot, which always runs. NOT run by fullcheck.sh (loads a 2B model).
+snapshot, which always runs. fullcheck.sh and gatecheck.yml run this file:
+the pinned case needs numpy only, and the model cases skip there.
 
 Run: .venv/bin/python tool/tests/test_stbackend.py
 """
