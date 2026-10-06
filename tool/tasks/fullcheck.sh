@@ -76,6 +76,9 @@ step "rebuild rust/bridge/python/urna/_urna.so"
 # published wheel the same way.
 PYO3_PYTHON="$PY" cargo build --release -p urna-bridge \
   --features pyo3/extension-module >/dev/null
+# a new file, not a copy over the old one: macOS keeps the old code
+# signature for the inode and kills (SIGKILL) whatever loads the new bytes.
+rm -f rust/bridge/python/urna/_urna.so
 case "$(uname)" in
   Darwin) cp target/release/lib_urna.dylib rust/bridge/python/urna/_urna.so ;;
   Linux)  cp target/release/lib_urna.so    rust/bridge/python/urna/_urna.so ;;
@@ -159,10 +162,10 @@ ok "embedpack: embedder payload (3 cases)"
 
 # the st_multimodal model_hash of a synthetic snapshot is the value the code
 # had before the move to the urna package: the fingerprint's key names are
-# data hashed into model_hash. needs numpy only; the model cases skip
-# without the local WeMM-2B snapshot.
-step "python tool/tests/test_stbackend.py"
-"$PY" tool/tests/test_stbackend.py
+# data hashed into model_hash. needs numpy only; --models none keeps the
+# model cases out, so the gate never loads a model (#488).
+step "python tool/tests/test_stbackend.py --models none"
+"$PY" tool/tests/test_stbackend.py --models none
 ok "stbackend: pinned model_hash"
 
 # importing the search-text embedder, the model registry and the image path
