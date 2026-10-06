@@ -4,7 +4,7 @@ description: renomear ou mover pastas, crates, pacotes, scripts, workflows e tes
 project: urna
 audience: agentes de código e contribuidores humanos
 status: active
-last-updated: 2026-10-05
+last-updated: 2026-10-06
 domain: workflow
 ---
 
@@ -42,7 +42,7 @@ Mova com `git mv` e substitua com regras que respeitem as exceções: um caminho
 - regenere o que é gerado: `dist generate` e `python script/rehearsal.py generate`;
 - repita a busca pelo nome antigo em todas as formas do passo 2;
 - confira que nenhuma pasta antiga sobrou com arquivos ignorados, como um `target/`;
-- rode uma checagem rápida do que a troca toca: `cargo check` ou `cargo metadata`, os geradores com `--check`, as suítes que citam o caminho.
+- rode uma checagem rápida do que a troca toca: `cargo check` ou `cargo metadata`, os geradores com `--check`, as suítes que citam o caminho e, num módulo Python, `pyright` e `lint-imports` (comandos na seção Naming do CONTRIBUTING).
 
 ## 5. Valide a série e registre
 
