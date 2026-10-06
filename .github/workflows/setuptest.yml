@@ -77,7 +77,7 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           # the installed binary is the tagged version, exactly.
           test "$(urna --version)" = "urna ${TAG#v}"
-          urna validate "$GITHUB_WORKSPACE/crates/format/tests/fixtures/golden_v1_minimal.urna"
+          urna validate "$GITHUB_WORKSPACE/rust/format/tests/fixtures/golden_v1_minimal.urna"
           urna doctor
 
       - name: validate the golden fixture (windows)
@@ -94,7 +94,7 @@ jobs:
           $expected = "urna $($env:TAG.TrimStart('v'))"
           $shown = (urna --version | Out-String).Trim()
           if ($LASTEXITCODE -ne 0 -or $shown -ne $expected) { Write-Error "urna --version: '$shown' (exit $LASTEXITCODE), expected '$expected'"; exit 1 }
-          urna validate "$env:GITHUB_WORKSPACE\crates\format\tests\fixtures\golden_v1_minimal.urna"
+          urna validate "$env:GITHUB_WORKSPACE\rust\format\tests\fixtures\golden_v1_minimal.urna"
           if ($LASTEXITCODE -ne 0) { Write-Error "urna validate exited $LASTEXITCODE"; exit $LASTEXITCODE }
           urna doctor
           if ($LASTEXITCODE -ne 0) { Write-Error "urna doctor exited $LASTEXITCODE"; exit $LASTEXITCODE }
@@ -202,7 +202,7 @@ jobs:
         working-directory: ${{ runner.temp }}
         run: |
           urna doctor
-          urna validate "$GITHUB_WORKSPACE/crates/format/tests/fixtures/golden_v1_minimal.urna"
+          urna validate "$GITHUB_WORKSPACE/rust/format/tests/fixtures/golden_v1_minimal.urna"
       # the released payload carries the model catalog: a model it leaves out
       # is refused with its reason (exit 14), with nothing downloaded.
       - name: the payload carries the model catalog

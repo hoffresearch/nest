@@ -153,10 +153,10 @@ groups:
         when: entrar um codec novo (um braço) ou um achado do fuzz for corrigido.
       - path: fuzz/seeds/
         when: um achado do fuzz for corrigido (um regress-*.bin ao lado do teste negativo).
-      - path: tests/
+      - path: tool/tests/
         when: mudarem a API Python, o builder, o forge ou um script de release.
       - path: rust/bridge/python/urna/
-        when: mudar um módulo do forge (seu test_*.py ao lado).
+        when: mudar um módulo do pacote urna (o seu teste em tool/tests/).
 
   - name: github
     files:

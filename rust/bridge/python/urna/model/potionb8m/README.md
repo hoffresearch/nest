@@ -2,14 +2,14 @@
 project: urna
 audience: contributors
 status: active
-last-updated: 2026-06-08
+last-updated: 2026-10-06
 domain: models
 ---
 
 # vendored model: potion-base-8M
 
 a vendored, offline model2vec/potion static embedding table. it is the SEMANTIC
-default embedder for forge (python/forge/embed_potion.py): token rows already
+default embedder for forge (urna/embed/potiontab.py): token rows already
 carry distilled meaning, so synonyms land close with no torch, no model
 download, and no network at runtime.
 
@@ -40,7 +40,7 @@ gather the token rows -> mean pool -> l2 normalize.
 base=https://huggingface.co/minishlab/potion-base-8M/resolve/main
 for f in model.safetensors tokenizer.json config.json modules.json \
          tokenizer_config.json special_tokens_map.json; do
-  curl -sSL "$base/$f" -o "python/forge/models/potion-base-8M/$f"
+  curl -sSL "$base/$f" -o "rust/bridge/python/urna/model/potionb8m/$f"
 done
 ```
 

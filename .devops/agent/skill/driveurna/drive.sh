@@ -22,7 +22,7 @@ set -eu
 TARGET="${CARGO_TARGET_DIR:-target}"
 U="${URNA_BIN:-$TARGET/release/urna}"
 SPEC=demo/starter/corpus.toml
-F="${URNA_FILE:-demos/quickstart/out/quickstart.urna}"
+F="${URNA_FILE:-demo/starter/out/quickstart.urna}"
 tmp="${TMPDIR:-/tmp}"
 SHOTS="${SHOTS:-${tmp%/}/urna-shots}"
 S="${URNA_SESSION:-urna}"
