@@ -25,14 +25,17 @@ pub const TOP_LEVEL: [&str; 1] = ["VERSION"];
 // layout until 0.5.4; remove in the release after next
 pub const LEGACY: [&str; 3] = ["forge", "embed_query.py", "model_fingerprint.py"];
 
-/// Removes the pre-0.5.5 payload from `home`; returns the paths it removed.
-pub fn remove_legacy(home: &Path) -> Vec<PathBuf> {
+/// Removes the pre-0.5.5 payload from `home`; returns the paths it removed
+/// and the ones still there (a removal that failed, on permissions say).
+pub fn remove_legacy(home: &Path) -> (Vec<PathBuf>, Vec<PathBuf>) {
     LEGACY
         .iter()
         .map(|n| home.join(n))
         .filter(|p| p.exists())
-        .inspect(|p| remove(p))
-        .collect()
+        .partition(|p| {
+            remove(p);
+            !p.exists()
+        })
 }
 
 use crate::cmd::payload::{DIR, PACKAGE, missing};

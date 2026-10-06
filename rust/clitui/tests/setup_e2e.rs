@@ -366,6 +366,29 @@ fn uninstall_removes_the_old_layout_too() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn uninstall_names_an_old_layout_it_could_not_remove() {
+    use std::os::unix::fs::PermissionsExt;
+    let d = scratch("legacy_locked");
+    let home = d.join("data/urna");
+    lay_down_legacy(&home);
+    // a home the user cannot write: nothing in it can be removed.
+    std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let out = urna(&d, &d, &["setup", "--uninstall"]);
+    std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let all = format!("{}{}", text(&out), String::from_utf8_lossy(&out.stderr));
+    assert_ne!(out.status.code(), Some(0), "{all}");
+    assert!(all.contains("could not remove"), "{all}");
+    assert!(
+        !all.contains("removed "),
+        "reported a removal that failed: {all}"
+    );
+    for name in LEGACY {
+        assert!(home.join(name).exists(), "{name}: {all}");
+    }
+}
+
 #[test]
 fn a_bare_urna_without_a_terminal_prints_help_and_exits_2() {
     let d = scratch("bare");

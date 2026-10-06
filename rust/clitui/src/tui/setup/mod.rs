@@ -61,8 +61,13 @@ pub fn uninstall() -> anyhow::Result<i32> {
             println!("removed {}", p.display());
         }
     }
-    for p in unpack::remove_legacy(&home) {
+    let (removed, kept) = unpack::remove_legacy(&home);
+    for p in removed {
         println!("removed {}", p.display());
+    }
+    if !kept.is_empty() {
+        let kept: Vec<String> = kept.iter().map(|p| p.display().to_string()).collect();
+        anyhow::bail!("could not remove {}", kept.join(", "));
     }
     println!(
         "urna setup: uninstalled the payload and the env; the binary stays with its package manager"
