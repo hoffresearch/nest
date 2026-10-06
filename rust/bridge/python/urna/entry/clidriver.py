@@ -18,9 +18,11 @@ import json
 import os
 import sys
 
-# the folder that holds urna/ (the dev layout)
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+# run as a file (the dev layout), the folder that holds urna/ goes first;
+# as the wheel's console script the package is already importable, and
+# ../.. would be site-packages itself.
+if not __package__:
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 import urna  # noqa: E402
 
 

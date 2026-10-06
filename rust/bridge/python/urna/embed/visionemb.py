@@ -34,6 +34,7 @@ import numpy as np
 if os.environ.get("URNA_ALLOW_DOWNLOAD") != "1":
     for _k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
         os.environ.setdefault(_k, "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".tif")
 

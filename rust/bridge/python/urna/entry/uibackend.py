@@ -15,7 +15,10 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # holds urna/
+# run as a file (rust/bridge/python/ or the payload python/), the folder that
+# holds urna/ goes first; imported as a module, the package is already there.
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from urna import _urna  # noqa: E402
 from urna.pipes.manifests import frame_resolver, manifest_items  # noqa: E402

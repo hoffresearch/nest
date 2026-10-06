@@ -33,9 +33,11 @@ from typing import TYPE_CHECKING
 # import before the move: no hub round-trip unless the caller opts in. set
 # here because every model load goes through the registry, and importing
 # urna.embed no longer loads potiontab (which sets the same flags).
+# tokenizers parallelism stays off, as potiontab sets it, whatever the opt-in.
 if os.environ.get("URNA_ALLOW_DOWNLOAD") != "1":
     for _k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
         os.environ.setdefault(_k, "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 if TYPE_CHECKING:
     import numpy as np

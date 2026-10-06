@@ -40,7 +40,10 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1]))  # holds urna/
+# run as a file (rust/bridge/python/ or the payload python/), the folder that
+# holds urna/ goes first; imported as a module, the package is already there.
+if not __package__:
+    sys.path.insert(0, str(HERE.parents[1]))
 
 CATALOG = HERE / "catalogue.json"
 

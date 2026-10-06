@@ -23,9 +23,10 @@ from __future__ import annotations
 import os
 import sys
 
-# the folder that holds urna/ (rust/bridge/python/ or the payload python/)
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+# run as a file (rust/bridge/python/ or the payload python/), the folder that
+# holds urna/ goes first; imported as a module, the package is already there.
+if not __package__:
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import urna  # noqa: E402
 from urna.embed.potiontab import potion_embedder  # noqa: E402

@@ -47,9 +47,10 @@ if os.environ.get("URNA_ALLOW_DOWNLOAD") != "1":
     for _k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
         os.environ.setdefault(_k, "1")
 
-# the folder that holds urna/ (rust/bridge/python/ or the payload python/)
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+# run as a file (rust/bridge/python/ or the payload python/), the folder that
+# holds urna/ goes first; imported as a module, the package is already there.
+if not __package__:
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from urna.model.modelhash import (
     compute_model_fingerprint,
     fingerprint_to_model_hash,

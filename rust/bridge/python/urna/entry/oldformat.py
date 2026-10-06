@@ -33,9 +33,10 @@ if os.environ.get("URNA_ALLOW_DOWNLOAD") != "1":
 import numpy as np
 import zstandard as zstd
 
-# the folder that holds urna/ (rust/bridge/python/ or the payload python/)
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+# run as a file (rust/bridge/python/ or the payload python/), the folder that
+# holds urna/ goes first; imported as a module, the package is already there.
+if not __package__:
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 import urna
 from urna.model.modelhash import (
     PLACEHOLDER_HASH,

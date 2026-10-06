@@ -20,7 +20,10 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))  # holds urna/
+# run as a file (rust/bridge/python/ or the payload python/), the folder that
+# holds urna/ goes first; imported as a module, the package is already there.
+if not __package__:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from urna.embed import visionemb
 from urna.image import discovery  # noqa: E402
