@@ -1,0 +1,18 @@
+{
+  "file_scan_exclusions": [
+    "**/.git",
+    "**/.svn",
+    "**/.hg",
+    "**/.jj",
+    "**/CVS",
+    "**/.DS_Store",
+    "**/Thumbs.db",
+    "**/.classpath",
+    "**/.settings",
+    ".bench-competitors",
+    "target",
+    ".venv",
+    ".__pycache__",
+    "TMP"
+  ]
+}
