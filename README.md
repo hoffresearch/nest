@@ -290,7 +290,7 @@ The profile names are the forge's (`[media] profile = "..."`, usage section 14).
 - [fakenews-ptbr-urna-benchmark](https://github.com/brennercruvinel/fakenews-ptbr-urna-benchmark) and [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark): the text and image benchmarks, with their files on Hugging Face
 - [docs/SECURITY.md](https://github.com/hoffresearch/urna/blob/main/docs/SECURITY.md): reporting, hardening, data governance
 - [docs/CHANGELOG](https://github.com/hoffresearch/urna/blob/main/docs/CHANGELOG): releases with measured numbers
-- [docs/ARCHS.toml](https://github.com/hoffresearch/urna/blob/main/docs/ARCHS.toml): the architecture map
+- [docs/ATLAS.toml](https://github.com/hoffresearch/urna/blob/main/docs/ATLAS.toml): the architecture map
 - [docs/adr](https://github.com/hoffresearch/urna/blob/main/docs/adr/README.md): architecture decision records, by category
 
 The crates are `urna-format` (the container), `urna-engine` (search), `urna` (the binary) and `urna-bridge` (the PyO3 bridge behind the Python package).

@@ -25,7 +25,6 @@ Three rules keep the lexicon useful:
 | `adr` | architecture decision record | `docs/adr/` |
 | `ai` | artificial intelligence | `aiops/` |
 | `api` | application programming interface | `test_pythonapi.py` |
-| `archs` | architecture | `ARCHS.toml` |
 | `b8m` | base-8M, the size of the potion model (`minishlab/potion-base-8M`) | `potionb8m/` |
 | `bench` | benchmark | `tool/bench/`, `BENCH.md`, `benchgate.py` |
 | `chan` | distribution channel | `chanprobe.py` |
@@ -35,6 +34,7 @@ Three rules keep the lexicon useful:
 | `crf` | constant rate factor, the video encoder's quality knob | `crfpicker.py` |
 | `dbs` | databases | `vectordbs.py` |
 | `dec` | decode | `decframes.py` |
+| `dev` | development | `.devops/` |
 | `docs` | documentation | `docs/` |
 | `emb` | embedding | `visionemb.py` |
 | `enc` | encode | `encstills.py`, `encstream.py` |
@@ -44,9 +44,8 @@ Three rules keep the lexicon useful:
 | `intro` | introduction | `demo/corpora/intro/` |
 | `lexi` | lexical | `lexifloor.py` |
 | `medic` | medical | `demo/corpora/medic/` |
-| `ops` | operations | `.secops/`, `aiops/` |
+| `ops` | operations | `.devops/`, `.secops/`, `aiops/` |
 | `osint` | open-source intelligence | `demo/corpora/osint/` |
-| `pd` | product and design (product and UX guidelines) | `.pdteam/` |
 | `pkgs` | packages, the distribution channels | `pkgs/` |
 | `pr` | pull request | `releasepr.sh` |
 | `prep` | prepare | `buildprep.yml`, `wheelprep.py` |

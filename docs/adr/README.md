@@ -8,7 +8,7 @@ domain: decision-records
 
 # Architecture decision records
 
-An ADR records an architecture decision, or a lesson that must stay as reference, with its context and trade-offs. Operational lessons that only change how something is used belong in the doc that owns the topic (`docs/USAGE.md`, `docs/CONTRIBUTING.md`), not here. Current architecture lives in `docs/ARCHS.toml`; change history lives in `docs/CHANGELOG`.
+An ADR records an architecture decision, or a lesson that must stay as reference, with its context and trade-offs. Operational lessons that only change how something is used belong in the doc that owns the topic (`docs/USAGE.md`, `docs/CONTRIBUTING.md`), not here. Current architecture lives in `docs/ATLAS.toml`; change history lives in `docs/CHANGELOG`.
 
 ## Writing one
 

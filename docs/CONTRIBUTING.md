@@ -8,7 +8,7 @@ domain: contributing
 
 # Contributing
 
-`urna` is maintained by [Hoff Research](https://hoffresearch.com). Author: Brenner Cruvinel ([brenner@hoffresearch.com](mailto:brenner@hoffresearch.com)). All contributions are welcome. Contributors and AI coding agents start from `.devops/agent/AGENTS.md`.
+`urna` is maintained by [Hoff Research](https://hoffresearch.com). Author: Brenner Cruvinel ([brenner@hoffresearch.com](mailto:brenner@hoffresearch.com)). All contributions are welcome.
 
 ## How to contribute
 
@@ -16,7 +16,7 @@ domain: contributing
 2. Branch from `main`: `git checkout -b feature/short-description origin/main`.
 3. Keep each PR focused on one concern. Small is better.
 4. Validate the behavior the change affects. Reuse existing tests and add cases for new guarantees or regressions. Use real artifacts for file and installation behavior, and controlled service responses for failure and retry cases.
-5. If the change alters architecture, module boundaries, data flow, or doc locations, update `docs/ARCHS.toml` in the same PR. Keep it concise and pragmatic. Do not add a separate human architecture doc; `ARCHS.toml` is the machine map, the human reference, and the mermaid diagram all in one file. Record an architecture decision, or a lesson that must stay as reference, as an ADR under `docs/adr/` (layout and categories in `docs/adr/README.md`).
+5. If the change alters architecture, module boundaries, data flow, or doc locations, update `docs/ATLAS.toml` in the same PR. Keep it concise and pragmatic. Do not add a separate human architecture doc; `ATLAS.toml` is the machine map, the human reference, and the mermaid diagram all in one file. Record an architecture decision, or a lesson that must stay as reference, as an ADR under `docs/adr/` (layout and categories in `docs/adr/README.md`).
 6. Run checks appropriate to the change and the required CI checks. Use `./tool/tasks/fullcheck.sh` for format, runtime, performance or broad integration changes; it rebuilds the extension, runs Rust and Python tests, lint and the corpus regression measurements. Focused script or documentation changes can use targeted checks, with their scope explained in the PR; editorial changes do not repeat corpus measurements. `.github/workflows/gatecheck.yml` covers the Rust side on Linux, macOS and Windows plus checks the local gate does not run (cargo-deny, cargo-semver-checks, the engine-only Clippy, the benches compiled, a cargo-fuzz smoke, the embedder payload staged under Python 3.10). Its Python job runs ruff, the model catalog check and the release suites that need no built extension; the suites that load `_urna.so` run only in the local gate, so run them locally. A pull request that touches a release input also runs the release rehearsal (`rehearsal.yml`), a required check.
 7. Commit with a clear message in plain English. No conventional commits prefix.
 8. Start from an issue: one change is one issue; several independent items are an epic with one sub-issue each. Give the issue and the PR the right label. Open a PR against `main` whose body starts with `Closes #<issue>` and lists its checks as checkboxes, then ask for a review. Only the maintainer merges, with a merge commit, so every commit of the pull request stays in `main`'s history. `main` is guarded by one ruleset (`opensource`): one approving review, verified (signed) commits, a branch up to date with `main`, resolved review conversations and a passing `rehearsal` check (the release rehearsal, dispensed when the change touches no release input); admins can bypass it. Sign your commits (`git config commit.gpgsign true` with an SSH or GPG key registered on GitHub). A pull request that builds on another opens from the updated `main` after that one merges.
@@ -52,7 +52,7 @@ These conventions are not aesthetic preferences. They exist to keep the repo rea
 ### Naming
 
 - Siblings of the same kind have the same length ([ADR-0003](adr/structure/0003-equal-length-siblings-and-a-shared-lexicon.md)). The ADR's table says, for each folder, which children are checked and how long they are: the root folders are four letters (`data`, `demo`, `docs`, `fuzz`, `pkgs`, `rust`, `tool`), the crates six (`rust/engine`, `rust/clitui`), the subpackages of `urna` five (`embed`, `model`) and their modules nine (`potiontab.py`), the files of `tool/bench/` and `tool/tasks/`, the workflows and the tests after `test_` nine (`benchgate.py`, `gatecheck.yml`, `test_hashguard.py`). A length counts letters and digits only: no hyphen, underscore, extension, leading dot or `test_` prefix.
-- Folders, modules, scripts and helper files are lowercase; the project docs in `docs/` are uppercase (`docs/USAGE.md`, `docs/ARCHS.toml`, `docs/TERMS.md`), like `README.md` and `LICENSE`.
+- Folders, modules, scripts and helper files are lowercase; the project docs in `docs/` are uppercase (`docs/USAGE.md`, `docs/ATLAS.toml`, `docs/TERMS.md`), like `README.md` and `LICENSE`.
 - Names fixed by a tool (`Cargo.toml`, `release.yml`, `__init__.py`, `SKILL.md`), by a distribution channel (`PKGBUILD`, `recipe.yaml`) or by a project convention (ADR records `NNNN-slug.md`, `fuzz/seeds/`) stay as they are; ADR-0003 lists them. A published package keeps its name: the `urna-` prefix on crates.io, the `urna` wheel, `import urna`.
 - An abbreviation in a name has one meaning, listed in [TERMS.md](TERMS.md) in the same pull request that creates the name; reuse the project's vocabulary before inventing a synonym to fill characters.
 - `python tool/tasks/namecheck.py` checks the length table, the exceptions and the lexicon on the tracked files; `fullcheck.sh` and `gatecheck.yml` run it.
@@ -66,12 +66,6 @@ These conventions are not aesthetic preferences. They exist to keep the repo rea
 - **No emoji**, anywhere. **No em-dash** (U+2014); use `,`, `;`, `.`, or a regular hyphen.
 - Short paragraphs, direct voice, no marketing copy. Commits explain the **why**; the diff already shows the what. No conventional-commits prefix.
 - Every governance or architecture doc starts with a YAML frontmatter block (`project`, `audience`, `status`, `last-updated`, `domain`) so LLM and vector tooling can resolve it semantically.
-
-### Agent instruction files
-
-`.devops/agent/AGENTS.md` is the shared instruction source. The repository keeps no `AGENTS.md`, `CLAUDE.md` or other per-tool file at the root: point your agent tooling at this file yourself.
-
-Before delivery, follow the afterwork skill, `.devops/agent/skill/afterwork/SKILL.md`. Its `specs.yaml` maps the files to review for each kind of change; update information that is stale and preserve files that are already correct.
 
 ### File hygiene
 
@@ -96,7 +90,7 @@ Python:
 
 Format and runtime invariants:
 
-The format is frozen at v1. Any byte-level change either fits inside v1 (unused section IDs and encoding IDs are reserved and additive; the IDs already written are listed in the `contract` of `docs/ARCHS.toml` and named in `rust/format/src/layout/mod.rs`) or bumps `URNA_FORMAT_VERSION` and ships as v2.
+The format is frozen at v1. Any byte-level change either fits inside v1 (unused section IDs and encoding IDs are reserved and additive; the IDs already written are listed in the `contract` of `docs/ATLAS.toml` and named in `rust/format/src/layout/mod.rs`) or bumps `URNA_FORMAT_VERSION` and ships as v2.
 
 ## Tests
 
@@ -123,7 +117,7 @@ cargo +nightly fuzz run urna-view -- -max_total_time=600      # needs cargo-fuzz
 
 - Bugs and feature requests: [GitHub issues](https://github.com/hoffresearch/urna/issues).
 - Security vulns: do not open a public issue. Use the private advisory form (<https://github.com/hoffresearch/urna/security/advisories/new>) or email [brenner@hoffresearch.com](mailto:brenner@hoffresearch.com). Target ack within 72 hours.
-- Questions about the format: open a discussion, or read `docs/ARCHS.toml`.
+- Questions about the format: open a discussion, or read `docs/ATLAS.toml`.
 
 Bug reports should include the `.urna` `file_hash` and `content_hash` (from `urna stats <file>`), the runtime `simd_backend` (also in `urna stats`), the exact CLI or Python invocation, and the error output.
 
