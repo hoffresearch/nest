@@ -84,7 +84,7 @@ def test_minimal_tree_passes():
 def test_measure_counts_letters_and_digits_only():
     assert namecheck.measure("av1stream.py", "files") == 9
     assert namecheck.measure("potionb8m", "dirs") == 9
-    assert namecheck.measure(".devops", "hidden") == 6
+    assert namecheck.measure(".github", "hidden") == 6
     assert namecheck.measure("test_namecheck.py", "files", "test_") == 9
     assert namecheck.measure("potion-base-8M", "dirs") == 12
     assert namecheck.measure("spec_rule.py", "files") == 8
@@ -119,7 +119,6 @@ def test_exceptions_hold_only_where_they_belong():
         "rust/bridge/build.rs": "",
         "pkgs/linux/aur/PKGBUILD": "",
         "rust/bridge/python/urna/embed/__init__.py": "",
-        ".devops/agent/skill/afterwork/SKILL.md": "",
         ".github/pull_request_template.md": "",
         "docs/CHANGELOG": "",
     }

@@ -292,7 +292,6 @@ The profile names are the forge's (`[media] profile = "..."`, usage section 14).
 - [docs/CHANGELOG](https://github.com/hoffresearch/urna/blob/main/docs/CHANGELOG): releases with measured numbers
 - [docs/ARCHS.toml](https://github.com/hoffresearch/urna/blob/main/docs/ARCHS.toml): the architecture map
 - [docs/adr](https://github.com/hoffresearch/urna/blob/main/docs/adr/README.md): architecture decision records, by category
-- [AGENTS.md](https://github.com/hoffresearch/urna/blob/main/.devops/agent/AGENTS.md): instructions for contributors and coding agents.
 
 The crates are `urna-format` (the container), `urna-engine` (search), `urna` (the binary) and `urna-bridge` (the PyO3 bridge behind the Python package).
 
