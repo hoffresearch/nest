@@ -300,11 +300,12 @@ jobs:
         # snapshot (the fingerprint's key names are hashed); test_nonetwork
         # checks that the search-text embedder, the registry and the image
         # path force the hub offline unless URNA_ALLOW_DOWNLOAD=1. both
-        # import numpy (stbackend, visionemb), nothing heavier. after the
+        # import numpy (stbackend, visionemb), nothing heavier, and
+        # --models none never loads a model (#488). after the
         # catalog step, which stays a bare-python check.
         run: |
           python -m pip install numpy
-          python tool/tests/test_stbackend.py
+          python tool/tests/test_stbackend.py --models none
           python tool/tests/test_nonetwork.py
       - name: the release version agrees everywhere a release names it
         # pins, lockfile, CITATION.cff and the changelog section; the tag
