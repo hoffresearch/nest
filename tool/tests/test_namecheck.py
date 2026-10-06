@@ -147,9 +147,9 @@ def test_exceptions_hold_only_where_they_belong():
 def test_script_holds_only_the_two_installer_stubs():
     stubs = {"script/installer.sh": "", "script/installer.ps1": ""}
     assert problems(stubs) == [], problems(stubs)
-    found = problems({**stubs, "script/fullcheck.sh": "", "script/tools/x.py": ""})
+    found = problems({**stubs, "script/extra.sh": "", "script/tools/x.py": ""})
     assert found == [
-        "script/fullcheck.sh: script/ is temporary and holds only installer.ps1 and installer.sh",
+        "script/extra.sh: script/ is temporary and holds only installer.ps1 and installer.sh",
         "script/tools/x.py: script/ is temporary and holds only installer.ps1 and installer.sh",
     ], found
 
