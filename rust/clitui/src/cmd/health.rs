@@ -118,7 +118,7 @@ pub fn collect() -> Vec<Row> {
             match super::paths::data_roots().first() {
                 Some(root) => format!(
                     "not found (looked in the repo layout and {}) (run `urna setup`)",
-                    root.join("urna").join("python").join("urna").display()
+                    super::payload::package_in(root).display()
                 ),
                 None => format!("not found: {} (run `urna setup`)", embedder.display()),
             },

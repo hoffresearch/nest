@@ -1,4 +1,7 @@
 fn main() {
+    // without this, cargo reruns the script on any change in the crate,
+    // python/ included.
+    println!("cargo:rerun-if-changed=build.rs");
     // Use pyo3-build-config to emit Python linker flags automatically.
     pyo3_build_config::use_pyo3_cfgs();
     // On macOS, allow undefined Python symbols for extension modules.

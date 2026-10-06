@@ -104,7 +104,7 @@ pub(crate) fn installed_script_in(rel: &[&str]) -> PathBuf {
         return p;
     }
     for base in super::paths::data_roots() {
-        let c = base.join("urna").join("python").join("urna").join(&rel);
+        let c = super::payload::package_in(&base).join(&rel);
         if c.exists() {
             return c;
         }

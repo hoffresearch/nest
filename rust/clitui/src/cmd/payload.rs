@@ -13,6 +13,12 @@ pub const DIR: &str = "python";
 #[cfg(feature = "tui")]
 pub const PACKAGE: &str = "python/urna";
 
+/// The `urna` package of the payload installed under data root `root`
+/// (`<root>/urna/python/urna`).
+pub fn package_in(root: &Path) -> PathBuf {
+    root.join("urna").join("python").join("urna")
+}
+
 /// What a complete payload holds, relative to `urna/`: every file
 /// `embedpack.py` ships, since each query path imports or reads
 /// one of them (the potion route reads the table's config, tokenizer and
