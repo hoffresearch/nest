@@ -47,7 +47,7 @@ Three rules keep the lexicon useful:
 | `medic` | medical | `demo/corpora/medic/` |
 | `ops` | operations | `.devops/`, `.secops/`, `aiops/`, `renameops/` |
 | `osint` | open-source intelligence | `demo/corpora/osint/` |
-| `pd` | product design | `.pdteam/` |
+| `pd` | product and design (product and UX guidelines) | `.pdteam/` |
 | `pkgs` | packages, the distribution channels | `pkgs/` |
 | `pr` | pull request | `releasepr.sh` |
 | `prep` | prepare | `buildprep.yml`, `wheelprep.py` |
