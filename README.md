@@ -47,7 +47,7 @@ Windows, Docker, `cargo binstall` and how to verify a download are in the [insta
 
 `urna setup` shows the plan before it writes anything and ends on the doctor checks. A corpus built with a heavier model, like the pt-BR MiniLM, needs that model on the machine: `urna setup --model minilm-multilingual` installs it (or `m` on the plan screen), and the ask tab of `urna tui` offers the same install when a query needs it. Nothing is downloaded until you say so.
 
-<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/docs/img/urna-setup.png" alt="urna setup: the verify step with every doctor check passing" width="100%">
+<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/docs/img/urna-setup.svg" alt="urna setup: the verify step with every doctor check passing" width="100%">
 
 `urna tui` opens a corpus, validates it, and lets you ask it questions. Each hit shows its score, the stored text and its citation.
 
@@ -55,7 +55,7 @@ Windows, Docker, `cargo binstall` and how to verify a download are in the [insta
 urna tui my_corpus.urna
 ```
 
-<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/docs/img/urna-tui.png" alt="urna tui: the ask tab with scored hits and the cited text of the selected one" width="100%">
+<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/docs/img/urna-tui.svg" alt="urna tui: the ask tab with scored hits and the cited text of the selected one" width="100%">
 
 ## Quickstart
 
