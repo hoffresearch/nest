@@ -57,11 +57,6 @@ LEVELS = [
     Level("docs/adr", "dirs", 9),
     Level("pkgs", "dirs", 5),
     Level("pkgs/linux", "dirs", 3),
-    Level(".devops", "dirs", 5),
-    Level(".devops/agent", "dirs", 5),
-    Level(".devops/agent/skill", "dirs", 9),
-    Level(".devops/agent/skill/*", "files", 5),
-    Level(".devops/rules", "dirs", 6),
     Level(".github", "files", 9),
     Level(".github/workflows", "files", 9),
 ]
@@ -75,8 +70,6 @@ EXCEPTIONS = [
     (re.compile(r"^docs/(CHANGELOG|CODE_OF_CONDUCT\.md|CONTRIBUTING\.md|SECURITY\.md)$"), "GitHub"),
     (re.compile(r"^\.github/pull_request_template\.md$"), "GitHub"),
     (re.compile(r"^\.github/workflows/release\.yml$"), "cargo-dist"),
-    (re.compile(r"^\.devops/agent/skill/[a-z]+/SKILL\.md$"), "agent skills"),
-    (re.compile(r"^\.devops/agent/skill/[a-z]+/\.gitkeep$"), "git keeps an empty folder"),
     (re.compile(r"^\.zed$"), "the Zed editor's project settings"),
 ]
 

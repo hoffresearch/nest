@@ -27,7 +27,7 @@ Three rules keep the lexicon useful:
 | `api` | application programming interface | `test_pythonapi.py` |
 | `archs` | architecture | `ARCHS.toml` |
 | `b8m` | base-8M, the size of the potion model (`minishlab/potion-base-8M`) | `potionb8m/` |
-| `bench` | benchmark | `tool/bench/`, `BENCH.md`, `benchgate.py`, `benchsync/` |
+| `bench` | benchmark | `tool/bench/`, `BENCH.md`, `benchgate.py` |
 | `chan` | distribution channel | `chanprobe.py` |
 | `choco` | Chocolatey, the Windows package manager | `pkgs/choco/` |
 | `cli` | command-line interface | `clitui/`, `clidriver.py`, `test_clispaces.py` |
@@ -35,8 +35,7 @@ Three rules keep the lexicon useful:
 | `crf` | constant rate factor, the video encoder's quality knob | `crfpicker.py` |
 | `dbs` | databases | `vectordbs.py` |
 | `dec` | decode | `decframes.py` |
-| `dev` | development | `.devops/` |
-| `docs` | documentation | `docs/`, `docscheck/` |
+| `docs` | documentation | `docs/` |
 | `emb` | embedding | `visionemb.py` |
 | `enc` | encode | `encstills.py`, `encstream.py` |
 | `eval` | evaluation | `imageeval.py` |
@@ -45,7 +44,7 @@ Three rules keep the lexicon useful:
 | `intro` | introduction | `demo/corpora/intro/` |
 | `lexi` | lexical | `lexifloor.py` |
 | `medic` | medical | `demo/corpora/medic/` |
-| `ops` | operations | `.devops/`, `.secops/`, `aiops/` |
+| `ops` | operations | `.secops/`, `aiops/` |
 | `osint` | open-source intelligence | `demo/corpora/osint/` |
 | `pd` | product and design (product and UX guidelines) | `.pdteam/` |
 | `pkgs` | packages, the distribution channels | `pkgs/` |
