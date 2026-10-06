@@ -3,7 +3,7 @@
 # the host job, see the plan-jobs note in Cargo.toml), and pypiindex.yml calls it
 # before a pypi upload. an unsigned tag, or one signed by a key not listed
 # in .github/trustkeys, fails the release before anything is uploaded. after the signature,
-# script/preflight.py checks the tag names the workspace version,
+# tool/tasks/preflight.py checks the tag names the workspace version,
 # its commit is on main (fetch-depth 0 brings origin/main) and every file a
 # release versions agrees (pins, lockfile, CITATION.cff, changelog).
 #
@@ -51,4 +51,4 @@ jobs:
         if: inputs.tag != '' || github.ref_type == 'tag'
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
-        run: python3 script/preflight.py --tag "$TAG" --main-ref origin/main
+        run: python3 tool/tasks/preflight.py --tag "$TAG" --main-ref origin/main

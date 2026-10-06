@@ -1,0 +1,316 @@
+project: urna
+audience: agentes de código e contribuidores humanos
+status: active
+last-updated: 2026-10-06
+domain: workflow
+description: >
+  Catálogo de referências para a revisão final descrita no SKILL.md desta
+  pasta. Os grupos indicam onde procurar conforme o comportamento alterado.
+  Revise as entradas pertinentes e siga as referências encontradas no código;
+  edite somente o que precisar de correção. O inventário detalhado fica no ARC.
+
+# path: caminho relativo à raiz; uma barra final indica um diretório.
+# when: situação em que o arquivo ou grupo deve ser revisado.
+# rule: cuidado específico de manutenção, quando necessário.
+
+groups:
+  - name: afterwork
+    files:
+      - path: .devops/agent/skill/afterwork/SKILL.md
+        when: mudar o procedimento de revisão final, organização de arquivos, validação ou entrega.
+      - path: .devops/agent/skill/afterwork/specs.yaml
+        when: mudar um caminho, responsabilidade ou situação de revisão representada neste catálogo.
+      - path: .devops/agent/skill/benchsync/
+        when: mudarem a versão publicada, uma superfície que um benchmark usa, um caminho que ele cita, ou entrar um benchmark novo.
+        rule: os caminhos dos benchmarks ficam só no bench.yaml.
+      - path: .devops/agent/skill/factcheck/SKILL.md
+        when: mudar a forma de dividir o catálogo, as regras dos revisores ou a validação das correções.
+      - path: .devops/agent/skill/releasing/SKILL.md
+        when: mudarem a preparação, a tag, os canais, as credenciais, as provas de publicação ou a recuperação de uma release.
+        rule: manter os comandos alinhados ao checklist do mantenedor no USAGE, que guarda o detalhe de cada canal.
+      - path: .devops/agent/skill/renameops/SKILL.md
+        when: mudarem a convenção de nomes, as formas em que um nome aparece ou o fluxo de PR das renomeações.
+      - path: .devops/agent/skill/driveurna/
+        when: mudarem o build do CLI, os verbos do ciclo (build, ask, retrieve, cite, validate, doctor), o quickstart ou as teclas e abas do explorer.
+        rule: rodar o drive.sh de novo (smoke e tui) e manter só comandos que funcionaram.
+
+  - name: instruções dos agentes
+    files:
+      - path: .devops/agent/AGENTS.md
+        when: mudarem orientações recorrentes de trabalho, organização e tamanho do código, validação, autonomia ou cuidados técnicos do projeto.
+      - path: .github/pull_request_template.md
+        when: mudarem requisitos de revisão, evidências ou critérios de conclusão.
+
+  - name: docs públicos
+    files:
+      - path: README.md
+        when: mudarem instalação, funcionalidades, API, exemplos principais ou resultados apresentados.
+      - path: docs/USAGE.md
+        when: mudarem comandos, opções, variáveis, instalação, modelos, builds ou operação das releases.
+      - path: docs/CONTRIBUTING.md
+        when: mudarem setup de desenvolvimento, dependências, testes, CI, convenção de nomes ou processo de contribuição.
+      - path: docs/SECURITY.md
+        when: mudarem garantias de segurança, proveniência, permissões, rede ou versões suportadas.
+      - path: docs/CODE_OF_CONDUCT.md
+        when: mudarem regras de convivência, responsáveis ou canais de contato.
+      - path: LICENSE
+        when: houver decisão explícita sobre licença ou titularidade.
+      - path: docs/CHANGELOG
+        when: houver mudança perceptível para usuários, operadores ou contribuidores.
+      - path: docs/BENCH.md
+        when: houver nova medição aprovada.
+        rule: regenerar com tool/bench/vectorcmp.py, nunca à mão.
+      - path: docs/ARCHS.toml
+        when: mudarem módulos, contratos, fluxos, arquitetura ou inventário de arquivos.
+      - path: docs/adr/
+        when: houver uma decisão de arquitetura ou uma lição que precise continuar como referência.
+        rule: partir do TEMPLATE.md, na pasta da categoria, com numeração única; um ADR aceito é substituído, nunca apagado.
+      - path: CITATION.cff
+        when: mudar a versão publicada ou houver alteração explícita dos metadados de citação.
+        rule: preservar os metadados escolhidos pelo mantenedor; a preparação atualiza os campos versionados.
+
+  - name: workspace e ferramental
+    files:
+      - path: Cargo.toml
+        when: mudarem workspace, versões, dependências internas, features, MSRV ou distribuição.
+      - path: Cargo.lock
+        when: mudarem versões ou a resolução das dependências do workspace principal.
+      - path: release.toml
+        when: mudar a configuração da preparação com cargo-release.
+      - path: pyproject.toml
+        when: mudarem dependências de desenvolvimento, grupos Python ou a configuração do Ruff, do pyright, do Rope ou do import-linter.
+        rule: os caminhos de pyright, Rope e import-linter seguem o sys.path de desenvolvimento e mudam junto com ele.
+      - path: pkgs/wheel/pyproject.toml
+        when: mudarem metadados, dependências, compatibilidade, entry point ou conteúdo da wheel.
+      - path: deny.toml
+        when: mudarem políticas de dependências, licenças, advisories ou exceções justificadas.
+      - path: clippy.toml
+        when: mudarem configurações ou exceções da análise Rust.
+      - path: rustfmt.toml
+        when: mudar a configuração de formatação Rust.
+      - path: .editorconfig
+        when: mudarem regras de edição ou surgir um novo tipo de arquivo.
+      - path: .gitignore
+        when: surgirem arquivos locais, caches, builds ou saídas que não devem ser versionados.
+      - path: .gitattributes
+        when: mudarem os arquivos tratados por LFS ou as regras de normalização.
+      - path: .dockerignore
+        when: mudar o conteúdo necessário no contexto de build Docker.
+      - path: Dockerfile
+        when: mudarem toolchain, alvo, dependências ou conteúdo da imagem.
+
+  - name: crates
+    files:
+      - path: rust/format/Cargo.toml
+        when: mudarem dependências, metadados ou configuração do crate de formato.
+      - path: rust/format/LICENSE
+        when: mudar a localização da licença compartilhada.
+        rule: symlink para LICENSE; preservar.
+      - path: rust/engine/Cargo.toml
+        when: mudarem dependências, benchmarks ou configuração do runtime.
+      - path: rust/engine/LICENSE
+        when: mudar a localização da licença compartilhada.
+        rule: symlink para LICENSE; preservar.
+      - path: rust/engine/build.rs
+        when: mudarem detecção do compilador, suporte SIMD ou condições de compilação.
+      - path: rust/clitui/Cargo.toml
+        when: mudarem CLI, features, MSRV, canais de pacote ou substituições de release.
+      - path: rust/clitui/LICENSE
+        when: mudar a localização da licença compartilhada.
+        rule: symlink para LICENSE; preservar.
+      - path: rust/bridge/Cargo.toml
+        when: mudarem PyO3, compatibilidade Python, dependências ou configuração da extensão.
+      - path: rust/bridge/build.rs
+        when: mudarem configuração ou flags de ligação da extensão Python.
+
+  - name: rust/ingest e fuzz
+    files:
+      - path: rust/ingest/Cargo.toml
+        when: mudarem dependências ou configuração do workspace de ingestão.
+      - path: rust/ingest/Cargo.lock
+        when: mudar a resolução das dependências do rust/ingest.
+      - path: rust/ingest/.gitignore
+        when: surgirem novas saídas locais desse workspace.
+      - path: fuzz/Cargo.toml
+        when: mudarem dependências ou alvos de fuzzing.
+      - path: fuzz/Cargo.lock
+        when: mudar a resolução das dependências do workspace de fuzzing.
+      - path: fuzz/README.md
+        when: mudarem alvos, comandos, sementes ou tratamento de falhas de fuzzing.
+
+  - name: testes e fixtures
+    files:
+      - path: rust/format/tests/
+        when: mudar uma seção, um codec ou um caminho do reader (um roundtrip e um negative_*.rs).
+      - path: rust/format/tests/fixtures/golden_v1_minimal.urna
+        when: uma mudança no formato precisar comprovar compatibilidade com arquivos existentes.
+        rule: preservar os bytes da fixture v1; atualizar testes ou acrescentar fixtures conforme o contrato, sem regenerá-la apenas para fazer um teste passar.
+      - path: rust/engine/tests/
+        when: mudar um caminho de busca, índice, kernel ou verificação do runtime.
+      - path: rust/clitui/tests/
+        when: mudar um verbo, código de saída, escada de resolução ou etapa do setup.
+      - path: fuzz/fuzz_targets/section_decoders.rs
+        when: entrar um codec novo (um braço) ou um achado do fuzz for corrigido.
+      - path: fuzz/seeds/
+        when: um achado do fuzz for corrigido (um regress-*.bin ao lado do teste negativo).
+      - path: tool/tests/
+        when: mudarem a API Python, o builder, o forge ou um script de release.
+      - path: rust/bridge/python/urna/
+        when: mudar um módulo do pacote urna (o seu teste em tool/tests/).
+
+  - name: github
+    files:
+      - path: .github/trustkeys
+        when: houver inclusão, substituição ou revogação autorizada de um assinante.
+      - path: .github/buildprep.yml
+        when: mudarem as preparações necessárias aos builds locais do cargo-dist.
+      - path: .github/workflows/gatecheck.yml
+        when: mudarem testes, ferramentas, plataformas ou verificações anteriores ao merge.
+      - path: .github/workflows/release.yml
+        when: mudar a configuração do cargo-dist.
+        rule: regenerar com dist generate, nunca à mão.
+      - path: .github/workflows/tagverify.yml
+        when: mudarem verificação de assinatura, versão ou origem da tag.
+      - path: .github/workflows/wheelmake.yml
+        when: mudarem plataformas, maturin, staging, checksums ou attestations das wheels.
+      - path: .github/workflows/rustready.yml
+        when: mudarem publicação, ordem, autenticação ou recuperação no crates.io.
+      - path: .github/workflows/pypiready.yml
+        when: mudarem despacho, acompanhamento ou prazo da publicação no PyPI.
+      - path: .github/workflows/pypiindex.yml
+        when: mudarem publishers, environments, validação da origem ou upload das wheels.
+      - path: .github/workflows/setuptest.yml
+        when: mudarem canais, plataformas ou verificações do produto instalado.
+      - path: .github/workflows/rehearsal.yml
+        when: mudar a release ou seu gerador.
+        rule: regenerar com python tool/tasks/rehearsal.py generate, nunca à mão.
+      - path: .github/workflows/runreport.yml
+        when: mudarem eventos, permissões, identificação da execução ou relato de canais indisponíveis e publicações parciais.
+
+  - name: script
+    files:
+      - path: tool/tasks/releasepr.sh
+        when: mudar a preparação de versão, worktree, assinatura, push ou abertura do PR.
+      - path: tool/tasks/preflight.py
+        when: mudarem campos de versão, metadados ou critérios de origem da release.
+      - path: tool/tasks/rehearsal.py
+        when: mudarem estrutura gerada, entradas distribuídas, classificação de impacto ou validação dos artefatos.
+      - path: tool/tasks/chanprobe.py
+        when: mudarem registries, respostas, retries ou verificações do relatório.
+      - path: tool/tasks/pypiindex.py
+        when: mudarem validação da origem, checksums ou recuperação de uploads parciais.
+      - path: tool/tasks/fullcheck.sh
+        when: mudarem suítes, pré-requisitos, critérios de execução ou resultados de aprovação, falha e dispensa do gate local.
+      - path: tool/tasks/ruffcheck.sh
+        when: surgir um módulo Python sujeito a lint ou mudar a execução do Ruff.
+      - path: tool/tasks/embedpack.py
+        when: mudarem arquivos distribuídos, modelos ou o processo de staging do payload.
+      - path: tool/tasks/wheelprep.py
+        when: mudarem arquivos distribuídos, modelos ou o processo de staging da wheel.
+      - path: tool/tasks/getpotion.sh
+        when: mudar a revisão aprovada, origem ou identidade da tabela Potion.
+      - path: tool/tasks/installer.sh
+        when: mudarem instalação Unix, arquivos baixados, checksums ou destinos.
+      - path: tool/tasks/installer.ps1
+        when: mudarem instalação Windows, arquivos baixados, checksums ou destinos.
+      - path: tool/tasks/precommit
+        when: mudarem as regras sobre dados e arquivos permitidos nos commits.
+      - path: tool/tasks/fuzzsweep.sh
+        when: mudarem alvos, duração ou execução dos testes de fuzzing.
+
+  - name: python forge
+    files:
+      - path: rust/bridge/python/urna/model/presetmap.py
+        when: mudarem presets, revisões, dependências, dimensões ou consentimento para código remoto.
+      - path: rust/bridge/python/urna/model/catalogue.py
+        when: mudarem critérios e geração dos modelos oferecidos para instalação.
+      - path: rust/bridge/python/urna/model/catalogue.json
+        when: mudar o catálogo.
+        rule: regenerar com python rust/bridge/python/urna/model/catalogue.py --write, nunca editar isoladamente.
+      - path: rust/bridge/python/urna/image/mediaplan.py
+        when: mudarem receitas e parâmetros dos perfis de mídia.
+      - path: rust/bridge/python/urna/specs/specparse.py
+        when: mudar o contrato dos arquivos declarativos de build.
+      - path: rust/bridge/python/urna/specs/specrules.py
+        when: mudarem validações e combinações permitidas no build.
+      - path: rust/bridge/python/urna/specs/specpaths.py
+        when: mudarem expansão de variáveis ou resolução de caminhos.
+      - path: rust/bridge/python/urna/model/installer.py
+        when: mudarem download, instalação, progresso ou verificação dos modelos.
+
+  - name: snapshot potion
+    files:
+      - path: rust/bridge/python/urna/model/potionb8m/
+        when: houver substituição aprovada do snapshot (pesos, estrutura, tokenizer ou configuração) ou mudar a documentação dele.
+        rule: os arquivos mudam juntos e com o fingerprint do modelo; o model.safetensors fica no LFS, e a release o obtém por tool/tasks/getpotion.sh, na revisão fixada e conferido pelo sha256 do ponteiro LFS, então a revisão do script muda na mesma alteração.
+
+  - name: caminhos de dados e setup da cli
+    files:
+      - path: rust/clitui/src/cmd/paths.rs
+        when: mudarem diretórios de dados, payload ou descoberta de arquivos.
+      - path: rust/clitui/src/cmd/payload.rs
+        when: mudarem arquivos obrigatórios, versão ou instalação transacional do payload.
+      - path: rust/clitui/src/cmd/pyenv.rs
+        when: mudar a descoberta ou execução do interpretador Python.
+      - path: rust/clitui/src/cmd/doctor.rs
+        when: mudarem comando, saída ou comportamento do diagnóstico.
+      - path: rust/clitui/src/cmd/health.rs
+        when: mudarem as verificações de saúde ou seus códigos de resultado.
+      - path: rust/clitui/src/tui/setup/
+        when: mudarem o fluxo do setup (detecção da máquina, plano, tarefas, downloads, extração, ambiente Python, modelos) ou as telas dele.
+
+  - name: exemplos
+    files:
+      - path: demo/starter/README.md
+        when: mudarem requisitos ou execução do exemplo.
+      - path: demo/starter/corpus.toml
+        when: mudar o contrato de build usado no quickstart.
+      - path: demo/starter/docs.jsonl
+        when: houver mudança intencional do conteúdo demonstrativo.
+      - path: demo/starter/quickstart.py
+        when: mudarem as APIs usadas no ciclo de build e consulta.
+      - path: demo/flaskpy/README.md
+        when: mudarem requisitos, instalação ou uso do exemplo Flask.
+      - path: demo/flaskpy/app.py
+        when: mudarem API de consulta, validação do modelo ou resposta com citações.
+      - path: demo/fastapi/README.md
+        when: mudarem requisitos, instalação ou uso do exemplo FastAPI.
+      - path: demo/fastapi/main.py
+        when: mudarem API de consulta, validação do modelo ou resposta com citações.
+      - path: demo/jupyter/README.md
+        when: mudarem requisitos ou execução do notebook.
+      - path: demo/jupyter/urna_minimal.ipynb
+        when: mudarem APIs, consultas ou resultados demonstrados.
+
+  - name: dados e medição
+    files:
+      - path: data/demo/Instructions.md
+        when: mudarem identidade, origem ou procedimento de uso do corpus de referência.
+      - path: data/measure/baseline.json
+        when: houver mudança intencional e medida da referência de regressão; nunca fora disso.
+      - path: data/measure/ladder.json
+        when: houver nova medição aprovada da comparação entre presets.
+      - path: data/measure/archive/
+        when: for corrigido um erro comprovado num registro histórico; nunca fora disso.
+
+  - name: corpus demonstrativo
+    files:
+      - path: demo/corpora/intro/README.md
+        when: mudarem uso, identidade ou finalidade do corpus demonstrativo.
+      - path: demo/corpora/intro/01-what-is-urna.md
+        when: mudar a explicação demonstrativa do produto.
+      - path: demo/corpora/intro/02-forge-ingestion.md
+        when: mudar a explicação demonstrativa da ingestão.
+      - path: demo/corpora/intro/03-citations.md
+        when: mudar a explicação demonstrativa das citações.
+      - path: demo/corpora/intro/04-offline-sovereignty.md
+        when: mudar a explicação demonstrativa do funcionamento offline.
+
+  - name: assets
+    files:
+      - path: docs/img/urna-setup.png
+        when: mudar a interface apresentada no setup.
+      - path: docs/img/urna-tui.png
+        when: mudar a interface apresentada no explorer.
+      - path: docs/img/urna-hoff-research-db-iage-thumb-git.png
+        when: mudar a apresentação visual usada no README.

@@ -5,7 +5,7 @@
 # (the first job here), stops the release before any channel publishes.
 #
 # one abi3 wheel per platform (cp312, matching pyo3 abi3-py312), built by
-# maturin from the staged project (script/wheelprep.py). each wheel gets a
+# maturin from the staged project (tool/tasks/wheelprep.py). each wheel gets a
 # `<wheel>.sha256` (`<hex> *<name>`, the archives' format) and a sigstore
 # build attestation. the upload is named `artifacts-wheel-*`, so the host job
 # attaches the wheels and their checksums to the github release; pypiindex.yml
@@ -51,16 +51,16 @@ jobs:
           persist-credentials: false
       - name: fetch the potion table the wheel bundles (verified against its lfs pointer)
         shell: bash
-        run: sh script/getpotion.sh
+        run: sh tool/tasks/getpotion.sh
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: stage the wheel project
-        run: python script/wheelprep.py
+        run: python tool/tasks/wheelprep.py
       - name: build the abi3 wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
-          working-directory: packs/staging
+          working-directory: pkgs/stage
           target: ${{ matrix.target }}
           args: --release --out ../../dist-wheels
       - name: checksum each wheel

@@ -15,8 +15,8 @@ Coverage-guided fuzzing of every byte-level entry point in `urna-format` and
 out-of-bounds read.
 
 The deterministic twins of these targets run on stable under plain `cargo
-test` (`crates/format/tests/mutation_fuzz.rs`,
-`crates/engine/tests/mutation_fuzz.rs`), so every CI run already
+test` (`rust/format/tests/mutation_fuzz.rs`,
+`rust/engine/tests/mutation_fuzz.rs`), so every CI run already
 executes a few thousand mutations; this directory is the long soak.
 
 ## Targets
@@ -38,7 +38,7 @@ integrity layer itself.
 ```sh
 cargo install cargo-fuzz          # needs a nightly toolchain
 cd fuzz
-mkdir -p corpus/urna-view && cp seeds/*.bin ../crates/format/tests/fixtures/golden_v1_minimal.urna corpus/urna-view/
+mkdir -p corpus/urna-view && cp seeds/*.bin ../rust/format/tests/fixtures/golden_v1_minimal.urna corpus/urna-view/
 cargo +nightly fuzz run urna-view -- -max_total_time=600
 cargo +nightly fuzz run section-decoders -- -max_total_time=600
 cargo +nightly fuzz run runtime-indexes -- -max_total_time=600
@@ -47,7 +47,7 @@ cargo +nightly fuzz run mmap-open-search -- -max_total_time=600 -rss_limit_mb=40
 
 A finding lands in `artifacts/<target>/`; reproduce with `cargo +nightly fuzz
 run <target> artifacts/<target>/<file>` and turn it into a negative test
-under `crates/*/tests/` before fixing.
+under `rust/*/tests/` before fixing.
 
 ## Seeds
 

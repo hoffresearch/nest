@@ -39,7 +39,7 @@ Thumbs.db
 # Project specific
 # data/corpus_next.v1.urna remains tracked via Git LFS.
 # Per-phase preset .urna files (data/measure/corpus_*.urna) are
-# regeneration artifacts: re-derivable in minutes by measure_presets.py
+# regeneration artifacts: re-derivable in minutes by presetrun.py
 # from the LFS-tracked baseline. Do NOT commit them: they'd inflate the
 # LFS bandwidth quota every phase. We commit only the JSON checksums and
 # metrics next to them.
@@ -65,15 +65,15 @@ data/hoff.db
 *.sidecar.jsonl
 **/pairs/
 !data/corpus_next.v1.urna
-!crates/format/tests/fixtures/golden_v1_minimal.urna
+!rust/format/tests/fixtures/golden_v1_minimal.urna
 
 # demo datasets are local-only (data/demo/Instructions.md says how to fetch them).
 data/demo/*
 !data/demo/Instructions.md
 .env
 
-# wheel staging (script/wheelprep.py output)
-packs/staging/
+# wheel staging (tool/tasks/wheelprep.py output)
+pkgs/stage/
 # mtg corpus artifacts (the benchmark lives in its own repository)
 data/mtg/
 
@@ -83,7 +83,7 @@ fuzz/corpus/
 fuzz/artifacts/
 fuzz/coverage/
 
-# competitor benchmark scratch stores (python/tools/bench_competitors.py --work)
+# competitor benchmark scratch stores (tool/bench/vectorcmp.py --work)
 .bench-competitors/
 /tools/
 
@@ -91,5 +91,5 @@ fuzz/coverage/
 docs/hardening-plan.md
 TMP/
 
-# quickstart build output (demos/quickstart/corpus.toml)
-demos/quickstart/out/
+# quickstart build output (demo/starter/corpus.toml)
+demo/starter/out/

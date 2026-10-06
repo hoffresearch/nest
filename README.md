@@ -1,4 +1,4 @@
-[![Urna: offline-first vector database, Rust and Python](https://raw.githubusercontent.com/hoffresearch/urna/main/assets/image/urna-hoff-research-db-iage-thumb-git.png)](https://docs.urna.dev/)
+[![Urna: offline-first vector database, Rust and Python](https://raw.githubusercontent.com/hoffresearch/urna/main/docs/img/urna-hoff-research-db-iage-thumb-git.png)](https://docs.urna.dev/)
 
 # Urna
 
@@ -26,7 +26,7 @@ cargo install urna
 ```
 
 ```sh
-curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/script/installer.sh | sh
+curl -sSf https://raw.githubusercontent.com/hoffresearch/urna/main/tool/tasks/installer.sh | sh
 ```
 
 Then run setup once. It downloads the offline embedder, prepares a Python env and checks the install:
@@ -47,7 +47,7 @@ Windows, Docker, `cargo binstall` and how to verify a download are in the [insta
 
 `urna setup` shows the plan before it writes anything and ends on the doctor checks. A corpus built with a heavier model, like the pt-BR MiniLM, needs that model on the machine: `urna setup --model minilm-multilingual` installs it (or `m` on the plan screen), and the ask tab of `urna tui` offers the same install when a query needs it. Nothing is downloaded until you say so.
 
-<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/assets/image/urna-setup.png" alt="urna setup: the verify step with every doctor check passing" width="100%">
+<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/docs/img/urna-setup.png" alt="urna setup: the verify step with every doctor check passing" width="100%">
 
 `urna tui` opens a corpus, validates it, and lets you ask it questions. Each hit shows its score, the stored text and its citation.
 
@@ -55,30 +55,30 @@ Windows, Docker, `cargo binstall` and how to verify a download are in the [insta
 urna tui my_corpus.urna
 ```
 
-<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/assets/image/urna-tui.png" alt="urna tui: the ask tab with scored hits and the cited text of the selected one" width="100%">
+<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/docs/img/urna-tui.png" alt="urna tui: the ask tab with scored hits and the cited text of the selected one" width="100%">
 
 ## Quickstart
 
-`demos/quickstart/` has twelve short paragraphs and the spec that builds them. From a checkout:
+`demo/starter/` has twelve short paragraphs and the spec that builds them. From a checkout:
 
 ```sh
-urna build --spec demos/quickstart/corpus.toml
+urna build --spec demo/starter/corpus.toml
 ```
 
 ```sh
-urna ask demos/quickstart/out/quickstart.urna "can I use this offline" -k 1
+urna ask demo/starter/out/quickstart.urna "can I use this offline" -k 1
 ```
 
 ```sh
-urna retrieve demos/quickstart/out/quickstart.urna "how do citations work" -k 2 --format jsonl
+urna retrieve demo/starter/out/quickstart.urna "how do citations work" -k 2 --format jsonl
 ```
 
 ```sh
-urna cite demos/quickstart/out/quickstart.urna 'urna://sha256:1147b256.../sha256:b5dfeb09...'
+urna cite demo/starter/out/quickstart.urna 'urna://sha256:1147b256.../sha256:b5dfeb09...'
 ```
 
 ```sh
-urna validate demos/quickstart/out/quickstart.urna
+urna validate demo/starter/out/quickstart.urna
 ```
 
 `ask` prints the answer with its citation, `retrieve` prints JSON for another program, `cite` turns a citation back into the stored text, and `validate` checks every hash. To build from your own rows, see [usage section 13](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
@@ -111,7 +111,7 @@ Author: Brenner Cruvinel
 
 ```python
 import urna
-from urna.embed_potion import potion_embedder
+from urna.embed.potiontab import potion_embedder
 
 emb = potion_embedder()
 db = urna.open("my_corpus.urna")
@@ -150,7 +150,7 @@ urna.build(
 )
 ```
 
-`python demos/quickstart/quickstart.py` runs the whole loop, build to cited hits, with no network.
+`python demo/starter/quickstart.py` runs the whole loop, build to cited hits, with no network.
 
 </details>
 
@@ -278,7 +278,7 @@ Real-query quality is in [fakenews-ptbr-urna-benchmark](https://github.com/brenn
 | `stills-av1` | AV1 all-intra crf35 | 1.37 GB | 2.89x |
 | `retrieval` | AV1 all-intra crf50 | 533 MB | 7.46x |
 
-The profile names are the forge's (`[media] profile = "..."`, usage section 14). mtg-urna-benchmark names its v0.3 files from before AVIF became the forge's `stills`: its `stills` file is this table's `stills-av1` row, and the AVIF q48 row is its candidate `v03-avif-q48`. Text-to-image hit@1 over every card: SigLIP2 0.750, wemm-2b 0.744, Jina 0.336, CLIP 0.098. The benchmark is [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark), and the `.urna` files are on [Hugging Face](https://huggingface.co/datasets/brennercruvinel/mtg-urna-benchmark); the recipes the forge uses are recorded in `python/forge/media_profiles.py` and `docs/CHANGELOG`.
+The profile names are the forge's (`[media] profile = "..."`, usage section 14). mtg-urna-benchmark names its v0.3 files from before AVIF became the forge's `stills`: its `stills` file is this table's `stills-av1` row, and the AVIF q48 row is its candidate `v03-avif-q48`. Text-to-image hit@1 over every card: SigLIP2 0.750, wemm-2b 0.744, Jina 0.336, CLIP 0.098. The benchmark is [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark), and the `.urna` files are on [Hugging Face](https://huggingface.co/datasets/brennercruvinel/mtg-urna-benchmark); the recipes the forge uses are recorded in `rust/bridge/python/urna/image/mediaplan.py` and `docs/CHANGELOG`.
 
 </details>
 
@@ -290,9 +290,9 @@ The profile names are the forge's (`[media] profile = "..."`, usage section 14).
 - [fakenews-ptbr-urna-benchmark](https://github.com/brennercruvinel/fakenews-ptbr-urna-benchmark) and [mtg-urna-benchmark](https://github.com/brennercruvinel/mtg-urna-benchmark): the text and image benchmarks, with their files on Hugging Face
 - [docs/SECURITY.md](https://github.com/hoffresearch/urna/blob/main/docs/SECURITY.md): reporting, hardening, data governance
 - [docs/CHANGELOG](https://github.com/hoffresearch/urna/blob/main/docs/CHANGELOG): releases with measured numbers
-- [docs/ARC.toml](https://github.com/hoffresearch/urna/blob/main/docs/ARC.toml): the architecture map
-- [docs/ADR](https://github.com/hoffresearch/urna/blob/main/docs/ADR/README.md): architecture decision records, by category
-- [AGENTS.md](https://github.com/hoffresearch/urna/blob/main/.contracts/.ai/.agents/AGENTS.md): instructions for contributors and coding agents.
+- [docs/ARCHS.toml](https://github.com/hoffresearch/urna/blob/main/docs/ARCHS.toml): the architecture map
+- [docs/adr](https://github.com/hoffresearch/urna/blob/main/docs/adr/README.md): architecture decision records, by category
+- [AGENTS.md](https://github.com/hoffresearch/urna/blob/main/.devops/agent/AGENTS.md): instructions for contributors and coding agents.
 
 The crates are `urna-format` (the container), `urna-engine` (search), `urna` (the binary) and `urna-bridge` (the PyO3 bridge behind the Python package).
 

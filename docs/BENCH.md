@@ -8,7 +8,7 @@ domain: benchmarks
 
 # Benchmarks
 
-Measured 2026-09-10 on arm64 Darwin 25.6.0, Python 3.12.14, single thread, n=100,000 synthetic clustered L2-normalized rows x 384 dims (2000 centers), 200 queries, k=10, seed 7. Reproduce: `.venv/bin/python python/tools/bench_competitors.py --n 100000 --dim 384 --queries 200`.
+Measured 2026-09-10 on arm64 Darwin 25.6.0, Python 3.12.14, single thread, n=100,000 synthetic clustered L2-normalized rows x 384 dims (2000 centers), 200 queries, k=10, seed 7. Reproduce: `.venv/bin/python tool/bench/vectorcmp.py --n 100000 --dim 384 --queries 200`.
 
 > [!TIP]
 > Verify these results on your own hardware with your own parameters: the command above regenerates the whole table, and `--n`, `--dim`, `--queries` set the corpus and the query count. Every Urna row is a real build, opened and validated before the first query.

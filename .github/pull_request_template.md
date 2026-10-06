@@ -15,7 +15,7 @@ Tested commit: `<sha>`
 
 ## Final review
 
-<!-- Follow .contracts/.ai/.agents/.skills/afterwork/SKILL.md and its specs.yaml. Summarize affected docs, configuration, examples and links; files already correct need no edit. -->
+<!-- Follow .devops/agent/skill/afterwork/SKILL.md and its specs.yaml. Summarize affected docs, configuration, examples and links; files already correct need no edit. -->
 
 ## Remaining limits
 

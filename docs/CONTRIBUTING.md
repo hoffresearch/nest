@@ -8,7 +8,7 @@ domain: contributing
 
 # Contributing
 
-`urna` is maintained by [Hoff Research](https://hoffresearch.com). Author: Brenner Cruvinel ([brenner@hoffresearch.com](mailto:brenner@hoffresearch.com)). All contributions are welcome. Contributors and AI coding agents start from `.contracts/.ai/.agents/AGENTS.md`.
+`urna` is maintained by [Hoff Research](https://hoffresearch.com). Author: Brenner Cruvinel ([brenner@hoffresearch.com](mailto:brenner@hoffresearch.com)). All contributions are welcome. Contributors and AI coding agents start from `.devops/agent/AGENTS.md`.
 
 ## How to contribute
 
@@ -16,8 +16,8 @@ domain: contributing
 2. Branch from `main`: `git checkout -b feature/short-description origin/main`.
 3. Keep each PR focused on one concern. Small is better.
 4. Validate the behavior the change affects. Reuse existing tests and add cases for new guarantees or regressions. Use real artifacts for file and installation behavior, and controlled service responses for failure and retry cases.
-5. If the change alters architecture, module boundaries, data flow, or doc locations, update `docs/ARC.toml` in the same PR. Keep it concise and pragmatic. Do not add a separate human architecture doc; `ARC.toml` is the machine map, the human reference, and the mermaid diagram all in one file. Record an architecture decision, or a lesson that must stay as reference, as an ADR under `docs/ADR/` (layout and categories in `docs/ADR/README.md`).
-6. Run checks appropriate to the change and the required CI checks. Use `./script/fullcheck.sh` for format, runtime, performance or broad integration changes; it rebuilds the extension, runs Rust and Python tests, lint and the corpus regression measurements. Focused script or documentation changes can use targeted checks, with their scope explained in the PR; editorial changes do not repeat corpus measurements. `.github/workflows/gatecheck.yml` covers the Rust side on Linux, macOS and Windows plus checks the local gate does not run (cargo-deny, cargo-semver-checks, the engine-only Clippy, the benches compiled, a cargo-fuzz smoke, the embedder payload staged under Python 3.10). Its Python job runs ruff, the model catalog check and the release suites that need no built extension; the suites that load `_urna.so` run only in the local gate, so run them locally. A pull request that touches a release input also runs the release rehearsal (`rehearsal.yml`), a required check.
+5. If the change alters architecture, module boundaries, data flow, or doc locations, update `docs/ARCHS.toml` in the same PR. Keep it concise and pragmatic. Do not add a separate human architecture doc; `ARCHS.toml` is the machine map, the human reference, and the mermaid diagram all in one file. Record an architecture decision, or a lesson that must stay as reference, as an ADR under `docs/adr/` (layout and categories in `docs/adr/README.md`).
+6. Run checks appropriate to the change and the required CI checks. Use `./tool/tasks/fullcheck.sh` for format, runtime, performance or broad integration changes; it rebuilds the extension, runs Rust and Python tests, lint and the corpus regression measurements. Focused script or documentation changes can use targeted checks, with their scope explained in the PR; editorial changes do not repeat corpus measurements. `.github/workflows/gatecheck.yml` covers the Rust side on Linux, macOS and Windows plus checks the local gate does not run (cargo-deny, cargo-semver-checks, the engine-only Clippy, the benches compiled, a cargo-fuzz smoke, the embedder payload staged under Python 3.10). Its Python job runs ruff, the model catalog check and the release suites that need no built extension; the suites that load `_urna.so` run only in the local gate, so run them locally. A pull request that touches a release input also runs the release rehearsal (`rehearsal.yml`), a required check.
 7. Commit with a clear message in plain English. No conventional commits prefix.
 8. Start from an issue: one change is one issue; several independent items are an epic with one sub-issue each. Give the issue and the PR the right label. Open a PR against `main` whose body starts with `Closes #<issue>` and lists its checks as checkboxes, then ask for a review. Only the maintainer merges, with a merge commit, so every commit of the pull request stays in `main`'s history. `main` is guarded by one ruleset (`opensource`): one approving review, verified (signed) commits, a branch up to date with `main`, resolved review conversations and a passing `rehearsal` check (the release rehearsal, dispensed when the change touches no release input); admins can bypass it. Sign your commits (`git config commit.gpgsign true` with an SSH or GPG key registered on GitHub). A pull request that builds on another opens from the updated `main` after that one merges.
 
@@ -34,8 +34,8 @@ cargo build --release --workspace
 # libpython out of the cdylib (without it the .so segfaults under uv's
 # standalone interpreters)
 cargo build --release -p urna-bridge --features pyo3/extension-module
-cp target/release/lib_urna.dylib python/_urna.so   # macOS
-cp target/release/lib_urna.so   python/_urna.so    # linux
+cp target/release/lib_urna.dylib rust/bridge/python/urna/_urna.so   # macOS
+cp target/release/lib_urna.so   rust/bridge/python/urna/_urna.so    # linux
 
 python3 -m venv .venv && source .venv/bin/activate
 pip install ruff pyyaml numpy tokenizers pillow sentence-transformers pandas zstandard pyarrow
@@ -51,12 +51,14 @@ These conventions are not aesthetic preferences. They exist to keep the repo rea
 
 ### Naming
 
-- Directories and assets are **kebab-case English** (`data/`, `docs/`, `demos/`, `assets/image/`, dataset folders); Rust workspace conventions (`crates/`, `target/`) and language defaults (`python/`, `script/`, `tests/`) stay as their stacks expect.
-- Names line up by length ([ADR-0002](ADR/STRUCTURE/0002-short-folder-names-published-package-names.md)): a crate folder is six letters (`crates/engine`, `crates/clitui`) and its published package carries the `urna-` prefix (`urna-engine`; the CLI is `urna`); a file in `script/`, a workflow and a test after `test_` are nine letters (`script/preflight.py`, `gatecheck.yml`, `tests/test_hashguard.py`); a top-level folder is one short word (`script/`, `demos/`, `packs/`). Names fixed by a tool stay (`release.yml`, `Cargo.toml`, `README.md`). A new file picks a name of the same length as its neighbours. The `renameops` agent skill (`.contracts/.ai/.agents/.skills/renameops/SKILL.md`) is the procedure for a rename or a move.
-- The docs keep their upper-case names: `docs/USAGE.md`, `docs/BENCH.md`, `docs/SECURITY.md`, `docs/CONTRIBUTING.md`, `docs/CODE_OF_CONDUCT.md`, `docs/CHANGELOG`, `docs/ARC.toml`, `docs/ADR/` and its category folders (`docs/ADR/RETRIEVAL/`).
+- Siblings of the same kind have the same length ([ADR-0003](adr/structure/0003-equal-length-siblings-and-a-shared-lexicon.md)). The ADR's table says, for each folder, which children are checked and how long they are: the root folders are four letters (`data`, `demo`, `docs`, `fuzz`, `pkgs`, `rust`, `tool`), the crates six (`rust/engine`, `rust/clitui`), the subpackages of `urna` five (`embed`, `model`) and their modules nine (`potiontab.py`), the files of `tool/bench/` and `tool/tasks/`, the workflows and the tests after `test_` nine (`benchgate.py`, `gatecheck.yml`, `test_hashguard.py`). A length counts letters and digits only: no hyphen, underscore, extension, leading dot or `test_` prefix.
+- Folders, modules, scripts and helper files are lowercase; the project docs in `docs/` are uppercase (`docs/USAGE.md`, `docs/ARCHS.toml`, `docs/TERMS.md`), like `README.md` and `LICENSE`.
+- Names fixed by a tool (`Cargo.toml`, `release.yml`, `__init__.py`, `SKILL.md`), by a distribution channel (`PKGBUILD`, `recipe.yaml`) or by a project convention (ADR records `NNNN-slug.md`, `fuzz/seeds/`) stay as they are; ADR-0003 lists them. A published package keeps its name: the `urna-` prefix on crates.io, the `urna` wheel, `import urna`.
+- An abbreviation in a name has one meaning, listed in [TERMS.md](TERMS.md) in the same pull request that creates the name; reuse the project's vocabulary before inventing a synonym to fill characters.
+- `python tool/tasks/namecheck.py` checks the length table, the exceptions and the lexicon on the tracked files; `fullcheck.sh` and `gatecheck.yml` run it. The `renameops` agent skill (`.devops/agent/skill/renameops/SKILL.md`) is the procedure for a rename or a move.
 - Source files follow the conventions of their language (`snake_case.rs`, `snake_case.py`).
 - When proposing renames or moves, list exact `mv` commands first, execute the move, fix every touched import, and run the test suite after.
-- Tools for a Python move, configured in `pyproject.toml`: Rope moves a module and rewrites the imports in every source folder of the dev `sys.path` (`uv run --no-project --with rope`, no install); `pyright` (`uv tool install pyright`) checks that every import still resolves, and the errors it reports before the move name only the optional backends the dev venv does not install, plus `_urna` until the extension is copied to `python/_urna.so`; `lint-imports` (`pip install import-linter`), run from `python/` as `PYTHONPATH=. lint-imports --config ../pyproject.toml`, keeps `forge` from importing `python/tools`. None of them sees a module path written in a string, a docstring or a config file: search those with `rg`.
+- Tools for a Python move, configured in `pyproject.toml`: Rope moves a module and rewrites the imports in every source folder of the dev `sys.path` (`uv run --no-project --with rope`, no install); `pyright` (`uv tool install pyright`) checks that every import still resolves, and the errors it reports before the move name only the optional backends the dev venv does not install, plus `_urna` until the extension is copied to `rust/bridge/python/urna/_urna.so`; `lint-imports` (`pip install import-linter`), run as `cd rust/bridge/python && ../../../.venv/bin/lint-imports --config ../../../pyproject.toml`, keeps `urna` from importing a module of `tool/bench`. None of them sees a module path written in a string, a docstring or a config file: search those with `rg`.
 
 ### Writing style
 
@@ -67,13 +69,13 @@ These conventions are not aesthetic preferences. They exist to keep the repo rea
 
 ### Agent instruction files
 
-`.contracts/.ai/.agents/AGENTS.md` is the shared instruction source. The repository keeps no `AGENTS.md`, `CLAUDE.md` or other per-tool file at the root: point your agent tooling at this file yourself.
+`.devops/agent/AGENTS.md` is the shared instruction source. The repository keeps no `AGENTS.md`, `CLAUDE.md` or other per-tool file at the root: point your agent tooling at this file yourself.
 
-Before delivery, follow the afterwork skill, `.contracts/.ai/.agents/.skills/afterwork/SKILL.md`. Its `specs.yaml` maps the files to review for each kind of change; update information that is stale and preserve files that are already correct.
+Before delivery, follow the afterwork skill, `.devops/agent/skill/afterwork/SKILL.md`. Its `specs.yaml` maps the files to review for each kind of change; update information that is stale and preserve files that are already correct.
 
 ### File hygiene
 
-Organize changed code by responsibility and respect the line limit enforced by the current checks. CI checks Rust source under `crates/**/src/**`; the local gate also checks non-test Rust files under `crates/`. Documentation, generated files and data do not need splitting to meet that code limit. Keep refactoring relevant to the task and preserve behavior and test coverage.
+Organize changed code by responsibility and respect the line limit enforced by the current checks. CI checks Rust source under `rust/**/src/**`; the local gate also checks non-test Rust files under `rust/`. Documentation, generated files and data do not need splitting to meet that code limit. Keep refactoring relevant to the task and preserve behavior and test coverage.
 
 ## Code style
 
@@ -88,26 +90,26 @@ Rust:
 Python:
 
 - Target `py312`, line length 100. Ruff config in `pyproject.toml`.
-- Lints: `E F W I B UP SIM`. Run `sh script/ruffcheck.sh` (`URNA_PYTHON=.venv/bin/python` picks the interpreter): it checks and format-checks the one file list CI and `fullcheck.sh` share; a new Python module goes on that list.
-- Private helpers in `python/tools/` use the `_` prefix (e.g. `_baseline_decoder.py`).
+- Lints: `E F W I B UP SIM`. Run `sh tool/tasks/ruffcheck.sh` (`URNA_PYTHON=.venv/bin/python` picks the interpreter): it checks and format-checks the one file list CI and `fullcheck.sh` share; a new Python module goes on that list.
+- Private helpers in `tool/bench/` use the `_` prefix (e.g. `baselines.py`).
 - Keep modules focused and follow the file hygiene guidance above.
 
 Format and runtime invariants:
 
-The format is frozen at v1. Any byte-level change either fits inside v1 (unused section IDs and encoding IDs are reserved and additive; the IDs already written are listed in the `contract` of `docs/ARC.toml` and named in `crates/format/src/layout/mod.rs`) or bumps `URNA_FORMAT_VERSION` and ships as v2.
+The format is frozen at v1. Any byte-level change either fits inside v1 (unused section IDs and encoding IDs are reserved and additive; the IDs already written are listed in the `contract` of `docs/ARCHS.toml` and named in `rust/format/src/layout/mod.rs`) or bumps `URNA_FORMAT_VERSION` and ships as v2.
 
 ## Tests
 
 ```
 cargo test --release --workspace
-python tests/test_pythonapi.py   # the python suites, in the order fullcheck.sh
-python tests/test_ingestion.py   # runs them; that script is the list, and
-python tests/test_hashguard.py   # USAGE section 10 names the three that run
-python tests/test_forgespec.py   # by hand
-./script/fullcheck.sh
+python tool/tests/test_pythonapi.py   # the python suites, in the order fullcheck.sh
+python tool/tests/test_ingestion.py   # runs them; that script is the list, and
+python tool/tests/test_hashguard.py   # USAGE section 10 names the three that run
+python tool/tests/test_specrules.py   # by hand
+./tool/tasks/fullcheck.sh
 ```
 
-The Python tests are plain scripts (`pytest tests/` does not run them). Suites that exercise the extension need a rebuilt `_urna.so`; release tooling tests have their own prerequisites. Read `fullcheck.sh` and the CI workflows for their coverage. Report skipped tests separately from passed tests and identify the tested commit.
+The Python tests are plain scripts (`pytest tool/tests/` does not run them). Suites that exercise the extension need a rebuilt `_urna.so`; release tooling tests have their own prerequisites. Read `fullcheck.sh` and the CI workflows for their coverage. Report skipped tests separately from passed tests and identify the tested commit.
 
 Two lints are denied workspace-wide and will fail the build: `clippy::unwrap_used` (tests are exempt; parse paths read fields through `urna_format::bytes`) and `clippy::undocumented_unsafe_blocks` (every `unsafe` block states its invariant in a `// SAFETY:` comment). A change to any section decoder or search path should also run the mutation harness, and a new codec gets an arm in `fuzz/fuzz_targets/section_decoders.rs`:
 
@@ -121,7 +123,7 @@ cargo +nightly fuzz run urna-view -- -max_total_time=600      # needs cargo-fuzz
 
 - Bugs and feature requests: [GitHub issues](https://github.com/hoffresearch/urna/issues).
 - Security vulns: do not open a public issue. Use the private advisory form (<https://github.com/hoffresearch/urna/security/advisories/new>) or email [brenner@hoffresearch.com](mailto:brenner@hoffresearch.com). Target ack within 72 hours.
-- Questions about the format: open a discussion, or read `docs/ARC.toml`.
+- Questions about the format: open a discussion, or read `docs/ARCHS.toml`.
 
 Bug reports should include the `.urna` `file_hash` and `content_hash` (from `urna stats <file>`), the runtime `simd_backend` (also in `urna stats`), the exact CLI or Python invocation, and the error output.
 
