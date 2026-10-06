@@ -318,6 +318,54 @@ fn uninstall_removes_the_payload_and_keeps_the_binary() {
     assert!(Path::new(env!("CARGO_BIN_EXE_urna")).is_file());
 }
 
+/// The payload an install up to 0.5.4 laid down under `<data root>/urna`
+/// (layout until 0.5.4; remove with `unpack::LEGACY` in the release after next).
+const LEGACY: [&str; 3] = ["forge", "embed_query.py", "model_fingerprint.py"];
+
+fn lay_down_legacy(home: &Path) {
+    std::fs::create_dir_all(home.join("forge/models")).unwrap();
+    std::fs::write(home.join("forge/potion.py"), b"0.5.4").unwrap();
+    std::fs::write(home.join("embed_query.py"), b"0.5.4").unwrap();
+    std::fs::write(home.join("model_fingerprint.py"), b"0.5.4").unwrap();
+}
+
+#[test]
+fn setup_over_the_old_layout_removes_it() {
+    if !has_curl() {
+        eprintln!("skip: no curl on PATH");
+        return;
+    }
+    let d = scratch("legacy");
+    let home = d.join("data/urna");
+    lay_down_legacy(&home);
+    std::fs::create_dir_all(home.join("venv/bin")).unwrap();
+    std::fs::write(home.join("venv/bin/marker"), b"keep").unwrap();
+    let rel = release(&d, None);
+    let s = text(&urna(&d, &rel, &["setup", "--yes", "--no-python"]));
+    assert!(s.contains("ok embedder payload"), "{s}");
+    for name in LEGACY {
+        assert!(!home.join(name).exists(), "{name} left behind: {s}");
+    }
+    assert!(home.join("python/urna/embed/potionqry.py").is_file(), "{s}");
+    assert!(home.join("venv/bin/marker").is_file(), "{s}");
+}
+
+#[test]
+fn uninstall_removes_the_old_layout_too() {
+    let d = scratch("legacy_rm");
+    let home = d.join("data/urna");
+    lay_down_legacy(&home);
+    let out = urna(&d, &d, &["setup", "--uninstall"]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    for name in LEGACY {
+        assert!(
+            !home.join(name).exists(),
+            "{name} left behind: {}",
+            text(&out)
+        );
+    }
+}
+
 #[test]
 fn a_bare_urna_without_a_terminal_prints_help_and_exits_2() {
     let d = scratch("bare");

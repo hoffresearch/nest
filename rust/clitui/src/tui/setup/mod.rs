@@ -61,6 +61,9 @@ pub fn uninstall() -> anyhow::Result<i32> {
             println!("removed {}", p.display());
         }
     }
+    for p in unpack::remove_legacy(&home) {
+        println!("removed {}", p.display());
+    }
     println!(
         "urna setup: uninstalled the payload and the env; the binary stays with its package manager"
     );

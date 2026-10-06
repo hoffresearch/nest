@@ -19,6 +19,22 @@ use flate2::read::GzDecoder;
 /// writes them); `--uninstall` removes exactly these.
 pub const TOP_LEVEL: [&str; 1] = ["VERSION"];
 
+/// What a payload laid down beside `VERSION` before the move to `python/`:
+/// an install of the new payload and `--uninstall` remove it, so an upgrade
+/// leaves no stale copy behind.
+// layout until 0.5.4; remove in the release after next
+pub const LEGACY: [&str; 3] = ["forge", "embed_query.py", "model_fingerprint.py"];
+
+/// Removes the pre-0.5.5 payload from `home`; returns the paths it removed.
+pub fn remove_legacy(home: &Path) -> Vec<PathBuf> {
+    LEGACY
+        .iter()
+        .map(|n| home.join(n))
+        .filter(|p| p.exists())
+        .inspect(|p| remove(p))
+        .collect()
+}
+
 use crate::cmd::payload::{DIR, PACKAGE, missing};
 
 /// Unpacks `tar_gz` into `root` (the parent of `urna/`), calling
@@ -154,6 +170,7 @@ fn swap(staging: &Path, root: &Path, fault: Fault) -> Result<PathBuf> {
     let Err(e) = laid else {
         // the previous payload is replaced; it goes with the staging dir.
         let _ = std::fs::remove_dir_all(&previous);
+        remove_legacy(&home);
         return Ok(home.join(PACKAGE));
     };
     let lost = restore(&home, &previous, &aside, &placed, fault);
