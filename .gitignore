@@ -16,6 +16,7 @@ build/
 wheels/
 .pytest_cache/
 .mypy_cache/
+.ropeproject/
 .ruff_cache/
 .python-version
 
