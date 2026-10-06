@@ -424,24 +424,6 @@ purpose = "Agent skill for a release end to end: readiness and account checks, w
 links = ["docs/USAGE.md", "tool/tasks/releasepr.sh", ".github/workflows/release.yml"]
 
 [[inventory.data_docs_python_script_tests]]
-path = ".devops/agent/skill/renameops/SKILL.md"
-kind = "repo-ops"
-purpose = "Agent skill for renames and moves: folder name versus published name, every form a name takes (backslash paths, sibling paths, bare names, packages, registry URLs, generated files), one pull request per item from main, format and regenerate after each, the full gate once at the end"
-links = ["docs/CONTRIBUTING.md", "docs/adr/structure/0002-short-folder-names-published-package-names.md"]
-
-[[inventory.data_docs_python_script_tests]]
-path = ".devops/agent/skill/driveurna/SKILL.md"
-kind = "repo-ops"
-purpose = "Agent skill to build, smoke and drive the CLI and the terminal explorer: the verified commands, the interpreter ladder and the explorer's quirks"
-links = [".devops/agent/skill/driveurna/drive.sh", "demo/starter/corpus.toml"]
-
-[[inventory.data_docs_python_script_tests]]
-path = ".devops/agent/skill/driveurna/drive.sh"
-kind = "shell-script"
-purpose = "The skill's driver: the _urna extension, the CLI build, a corpus from any spec, a smoke of ask, retrieve, cite, validate and doctor with checks, and the explorer in a tmux session (key, type, wait for text on the screen, text captures, quit)"
-links = ["rust/clitui", "demo/starter/corpus.toml"]
-
-[[inventory.data_docs_python_script_tests]]
 path = ".devops/agent/skill/benchsync/SKILL.md"
 kind = "repo-ops"
 purpose = "Agent skill to bring the public benchmarks and other external repositories that use urna, with their datasets, in line with the released version: what changed since the version each one uses, the repository and dataset review, the fixes, and a validation against the released version"

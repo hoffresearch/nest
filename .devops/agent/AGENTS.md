@@ -2,20 +2,7 @@
 
 Pockebok de boas praticas para desenvolvedores humanos e agentes de código (CLAUDE.md, AGENTS.md, kimi, hermes, codex, windsurf, cursor, aider etc.) trabalharem com eficiência nesta aplicação.
 
-# Primcipais arquivos de contexto:
 
-| Arquitetura, contratos e responsáveis por cada parte | [ARCHS.toml](../../docs/ARCHS.toml) |
-| Comandos, instalação, modelos e operação das releases | [USAGE.md](../../docs/USAGE.md) |
-| Ambiente de desenvolvimento, testes e contribuição | [CONTRIBUTING.md](../../docs/CONTRIBUTING.md) |
-| Segurança, proveniência e relato de vulnerabilidades | [SECURITY.md](../../docs/SECURITY.md) |
-| Mudanças entregues e histórico | [CHANGELOG](../../docs/CHANGELOG) |
-| Decisões de arquitetura e lições de referência | [ADR](../../docs/adr/README.md) |
-| Revisão final e arquivos que a mudança pode afetar | [afterwork](skill/afterwork/SKILL.md) e [specs.yaml](skill/afterwork/specs.yaml) |
-| Compilar, rodar e dirigir o CLI e o explorer | [driveurna](skill/driveurna/SKILL.md) |
-| Revisar o repositório inteiro contra o estado real | [factcheck](skill/factcheck/SKILL.md) |
-| Preparar, publicar e provar uma release em todos os canais | [releasing](skill/releasing/SKILL.md) |
-| Renomear pastas, crates, pacotes, scripts, workflows ou testes | [renameops](skill/renameops/SKILL.md) |
-| Sincronizar benchmarks, datasets e repositórios externos | [benchsync](skill/benchsync/SKILL.md) e [bench.yaml](skill/benchsync/bench.yaml) |
 | O que repetir e o que evitar, aprendido em sessões anteriores | [mantra.md](../rules/mantra/mantra.md) e [taboo.md](../rules/taboos/taboo.md) |
 
 Para uma nova task, crie uma branch curta a partir de `origin/main`, sempre analise a razia ntes e faça um commit de checkpoint para nao perder nada; uma worktree isolada ajuda quando já há outro trabalho em andamento.
@@ -27,17 +14,6 @@ O dev principal e tech lead da aplicação escreve rápido e usa transcrição d
 Antes do primeiro commit, defina o tamanho do trabalho e procure uma issue existente (`gh issue list --search`). Se o pedido já tiver uma issue, use-a. Se o escopo mudar, atualize o corpo da issue e vincule a ela as novas sub-issues.
 
 Uma mudança coesa tem uma issue e um PR. Correções do mesmo assunto formam uma mudança só, mesmo quando tocam arquivos diferentes. Vários itens independentes, como uma série de renomeações ou um conjunto de skills, ganham uma épica com o objetivo e a lista dos itens, e uma sub-issue por item, ligada à épica pelo recurso de sub-issues do GitHub. Cada sub-issue tem o seu PR.
-
-## Principais responsabilidades da aplicação
-
-- `rust/format`: formato binário, leitura, escrita e hashes.
-- `rust/engine`: mmap, índices, kernels e busca.
-- `rust/clitui`: binário `urna`, comandos e interface de terminal.
-- `rust/bridge`: extensão PyO3 distribuída na wheel.
-- `rust/bridge/python/urna/`: pacote `urna`, com a API Python, a construção dos corpora, os embedders e o catálogo de modelos.
-- `tool/bench/`: benchmarks e gates de medição; `tool/tests/`: as suítes Python.
-- `rust/ingest` (schema `.fci` do forge) e `fuzz/`: workspaces Cargo separados; o `Cargo.toml` da raiz exclui o primeiro e comandos no workspace principal não os cobrem.
-- `pkgs/`, `tool/tasks/` e `.github/`: empacotamento, instalação, validação e releases.
 
 
 ## Empacotamento e release
