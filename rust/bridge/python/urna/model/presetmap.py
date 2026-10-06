@@ -29,6 +29,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+# offline by default, the guarantee the forge package gave every registry
+# import before the move: no hub round-trip unless the caller opts in. set
+# here because every model load goes through the registry, and importing
+# urna.embed no longer loads potiontab (which sets the same flags).
+if os.environ.get("URNA_ALLOW_DOWNLOAD") != "1":
+    for _k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
+        os.environ.setdefault(_k, "1")
+
 if TYPE_CHECKING:
     import numpy as np
 
