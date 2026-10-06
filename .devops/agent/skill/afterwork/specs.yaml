@@ -7,7 +7,7 @@ description: >
   Catálogo de referências para a revisão final descrita no SKILL.md desta
   pasta. Os grupos indicam onde procurar conforme o comportamento alterado.
   Revise as entradas pertinentes e siga as referências encontradas no código;
-  edite somente o que precisar de correção. O inventário detalhado fica no ARC.
+  edite somente o que precisar de correção. O inventário detalhado fica no docs/ARCHS.toml.
 
 # path: caminho relativo à raiz; uma barra final indica um diretório.
 # when: situação em que o arquivo ou grupo deve ser revisado.
@@ -28,11 +28,6 @@ groups:
       - path: .devops/agent/skill/releasing/SKILL.md
         when: mudarem a preparação, a tag, os canais, as credenciais, as provas de publicação ou a recuperação de uma release.
         rule: manter os comandos alinhados ao checklist do mantenedor no USAGE, que guarda o detalhe de cada canal.
-      - path: .devops/agent/skill/renameops/SKILL.md
-        when: mudarem a convenção de nomes, as formas em que um nome aparece ou o fluxo de PR das renomeações.
-      - path: .devops/agent/skill/driveurna/
-        when: mudarem o build do CLI, os verbos do ciclo (build, ask, retrieve, cite, validate, doctor), o quickstart ou as teclas e abas do explorer.
-        rule: rodar o drive.sh de novo (smoke e tui) e manter só comandos que funcionaram.
 
   - name: instruções dos agentes
     files:
@@ -154,7 +149,7 @@ groups:
       - path: fuzz/seeds/
         when: um achado do fuzz for corrigido (um regress-*.bin ao lado do teste negativo).
       - path: tool/tests/
-        when: mudarem a API Python, o builder, o forge ou um script de release.
+        when: mudarem a API Python, o builder, o pacote urna ou um script de release.
       - path: rust/bridge/python/urna/
         when: mudar um módulo do pacote urna (o seu teste em tool/tests/).
 
@@ -187,7 +182,7 @@ groups:
       - path: .github/workflows/runreport.yml
         when: mudarem eventos, permissões, identificação da execução ou relato de canais indisponíveis e publicações parciais.
 
-  - name: script
+  - name: tool/tasks
     files:
       - path: tool/tasks/releasepr.sh
         when: mudar a preparação de versão, worktree, assinatura, push ou abertura do PR.
@@ -218,7 +213,7 @@ groups:
       - path: tool/tasks/fuzzsweep.sh
         when: mudarem alvos, duração ou execução dos testes de fuzzing.
 
-  - name: python forge
+  - name: pacote urna
     files:
       - path: rust/bridge/python/urna/model/presetmap.py
         when: mudarem presets, revisões, dependências, dimensões ou consentimento para código remoto.
