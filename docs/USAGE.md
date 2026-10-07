@@ -247,7 +247,7 @@ The Python convenience is `python rust/bridge/python/urna/reads/retrieval.py`: i
 | `nano`       | zstd          | int4        | Yes | No   |      0.209 |    0.9130 |
 | `hybrid`     | zstd          | float32     | Yes | Yes  |      0.609 |    1.0000 |
 
-Numbers measured on the project's pt-BR fake-news corpus (n=30,725, dim=384), 100 queries, k=10 vs the float32 exact baseline (the published ladder `data/measure/ladder.json`, gated against `data/measure/baseline.json`). RULER CAVEAT: these `recall@10` figures use a SELF-PERTURBATION ruler (each query is a corpus vector plus tiny noise), so they measure rank-stability under quantization, NOT real-query retrieval, and are likely inflated; see the `ruler` field in `ladder.json`/`baseline.json` and the pending real-query (MTEB-style) ruler (gate-zero). These are the honest current sizes after the text-codec repack (intpack chunk_ids/spans, bitpacked HNSW/BM25 payloads) shrank the indexed presets below the v0.2 figures: `tiny` 0.283 -> 0.256, `compressed` 0.350 -> 0.339, `hybrid` 0.668 -> 0.609. Latency ranges (NEON, hot cache): exact p50 ~3.1 ms, tiny p50 ~1.2 ms, micro p50 ~0.8 ms, nano p50 ~2.1 ms, hybrid p50 ~4.0 ms.
+Numbers measured on the project's pt-BR fake-news corpus (n=30,725, dim=384), 100 queries, k=10 vs the float32 exact baseline. RULER CAVEAT: these `recall@10` figures use a SELF-PERTURBATION ruler (each query is a corpus vector plus tiny noise), so they measure rank-stability under quantization, NOT real-query retrieval, and are likely inflated; see the `ruler` field in `ladder.json`/`baseline.json` and the pending real-query (MTEB-style) ruler (gate-zero). These are the honest current sizes after the text-codec repack (intpack chunk_ids/spans, bitpacked HNSW/BM25 payloads) shrank the indexed presets below the v0.2 figures: `tiny` 0.283 -> 0.256, `compressed` 0.350 -> 0.339, `hybrid` 0.668 -> 0.609. Latency ranges (NEON, hot cache): exact p50 ~3.1 ms, tiny p50 ~1.2 ms, micro p50 ~0.8 ms, nano p50 ~2.1 ms, hybrid p50 ~4.0 ms.
 
 The `exact`/`compressed`/`tiny`/`nano`/`hybrid` rows are direct `preset=` values; `micro` is the published name for the matryoshka size lever (the documented honest point `mrl256-int8`), built with `urna.build(text_encoding="zstd", dtype="int8", mrl_dim=256, with_hnsw=True)` and emitted by `presetrun.py --variants ...,micro,...`.
 
@@ -257,7 +257,7 @@ Pick `nano` for the smallest distributable file with recall above the nano floor
 
 `urna.build(..., mrl_dim=K)` (or `BuildConfig.mrl_dim`) slices each l2-normalized vector to its first `K` components and re-l2-normalizes the prefix BEFORE quantization (Qwen3/ST/BGE truncate-then-renormalize). This is the dimension axis: orthogonal to and multiplicative with the dtype levers. The stored `embedding_dim` becomes `K`, the source dim is recorded as `full_dim`, and both appear in `urna stats`. Queries are striped at `K` too, so a full-dim query against a truncated file is a dimension mismatch; slice + renorm the query to `K` first. Truncation is a pure deterministic op, so builds stay byte-identical; `content_hash` is over the truncated embeddings, so a citation is tied to its `mrl_dim` (never claimed stable across dims). int4 still needs the effective dim divisible by 64, so `mrl_dim` in {256, 192, 128} works with int4 but 96 does not (use int8/f16/f32 at 96).
 
-Matryoshka pays off on a model trained for it (information front-loads into the prefix). The shipped MiniLM corpus is NOT MRL-trained, so truncation costs real recall@10 there; the published ladder in `data/measure/ladder.json` (100 queries, k=10) reports the honest curve (same self-perturbation ruler as above, see the RULER CAVEAT) and `tool/bench/presetrun.py` emits it (the default `--variants` are `compressed,tiny,micro,nano,hybrid` plus `mrl256/192/128-int8`, `mrl96-int8`, `mrl256/192/128-int4`):
+Matryoshka pays off on a model trained for it (information front-loads into the prefix). The shipped MiniLM corpus is NOT MRL-trained, so truncation costs real recall@10 there; the published ladder (100 queries, k=10) reports the honest curve (same self-perturbation ruler as above, see the RULER CAVEAT) and `tool/bench/presetrun.py` emits it (the default `--variants` are `compressed,tiny,micro,nano,hybrid` plus `mrl256/192/128-int8`, `mrl96-int8`, `mrl256/192/128-int4`):
 
 | Ladder        | Size ratio | recall@10 |
 |---------------|-----------:|----------:|
@@ -586,7 +586,6 @@ Every `URNA_*` variable read anywhere in the codebase (installers, CLI, forge, d
 | `URNA_MUTATION_ITERS` | Dev | `1500` | Iteration count for the mutation-fuzz harness; raise for a soak run |
 | `URNA_FUZZ_SEED_DIR` | Dev | Unset | Seed corpus dir override for the mutation-fuzz harness |
 | `URNA_FUZZ_TARGETS` | Dev | `urna-view section-decoders runtime-indexes mmap-open-search` | Space-separated cargo-fuzz targets `tool/tasks/fuzzsweep.sh` runs |
-| `URNA_BASELINE` | Dev | `data/measure/baseline.json` | Regression baseline `fullcheck.sh` compares against |
 | `URNA_QUERIES` | Dev | `100` | Query count `presetrun.py` uses via `fullcheck.sh` |
 | `URNA_K` | Dev | `10` | Top-k `presetrun.py` uses via `fullcheck.sh` |
 | `URNA_OUT` | Dev | `/tmp/fullcheck_post.json` | Where `fullcheck.sh` writes the post-run measurement JSON |
@@ -701,7 +700,6 @@ cargo install urna      # compile from crates.io
 
 ```sh
 docker build --platform=linux/amd64 -t urna .
-docker run --rm -v "$PWD/data:/data:ro" urna validate /data/corpus_next.v1.urna
 ```
 
 The root `Dockerfile` builds the static musl binary in a throwaway toolchain stage and copies it into `scratch`: no shell, no package manager, no network at runtime. The corpus arrives as a mounted volume, so the same image serves air-gapped hosts. On Apple silicon build the aarch64 variant natively (`--build-arg TARGET=aarch64-unknown-linux-musl`); QEMU user emulation crashes rustc mid-build. The binary is the engine-only CLI, built with `--locked` (the dependency versions of `Cargo.lock`) and `--no-default-features` (no terminal UI, so no `setup` or `tui`), from a toolchain image pinned by tag and digest. The image has no Python, so `ask`, `retrieve`, `build`, `search-text` and `doctor`'s embed check do not run inside it; the other engine verbs (file + vector in) do.

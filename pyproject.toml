@@ -94,7 +94,7 @@ reportMissingImports = "error"
 source_folders = ["rust/bridge/python", "tool/bench", "tool/tasks"]
 ignored_resources = [
     "*.pyc", "*~", ".ropeproject", ".git", ".venv", "__pycache__",
-    "target", "TMP", "data", "docs", "fuzz", "pkgs/stage", "demo",
+    "target", "TMP", "docs", "fuzz", "pkgs/stage",
 ]
 save_objectdb = false
 save_history = false

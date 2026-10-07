@@ -37,14 +37,6 @@ Thumbs.db
 *~
 
 # Project specific
-# data/corpus_next.v1.urna remains tracked via Git LFS.
-# Per-phase preset .urna files (data/measure/corpus_*.urna) are
-# regeneration artifacts: re-derivable in minutes by presetrun.py
-# from the LFS-tracked baseline. Do NOT commit them: they'd inflate the
-# LFS bandwidth quota every phase. We commit only the JSON checksums and
-# metrics next to them.
-data/measure/corpus_*.urna
-data/measure/*.urna-*
 
 
 # Temporary workspace for agent sessions.
@@ -64,12 +56,8 @@ data/hoff.db
 *.urna
 *.sidecar.jsonl
 **/pairs/
-!data/corpus_next.v1.urna
 !rust/format/tests/fixtures/golden_v1_minimal.urna
 
-# demo datasets are local-only (data/demo/Instructions.md says how to fetch them).
-data/demo/*
-!data/demo/Instructions.md
 .env
 
 # wheel staging (tool/tasks/wheelprep.py output)
@@ -93,3 +81,5 @@ TMP/
 
 # quickstart build output (demo/starter/corpus.toml)
 demo/starter/out/
+tool/
+tmps/

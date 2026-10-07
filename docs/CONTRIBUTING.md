@@ -43,8 +43,6 @@ pip install ruff pyyaml numpy tokenizers pillow sentence-transformers pandas zst
 
 `numpy` and `tokenizers` are the forge deps the potion embedder needs; `pyyaml` is for the release rehearsal generator and its tests; `pillow` is for the image tests; `sentence-transformers` only for the pt-BR corpus and `search-text`.
 
-`data/corpus_next.v1.urna` is tracked via Git LFS; it is the frozen baseline of the regression gate, and `data/demo/Instructions.md` gives its hashes. Demo data under `data/demo/` is local-only and gitignored. Without it, runtime unit tests still pass.
-
 ## Conventions and writing style
 
 These conventions are not aesthetic preferences. They exist to keep the repo readable for humans, agents, and vector search at the same time. If you find yourself wanting to break one, open an issue first and explain why; do not silently deviate. The goal is gentle communal pressure to keep the codebase legible.
