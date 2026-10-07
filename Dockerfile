@@ -9,7 +9,6 @@
 # the toolchain image is pinned by tag and digest; bump both together.
 #
 # build:  docker build --platform=linux/amd64 -t urna .
-# run:    docker run --rm -v "$PWD/data:/data:ro" urna validate /data/corpus_next.v1.urna
 #
 # TARGET is a build arg: x86_64-unknown-linux-musl (default) or
 # aarch64-unknown-linux-musl. on apple silicon, build the aarch64 variant
