@@ -8,7 +8,7 @@ A `.urna` file keeps embeddings, HNSW/BM25 indexes and the search contract toget
 
 Made for those tired of yet another cloud database service.
 
-No ambition to become a cloud service or compete with mature projects like Qdrant or Chroma. My focus is exact cosine scores, byte-for-byte contract validation, compression, portability and verifiable retrieval without depending on cloud infrastructure.
+No plans to become a cloud service or to compete with mature projects like Qdrant or Chroma. The focus is exact cosine scores, byte-for-byte contract validation, compression, portability, and verifiable retrieval without any cloud dependency.
 
 Recent experiments with datasets [pt-BR fact-check retrieval](https://github.com/brennercruvinel/fakenews-ptbr-urna-benchmark) · [38k Magic cards compressed with AV1](https://github.com/brennercruvinel/mtg-urna-benchmark)
 
