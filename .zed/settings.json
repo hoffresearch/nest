@@ -12,7 +12,11 @@
     ".bench-competitors",
     "target",
     ".venv",
-    ".__pycache__",
-    "TMP"
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/.mypy_cache",
+    "**/.ruff_cache",
+    "**/.hypothesis",
+    "**/*.egg-info"
   ]
 }

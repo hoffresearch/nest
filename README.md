@@ -6,7 +6,15 @@ Portable binary vector db that fits in your pocket.
 
 A `.urna` file keeps embeddings, HNSW/BM25 indexes and the search contract together. The Rust runtime memory maps it, checks its hashes and reranks every candidate with exact cosine similarity. The CLI and TUI are intentionally simple: `build`, `ask`, `retrieve`.
 
-Documentation: [docs.urna.dev](https://docs.urna.dev), with install, a quickstart, the concepts, the guides and the full CLI, build spec, Python and file format reference. Project site: [urna.dev](https://urna.dev)
+Made for those tired of yet another cloud database service.
+
+No plans to become a cloud service or to compete with mature projects like Qdrant or Chroma. The focus is exact cosine scores, byte-for-byte contract validation, compression, portability, and verifiable retrieval without any cloud dependency.
+
+Recent experiments with datasets [pt-BR fact-check retrieval](https://github.com/brennercruvinel/fakenews-ptbr-urna-benchmark) · [38k Magic cards compressed with AV1](https://github.com/brennercruvinel/mtg-urna-benchmark)
+
+Docs  [docs.urna.dev](https://docs.urna.dev) 
+
+<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/docs/img/urna-tui.svg" alt="urna tui: the ask tab with scored hits and the cited text of the selected one" width="100%">
 
 ## Install
 
@@ -43,11 +51,8 @@ pip install "urna[embed]"
 
 Windows, Docker, `cargo binstall` and how to verify a download are in the [install reference](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md#reference).
 
-## In the terminal
-
 `urna setup` shows the plan before it writes anything and ends on the doctor checks. A corpus built with a heavier model, like the pt-BR MiniLM, needs that model on the machine: `urna setup --model minilm-multilingual` installs it (or `m` on the plan screen), and the ask tab of `urna tui` offers the same install when a query needs it. Nothing is downloaded until you say so.
 
-<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/docs/img/urna-tui.svg" alt="urna tui: the ask tab with scored hits and the cited text of the selected one" width="100%">
 
 `urna tui` opens a corpus, validates it, and lets you ask it questions. Each hit shows its score, the stored text and its citation.
 
@@ -79,7 +84,7 @@ urna cite demo/starter/out/quickstart.urna 'urna://sha256:1147b256.../sha256:b5d
 urna validate demo/starter/out/quickstart.urna
 ```
 
-`ask` prints the answer with its citation, `retrieve` prints JSON for another program, `cite` turns a citation back into the stored text, and `validate` checks every hash. To build from your own rows, see [usage section 13](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
+`ask` prints the answer with its citation, `retrieve` prints JSON for another program, `cite` turns a citation back into the stored text, and `validate` checks every hash. To build from your own rows, see [usage](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
 
 Doc  [docs.urna.dev](https://docs.urna.dev)
 
@@ -89,10 +94,8 @@ Web [www.urna.dev](https://urna.dev)
 
 ## License
 
-MIT, see [LICENSE](https://github.com/hoffresearch/urna/blob/main/LICENSE). [Hoff Research](https://hoffresearch.com)
-
+MIT, see [LICENSE](https://github.com/hoffresearch/urna/blob/main/LICENSE). Author: Brenner Cruvinel.
 Made it simple, but significant (∂μfμν = jν)
-Author: Brenner Cruvinel
 
 ----
 <details>
@@ -171,7 +174,7 @@ urna retrieve my_corpus.urna "can I use this offline" -k 5 --format jsonl
 urna build --spec corpus.toml --dry-run
 ```
 
-`build` reads one TOML: the source (SQLite, CSV, JSONL, an image dir), the media settings, and one or more embedding models from the registry (`potion`, `clip-vit-b32`, `siglip2`, `wemm-2b`, ...). Each model becomes a named vector space in the same file. The full spec is in [usage section 13](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
+`build` reads one TOML: the source (SQLite, CSV, JSONL, an image dir), the media settings, and one or more embedding models from the registry (`potion`, `clip-vit-b32`, `siglip2`, `wemm-2b`, ...). Each model becomes a named vector space in the same file. The full spec is in [usage](https://github.com/hoffresearch/urna/blob/main/docs/USAGE.md).
 
 </details>
 
@@ -294,5 +297,7 @@ The profile names are the forge's (`[media] profile = "..."`, usage section 14).
 The crates are `urna-format` (the container), `urna-engine` (search), `urna` (the binary) and `urna-bridge` (the PyO3 bridge behind the Python package).
 
 > Renamed from `nest` after 0.4.0. A `.nest` file written by 0.4.0 still opens.
+
+[Hoff Research](https://hoffresearch.com)
 
 </details>
