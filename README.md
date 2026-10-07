@@ -2,7 +2,7 @@
 
 # Urna
 
-Portable binary vector db that fits in your pocket.
+Lightweight portable binary vector db that fits in your pocket.
 
 A `.urna` file keeps embeddings, HNSW/BM25 indexes and the search contract together. The Rust runtime memory maps it, checks its hashes and reranks every candidate with exact cosine similarity. The CLI and TUI are intentionally simple: `build`, `ask`, `retrieve`.
 
