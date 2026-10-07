@@ -2,9 +2,9 @@
 
 # Urna
 
-A vector database in one file, with citations that stay valid.
+Portable binary vector db that fits in your pocket.
 
-A `.urna` file holds the chunks, the embeddings, the source spans, the indices and the search contract. The Rust runtime maps it into memory, checks its hashes, and answers with exact cosine scores and a `urna://content_hash/chunk_id` citation for every hit. It works offline and rebuilds byte for byte. Python builds the file, Rust serves it.
+A `.urna` file keeps embeddings, HNSW/BM25 indexes and the search contract together. The Rust runtime memory maps it, checks its hashes and reranks every candidate with exact cosine similarity. The CLI and TUI are intentionally simple: `build`, `ask`, `retrieve`.
 
 Documentation: [docs.urna.dev](https://docs.urna.dev), with install, a quickstart, the concepts, the guides and the full CLI, build spec, Python and file format reference. Project site: [urna.dev](https://urna.dev)
 
@@ -47,15 +47,13 @@ Windows, Docker, `cargo binstall` and how to verify a download are in the [insta
 
 `urna setup` shows the plan before it writes anything and ends on the doctor checks. A corpus built with a heavier model, like the pt-BR MiniLM, needs that model on the machine: `urna setup --model minilm-multilingual` installs it (or `m` on the plan screen), and the ask tab of `urna tui` offers the same install when a query needs it. Nothing is downloaded until you say so.
 
-<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/docs/img/urna-setup.svg" alt="urna setup: the verify step with every doctor check passing" width="100%">
+<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/docs/img/urna-tui.svg" alt="urna tui: the ask tab with scored hits and the cited text of the selected one" width="100%">
 
 `urna tui` opens a corpus, validates it, and lets you ask it questions. Each hit shows its score, the stored text and its citation.
 
 ```sh
 urna tui my_corpus.urna
 ```
-
-<img src="https://raw.githubusercontent.com/hoffresearch/urna/main/docs/img/urna-tui.svg" alt="urna tui: the ask tab with scored hits and the cited text of the selected one" width="100%">
 
 ## Quickstart
 
