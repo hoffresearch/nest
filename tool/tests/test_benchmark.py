@@ -1,7 +1,7 @@
 """Prove the benchmark rebuild never destroys the corpus it replaces.
 
 `presetrun.py` (and through it `fullcheck.sh`) rebuilds
-`target/bench/corpus_<preset>.urna` with `benchtime.build_variant`,
+`target/bench/<baseline hash>/corpus_<preset>.urna` with `benchtime.build_variant`,
 which builds under a temporary name in the same directory, validates, and
 renames over the old file only at the end, so an interrupted gate never
 leaves the corpus gone:
@@ -12,7 +12,8 @@ leaves the corpus gone:
   corpus byte-for-byte and no temporary;
 - edge: a temporary a killed run left behind is removed by the next build,
   one of a run still building is kept, and a first build with no corpus
-  yet creates it.
+  yet creates it; the variants of two baselines land in two directories,
+  so `--reuse` never measures one corpus's builds against another's.
 
 Run: .venv/bin/python tool/tests/test_benchmark.py
 """
@@ -26,6 +27,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "rust" / "bridge" / "python"))
 sys.path.insert(0, str(REPO / "tool" / "bench"))
 
+from baselines import OUT_DIR, out_dir
 from benchtime import build_variant
 
 import urna
@@ -123,12 +125,22 @@ def test_a_running_build_keeps_its_temporary(d: Path) -> None:
     print("edge (a running build's temporary kept): OK")
 
 
+def test_each_baseline_has_its_own_variants(_d: Path) -> None:
+    a = out_dir("sha256:" + "4bcb8e0fc38a1c13" + "0" * 48)
+    b = out_dir("sha256:" + "ea86ab5097646122" + "0" * 48)
+    assert a == OUT_DIR / "4bcb8e0fc38a1c13", a
+    assert a != b and a.parent == b.parent == OUT_DIR, (a, b)
+    assert out_dir("sha256:" + "4bcb8e0fc38a1c13" + "f" * 48) == a  # 16 hex name it
+    print("edge (each baseline's variants in their own directory): OK")
+
+
 def main() -> None:
     for test in (
         test_replaces_a_corpus_with_a_valid_one,
         test_a_failed_build_keeps_the_old_corpus,
         test_stale_temporaries_go_and_a_first_build_creates,
         test_a_running_build_keeps_its_temporary,
+        test_each_baseline_has_its_own_variants,
     ):
         with tempfile.TemporaryDirectory(prefix="urna-bench-") as tmp:
             test(Path(tmp))

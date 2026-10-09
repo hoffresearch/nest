@@ -12,6 +12,7 @@ The three-layer gate itself is covered by test_hashguard.py.
 Run: .venv/bin/python tool/tests/test_askrouter.py
 """
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -155,6 +156,16 @@ def _st_python() -> str | None:
     return st_py if _has_st(st_py) else None
 
 
+def _pinned_sha256() -> str:
+    """the sha-256 tool/tasks/benchdata.py pins for the benchmark corpus."""
+    spec = importlib.util.spec_from_file_location(
+        "benchdata", REPO / "tool" / "tasks" / "benchdata.py"
+    )
+    benchdata = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(benchdata)
+    return benchdata.SHA256
+
+
 def _offline_env() -> dict:
     return {k: v for k, v in os.environ.items() if k != "URNA_ALLOW_DOWNLOAD"}
 
@@ -283,7 +294,8 @@ def _minilm_preset_case(st_py: str, query_hash: str) -> None:
         assert out["embedding_dim"] == adapter["d"] == 384, name
         cos = sum(x * y for x, y in zip(out["vector"], adapter["v"], strict=True))
         assert cos > 0.99999, (name, cos)
-    built = REPO / "target" / "bench" / "corpus_hybrid.urna"
+    # presetrun builds the variants of the pinned corpus under its hash.
+    built = REPO / "target" / "bench" / _pinned_sha256()[:16] / "corpus_hybrid.urna"
     if built.exists():
         assert urna.open(str(built)).inspect()["manifest"]["model_hash"] == adapter["h"]
         print("case 10 (minilm-multilingual preset == searchtxt.py == the benchmark corpus): OK")

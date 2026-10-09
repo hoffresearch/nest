@@ -128,8 +128,16 @@ def _decode_spans(buf: bytes, expected: int) -> list[tuple[str, int, int]]:
 
 
 # where presetrun builds the variants: under the gitignored target/, beside
-# fullcheck's step stamps.
+# fullcheck's step stamps, one directory per baseline (out_dir).
 OUT_DIR = REPO / "target" / "bench"
+
+
+def out_dir(file_hash: str) -> Path:
+    """the variants of the baseline with this file_hash (`sha256:<hex>`):
+    target/bench/<first 16 hex>/. a variant built from another baseline is
+    never in it, so `--reuse` cannot measure one corpus's builds against
+    another corpus's ground truth."""
+    return OUT_DIR / file_hash.removeprefix("sha256:")[:16]
 
 # Silence the "imported but unused" warning when this module is loaded
 # for its side effects (sys.path insertion).

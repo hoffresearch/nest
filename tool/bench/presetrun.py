@@ -47,7 +47,7 @@ sys.path.insert(0, str(REPO / "tool" / "tasks"))
 sys.path.insert(0, str(REPO / "rust" / "bridge" / "python"))
 
 import benchdata  # noqa: E402
-from baselines import OUT_DIR, decode_baseline  # noqa: E402
+from baselines import decode_baseline, out_dir  # noqa: E402
 from benchtime import build_variant, percentile, run_bench  # noqa: E402
 
 import urna  # noqa: E402
@@ -229,7 +229,8 @@ def main():
         "--reuse",
         action="store_true",
         help=(
-            "Reuse an existing variant build when the .urna opens and validates "
+            "Reuse an existing variant build of this same baseline (they live in "
+            "target/bench/<baseline file_hash>/) when the .urna opens and validates "
             "cleanly (builds are deterministic, so the bytes are identical). "
             "build_s is recorded as 0.0 and the log line says reused=true. "
             "Default off: every variant is rebuilt."
@@ -247,12 +248,12 @@ def main():
     if not base_path.exists():
         raise SystemExit(f"baseline not found: {base_path}")
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-
     chunks, meta = decode_baseline(base_path)
     queries = _sample_queries(chunks, args.n_queries, args.seed)
 
     db_exact = urna.open(str(base_path))
+    variants = out_dir(db_exact.file_hash)
+    variants.mkdir(parents=True, exist_ok=True)
     base_size = base_path.stat().st_size
     t_exact, hits_exact = run_bench(db_exact, queries, args.k, mode="exact")
     base_top_score = [h[0].score for h in hits_exact]
@@ -291,7 +292,7 @@ def main():
         preset = preset.strip()
         if not preset:
             continue
-        out_path = OUT_DIR / f"corpus_{preset}.urna"
+        out_path = variants / f"corpus_{preset}.urna"
         print(f"\n→ building preset={preset} → {out_path}", file=log)
         reused = False
         build_time = 0.0

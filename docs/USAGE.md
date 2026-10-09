@@ -599,7 +599,7 @@ Every `URNA_*` variable read anywhere in the codebase (installers, CLI, forge, d
 | `URNA_K` | Dev | `10` | Top-k `presetrun.py` uses via `fullcheck.sh` |
 | `URNA_OUT` | Dev | `/tmp/fullcheck_post.json` | Where `fullcheck.sh` writes the post-run measurement JSON |
 | `URNA_CORPUS` | Dev | The benchmark corpus | The corpus `presetrun.py` measures via `fullcheck.sh`. Unset, it is `fakenews.urna` (MiniLM, exact) of `brennercruvinel/fakenews-ptbr-urna-benchmark` at a pinned commit, in the Hugging Face cache, checked against its sha-256; `tool/tasks/benchdata.py fetch` downloads it only with `URNA_ALLOW_DOWNLOAD=1` |
-| `URNA_BASELINE` | Dev | `tool/bench/reference.json` | The metrics `benchgate.py` compares against via `fullcheck.sh`, measured on the default corpus |
+| `URNA_BASELINE` | Dev | `tool/bench/reference.json` | The metrics `benchgate.py` compares against via `fullcheck.sh`, measured on the default corpus. They must come from the corpus the run measures: before any step, `fullcheck.sh` stops with exit 9 when the file is missing or unreadable and with exit 10 when its `baseline_file_hash` is not the corpus's sha-256 (`tool/tasks/benchdata.py match`); exit 3 stays the uncached corpus |
 | `URNA_FRESH` | Dev | `0` | `1` makes `fullcheck.sh` run every step, ignoring the steps that already passed with the same inputs |
 
 <details>

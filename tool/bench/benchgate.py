@@ -87,6 +87,14 @@ def main() -> int:
 
     base = load_metrics(args.baseline)
     post = load_metrics(args.post)
+    # metrics from two corpora say nothing about a regression.
+    if base.get("baseline_file_hash") != post.get("baseline_file_hash"):
+        print(
+            f"ERROR: the baseline was measured on {base.get('baseline_file_hash')} and the "
+            f"post on {post.get('baseline_file_hash')}; compare runs of the same corpus",
+            file=sys.stderr,
+        )
+        return 1
 
     base_p = by_preset(base)
     post_p = by_preset(post)
