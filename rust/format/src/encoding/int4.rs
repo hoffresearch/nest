@@ -129,26 +129,11 @@ pub struct Int4EmbeddingsView<'a> {
     pub blocks: usize,
 }
 
-// shape only: a derived Debug would print every byte of the payload.
+crate::shape_debug!(Int4EmbeddingsView<'_> {
+    show n, show dim, show blocks, len scales, len codes,
+});
 
-impl std::fmt::Debug for Int4EmbeddingsView<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // every field named: a new one fails to compile here until it
-        // is shown or marked `_`.
-        let Self {
-            n,
-            dim,
-            blocks,
-            scales: _,
-            codes: _,
-        } = self;
-        f.debug_struct("Int4EmbeddingsView")
-            .field("n", n)
-            .field("dim", dim)
-            .field("blocks", blocks)
-            .finish_non_exhaustive()
-    }
-}
+// shape only: a derived Debug would print every byte of the payload.
 
 impl<'a> Int4EmbeddingsView<'a> {
     pub fn parse(bytes: &'a [u8], n: usize, dim: usize) -> crate::Result<Self> {

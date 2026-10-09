@@ -38,30 +38,11 @@ pub struct Bm25Index {
     pub(super) terms: HashMap<String, TermEntry>,
 }
 
-// parameters and sizes only, not the postings.
+crate::shape_debug!(Bm25Index {
+    show k1, show b, show avgdl, show n_docs, show n_terms, len doc_lengths, len terms,
+});
 
-impl std::fmt::Debug for Bm25Index {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // every field named: a new one fails to compile here until it
-        // is shown or marked `_`.
-        let Self {
-            k1,
-            b,
-            avgdl,
-            n_docs,
-            n_terms,
-            doc_lengths: _,
-            terms: _,
-        } = self;
-        f.debug_struct("Bm25Index")
-            .field("k1", k1)
-            .field("b", b)
-            .field("avgdl", avgdl)
-            .field("n_docs", n_docs)
-            .field("n_terms", n_terms)
-            .finish_non_exhaustive()
-    }
-}
+// parameters and sizes only, not the postings.
 
 impl Bm25Index {
     /// Build a BM25 index from the canonical chunk texts.

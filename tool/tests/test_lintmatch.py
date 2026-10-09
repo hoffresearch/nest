@@ -1,15 +1,17 @@
-"""Prove rust/ingest keeps the root's lint policy and toolchain floor.
+"""Prove the workspaces outside the root keep its lint policy.
 
-rust/ingest is its own cargo workspace (the root excludes it), so it
-inherits nothing: its `[lints]` tables are a copy of the root's
-`[workspace.lints]`, and its `rust-version` a copy of the root's. a copy
-drifts silently; this suite makes the drift a failure:
+rust/ingest (the root excludes it) and fuzz/ (cargo-fuzz needs nightly)
+are cargo workspaces of their own, so they inherit nothing: their `[lints]`
+tables are a copy of the root's `[workspace.lints]`, and rust/ingest's
+`rust-version` a copy of the root's (fuzz/ runs on nightly and pins none).
+a copy drifts silently; this suite makes the drift a failure:
 
-- happy path: every root lint is in rust/ingest at the same level and
-  priority, and the two rust-version values agree;
-- error path: a lint missing from the copy, or at another level, is named;
-- edge case: rust/ingest may add a lint the root cannot have
-  (`unsafe_code = "forbid"`: the engine's SIMD keeps the root from it).
+- happy path: every root lint is in each copy at the same level and
+  priority, and rust/ingest's rust-version agrees with the root's;
+- error path: a lint missing from a copy, or at another level, is named
+  with the copy it is missing from;
+- edge case: a copy may add a lint the root cannot have (rust/ingest's
+  `unsafe_code = "forbid"`: the engine's SIMD keeps the root from it).
 
 Run: python tool/tests/test_lintmatch.py
 """
@@ -21,29 +23,31 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 ROOT = REPO / "Cargo.toml"
 INGEST = REPO / "rust" / "ingest" / "Cargo.toml"
+COPIES = {"rust/ingest": INGEST, "fuzz": REPO / "fuzz" / "Cargo.toml"}
 
 
 def load(path: Path) -> dict:
     return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
-def drift(root: dict, copy: dict) -> list[str]:
+def drift(root: dict, copy: dict, where: str = "rust/ingest") -> list[str]:
     """what the copy lacks or sets differently, one line per lint."""
     found = []
     for tool, lints in root.items():
         theirs = copy.get(tool, {})
         for name, level in lints.items():
             if name not in theirs:
-                found.append(f"{tool}::{name} missing from rust/ingest")
+                found.append(f"{tool}::{name} missing from {where}")
             elif theirs[name] != level:
                 found.append(f"{tool}::{name} is {theirs[name]!r}, the root has {level!r}")
     return found
 
 
-def test_ingest_copies_the_root_lints():
+def test_every_copy_has_the_root_lints():
     root = load(ROOT)["workspace"]["lints"]
-    copy = load(INGEST)["lints"]
-    assert drift(root, copy) == [], drift(root, copy)
+    for where, path in COPIES.items():
+        found = drift(root, load(path).get("lints", {}), where)
+        assert found == [], found
 
 
 def test_ingest_keeps_the_root_rust_version():
@@ -55,10 +59,10 @@ def test_ingest_keeps_the_root_rust_version():
 def test_a_drift_is_named():
     root = {"clippy": {"todo": "deny", "expect_used": "deny"}}
     copy = {"clippy": {"todo": "warn"}}
-    assert drift(root, copy) == [
+    assert drift(root, copy, "fuzz") == [
         "clippy::todo is 'warn', the root has 'deny'",
-        "clippy::expect_used missing from rust/ingest",
-    ], drift(root, copy)
+        "clippy::expect_used missing from fuzz",
+    ], drift(root, copy, "fuzz")
 
 
 def test_ingest_may_be_stricter():

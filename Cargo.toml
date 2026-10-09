@@ -16,13 +16,18 @@ readme = "README.md"
 keywords = ["vector-database", "embeddings", "search", "offline", "citations"]
 
 # workspace-wide lint policy (every crate opts in with `[lints] workspace =
-# true`). the two `deny`s are the hardening contract of docs/SECURITY.md made
-# mechanical: a runtime that opens third-party files may not panic on an
-# `unwrap`, and every `unsafe` block must state the invariant that makes it
-# sound (`// SAFETY:`). tests are exempt from `unwrap_used` and
-# `expect_used` via clippy.toml. `unsafe_code` cannot be forbidden here, the
-# engine's SIMD needs it; rust/format forbids it in its lib.rs. rust/ingest
-# is outside the workspace and keeps a copy of these tables.
+# true`). `unwrap_used`, `expect_used` and `undocumented_unsafe_blocks` are
+# the hardening contract of docs/SECURITY.md made mechanical: a runtime that
+# opens third-party files may not panic on an `unwrap` or an `expect`, and
+# every `unsafe` block must state the invariant that makes it sound
+# (`// SAFETY:`); tests are exempt from the first two via clippy.toml. the
+# rest keep the code reviewable: no `dbg!` or `todo!` left behind, each
+# unsafe operation inside an `unsafe fn` in its own block, every public type
+# `Debug` (the ones holding file bytes print their shape, `shape_debug!`),
+# and every path naming its lifetime. `unsafe_code` cannot be forbidden here,
+# the engine's SIMD needs it; rust/format forbids it in its lib.rs.
+# rust/ingest and fuzz/ are workspaces of their own and keep a copy of these
+# tables (tool/tests/test_lintmatch.py).
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
 missing_debug_implementations = "deny"

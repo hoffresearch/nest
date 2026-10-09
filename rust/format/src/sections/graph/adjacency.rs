@@ -218,13 +218,16 @@ impl<'a> Cursor<'a> {
 /// the validated csr columns the runtime `CsrIndex` indexes in O(1):
 /// `offsets` (len n_nodes+1) bounds each node's run in `neighbors` (absolute
 /// decoded dst ids) and `edge_types` (1:1 with `neighbors`).
-#[derive(Debug)]
 pub struct CsrParts {
     pub n_nodes: usize,
     pub offsets: Vec<u64>,
     pub neighbors: Vec<u32>,
     pub edge_types: Vec<u8>,
 }
+
+crate::shape_debug!(CsrParts {
+    show n_nodes, len offsets, len neighbors, len edge_types,
+});
 
 /// parse the csr payload into validated owned columns (the single parser):
 /// bounds-checks the header, monotone offsets, degree cap, column lengths,

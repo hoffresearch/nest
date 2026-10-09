@@ -83,6 +83,8 @@ jobs:
           cargo fmt --manifest-path rust/ingest/Cargo.toml --all --check
           cargo clippy --manifest-path rust/ingest/Cargo.toml --all-targets -- -D warnings
           cargo test --manifest-path rust/ingest/Cargo.toml
+      - name: fuzz/ lints (separate workspace; the targets run on nightly below)
+        run: cargo clippy --manifest-path fuzz/Cargo.toml --all-targets -- -D warnings
 
   # the terminal ui (`urna setup`, `urna tui`) ships in the windows
   # release archive too, and the rust job above never compiles for windows:

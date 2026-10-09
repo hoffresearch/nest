@@ -161,24 +161,11 @@ pub struct IntpackReader<'a> {
     n_blocks: usize,
 }
 
-// shape only: a derived Debug would print every byte of the payload.
+crate::shape_debug!(IntpackReader<'_> {
+    show count, show n_blocks, len bytes,
+});
 
-impl std::fmt::Debug for IntpackReader<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // every field named: a new one fails to compile here until it
-        // is shown or marked `_`.
-        let Self {
-            count,
-            n_blocks,
-            bytes,
-        } = self;
-        f.debug_struct("IntpackReader")
-            .field("count", count)
-            .field("n_blocks", n_blocks)
-            .field("bytes", &bytes.len())
-            .finish_non_exhaustive()
-    }
-}
+// shape only: a derived Debug would print every byte of the payload.
 
 impl<'a> IntpackReader<'a> {
     pub fn parse(bytes: &'a [u8]) -> Result<Self, UrnaError> {
