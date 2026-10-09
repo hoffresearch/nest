@@ -57,6 +57,13 @@ fi
 if [[ -z "$CORPUS" ]]; then
   CORPUS="$("$PY" tool/tasks/benchdata.py fetch)"
 fi
+# the same for the baseline, which benchgate reads only at the last step.
+if [[ ! -f "$BASELINE" ]]; then
+  printf 'fullcheck: no baseline at %s. URNA_BASELINE must name the metrics\n' "$BASELINE" >&2
+  printf '  measured on the corpus this run measures (tool/bench/reference.json\n' >&2
+  printf '  for the pinned one); another corpus needs its own baseline.\n' >&2
+  exit 3
+fi
 
 step() {
   printf '\n\033[1;36m== %s ==\033[0m\n' "$*" >&2
@@ -281,7 +288,7 @@ python_tests() {
   ok "modelpull: model install (5 cases)"
 
   # the benchmark rebuild builds beside the corpus and renames at the end, so
-  # an interrupted gate never leaves data/measure without its corpora.
+  # an interrupted gate never leaves target/bench without its corpora.
   step "python tool/tests/test_benchmark.py"
   "$PY" tool/tests/test_benchmark.py
   ok "benchmark: bench runner (4 cases)"

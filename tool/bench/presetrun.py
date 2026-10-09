@@ -1,5 +1,6 @@
 """Acceptance harness: measure file size, recall@k, score drift, and
-latency for the four presets against a baseline `data/corpus_next.v1.urna`.
+latency for the four presets against a baseline `.urna` (default: the
+pinned benchmark corpus, `tool/tasks/benchdata.py`).
 
 Pipeline:
 
@@ -42,9 +43,11 @@ from statistics import mean
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(REPO / "tool" / "tasks"))
 sys.path.insert(0, str(REPO / "rust" / "bridge" / "python"))
 
-from baselines import DEFAULT_BASELINE, OUT_DIR, decode_baseline  # noqa: E402
+import benchdata  # noqa: E402
+from baselines import OUT_DIR, decode_baseline  # noqa: E402
 from benchtime import build_variant, percentile, run_bench  # noqa: E402
 
 import urna  # noqa: E402
@@ -196,7 +199,10 @@ def _variant_row(
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--baseline", default=str(DEFAULT_BASELINE))
+    ap.add_argument(
+        "--baseline",
+        help="the .urna to measure (default: the pinned benchmark corpus, tool/tasks/benchdata.py)",
+    )
     ap.add_argument("--n-queries", type=int, default=50)
     ap.add_argument("--k", type=int, default=10)
     ap.add_argument("--seed", type=int, default=0)
@@ -231,7 +237,13 @@ def main():
     )
     args = ap.parse_args()
 
-    base_path = Path(args.baseline)
+    if args.baseline is None:
+        try:
+            base_path = benchdata.fetch()
+        except benchdata.Refused as e:
+            raise SystemExit(f"presetrun: {e}") from e
+    else:
+        base_path = Path(args.baseline)
     if not base_path.exists():
         raise SystemExit(f"baseline not found: {base_path}")
 

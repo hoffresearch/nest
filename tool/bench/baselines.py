@@ -127,9 +127,9 @@ def _decode_spans(buf: bytes, expected: int) -> list[tuple[str, int, int]]:
     return out
 
 
-# Re-export the path constant some callers want.
-DEFAULT_BASELINE = REPO / "data" / "corpus_next.v1.urna"
-OUT_DIR = REPO / "data" / "measure"
+# where presetrun builds the variants: under the gitignored target/, beside
+# fullcheck's step stamps.
+OUT_DIR = REPO / "target" / "bench"
 
 # Silence the "imported but unused" warning when this module is loaded
 # for its side effects (sys.path insertion).

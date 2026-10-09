@@ -14,8 +14,8 @@ DermLIP is not mrl-trained, so prefix truncation degrades more than on an
 mrl model; pca is the fallback lever if int4/int8 collapse.
 
 Usage:
-    tool/bench/imagerate.py --input-dir data/demo/derm/ph2/images \
-        --labels data/demo/derm/ph2/PH2_simple_dataset.csv --dataset ph2 \
+    tool/bench/imagerate.py --input-dir <ph2>/images \
+        --labels <ph2>/PH2_simple_dataset.csv --dataset ph2 \
         --out-dir tmp/sweep-ph2 --variants "av1-inter:30,35,40;avif:35"
 """
 

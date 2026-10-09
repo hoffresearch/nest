@@ -7,7 +7,7 @@ search-text, benchmark, cite, doctor) lives in the rust `urna` binary,
 installed by tool/tasks/installer.sh.
 
 dev repo usage:
-  python3 rust/bridge/python/urna/entry/clidriver.py validate data/corpus_next.v1.urna
+  python3 rust/bridge/python/urna/entry/clidriver.py validate <corpus>.urna
 installed usage: urna validate corpus.urna
 """
 

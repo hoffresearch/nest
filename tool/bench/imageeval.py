@@ -8,7 +8,7 @@ identity
     frame came back. this measures RANK STABILITY UNDER THE CODEC, not
     retrieval quality. it is a self-retrieval ruler and it is inflated by
     construction: the corpus contains the answer, lightly perturbed. it is
-    the same class of ruler the repo already flags in `data/measure/*.json`.
+    the same class of ruler `tool/bench/presetrun.py` flags in its `ruler` block.
 
 label
     the query's own frame is REMOVED from its results, and the score is how

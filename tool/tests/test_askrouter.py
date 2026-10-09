@@ -283,7 +283,7 @@ def _minilm_preset_case(st_py: str, query_hash: str) -> None:
         assert out["embedding_dim"] == adapter["d"] == 384, name
         cos = sum(x * y for x, y in zip(out["vector"], adapter["v"], strict=True))
         assert cos > 0.99999, (name, cos)
-    built = REPO / "data" / "measure" / "corpus_hybrid.urna"
+    built = REPO / "target" / "bench" / "corpus_hybrid.urna"
     if built.exists():
         assert urna.open(str(built)).inspect()["manifest"]["model_hash"] == adapter["h"]
         print("case 10 (minilm-multilingual preset == searchtxt.py == the benchmark corpus): OK")
