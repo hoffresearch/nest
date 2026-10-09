@@ -89,6 +89,16 @@ def encode(model, texts: list[str]) -> list[list[float]]:
     return out
 
 
+def dimension(model) -> int:
+    """the model's output dim. sentence-transformers 6 renamed
+    `get_sentence_embedding_dimension` to `get_embedding_dimension` and warns
+    on the old name; the supported floor (5.7) may predate the new one."""
+    get = getattr(model, "get_embedding_dimension", None)
+    if get is None:
+        get = model.get_sentence_embedding_dimension
+    return int(get())
+
+
 def fingerprint(local_path: str, model_id: str):
     """The model fingerprint over the snapshot, keyed by the manifest name."""
     return compute_model_fingerprint(local_path, model_id=model_id)
@@ -97,7 +107,7 @@ def fingerprint(local_path: str, model_id: str):
 def _embed(model_name_or_path: str, query: str) -> tuple[list[float], int, str]:
     """Return (vector, dim, resolved_local_path) for `query`."""
     model, local_path = load(model_name_or_path)
-    dim = int(model.get_sentence_embedding_dimension())
+    dim = dimension(model)
     return encode(model, [query])[0], dim, local_path
 
 
@@ -154,7 +164,7 @@ def _embed_dim(model_name_or_path: str) -> int:
     from sentence_transformers import SentenceTransformer
 
     model = SentenceTransformer(model_name_or_path)
-    return int(model.get_sentence_embedding_dimension())
+    return dimension(model)
 
 
 def main(argv: list[str] | None = None) -> int:
