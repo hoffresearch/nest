@@ -84,6 +84,25 @@ pub struct Int8EmbeddingsView<'a> {
     pub dim: usize,
 }
 
+// shape only: a derived Debug would print every byte of the payload.
+
+impl std::fmt::Debug for Int8EmbeddingsView<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // every field named: a new one fails to compile here until it
+        // is shown or marked `_`.
+        let Self {
+            n,
+            dim,
+            scales: _,
+            bodies: _,
+        } = self;
+        f.debug_struct("Int8EmbeddingsView")
+            .field("n", n)
+            .field("dim", dim)
+            .finish_non_exhaustive()
+    }
+}
+
 impl<'a> Int8EmbeddingsView<'a> {
     pub fn parse(bytes: &'a [u8], n: usize, dim: usize) -> crate::Result<Self> {
         // checked: `n` / `dim` are header-controlled; an overflowed product

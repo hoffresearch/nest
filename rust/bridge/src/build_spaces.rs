@@ -15,7 +15,7 @@ use pyo3::types::{PyDict, PyList};
 /// band (0x20 + index) per space, both excluded from content_hash.
 pub(crate) fn attach_spaces(
     mut builder: urna_format::writer::UrnaFileBuilder,
-    spaces: &Bound<PyList>,
+    spaces: &Bound<'_, PyList>,
     n_chunks: u64,
 ) -> PyResult<urna_format::writer::UrnaFileBuilder> {
     use urna_format::layout::{
@@ -33,7 +33,7 @@ pub(crate) fn attach_spaces(
     let mut entries = Vec::with_capacity(spaces.len());
     let mut bands: Vec<(u8, u32, Vec<u8>)> = Vec::with_capacity(spaces.len());
     for (i, item) in spaces.iter().enumerate() {
-        let d: Bound<PyDict> = item
+        let d: Bound<'_, PyDict> = item
             .cast::<PyDict>()
             .map_err(|_| PyValueError::new_err(format!("spaces[{}] is not a dict", i)))?
             .clone();

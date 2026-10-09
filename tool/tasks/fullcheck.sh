@@ -224,6 +224,12 @@ python_tests() {
   "$PY" tool/tests/test_atlasdocs.py
   ok "atlasdocs (4 cases)"
 
+  # rust/ingest inherits nothing from the root workspace: its lint tables
+  # and rust-version are a copy, held to the root's here.
+  step "python tool/tests/test_lintmatch.py"
+  "$PY" tool/tests/test_lintmatch.py
+  ok "lintmatch (4 cases)"
+
   step "python tool/tests/test_pythonapi.py"
   "$PY" tool/tests/test_pythonapi.py
   ok "pythonapi"

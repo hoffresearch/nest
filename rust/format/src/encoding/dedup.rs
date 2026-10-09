@@ -35,6 +35,7 @@ fn malformed(reason: impl Into<String>) -> UrnaError {
 
 /// the result of a dedup pass: the first-seen unique texts (in first-seen
 /// order, deterministic) and a per-chunk back-reference into that pool.
+#[derive(Debug)]
 pub struct Deduped {
     pub unique: Vec<String>,
     pub back_refs: Vec<u32>,

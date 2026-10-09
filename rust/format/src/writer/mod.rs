@@ -63,6 +63,37 @@ pub struct UrnaFileBuilder {
     pub(super) space_bands: Vec<(u32, u32, Vec<u8>)>,
 }
 
+// counts only: a derived Debug would print every chunk and payload.
+
+impl std::fmt::Debug for UrnaFileBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // every field named: a new one fails to compile here until it
+        // is shown or marked `_`.
+        let Self {
+            reproducible,
+            text_encoding,
+            dtype,
+            manifest: _,
+            chunks,
+            provenance: _,
+            hnsw_index: _,
+            bm25_index: _,
+            graph_adjacency: _,
+            blob_refs: _,
+            blob_data: _,
+            blob_span_overlay: _,
+            space_table: _,
+            space_bands: _,
+        } = self;
+        f.debug_struct("UrnaFileBuilder")
+            .field("reproducible", reproducible)
+            .field("text_encoding", text_encoding)
+            .field("dtype", dtype)
+            .field("chunks", &chunks.len())
+            .finish_non_exhaustive()
+    }
+}
+
 impl UrnaFileBuilder {
     pub fn new(manifest: Manifest) -> Self {
         Self {

@@ -9,6 +9,7 @@ use pyo3::types::PyDict;
 use crate::search_hit::SearchHitPy;
 
 #[pyclass]
+#[derive(Debug)]
 pub struct UrnaFile {
     pub(super) rt: urna_engine::MmapUrnaFile,
 }
@@ -22,7 +23,7 @@ impl UrnaFile {
         Ok(Self { rt })
     }
 
-    fn search(&self, query: &Bound<PyAny>, k: i32) -> PyResult<Vec<SearchHitPy>> {
+    fn search(&self, query: &Bound<'_, PyAny>, k: i32) -> PyResult<Vec<SearchHitPy>> {
         let qvec: Vec<f32> = query
             .extract()
             .map_err(|e| PyValueError::new_err(format!("invalid query vector: {}", e)))?;
@@ -37,7 +38,12 @@ impl UrnaFile {
     /// file's ef_construction), so an `ef` below the build's floor (400
     /// for python builds) changes nothing. Falls back to `search()` if the
     /// file has no HNSW section.
-    fn search_ann(&self, query: &Bound<PyAny>, k: i32, ef: usize) -> PyResult<Vec<SearchHitPy>> {
+    fn search_ann(
+        &self,
+        query: &Bound<'_, PyAny>,
+        k: i32,
+        ef: usize,
+    ) -> PyResult<Vec<SearchHitPy>> {
         let qvec: Vec<f32> = query
             .extract()
             .map_err(|e| PyValueError::new_err(format!("invalid query vector: {}", e)))?;
@@ -55,7 +61,7 @@ impl UrnaFile {
     #[pyo3(signature = (query, k, hops=1, ef=100))]
     fn search_graph(
         &self,
-        query: &Bound<PyAny>,
+        query: &Bound<'_, PyAny>,
         k: i32,
         hops: usize,
         ef: usize,
@@ -74,7 +80,7 @@ impl UrnaFile {
     /// when no BM25 section is present.
     fn search_hybrid(
         &self,
-        query: &Bound<PyAny>,
+        query: &Bound<'_, PyAny>,
         query_text: &str,
         k: i32,
         candidates: usize,
@@ -104,7 +110,7 @@ impl UrnaFile {
     #[allow(clippy::too_many_arguments)]
     fn retrieve(
         &self,
-        query: &Bound<PyAny>,
+        query: &Bound<'_, PyAny>,
         k: i32,
         candidates: Option<usize>,
         hops: usize,
@@ -134,7 +140,7 @@ impl UrnaFile {
     fn search_space(
         &self,
         name: &str,
-        query: &Bound<PyAny>,
+        query: &Bound<'_, PyAny>,
         k: i32,
         expected_model_hash: Option<String>,
     ) -> PyResult<Vec<SearchHitPy>> {

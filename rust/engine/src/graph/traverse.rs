@@ -14,6 +14,7 @@ use super::csr::CsrIndex;
 /// reusable traversal scratch. allocate once per `CsrIndex`, reuse across
 /// queries; `bounded_bfs` bumps the generation so stale stamps read as
 /// unvisited without clearing the buffer.
+#[derive(Debug)]
 pub struct Traversal {
     /// per-node last-seen generation stamp; `stamp[node] == cur_gen` means
     /// visited this query. 0 is the "never visited" sentinel, so the first

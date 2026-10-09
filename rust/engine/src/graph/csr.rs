@@ -13,6 +13,7 @@ use crate::error::RuntimeError;
 /// flat csr adjacency over chunk ordinals. `offsets[node..node+1]` bounds
 /// node's run in `neighbors` (and `edge_types`), so one node's neighbors are
 /// a contiguous `&[u32]` slice.
+#[derive(Debug)]
 pub struct CsrIndex {
     n_nodes: usize,
     /// row pointers, len `n_nodes + 1`.

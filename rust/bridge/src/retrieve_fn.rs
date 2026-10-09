@@ -61,7 +61,7 @@ pub struct RetrieveHitPy {
 /// method.
 pub fn retrieve(
     rt: &MmapUrnaFile,
-    query: &Bound<PyAny>,
+    query: &Bound<'_, PyAny>,
     k: i32,
     candidates: Option<usize>,
     ef: usize,

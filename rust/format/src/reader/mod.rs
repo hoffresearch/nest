@@ -35,6 +35,27 @@ pub struct UrnaView<'a> {
     pub footer: UrnaFooter,
 }
 
+// the header and section count, not the file bytes or the manifest.
+
+impl std::fmt::Debug for UrnaView<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // every field named: a new one fails to compile here until it
+        // is shown or marked `_`.
+        let Self {
+            header,
+            data,
+            section_table,
+            manifest: _,
+            footer: _,
+        } = self;
+        f.debug_struct("UrnaView")
+            .field("header", header)
+            .field("len", &data.len())
+            .field("sections", &section_table.len())
+            .finish_non_exhaustive()
+    }
+}
+
 impl<'a> UrnaView<'a> {
     pub fn len(&self) -> usize {
         self.data.len()

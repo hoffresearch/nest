@@ -70,6 +70,52 @@ pub struct MmapUrnaFile {
     pub(crate) declared_score_type: String,
 }
 
+// identity and shape only: the mapped bytes and the indices stay out.
+
+impl std::fmt::Debug for MmapUrnaFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // every field named: a new one fails to compile here until it
+        // is shown or marked `_`.
+        let Self {
+            n_embeddings,
+            embedding_dim,
+            dtype,
+            embedding_model,
+            model_hash,
+            file_hash,
+            content_hash,
+            declared_index_type,
+            declared_score_type,
+            _mmap: _,
+            embeddings_offset: _,
+            embeddings_size: _,
+            embeddings_fp: _,
+            chunk_ids: _,
+            spans: _,
+            ann_index,
+            bm25_index,
+            graph_index,
+            blob_refs: _,
+            blob_data: _,
+            spaces: _,
+        } = self;
+        f.debug_struct("MmapUrnaFile")
+            .field("n_embeddings", n_embeddings)
+            .field("embedding_dim", embedding_dim)
+            .field("dtype", dtype)
+            .field("embedding_model", embedding_model)
+            .field("model_hash", model_hash)
+            .field("file_hash", file_hash)
+            .field("content_hash", content_hash)
+            .field("declared_index_type", declared_index_type)
+            .field("declared_score_type", declared_score_type)
+            .field("ann", &ann_index.is_some())
+            .field("bm25", &bm25_index.is_some())
+            .field("graph", &graph_index.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
 impl MmapUrnaFile {
     pub fn open(path: &Path) -> Result<Self, RuntimeError> {
         let file = std::fs::File::open(path)?;

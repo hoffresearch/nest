@@ -121,7 +121,11 @@ const MAX_PREALLOC: usize = 1 << 20;
 type Decoded = (Vec<u32>, HashMap<String, TermEntry>);
 
 /// v1: flat `u32` doc lengths and `(doc, tf)` postings.
-fn decode_v1(cur: &mut ByteCursor, n_docs: usize, n_terms: usize) -> Result<Decoded, RuntimeError> {
+fn decode_v1(
+    cur: &mut ByteCursor<'_>,
+    n_docs: usize,
+    n_terms: usize,
+) -> Result<Decoded, RuntimeError> {
     let mut doc_lengths = Vec::with_capacity(n_docs.min(MAX_PREALLOC));
     for _ in 0..n_docs {
         doc_lengths.push(cur.u32()?);
@@ -142,7 +146,11 @@ fn decode_v1(cur: &mut ByteCursor, n_docs: usize, n_terms: usize) -> Result<Deco
 }
 
 /// v2: `intpack` columns for doc lengths, delta-gapped doc ids, and tfs.
-fn decode_v2(cur: &mut ByteCursor, n_docs: usize, n_terms: usize) -> Result<Decoded, RuntimeError> {
+fn decode_v2(
+    cur: &mut ByteCursor<'_>,
+    n_docs: usize,
+    n_terms: usize,
+) -> Result<Decoded, RuntimeError> {
     let dls = cur.intpack_column()?;
     if dls.len() != n_docs {
         return Err(malformed("bm25 v2: doc-length column mismatch"));

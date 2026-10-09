@@ -69,10 +69,12 @@ pub(crate) fn resolve_preset(
 /// `content_hash` ("sha256:<64 hex>" or bare 64 hex), `original_uri`,
 /// `byte_len`, `inlined`. entry order is preserved: the 0x14 table is
 /// addressed by ordinal from the span overlay.
-pub(crate) fn parse_blob_refs(refs: &Bound<PyList>) -> PyResult<Vec<urna_format::BlobRefRecord>> {
+pub(crate) fn parse_blob_refs(
+    refs: &Bound<'_, PyList>,
+) -> PyResult<Vec<urna_format::BlobRefRecord>> {
     let mut out = Vec::with_capacity(refs.len());
     for (i, item) in refs.iter().enumerate() {
-        let d: Bound<PyDict> = item
+        let d: Bound<'_, PyDict> = item
             .cast::<PyDict>()
             .map_err(|_| PyValueError::new_err(format!("blob_refs[{}] is not a dict", i)))?
             .clone();
@@ -113,10 +115,12 @@ pub(crate) fn parse_blob_refs(refs: &Bound<PyList>) -> PyResult<Vec<urna_format:
 /// Parse the optional `chunk_blob_spans` kwarg: a list of dicts with keys
 /// `blob_ref_index` (int, or None for BLOB_REF_NONE), `byte_start`,
 /// `byte_end`. one entry per chunk, in chunk order.
-pub(crate) fn parse_blob_spans(spans: &Bound<PyList>) -> PyResult<Vec<urna_format::BlobSpanEntry>> {
+pub(crate) fn parse_blob_spans(
+    spans: &Bound<'_, PyList>,
+) -> PyResult<Vec<urna_format::BlobSpanEntry>> {
     let mut out = Vec::with_capacity(spans.len());
     for (i, item) in spans.iter().enumerate() {
-        let d: Bound<PyDict> = item
+        let d: Bound<'_, PyDict> = item
             .cast::<PyDict>()
             .map_err(|_| PyValueError::new_err(format!("chunk_blob_spans[{}] is not a dict", i)))?
             .clone();
@@ -254,11 +258,11 @@ pub(crate) fn build_hnsw(
     urna_engine::ann::HnswIndex::build(flat, chunks.len(), dim, m, ef_construction, seed)
 }
 
-pub(crate) fn parse_chunks(chunks: &Bound<PyList>) -> PyResult<Vec<urna_format::ChunkInput>> {
+pub(crate) fn parse_chunks(chunks: &Bound<'_, PyList>) -> PyResult<Vec<urna_format::ChunkInput>> {
     use urna_format::ChunkInput;
     let mut out: Vec<ChunkInput> = Vec::with_capacity(chunks.len());
     for (i, item) in chunks.iter().enumerate() {
-        let d: Bound<PyDict> = item
+        let d: Bound<'_, PyDict> = item
             .cast::<PyDict>()
             .map_err(|_| PyValueError::new_err(format!("chunks[{}] is not a dict", i)))?
             .clone();

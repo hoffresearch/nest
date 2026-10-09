@@ -129,7 +129,7 @@ fn check_cap(values: &[u64], cap: u64, what: &str) -> Result<(), RuntimeError> {
 }
 
 /// v1: flat `u32` per id, inline per node.
-fn decode_nodes_v1(cur: &mut ByteCursor, n_nodes: usize) -> Result<Vec<Node>, RuntimeError> {
+fn decode_nodes_v1(cur: &mut ByteCursor<'_>, n_nodes: usize) -> Result<Vec<Node>, RuntimeError> {
     let mut nodes = Vec::with_capacity(n_nodes.min(1 << 16));
     for _ in 0..n_nodes {
         let level = cur.u32()?;
@@ -158,7 +158,7 @@ fn decode_nodes_v1(cur: &mut ByteCursor, n_nodes: usize) -> Result<Vec<Node>, Ru
 }
 
 /// v2: three `intpack` columns (levels, per-layer counts, neighbour ids).
-fn decode_nodes_v2(cur: &mut ByteCursor, n_nodes: usize) -> Result<Vec<Node>, RuntimeError> {
+fn decode_nodes_v2(cur: &mut ByteCursor<'_>, n_nodes: usize) -> Result<Vec<Node>, RuntimeError> {
     let levels = cur.intpack_column()?;
     if levels.len() != n_nodes {
         return Err(malformed("hnsw v2: level count mismatch"));

@@ -38,6 +38,31 @@ pub struct Bm25Index {
     pub(super) terms: HashMap<String, TermEntry>,
 }
 
+// parameters and sizes only, not the postings.
+
+impl std::fmt::Debug for Bm25Index {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // every field named: a new one fails to compile here until it
+        // is shown or marked `_`.
+        let Self {
+            k1,
+            b,
+            avgdl,
+            n_docs,
+            n_terms,
+            doc_lengths: _,
+            terms: _,
+        } = self;
+        f.debug_struct("Bm25Index")
+            .field("k1", k1)
+            .field("b", b)
+            .field("avgdl", avgdl)
+            .field("n_docs", n_docs)
+            .field("n_terms", n_terms)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Bm25Index {
     /// Build a BM25 index from the canonical chunk texts.
     pub fn build(docs: &[String], k1: f32, b: f32) -> Self {

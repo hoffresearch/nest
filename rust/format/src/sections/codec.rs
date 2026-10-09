@@ -91,7 +91,7 @@ impl<'a> Cursor<'a> {
     }
 }
 
-pub(super) fn read_prefix(c: &mut Cursor) -> Result<u64, UrnaError> {
+pub(super) fn read_prefix(c: &mut Cursor<'_>) -> Result<u64, UrnaError> {
     if c.data.len() < SECTION_PAYLOAD_PREFIX_SIZE {
         return Err(c.malformed(format!(
             "payload shorter than {} byte prefix",

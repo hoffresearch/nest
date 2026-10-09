@@ -18,9 +18,9 @@ use crate::build_inputs::{parse_blob_refs, parse_blob_spans};
 /// runtime's span rewrite would misalign.
 pub(crate) fn attach_blob_sections(
     mut builder: UrnaFileBuilder,
-    blob_refs: Option<&Bound<PyList>>,
-    blob_data_paths: Option<&Bound<PyList>>,
-    chunk_blob_spans: Option<&Bound<PyList>>,
+    blob_refs: Option<&Bound<'_, PyList>>,
+    blob_data_paths: Option<&Bound<'_, PyList>>,
+    chunk_blob_spans: Option<&Bound<'_, PyList>>,
     n_chunks: usize,
 ) -> PyResult<UrnaFileBuilder> {
     if let Some(refs) = blob_refs {
@@ -57,7 +57,10 @@ pub(crate) fn attach_blob_sections(
 /// Parse `blob_data_paths` (list parallel to blob_refs: str path or
 /// None) and encode the 0x17 payload. `n_refs` is the blob_refs record
 /// count; a length mismatch is an error, never a silent misalignment.
-pub(crate) fn build_blob_data_payload(paths: &Bound<PyList>, n_refs: usize) -> PyResult<Vec<u8>> {
+pub(crate) fn build_blob_data_payload(
+    paths: &Bound<'_, PyList>,
+    n_refs: usize,
+) -> PyResult<Vec<u8>> {
     if paths.len() != n_refs {
         return Err(PyValueError::new_err(format!(
             "blob_data_paths must have one entry per blob_refs record ({}), got {}",

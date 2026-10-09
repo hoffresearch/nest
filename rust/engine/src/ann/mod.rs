@@ -90,6 +90,37 @@ pub struct HnswIndex {
     pub ef_search: usize,
 }
 
+// parameters and sizes only, not the graph or the vectors.
+
+impl std::fmt::Debug for HnswIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // every field named: a new one fails to compile here until it
+        // is shown or marked `_`.
+        let Self {
+            m,
+            m_max0,
+            ef_construction,
+            ef_search,
+            entry_point,
+            max_level,
+            n,
+            dim,
+            nodes: _,
+            store: _,
+        } = self;
+        f.debug_struct("HnswIndex")
+            .field("m", m)
+            .field("m_max0", m_max0)
+            .field("ef_construction", ef_construction)
+            .field("ef_search", ef_search)
+            .field("entry_point", entry_point)
+            .field("max_level", max_level)
+            .field("n", n)
+            .field("dim", dim)
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Candidate {
     pub id: u32,

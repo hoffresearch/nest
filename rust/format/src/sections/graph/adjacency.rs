@@ -154,7 +154,7 @@ fn push_edge_types(out: &mut Vec<u8>, types: &[u8]) {
     }
 }
 
-fn read_edge_types(cur: &mut Cursor, total: usize) -> Result<Vec<u8>, UrnaError> {
+fn read_edge_types(cur: &mut Cursor<'_>, total: usize) -> Result<Vec<u8>, UrnaError> {
     let kind = cur.u8()?;
     match kind {
         EDGE_COL_ISO => {
@@ -218,6 +218,7 @@ impl<'a> Cursor<'a> {
 /// the validated csr columns the runtime `CsrIndex` indexes in O(1):
 /// `offsets` (len n_nodes+1) bounds each node's run in `neighbors` (absolute
 /// decoded dst ids) and `edge_types` (1:1 with `neighbors`).
+#[derive(Debug)]
 pub struct CsrParts {
     pub n_nodes: usize,
     pub offsets: Vec<u64>,
