@@ -82,6 +82,8 @@ rust/bridge/python/urna/embed/__init__.py
 tool/tasks/wheelprep.py
 tool/tasks/namecheck.py
 tool/tasks/stepcache.py
+tool/tasks/benchdata.py
+tool/tests/test_benchdata.py
 tool/tests/test_stepcache.py
 tool/tests/test_namecheck.py
 "

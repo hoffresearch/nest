@@ -584,7 +584,7 @@ Every `URNA_*` variable read anywhere in the codebase (installers, CLI, forge, d
 | `URNA_COLOR` | Runtime | Probed from the terminal | `truecolor`, `256` or `none`: color depth of `urna setup`, `urna tui` and the colored `doctor` output |
 | `NO_COLOR` | Runtime | Unset | Any value turns every color off (no-color.org); modifiers stay |
 | `URNA_FORCE_SCALAR` | Runtime | Unset | Forces the scalar SIMD kernel over AVX2 / NEON, for A/B benchmarking |
-| `URNA_ALLOW_DOWNLOAD` | Runtime, build | Unset (offline) | Lets `search-text`, `searchtxt.py`, `modelhash.py`, and the corpus builder fetch a sentence-transformers model instead of failing offline; `urna setup --model` and the explorer's install panel set it for their own fetch only, after the download was confirmed |
+| `URNA_ALLOW_DOWNLOAD` | Runtime, build | Unset (offline) | Lets `search-text`, `searchtxt.py`, `modelhash.py`, and the corpus builder fetch a sentence-transformers model instead of failing offline, and `tool/tasks/benchdata.py` fetch the benchmark corpus `fullcheck.sh` measures; `urna setup --model` and the explorer's install panel set it for their own fetch only, after the download was confirmed |
 | `URNA_ALLOW_REMOTE_CODE` | Runtime, build | Unset (empty) | Comma-separated preset names allowed to load `trust_remote_code` model-repo code (`ask` / `retrieve` routing, `modelrank.py`, `uibackend.py`) |
 | `URNA_ALLOW_HEAVY` | Runtime | Unset | Allows an executable / heavy embedder preset in `presetqry.py` |
 | `URNA_CACHE_DIR` | Build | `${XDG_CACHE_HOME:-~/.cache}/urna` | Forge's triad-addressed embed cache root (declarative builds, section 13) |
@@ -598,7 +598,8 @@ Every `URNA_*` variable read anywhere in the codebase (installers, CLI, forge, d
 | `URNA_QUERIES` | Dev | `100` | Query count `presetrun.py` uses via `fullcheck.sh` |
 | `URNA_K` | Dev | `10` | Top-k `presetrun.py` uses via `fullcheck.sh` |
 | `URNA_OUT` | Dev | `/tmp/fullcheck_post.json` | Where `fullcheck.sh` writes the post-run measurement JSON |
-| `URNA_CORPUS` | Dev | `data/corpus_next.v1.urna` | The corpus `presetrun.py` measures via `fullcheck.sh` |
+| `URNA_CORPUS` | Dev | The benchmark corpus | The corpus `presetrun.py` measures via `fullcheck.sh`. Unset, it is `fakenews.urna` (MiniLM, exact) of `brennercruvinel/fakenews-ptbr-urna-benchmark` at a pinned commit, in the Hugging Face cache, checked against its sha-256; `tool/tasks/benchdata.py fetch` downloads it only with `URNA_ALLOW_DOWNLOAD=1` |
+| `URNA_BASELINE` | Dev | `tool/bench/reference.json` | The metrics `benchgate.py` compares against via `fullcheck.sh`, measured on the default corpus |
 | `URNA_FRESH` | Dev | `0` | `1` makes `fullcheck.sh` run every step, ignoring the steps that already passed with the same inputs |
 
 <details>
