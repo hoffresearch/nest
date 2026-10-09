@@ -22,9 +22,10 @@
 //! and duckdb (per-section analyze-and-pick over candidate codecs).
 
 use super::intpack::{IntpackReader, pack_u64s};
-use super::txt_streams::{build_canonical, malformed, write_container};
+use super::txt_streams::{build_canonical, concat_frames, malformed, write_container};
 use crate::bytes::le_u64;
 use crate::error::UrnaError;
+use rayon::prelude::*;
 use zstd::bulk::{Compressor, Decompressor};
 use zstd::dict::{DecoderDictionary, EncoderDictionary};
 
@@ -88,20 +89,28 @@ pub fn train_dict(sorted_unique: &[String]) -> Option<Vec<u8>> {
 /// encode `texts` as per-chunk dict-framed zstd streams behind the shared
 /// txt_streams offset table. byte-identical output for identical inputs +
 /// identical `dict` (the dict itself is deterministic), so two builds match.
+///
+/// each stream is a one-shot compress against the shared prepared dict, so
+/// the streams are compressed in parallel (one compressor per rayon split)
+/// and laid out in chunk order: the bytes do not depend on the thread count.
 pub fn encode(texts: &[String], dict: &[u8]) -> crate::Result<Vec<u8>> {
     let edict = EncoderDictionary::copy(dict, DICT_LEVEL);
-    let mut comp = Compressor::with_prepared_dictionary(&edict)
-        .map_err(|e| UrnaError::InvalidInput(format!("zstd_dict: compressor init: {}", e)))?;
-    let mut streams: Vec<u8> = Vec::new();
-    let mut offsets: Vec<u64> = Vec::with_capacity(texts.len() + 1);
-    offsets.push(0);
-    for t in texts {
-        let c = comp
-            .compress(t.as_bytes())
-            .map_err(|e| UrnaError::InvalidInput(format!("zstd_dict: compress: {}", e)))?;
-        streams.extend_from_slice(&c);
-        offsets.push(streams.len() as u64);
-    }
+    let frames = texts
+        .par_iter()
+        .map_init(
+            || Compressor::with_prepared_dictionary(&edict),
+            |comp, t| match comp {
+                Ok(comp) => comp
+                    .compress(t.as_bytes())
+                    .map_err(|e| UrnaError::InvalidInput(format!("zstd_dict: compress: {}", e))),
+                Err(e) => Err(UrnaError::InvalidInput(format!(
+                    "zstd_dict: compressor init: {}",
+                    e
+                ))),
+            },
+        )
+        .collect::<crate::Result<Vec<Vec<u8>>>>()?;
+    let (streams, offsets) = concat_frames(&frames);
     let table = pack_u64s(&offsets);
     Ok(write_container(
         TXT_STREAMS_V2,
@@ -194,4 +203,40 @@ fn stream_slice<'a>(streams: &'a [u8], offsets: &[u64], i: usize) -> crate::Resu
     streams
         .get(start..end)
         .ok_or_else(|| malformed("zstd_dict: stream slice out of bounds"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
+    fn parallel_encode_equals_sequential() {
+        let t: Vec<String> = (0..2_000)
+            .map(|i| {
+                format!(
+                    "documento {} - seção {}: {}",
+                    i % 40,
+                    i,
+                    "texto ".repeat(i % 50)
+                )
+            })
+            .collect();
+        let mut samples = t.clone();
+        samples.sort_unstable();
+        samples.dedup();
+        let dict = train_dict(&samples).expect("dict trains on 2000 samples");
+        // the encoder before the streams were made in parallel: one
+        // compressor over every chunk, in order. kept to pin the bytes.
+        let edict = EncoderDictionary::copy(&dict, DICT_LEVEL);
+        let mut comp = Compressor::with_prepared_dictionary(&edict).unwrap();
+        let mut streams: Vec<u8> = Vec::new();
+        let mut offsets: Vec<u64> = vec![0];
+        for s in &t {
+            streams.extend_from_slice(&comp.compress(s.as_bytes()).unwrap());
+            offsets.push(streams.len() as u64);
+        }
+        let sequential = write_container(TXT_STREAMS_V2, t.len(), &pack_u64s(&offsets), &streams);
+        assert_eq!(encode(&t, &dict).unwrap(), sequential);
+    }
 }

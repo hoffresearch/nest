@@ -31,12 +31,13 @@
 //! ```
 
 use super::intpack::{IntpackReader, pack_u64s};
-use super::zstd_codec::{zstd_decode, zstd_encode};
+use super::zstd_codec::{ZstdFramer, zstd_decode};
 use crate::bytes::le_u64;
 use crate::error::UrnaError;
 use crate::layout::{
     SECTION_CHUNKS_CANONICAL, SECTION_PAYLOAD_PREFIX_SIZE, SECTION_PAYLOAD_VERSION,
 };
+use rayon::prelude::*;
 
 /// leading kind/version byte. v1 = plain per-stream zstd. the dict (V2) and
 /// fsst (V3) variants live in `zstd_dict.rs` / `fsst.rs` and claim the next
@@ -87,16 +88,16 @@ pub(super) fn build_canonical(count: usize, bodies: &[Vec<u8>]) -> crate::Result
 /// encode `texts` (the canonical strings, in chunk order) as per-chunk
 /// independent zstd streams behind an intpack offset table. the layout is
 /// a pure function of the inputs, so two builds are byte-identical.
+///
+/// the frames are independent, so they are compressed in parallel, one
+/// reused zstd context per rayon split, and laid out in chunk order: the
+/// bytes do not depend on the thread count.
 pub fn encode_txt_streams(texts: &[String]) -> crate::Result<Vec<u8>> {
-    let mut streams: Vec<u8> = Vec::new();
-    // n+1 offsets so stream i is [off[i] .. off[i+1]); off[0] == 0 and the
-    // last is the total streams length, giving O(1) seek and exact bounds.
-    let mut offsets: Vec<u64> = Vec::with_capacity(texts.len() + 1);
-    offsets.push(0);
-    for t in texts {
-        streams.extend_from_slice(&zstd_encode(t.as_bytes())?);
-        offsets.push(streams.len() as u64);
-    }
+    let frames = texts
+        .par_iter()
+        .map_init(ZstdFramer::new, |z, t| z.encode(t.as_bytes()))
+        .collect::<crate::Result<Vec<Vec<u8>>>>()?;
+    let (streams, offsets) = concat_frames(&frames);
     let table = pack_u64s(&offsets);
     Ok(write_container(
         TXT_STREAMS_V1,
@@ -104,6 +105,20 @@ pub fn encode_txt_streams(texts: &[String]) -> crate::Result<Vec<u8>> {
         &table,
         &streams,
     ))
+}
+
+/// concatenate per-chunk frames in order, with the n+1 offsets so stream i
+/// is [off[i] .. off[i+1]); off[0] == 0 and the last is the total streams
+/// length, giving O(1) seek and exact bounds. shared by the V1/V2/V3 encoders.
+pub(super) fn concat_frames(frames: &[Vec<u8>]) -> (Vec<u8>, Vec<u64>) {
+    let mut streams: Vec<u8> = Vec::with_capacity(frames.iter().map(Vec::len).sum());
+    let mut offsets: Vec<u64> = Vec::with_capacity(frames.len() + 1);
+    offsets.push(0);
+    for f in frames {
+        streams.extend_from_slice(f);
+        offsets.push(streams.len() as u64);
+    }
+    (streams, offsets)
 }
 
 /// a parsed `txt_streams` payload. `parse` validates the header and offset
@@ -268,6 +283,35 @@ mod tests {
             assert_eq!(&parsed.text(i).unwrap(), s, "text({}) mismatch", i);
         }
         assert!(parsed.text(4).is_err(), "oob index must error");
+    }
+
+    /// the encoder before the frames were made in parallel: one fresh
+    /// `zstd_encode` per chunk, in order. kept to pin the bytes.
+    fn encode_sequential(texts: &[String]) -> Vec<u8> {
+        let mut streams: Vec<u8> = Vec::new();
+        let mut offsets: Vec<u64> = vec![0];
+        for t in texts {
+            streams.extend_from_slice(&crate::encoding::zstd_encode(t.as_bytes()).unwrap());
+            offsets.push(streams.len() as u64);
+        }
+        write_container(TXT_STREAMS_V1, texts.len(), &pack_u64s(&offsets), &streams)
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
+    fn parallel_encode_equals_sequential() {
+        // enough chunks that rayon splits them across workers, with sizes
+        // from empty to past one zstd block, so each worker's context encodes
+        // many frames of mixed size.
+        let t: Vec<String> = (0..2_000)
+            .map(|i| match i % 7 {
+                0 => String::new(),
+                3 => "informação sobre o acervo ".repeat(6_000 + i),
+                _ => format!("chunk {} do corpus, coração {}", i, "x".repeat(i % 97)),
+            })
+            .collect();
+        assert_eq!(encode_txt_streams(&t).unwrap(), encode_sequential(&t));
+        assert_eq!(encode_txt_streams(&[]).unwrap(), encode_sequential(&[]));
     }
 
     #[test]

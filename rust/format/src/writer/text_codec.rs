@@ -44,66 +44,99 @@ pub(super) struct TextChoice {
 /// `compressed` must be true (the caller only invokes this under a zstd-text
 /// preset); the cold single-frame zstd is the never-regress floor.
 pub(super) fn choose(texts: &[String]) -> crate::Result<TextChoice> {
-    let canonical_raw = encode_chunks_canonical(texts)?;
-    // candidate 1: single-frame zstd (the existing form, always the floor).
-    let mut best = Candidate::plain(maybe_zstd(
-        SECTION_CHUNKS_CANONICAL,
-        SectionEncoding::Zstd,
-        canonical_raw.clone(),
-    )?);
+    compute(texts, encode_chunks_canonical(texts)?)
+}
 
-    // candidate 2: txt_streams cold (per-chunk zstd + intpack offset table).
-    let streams = encode_txt_streams(texts)?;
-    best.consider(Candidate::plain((
-        SECTION_CHUNKS_CANONICAL,
-        SECTION_ENCODING_TXT_STREAMS,
-        streams,
-    )));
-
-    // candidate 3: txt_streams + trained dict. the dict is a separate
-    // optional section (0x0A), excluded from content_hash; its size counts
-    // toward the candidate total so the chooser is honest about the dict cost.
-    if let Some(dict) = train_dict(&sorted_unique(texts)) {
-        let framed = encode_zstd_dict(texts, &dict)?;
-        let total = framed.len() + dict.len();
-        best.consider(Candidate {
-            canonical: (SECTION_CHUNKS_CANONICAL, SECTION_ENCODING_ZSTD_DICT, framed),
-            aux: vec![(SECTION_DICTIONARY, SECTION_ENCODING_RAW, dict)],
-            total,
-        });
+/// run the five candidates and keep the smallest. they are independent, so
+/// they run at the same time (the build costs the slowest, the single-frame
+/// zstd-19, not the sum); the race is still judged in candidate order, so
+/// ties keep the earlier candidate exactly as a sequential run would.
+fn compute(texts: &[String], canonical_raw: Vec<u8>) -> crate::Result<TextChoice> {
+    let ((single, streams), (dict, (fsst, dedup))) = rayon::join(
+        || rayon::join(|| single_frame(canonical_raw), || txt_streams(texts)),
+        || {
+            rayon::join(
+                || with_dict(texts),
+                || rayon::join(|| fsst(texts), || dedup_zstd(texts)),
+            )
+        },
+    );
+    let mut best = single?;
+    for other in [Some(streams?), dict?, Some(fsst?), dedup?]
+        .into_iter()
+        .flatten()
+    {
+        best.consider(other);
     }
-
-    // candidate 4: txt_streams + fsst (self-contained static symbol table).
-    let fsst = encode_fsst(texts)?;
-    best.consider(Candidate::plain((
-        SECTION_CHUNKS_CANONICAL,
-        SECTION_ENCODING_FSST,
-        fsst,
-    )));
-
-    // candidate 5: dedup + single-frame zstd. the dedup pass runs on the
-    // DECOMPRESSED canonical texts (the nix/ipfs order rule), then the UNIQUE
-    // pool is zstd-compressed; the back-references live in section 0x0B,
-    // excluded from content_hash. only competes when the corpus actually
-    // repeats (else unique == texts and it can only lose to candidate 1).
-    let d = dedup(texts);
-    if d.unique.len() < texts.len() {
-        let unique_raw = encode_chunks_canonical(&d.unique)?;
-        let (cid, cenc, cbytes) =
-            maybe_zstd(SECTION_CHUNKS_CANONICAL, SectionEncoding::Zstd, unique_raw)?;
-        let map = encode_dedup_map(&d.back_refs);
-        let total = cbytes.len() + map.len();
-        best.consider(Candidate {
-            canonical: (cid, cenc, cbytes),
-            aux: vec![(SECTION_DEDUP_MAP, SECTION_ENCODING_RAW, map)],
-            total,
-        });
-    }
-
     Ok(TextChoice {
         canonical: best.canonical,
         aux: best.aux,
     })
+}
+
+/// candidate 1: single-frame zstd (the existing form, always the floor).
+fn single_frame(canonical_raw: Vec<u8>) -> crate::Result<Candidate> {
+    Ok(Candidate::plain(maybe_zstd(
+        SECTION_CHUNKS_CANONICAL,
+        SectionEncoding::Zstd,
+        canonical_raw,
+    )?))
+}
+
+/// candidate 2: txt_streams cold (per-chunk zstd + intpack offset table).
+fn txt_streams(texts: &[String]) -> crate::Result<Candidate> {
+    Ok(Candidate::plain((
+        SECTION_CHUNKS_CANONICAL,
+        SECTION_ENCODING_TXT_STREAMS,
+        encode_txt_streams(texts)?,
+    )))
+}
+
+/// candidate 3: txt_streams + trained dict. the dict is a separate optional
+/// section (0x0A), excluded from content_hash; its size counts toward the
+/// candidate total so the chooser is honest about the dict cost.
+fn with_dict(texts: &[String]) -> crate::Result<Option<Candidate>> {
+    let Some(dict) = train_dict(&sorted_unique(texts)) else {
+        return Ok(None);
+    };
+    let framed = encode_zstd_dict(texts, &dict)?;
+    let total = framed.len() + dict.len();
+    Ok(Some(Candidate {
+        canonical: (SECTION_CHUNKS_CANONICAL, SECTION_ENCODING_ZSTD_DICT, framed),
+        aux: vec![(SECTION_DICTIONARY, SECTION_ENCODING_RAW, dict)],
+        total,
+    }))
+}
+
+/// candidate 4: txt_streams + fsst (self-contained static symbol table).
+fn fsst(texts: &[String]) -> crate::Result<Candidate> {
+    Ok(Candidate::plain((
+        SECTION_CHUNKS_CANONICAL,
+        SECTION_ENCODING_FSST,
+        encode_fsst(texts)?,
+    )))
+}
+
+/// candidate 5: dedup + single-frame zstd. the dedup pass runs on the
+/// DECOMPRESSED canonical texts (the nix/ipfs order rule), then the UNIQUE
+/// pool is zstd-compressed; the back-references live in section 0x0B,
+/// excluded from content_hash. only competes when the corpus actually
+/// repeats (else unique == texts and it can only lose to candidate 1).
+fn dedup_zstd(texts: &[String]) -> crate::Result<Option<Candidate>> {
+    let d = dedup(texts);
+    if d.unique.len() >= texts.len() {
+        return Ok(None);
+    }
+    let unique_raw = encode_chunks_canonical(&d.unique)?;
+    let (cid, cenc, cbytes) =
+        maybe_zstd(SECTION_CHUNKS_CANONICAL, SectionEncoding::Zstd, unique_raw)?;
+    let map = encode_dedup_map(&d.back_refs);
+    let total = cbytes.len() + map.len();
+    Ok(Some(Candidate {
+        canonical: (cid, cenc, cbytes),
+        aux: vec![(SECTION_DEDUP_MAP, SECTION_ENCODING_RAW, map)],
+        total,
+    }))
 }
 
 /// the canonical texts, sorted and deduplicated, as the deterministic ZDICT
