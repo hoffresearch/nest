@@ -6,26 +6,29 @@
 #   1. cargo build (release), then the PyO3 extension (.so) the tests load
 #   2. cargo test/clippy/fmt (release profile), the 639-line guard
 #   3. the python suites (the `step "python tool/tests/..."` lines below), ruff
-#   4. presetrun --json on the LFS-tracked corpus
-#   5. benchgate regression gates vs data/measure/baseline.json
+#   4. presetrun --json on the benchmark corpus (tool/tasks/benchdata.py)
+#   5. benchgate regression gates vs tool/bench/reference.json
 #
 # Exits non-zero on the first failure. A step that already passed with the
 # same inputs is skipped (tool/tasks/stepcache.py): its key hashes the files
 # it reads, the toolchain and the step's own text, so a run with nothing
 # changed takes seconds. A cold run takes about 5 min on an m-series mac
 # with a warm cargo cache: steps 1 to 3 about 3 min, and step 4 builds the
-# twelve presets and mrl variants of the 30,725-chunk corpus, which share
+# twelve presets and mrl variants of the 23,335-chunk corpus, which share
 # one text-codec choice (the first build makes it, about 40 s). System tools
 # (ffmpeg, cjxl, ssimulacra2) and the network are not in the key: after
 # changing any of them, run with URNA_FRESH=1.
 #
 # Override knobs (env vars):
-#   URNA_BASELINE  - baseline JSON to compare against (default: data/measure/baseline.json)
+#   URNA_BASELINE  - baseline JSON to compare against (default: tool/bench/reference.json,
+#                    measured on the default corpus; another corpus needs its own)
 #   URNA_QUERIES   - presetrun query count (default: 100)
 #   URNA_K         - presetrun top-k (default: 10)
 #   URNA_PYTHON    - python interpreter (default: ./.venv/bin/python if present, else python3)
 #   URNA_OUT       - where to write the post-run JSON (default: /tmp/fullcheck_post.json)
-#   URNA_CORPUS    - the corpus presetrun measures (default: data/corpus_next.v1.urna)
+#   URNA_CORPUS    - the corpus presetrun measures (default: the pinned benchmark corpus in
+#                    the hugging face cache; tool/tasks/benchdata.py fetches it, only with
+#                    URNA_ALLOW_DOWNLOAD=1, and checks its sha-256)
 #   URNA_FRESH     - 1 runs every step, ignoring what passed before (default: 0)
 
 set -euo pipefail
@@ -34,11 +37,11 @@ cd "$(dirname "$0")/../.."
 ROOT="$(pwd)"
 
 # ---- knobs ----
-BASELINE="${URNA_BASELINE:-data/measure/baseline.json}"
+BASELINE="${URNA_BASELINE:-tool/bench/reference.json}"
 QUERIES="${URNA_QUERIES:-100}"
 K="${URNA_K:-10}"
 OUT="${URNA_OUT:-/tmp/fullcheck_post.json}"
-CORPUS="${URNA_CORPUS:-data/corpus_next.v1.urna}"
+CORPUS="${URNA_CORPUS:-}"
 FRESH="${URNA_FRESH:-0}"
 
 if [[ -n "${URNA_PYTHON:-}" ]]; then
@@ -47,6 +50,12 @@ elif [[ -x "$ROOT/.venv/bin/python" ]]; then
   PY="$ROOT/.venv/bin/python"
 else
   PY="$(command -v python3)"
+fi
+
+# the corpus, before any step: a missing one stops the run here, with the
+# command that fetches it, not after the tests.
+if [[ -z "$CORPUS" ]]; then
+  CORPUS="$("$PY" tool/tasks/benchdata.py fetch)"
 fi
 
 step() {
@@ -194,6 +203,11 @@ python_tests() {
   step "python tool/tests/test_stepcache.py"
   "$PY" tool/tests/test_stepcache.py
   ok "stepcache (8 cases)"
+
+  # the corpus of step 4: fetched only with consent, measured only if pinned.
+  step "python tool/tests/test_benchdata.py"
+  "$PY" tool/tests/test_benchdata.py
+  ok "benchdata (4 cases)"
 
   step "python tool/tests/test_pythonapi.py"
   "$PY" tool/tests/test_pythonapi.py
