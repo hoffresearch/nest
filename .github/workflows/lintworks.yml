@@ -1,0 +1,78 @@
+# static checks of the workflows themselves, on every change under
+# .github/workflows. nothing here runs a job: both tools read the yaml.
+#
+# actionlint checks syntax, `${{ }}` expressions, `needs`, runner labels
+# and, through shellcheck, every `run:` script. it gates the pull request.
+# shellcheck reports warnings and errors only (info and style stay quiet).
+# one finding is ignored by name: release.yml reads
+# `steps.cargo-cyclonedx.output.paths` where the step has `outputs`, so the
+# sbom path comes out empty; that line is cargo-dist's template, regenerated
+# by `dist generate` and copied into rehearsal.yml, and both files are never
+# hand-edited, so the fix belongs upstream.
+#
+# zizmor audits the workflows for security: template injection, permissions
+# wider than needed, credentials persisted by checkout, unpinned actions,
+# dangerous triggers. its findings go to the repository's code scanning as
+# sarif instead of failing the job, because the workflows carry findings
+# from before this check (156 on 2026-10-09); new ones show on the pull
+# request that adds them. a pull request from a fork gets a read-only token
+# whatever the job asks for, so the sarif upload would fail there: zizmor
+# skips those and audits the change on the push to main after the merge.
+
+name: lintworks
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/**"]
+  pull_request:
+    paths: [".github/workflows/**"]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      ACTIONLINT_VERSION: "1.7.12"
+      ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: install actionlint (pinned release, checksum verified)
+        run: |
+          set -eu
+          tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$tarball" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/$tarball"
+          echo "$ACTIONLINT_SHA256  $RUNNER_TEMP/$tarball" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP" actionlint
+      - name: actionlint
+        env:
+          SHELLCHECK_OPTS: -S warning
+        run: |
+          "$RUNNER_TEMP/actionlint" -color \
+            -ignore 'property "output" is not defined in object type'
+
+  zizmor:
+    name: zizmor
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          version: "1.30.1"
