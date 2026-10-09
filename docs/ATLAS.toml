@@ -2747,7 +2747,7 @@ links = ["tool/bench/presetrun.py"]
 [[inventory.data_docs_python_script_tests]]
 path = "tool/bench/benchtime.py"
 kind = "python-source"
-purpose = "Timing and build helpers for preset measurement, incl parse_variant (resolves plain presets, the named sub-int8 rungs nano=int4-full-dim and micro=mrl256-int8-alias, and matryoshka mrl<DIM>-<dtype> ladder points into urna.build kwargs); build_variant builds beside data/measure/corpus_<preset>.urna under a hidden .tmp.urna name, validates, then renames over it, so an interrupted gate never loses a corpus; it removes only temporaries whose PID is gone, never one a concurrent run is writing"
+purpose = "Timing and build helpers for preset measurement, incl parse_variant (resolves plain presets, the named sub-int8 rungs nano=int4-full-dim and micro=mrl256-int8-alias, and matryoshka mrl<DIM>-<dtype> ladder points into urna.build kwargs); build_variant builds beside target/bench/<baseline hash>/corpus_<preset>.urna under a hidden .tmp.urna name, validates, then renames over it, so an interrupted gate never loses a corpus; it removes only temporaries whose PID is gone, never one a concurrent run is writing"
 links = ["tool/bench/presetrun.py"]
 
 [[inventory.data_docs_python_script_tests]]
@@ -2800,7 +2800,7 @@ links = [
 [[inventory.data_docs_python_script_tests]]
 path = "tool/bench/presetrun.py"
 kind = "python-source"
-purpose = "Build and benchmark the published preset ladder (compressed/tiny/micro/nano/hybrid plus the matryoshka mrl<DIM>-<dtype> curve; micro is the mrl256-int8 alias, nano is int4 full-dim) over the LFS baseline; recall@10 vs the full-dim f32 exact top-k (MRL points truncate the query to the prefix + renorm to match the build); publishes data/measure/ladder.json (the whole curve) and refreshes data/measure/baseline.json; every sub-int8 row carries the machine-checkable net-of-fp disclosure (dtype, stored_precision, has_fp_source=false, net_of_fp_ratio==stored ratio) and matryoshka rows carry mrl_dim/full_dim"
+purpose = "Build and benchmark the published preset ladder (compressed/tiny/micro/nano/hybrid plus the matryoshka mrl<DIM>-<dtype> curve; micro is the mrl256-int8 alias, nano is int4 full-dim) over a baseline .urna (default: the pinned benchmark corpus that tool/tasks/benchdata.py resolves); builds the variants under target/bench/<first 16 hex of the baseline file_hash>/, so --reuse never picks up another corpus's builds; recall@10 vs the full-dim f32 exact top-k (MRL points truncate the query to the prefix + renorm to match the build); --json prints the whole curve to stdout, which fullcheck gates with benchgate.py against tool/bench/reference.json (measured on the pinned corpus; benchdata.py match refuses a baseline of another corpus); every sub-int8 row carries the machine-checkable net-of-fp disclosure (dtype, stored_precision, has_fp_source=false, net_of_fp_ratio==stored ratio) and matryoshka rows carry mrl_dim/full_dim"
 links = [
     "tool/bench/baselines.py",
     "tool/bench/benchtime.py",
