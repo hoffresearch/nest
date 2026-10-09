@@ -598,6 +598,8 @@ Every `URNA_*` variable read anywhere in the codebase (installers, CLI, forge, d
 | `URNA_QUERIES` | Dev | `100` | Query count `presetrun.py` uses via `fullcheck.sh` |
 | `URNA_K` | Dev | `10` | Top-k `presetrun.py` uses via `fullcheck.sh` |
 | `URNA_OUT` | Dev | `/tmp/fullcheck_post.json` | Where `fullcheck.sh` writes the post-run measurement JSON |
+| `URNA_CORPUS` | Dev | `data/corpus_next.v1.urna` | The corpus `presetrun.py` measures via `fullcheck.sh` |
+| `URNA_FRESH` | Dev | `0` | `1` makes `fullcheck.sh` run every step, ignoring the steps that already passed with the same inputs |
 
 <details>
 <summary>One-liner (Linux, macOS)</summary>
