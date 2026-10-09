@@ -290,6 +290,8 @@ jobs:
         run: |
           python tool/tasks/namecheck.py
           python tool/tests/test_namecheck.py
+      - name: the atlas summary is the current state, not history
+        run: python tool/tests/test_atlasdocs.py
       - name: the registry imports and the model catalog is current
         # bare python, no ml deps: catalogue imports the whole registry,
         # so a preset that names a field ModelPreset lacks fails here, and a
