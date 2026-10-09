@@ -218,6 +218,12 @@ python_tests() {
   "$PY" tool/tests/test_benchdata.py
   ok "benchdata (7 cases)"
 
+  # the atlas summary is the current state in at most three sentences; the
+  # history is in docs/CHANGELOG.
+  step "python tool/tests/test_atlasdocs.py"
+  "$PY" tool/tests/test_atlasdocs.py
+  ok "atlasdocs (4 cases)"
+
   step "python tool/tests/test_pythonapi.py"
   "$PY" tool/tests/test_pythonapi.py
   ok "pythonapi"
