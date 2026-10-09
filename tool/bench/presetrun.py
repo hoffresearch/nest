@@ -1,5 +1,6 @@
 """Acceptance harness: measure file size, recall@k, score drift, and
-latency for the four presets against a baseline `data/corpus_next.v1.urna`.
+latency for the four presets against a baseline `.urna` (default: the
+pinned benchmark corpus, `tool/tasks/benchdata.py`).
 
 Pipeline:
 
@@ -42,9 +43,11 @@ from statistics import mean
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(REPO / "tool" / "tasks"))
 sys.path.insert(0, str(REPO / "rust" / "bridge" / "python"))
 
-from baselines import DEFAULT_BASELINE, OUT_DIR, decode_baseline  # noqa: E402
+import benchdata  # noqa: E402
+from baselines import decode_baseline, out_dir  # noqa: E402
 from benchtime import build_variant, percentile, run_bench  # noqa: E402
 
 import urna  # noqa: E402
@@ -196,7 +199,10 @@ def _variant_row(
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--baseline", default=str(DEFAULT_BASELINE))
+    ap.add_argument(
+        "--baseline",
+        help="the .urna to measure (default: the pinned benchmark corpus, tool/tasks/benchdata.py)",
+    )
     ap.add_argument("--n-queries", type=int, default=50)
     ap.add_argument("--k", type=int, default=10)
     ap.add_argument("--seed", type=int, default=0)
@@ -223,7 +229,8 @@ def main():
         "--reuse",
         action="store_true",
         help=(
-            "Reuse an existing variant build when the .urna opens and validates "
+            "Reuse an existing variant build of this same baseline (they live in "
+            "target/bench/<baseline file_hash>/) when the .urna opens and validates "
             "cleanly (builds are deterministic, so the bytes are identical). "
             "build_s is recorded as 0.0 and the log line says reused=true. "
             "Default off: every variant is rebuilt."
@@ -231,16 +238,22 @@ def main():
     )
     args = ap.parse_args()
 
-    base_path = Path(args.baseline)
+    if args.baseline is None:
+        try:
+            base_path = benchdata.fetch()
+        except benchdata.Refused as e:
+            raise SystemExit(f"presetrun: {e}") from e
+    else:
+        base_path = Path(args.baseline)
     if not base_path.exists():
         raise SystemExit(f"baseline not found: {base_path}")
-
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     chunks, meta = decode_baseline(base_path)
     queries = _sample_queries(chunks, args.n_queries, args.seed)
 
     db_exact = urna.open(str(base_path))
+    variants = out_dir(db_exact.file_hash)
+    variants.mkdir(parents=True, exist_ok=True)
     base_size = base_path.stat().st_size
     t_exact, hits_exact = run_bench(db_exact, queries, args.k, mode="exact")
     base_top_score = [h[0].score for h in hits_exact]
@@ -279,7 +292,7 @@ def main():
         preset = preset.strip()
         if not preset:
             continue
-        out_path = OUT_DIR / f"corpus_{preset}.urna"
+        out_path = variants / f"corpus_{preset}.urna"
         print(f"\n→ building preset={preset} → {out_path}", file=log)
         reused = False
         build_time = 0.0

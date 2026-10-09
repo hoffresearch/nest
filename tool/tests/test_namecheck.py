@@ -50,7 +50,7 @@ BASE = {
     ".github/workflows/gatecheck.yml": "",
     ".github/workflows/release.yml": "",
     "pkgs/choco/urna.nuspec": "",
-    "data/x.json": "",
+    "demo/x.json": "",
 }
 
 

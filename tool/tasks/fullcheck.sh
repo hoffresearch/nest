@@ -30,6 +30,11 @@
 #                    the hugging face cache; tool/tasks/benchdata.py fetches it, only with
 #                    URNA_ALLOW_DOWNLOAD=1, and checks its sha-256)
 #   URNA_FRESH     - 1 runs every step, ignoring what passed before (default: 0)
+#
+# Before any step: exit 3 when the default corpus is not cached and downloads
+# were not confirmed (6 when the cached file is not the pinned one), exit 9
+# when URNA_BASELINE names no usable baseline, exit 10 when the baseline was
+# measured on another corpus (tool/tasks/benchdata.py lists every code).
 
 set -euo pipefail
 
@@ -57,6 +62,10 @@ fi
 if [[ -z "$CORPUS" ]]; then
   CORPUS="$("$PY" tool/tasks/benchdata.py fetch)"
 fi
+# the same for the baseline, which benchgate reads only at the last step: it
+# must exist (exit 9) and be measured on this corpus (exit 10), never on
+# another one whose numbers would pass or fail this run for no reason.
+"$PY" tool/tasks/benchdata.py match "$BASELINE" "$CORPUS"
 
 step() {
   printf '\n\033[1;36m== %s ==\033[0m\n' "$*" >&2
@@ -207,7 +216,7 @@ python_tests() {
   # the corpus of step 4: fetched only with consent, measured only if pinned.
   step "python tool/tests/test_benchdata.py"
   "$PY" tool/tests/test_benchdata.py
-  ok "benchdata (4 cases)"
+  ok "benchdata (7 cases)"
 
   step "python tool/tests/test_pythonapi.py"
   "$PY" tool/tests/test_pythonapi.py
@@ -281,10 +290,10 @@ python_tests() {
   ok "modelpull: model install (5 cases)"
 
   # the benchmark rebuild builds beside the corpus and renames at the end, so
-  # an interrupted gate never leaves data/measure without its corpora.
+  # an interrupted gate never leaves target/bench without its corpora.
   step "python tool/tests/test_benchmark.py"
   "$PY" tool/tests/test_benchmark.py
-  ok "benchmark: bench runner (4 cases)"
+  ok "benchmark: bench runner (5 cases)"
 
   # the version a release names agrees across the manifests, the lockfile,
   # CITATION.cff and the changelog; the tag checks need a tag and run in ci.

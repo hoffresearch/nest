@@ -65,7 +65,7 @@ class _STTextAdapter:
 
     @property
     def dim(self) -> int:
-        return int(self._model.get_sentence_embedding_dimension())
+        return self._eq.dimension(self._model)
 
     @property
     def model_hash(self) -> str:

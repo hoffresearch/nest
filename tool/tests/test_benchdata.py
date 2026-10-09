@@ -4,9 +4,12 @@
 runs it against a throwaway hugging face cache (HF_HOME), with no network:
 
 - happy path: a cached file with the pinned sha-256 is returned as is,
-  without URNA_ALLOW_DOWNLOAD;
+  without URNA_ALLOW_DOWNLOAD; a baseline whose baseline_file_hash is the
+  corpus's sha-256 matches it;
 - error path: no file and no URNA_ALLOW_DOWNLOAD stops with exit 3 and the
   command that fetches it; a cached file with another sha-256 is refused;
+  a baseline of another corpus stops with exit 10, a missing or unreadable
+  one with exit 9, never with the corpus's 3;
 - edge case: the path is where hf_hub_download puts a dataset file at the
   pinned revision, under $HF_HOME/hub.
 
@@ -17,6 +20,7 @@ import contextlib
 import hashlib
 import importlib.util
 import io
+import json
 import os
 import sys
 import tempfile
@@ -97,6 +101,44 @@ def test_another_file_is_refused():
             assert "not the pinned" in str(e), e
         else:
             raise AssertionError("a file with another sha-256 was accepted")
+
+
+def match_code(baseline: Path, corpus: Path) -> tuple[int, str]:
+    err = io.StringIO()
+    with contextlib.redirect_stderr(err):
+        code = benchdata.main(["match", str(baseline), str(corpus)])
+    return code, err.getvalue()
+
+
+def test_baseline_of_this_corpus_matches():
+    with tempfile.TemporaryDirectory(prefix="urna-benchdata-") as d:
+        corpus = Path(d) / "c.urna"
+        corpus.write_bytes(b"a corpus")
+        digest = "sha256:" + hashlib.sha256(b"a corpus").hexdigest()
+        baseline = Path(d) / "ref.json"
+        baseline.write_text(json.dumps({"baseline_file_hash": digest}))
+        assert match_code(baseline, corpus) == (0, "")
+
+
+def test_baseline_of_another_corpus_is_refused():
+    with tempfile.TemporaryDirectory(prefix="urna-benchdata-") as d:
+        corpus = Path(d) / "c.urna"
+        corpus.write_bytes(b"another corpus")
+        baseline = Path(d) / "ref.json"
+        baseline.write_text(json.dumps({"baseline_file_hash": "sha256:" + "0" * 64}))
+        code, err = match_code(baseline, corpus)
+        assert code == 10, (code, err)
+        assert "another corpus needs its own baseline" in err, err
+
+
+def test_missing_baseline_has_its_own_code():
+    with tempfile.TemporaryDirectory(prefix="urna-benchdata-") as d:
+        corpus = Path(d) / "c.urna"
+        corpus.write_bytes(b"a corpus")
+        for baseline in (Path(d) / "absent.json", corpus):  # absent; not json
+            code, err = match_code(baseline, corpus)
+            assert code == 9, (baseline, code, err)
+            assert "URNA_BASELINE" in err, err
 
 
 def main() -> int:

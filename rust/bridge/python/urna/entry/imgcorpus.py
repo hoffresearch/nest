@@ -8,7 +8,7 @@
 
 Usage:
     rust/bridge/python/urna/entry/imgcorpus.py \\
-        --input-dir data/demo/derm/ph2/images --dataset ph2 \\
+        --input-dir <ph2>/images --dataset ph2 \\
         --output tmp/ph2/ph2.urna --labels tmp/ph2/labels.json
 """
 
