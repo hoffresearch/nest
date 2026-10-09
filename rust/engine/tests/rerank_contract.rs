@@ -181,7 +181,7 @@ fn non_exact_paths_return_real_cosine_byte_for_byte_and_recall_is_nan() {
 
     // Every non-exact search entry point, by name + how to invoke it.
     // ADD graph/space/cross here when they land. The list is the gate.
-    let non_exact_paths: Vec<NonExactPath> = {
+    let non_exact_paths: Vec<NonExactPath<'_>> = {
         let qa = q.clone();
         let qh = q.clone();
         let qg = q.clone();

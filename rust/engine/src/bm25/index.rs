@@ -38,6 +38,12 @@ pub struct Bm25Index {
     pub(super) terms: HashMap<String, TermEntry>,
 }
 
+crate::shape_debug!(Bm25Index {
+    show k1, show b, show avgdl, show n_docs, show n_terms, len doc_lengths, len terms,
+});
+
+// parameters and sizes only, not the postings.
+
 impl Bm25Index {
     /// Build a BM25 index from the canonical chunk texts.
     pub fn build(docs: &[String], k1: f32, b: f32) -> Self {

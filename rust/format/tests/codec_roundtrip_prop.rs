@@ -103,6 +103,7 @@ fn normalized_rows(
     })
 }
 
+#[allow(clippy::expect_used, reason = "a test helper, outside #[test]")]
 fn raw_canonical(texts: &[String]) -> Vec<u8> {
     encode_chunks_canonical(texts).expect("raw canonical encoding never fails")
 }

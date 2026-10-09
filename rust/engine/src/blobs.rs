@@ -29,7 +29,7 @@ pub struct OpenBlobData {
 /// and must parallel the 0x14 record order, so a length mismatch against
 /// `n_refs` is a typed format error.
 pub(crate) fn open_blob_data(
-    view: &UrnaView,
+    view: &UrnaView<'_>,
     n_refs: usize,
 ) -> Result<Option<OpenBlobData>, RuntimeError> {
     let Some(entry) = view
@@ -111,7 +111,7 @@ impl crate::mmap_file::MmapUrnaFile {
 /// chunks). a dangling blob_ref_index is a typed format error, never a
 /// silent fallback.
 pub(crate) fn open_blob_sections(
-    view: &UrnaView,
+    view: &UrnaView<'_>,
     spans: &mut [OriginalSpan],
 ) -> Result<Option<Vec<BlobRefRecord>>, RuntimeError> {
     let blobs_present = view
@@ -167,7 +167,7 @@ pub(crate) fn open_blob_sections(
 /// not the row ordinal the forge writes into 0x03. without the overlay (or
 /// the `blobs_present` capability) the spans are left as decoded.
 pub fn apply_blob_span_overlay(
-    view: &UrnaView,
+    view: &UrnaView<'_>,
     spans: &mut [OriginalSpan],
 ) -> Result<(), RuntimeError> {
     open_blob_sections(view, spans).map(|_| ())

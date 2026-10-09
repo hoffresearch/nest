@@ -83,6 +83,8 @@ jobs:
           cargo fmt --manifest-path rust/ingest/Cargo.toml --all --check
           cargo clippy --manifest-path rust/ingest/Cargo.toml --all-targets -- -D warnings
           cargo test --manifest-path rust/ingest/Cargo.toml
+      - name: fuzz/ lints (separate workspace; the targets run on nightly below)
+        run: cargo clippy --manifest-path fuzz/Cargo.toml --all-targets -- -D warnings
 
   # the terminal ui (`urna setup`, `urna tui`) ships in the windows
   # release archive too, and the rust job above never compiles for windows:
@@ -292,6 +294,8 @@ jobs:
           python tool/tests/test_namecheck.py
       - name: the atlas summary is the current state, not history
         run: python tool/tests/test_atlasdocs.py
+      - name: rust/ingest keeps the root's lints and rust-version
+        run: python tool/tests/test_lintmatch.py
       - name: the registry imports and the model catalog is current
         # bare python, no ml deps: catalogue imports the whole registry,
         # so a preset that names a field ModelPreset lacks fails here, and a

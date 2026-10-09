@@ -12,6 +12,11 @@
 //! files land under the os temp dir and are rebuilt on every run (the
 //! build is not timed). run: `cargo bench -p urna-engine --bench rerank`
 
+#![allow(
+    clippy::expect_used,
+    reason = "a bench stops on a setup failure, like a test"
+)]
+
 use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use std::path::PathBuf;
 use urna_engine::MmapUrnaFile;

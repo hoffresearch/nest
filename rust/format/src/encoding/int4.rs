@@ -129,6 +129,12 @@ pub struct Int4EmbeddingsView<'a> {
     pub blocks: usize,
 }
 
+crate::shape_debug!(Int4EmbeddingsView<'_> {
+    show n, show dim, show blocks, len scales, len codes,
+});
+
+// shape only: a derived Debug would print every byte of the payload.
+
 impl<'a> Int4EmbeddingsView<'a> {
     pub fn parse(bytes: &'a [u8], n: usize, dim: usize) -> crate::Result<Self> {
         if dim == 0 || dim % INT4_BLOCK != 0 {

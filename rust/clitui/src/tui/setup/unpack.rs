@@ -144,7 +144,7 @@ fn remove(p: &Path) {
 
 /// Lays the staged payload down over `<root>/urna`, restoring the previous
 /// one on any failure; see `Fault` for the failures the tests inject.
-fn swap(staging: &Path, root: &Path, fault: Fault) -> Result<PathBuf> {
+fn swap(staging: &Path, root: &Path, fault: Fault<'_>) -> Result<PathBuf> {
     let new_home = staging.join("urna");
     let gone: Vec<&str> = missing(&new_home);
     if !gone.is_empty() {
@@ -206,7 +206,7 @@ fn lay_down(
     new_home: &Path,
     home: &Path,
     previous: &Path,
-    fault: Fault,
+    fault: Fault<'_>,
     aside: &mut Vec<String>,
     placed: &mut Vec<String>,
 ) -> Result<()> {
@@ -234,7 +234,7 @@ fn restore(
     previous: &Path,
     aside: &[String],
     placed: &[String],
-    fault: Fault,
+    fault: Fault<'_>,
 ) -> Vec<String> {
     for n in placed.iter().rev() {
         remove(&home.join(n));
@@ -254,7 +254,7 @@ fn restore(
 /// cleaning the staging dir can never delete it; returns where it now is
 /// (the staging copy itself when even that move fails, and `finish` then
 /// keeps the staging dir).
-fn keep_previous(previous: &Path, root: &Path, fault: Fault) -> PathBuf {
+fn keep_previous(previous: &Path, root: &Path, fault: Fault<'_>) -> PathBuf {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -333,7 +333,7 @@ mod tests {
         d: &Path,
         root: &Path,
         entries: &[(String, Vec<u8>)],
-        fault: Fault,
+        fault: Fault<'_>,
     ) -> Result<PathBuf> {
         let tgz = pack(d, entries);
         let staging = root.join(STAGING);

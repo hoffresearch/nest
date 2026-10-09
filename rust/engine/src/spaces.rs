@@ -26,7 +26,9 @@ pub(crate) struct OpenSpace {
 /// presence and exact size were already validated by the reader
 /// (`validate_space_bands`), so a missing band here is a typed error,
 /// never a silent skip.
-pub(crate) fn open_space_sections(view: &UrnaView) -> Result<Option<Vec<OpenSpace>>, RuntimeError> {
+pub(crate) fn open_space_sections(
+    view: &UrnaView<'_>,
+) -> Result<Option<Vec<OpenSpace>>, RuntimeError> {
     let multimodal = view
         .manifest
         .capabilities_ext

@@ -46,7 +46,7 @@ quality = [
     "The CLI stays intentionally thin and delegates behavior to runtime and format crates.",
     "The Python surface is small and explicit: load extension, build corpora, fingerprint models, and run support tooling.",
     "ANN, graph, hybrid, and space paths always rerank with exact cosine, which keeps scores consistent across search modes.",
-    "A malformed .urna may be rejected with a typed error, never with a panic: Clippy denies unwrap_used and undocumented_unsafe_blocks workspace-wide, urna-format carries zero unsafe (bytemuck views), fixed-width fields go through urna_format::bytes, header-derived sizes are overflow-checked, cursor bounds checks are written need > remaining, every scored slab (canonical, fp, bands) passes a finite-values gate at open, and every f32 sort is a NaN-last total order (urna_engine::order). The mutation-fuzz harnesses run under cargo test and CI; fuzz/ holds the coverage-guided targets.",
+    "A malformed .urna may be rejected with a typed error, never with a panic: Clippy denies unwrap_used, expect_used and undocumented_unsafe_blocks workspace-wide (with dbg_macro, todo and rustc's unsafe_op_in_unsafe_fn, missing_debug_implementations and rust_2018_idioms; rust/ingest and fuzz/ carry a copy, held to it by tool/tests/test_lintmatch.py), urna-format forbids unsafe_code (bytemuck views), fixed-width fields go through urna_format::bytes, header-derived sizes are overflow-checked, cursor bounds checks are written need > remaining, every scored slab (canonical, fp, bands) passes a finite-values gate at open, and every f32 sort is a NaN-last total order (urna_engine::order). The mutation-fuzz harnesses run under cargo test and CI; fuzz/ holds the coverage-guided targets.",
     "Media (blob_refs/blob_span_overlay) and multimodal spaces (space_table + bands) are additive and content_hash-excluded, so attaching them to a corpus never moves an existing text citation; each named space is gated by its own model_hash in isolation.",
 ]
 
@@ -340,7 +340,7 @@ path = [
     "tool/tasks/ruffcheck.sh",
     "rust/ingest/Cargo.toml",
 ]
-summary = "On every push and pull request: fmt, Clippy with the workspace deny lints, build + test on Ubuntu (AVX2) and macOS (NEON), the mutation-fuzz harnesses at a higher iteration count, the 639-line guard, rust/ingest's gate, ruff over the shared file list, and a bounded cargo-fuzz smoke on nightly"
+summary = "On every push and pull request: fmt, Clippy with the workspace deny lints, build + test on Ubuntu (AVX2) and macOS (NEON), the mutation-fuzz harnesses at a higher iteration count, the 639-line guard, rust/ingest's gate, Clippy on fuzz/, ruff over the shared file list, and a bounded cargo-fuzz smoke on nightly"
 
 [[flows]]
 name = "mutation-fuzz"
@@ -431,7 +431,7 @@ links = [
 [[inventory.root]]
 path = "clippy.toml"
 kind = "lint-config"
-purpose = "Pins Clippy lint thresholds, exempts tests from unwrap_used, accepts // SAFETY: comments above the statement; MSRV comes from the workspace rust-version; the deny lints themselves live in Cargo.toml [workspace.lints]"
+purpose = "Pins Clippy lint thresholds, exempts tests from unwrap_used and expect_used, accepts // SAFETY: comments above the statement; MSRV comes from the workspace rust-version; the deny lints themselves live in Cargo.toml [workspace.lints]"
 links = ["Cargo.toml"]
 
 [[inventory.root]]
@@ -455,7 +455,7 @@ links = ["Cargo.toml", "rust/ingest/Cargo.toml", "fuzz/Cargo.toml"]
 [[inventory.root]]
 path = ".github/workflows/gatecheck.yml"
 kind = "ci-workflow"
-purpose = "The pull-request gate: fmt, Clippy with the deny lints, build + test on Ubuntu and macOS, mutation-fuzz harnesses, 639-line guard, rust/ingest gate, ruff via tool/tasks/ruffcheck.sh, cargo-fuzz smoke on nightly; nightly: fuzz soak, Miri on urna-format"
+purpose = "The pull-request gate: fmt, Clippy with the deny lints, build + test on Ubuntu and macOS, mutation-fuzz harnesses, 639-line guard, rust/ingest gate, Clippy on fuzz/, ruff via tool/tasks/ruffcheck.sh, cargo-fuzz smoke on nightly; nightly: fuzz soak, Miri on urna-format"
 links = [
     "tool/tasks/fullcheck.sh",
     "tool/tasks/ruffcheck.sh",

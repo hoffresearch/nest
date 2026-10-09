@@ -90,6 +90,13 @@ pub struct HnswIndex {
     pub ef_search: usize,
 }
 
+crate::shape_debug!(HnswIndex {
+    show m, show m_max0, show ef_construction, show ef_search, show entry_point, show max_level,
+    show n, show dim, len nodes, skip store,
+});
+
+// parameters and sizes only, not the graph or the vectors.
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Candidate {
     pub id: u32,

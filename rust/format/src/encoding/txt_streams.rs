@@ -131,6 +131,12 @@ pub struct TxtStreams<'a> {
     count: usize,
 }
 
+crate::shape_debug!(TxtStreams<'_> {
+    show count, len streams, len offsets,
+});
+
+// shape only: a derived Debug would print every byte of the payload.
+
 impl<'a> TxtStreams<'a> {
     pub fn parse(bytes: &'a [u8]) -> crate::Result<Self> {
         let (kind, rest) = bytes

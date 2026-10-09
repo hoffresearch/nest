@@ -23,7 +23,7 @@ use super::ui::{Step, Ui};
 use crate::tui::hud::{self};
 use crate::tui::{art, fx, pal};
 
-pub fn draw(f: &mut Frame, ui: &mut Ui, dt: Duration) {
+pub fn draw(f: &mut Frame<'_>, ui: &mut Ui, dt: Duration) {
     let area = f.area();
     let buf = f.buffer_mut();
     pal::ground(buf, area);

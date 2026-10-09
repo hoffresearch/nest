@@ -161,6 +161,12 @@ pub struct IntpackReader<'a> {
     n_blocks: usize,
 }
 
+crate::shape_debug!(IntpackReader<'_> {
+    show count, show n_blocks, len bytes,
+});
+
+// shape only: a derived Debug would print every byte of the payload.
+
 impl<'a> IntpackReader<'a> {
     pub fn parse(bytes: &'a [u8]) -> Result<Self, UrnaError> {
         let count = read_u32(bytes, 0)? as usize;

@@ -12,6 +12,22 @@ edition = "2024"
 [package.metadata]
 cargo-fuzz = true
 
+# a copy of the root [workspace.lints]: a workspace of its own inherits
+# nothing. tool/tests/test_lintmatch.py fails when the two drift. no
+# `unsafe_code = "forbid"` here: libfuzzer-sys's fuzz_target! expands to an
+# `unsafe extern "C"` entry point.
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_debug_implementations = "deny"
+rust_2018_idioms = { level = "deny", priority = -1 }
+
+[lints.clippy]
+unwrap_used = "deny"
+undocumented_unsafe_blocks = "deny"
+dbg_macro = "deny"
+todo = "deny"
+expect_used = "deny"
+
 [dependencies]
 libfuzzer-sys = "0.4"
 urna-format = { path = "../rust/format" }

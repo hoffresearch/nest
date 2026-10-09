@@ -21,7 +21,7 @@ use search_hit::SearchHitPy;
 use urna_file::UrnaFile;
 
 #[pymodule]
-fn _urna(m: &Bound<PyModule>) -> PyResult<()> {
+fn _urna(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<UrnaFile>()?;
     m.add_class::<SearchHitPy>()?;
     m.add_class::<RetrieveHitPy>()?;

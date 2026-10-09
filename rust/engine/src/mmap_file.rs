@@ -70,6 +70,16 @@ pub struct MmapUrnaFile {
     pub(crate) declared_score_type: String,
 }
 
+crate::shape_debug!(MmapUrnaFile {
+    show n_embeddings, show embedding_dim, show dtype, show embedding_model, show model_hash,
+    show file_hash, show content_hash, show declared_index_type, show declared_score_type,
+    some ann_index, some bm25_index, some graph_index, some embeddings_fp, some blob_refs,
+    some blob_data, some spaces, len chunk_ids, len spans, skip _mmap, skip embeddings_offset,
+    skip embeddings_size,
+});
+
+// identity and shape only: the mapped bytes and the indices stay out.
+
 impl MmapUrnaFile {
     pub fn open(path: &Path) -> Result<Self, RuntimeError> {
         let file = std::fs::File::open(path)?;

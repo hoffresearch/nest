@@ -63,6 +63,14 @@ pub struct UrnaFileBuilder {
     pub(super) space_bands: Vec<(u32, u32, Vec<u8>)>,
 }
 
+crate::shape_debug!(UrnaFileBuilder {
+    show reproducible, show text_encoding, show dtype, len chunks, skip manifest, skip provenance,
+    skip hnsw_index, skip bm25_index, skip graph_adjacency, skip blob_refs, skip blob_data,
+    skip blob_span_overlay, skip space_table, len space_bands,
+});
+
+// counts only: a derived Debug would print every chunk and payload.
+
 impl UrnaFileBuilder {
     pub fn new(manifest: Manifest) -> Self {
         Self {

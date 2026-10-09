@@ -6,6 +6,11 @@
 //! throughput is in elements (dim) so the numbers compare across dims.
 //! run: `cargo bench -p urna-engine --bench simd`
 
+#![allow(
+    clippy::expect_used,
+    reason = "a bench stops on a setup failure, like a test"
+)]
+
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use urna_engine::simd::{
     detect_backend, dot_f32_bytes, dot_f32_f16_bytes, dot_f32_i4_blocked, dot_f32_i8,

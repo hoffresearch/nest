@@ -154,7 +154,7 @@ fn push_edge_types(out: &mut Vec<u8>, types: &[u8]) {
     }
 }
 
-fn read_edge_types(cur: &mut Cursor, total: usize) -> Result<Vec<u8>, UrnaError> {
+fn read_edge_types(cur: &mut Cursor<'_>, total: usize) -> Result<Vec<u8>, UrnaError> {
     let kind = cur.u8()?;
     match kind {
         EDGE_COL_ISO => {
@@ -224,6 +224,10 @@ pub struct CsrParts {
     pub neighbors: Vec<u32>,
     pub edge_types: Vec<u8>,
 }
+
+crate::shape_debug!(CsrParts {
+    show n_nodes, len offsets, len neighbors, len edge_types,
+});
 
 /// parse the csr payload into validated owned columns (the single parser):
 /// bounds-checks the header, monotone offsets, degree cap, column lengths,

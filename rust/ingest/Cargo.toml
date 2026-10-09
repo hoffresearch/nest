@@ -10,6 +10,7 @@
 name = "urna-ingest"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
 license = "MIT"
 description = "forge canonical intermediate (.fci) schema, outside the sovereign urna workspace"
 repository = "https://github.com/hoffresearch/urna"
@@ -23,3 +24,18 @@ resolver = "3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+
+# a copy of the root [workspace.lints]: an excluded workspace inherits
+# nothing. tool/tests/test_lintmatch.py fails when the two drift.
+[lints.rust]
+unsafe_code = "forbid"
+unsafe_op_in_unsafe_fn = "deny"
+missing_debug_implementations = "deny"
+rust_2018_idioms = { level = "deny", priority = -1 }
+
+[lints.clippy]
+unwrap_used = "deny"
+undocumented_unsafe_blocks = "deny"
+dbg_macro = "deny"
+todo = "deny"
+expect_used = "deny"

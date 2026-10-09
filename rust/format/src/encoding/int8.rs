@@ -84,6 +84,12 @@ pub struct Int8EmbeddingsView<'a> {
     pub dim: usize,
 }
 
+crate::shape_debug!(Int8EmbeddingsView<'_> {
+    show n, show dim, len scales, len bodies,
+});
+
+// shape only: a derived Debug would print every byte of the payload.
+
 impl<'a> Int8EmbeddingsView<'a> {
     pub fn parse(bytes: &'a [u8], n: usize, dim: usize) -> crate::Result<Self> {
         // checked: `n` / `dim` are header-controlled; an overflowed product

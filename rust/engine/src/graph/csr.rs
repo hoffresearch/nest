@@ -23,6 +23,10 @@ pub struct CsrIndex {
     edge_types: Vec<u8>,
 }
 
+crate::shape_debug!(CsrIndex {
+    show n_nodes, len offsets, len neighbors, len edge_types,
+});
+
 impl CsrIndex {
     /// parse a graph_adjacency csr payload. `n_embeddings` is the corpus
     /// chunk count; the csr's `n_nodes` must match it so neighbor ids index

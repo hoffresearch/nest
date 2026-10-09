@@ -22,6 +22,10 @@ pub struct Traversal {
     cur_gen: u32,
 }
 
+crate::shape_debug!(Traversal {
+    show cur_gen, len stamp,
+});
+
 impl Traversal {
     pub fn new(n_nodes: usize) -> Self {
         Self {

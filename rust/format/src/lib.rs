@@ -1,3 +1,30 @@
+// the format crate has no `unsafe` (its byte views go through bytemuck), so
+// it forbids it outright; the workspace cannot, the engine's SIMD needs it.
+#![forbid(unsafe_code)]
+
+/// `Debug` that prints a type's shape, never its payload: a derive would
+/// print every byte of a corpus. Each field is named with what it shows
+/// (`show` the value, `len` its length, `some` whether it is set, `skip`
+/// nothing), and the impl destructures all of them, so a field added to
+/// the struct fails to compile here until it is named.
+macro_rules! shape_debug {
+    ($ty:ty { $($how:ident $field:ident),* $(,)? }) => {
+        impl ::std::fmt::Debug for $ty {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                let Self { $($field),* } = self;
+                let mut out = f.debug_struct(stringify!($ty));
+                $( crate::shape_debug!(@$how out $field); )*
+                out.finish_non_exhaustive()
+            }
+        }
+    };
+    (@show $out:ident $field:ident) => { $out.field(stringify!($field), $field); };
+    (@len $out:ident $field:ident) => { $out.field(stringify!($field), &$field.len()); };
+    (@some $out:ident $field:ident) => { $out.field(stringify!($field), &$field.is_some()); };
+    (@skip $out:ident $field:ident) => { let _ = $field; };
+}
+pub(crate) use shape_debug;
+
 pub mod bytes;
 pub mod chunk;
 pub mod encoding;

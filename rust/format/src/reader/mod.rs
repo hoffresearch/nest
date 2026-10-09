@@ -35,6 +35,12 @@ pub struct UrnaView<'a> {
     pub footer: UrnaFooter,
 }
 
+crate::shape_debug!(UrnaView<'_> {
+    show header, len data, len section_table, skip manifest, skip footer,
+});
+
+// the header and section count, not the file bytes or the manifest.
+
 impl<'a> UrnaView<'a> {
     pub fn len(&self) -> usize {
         self.data.len()

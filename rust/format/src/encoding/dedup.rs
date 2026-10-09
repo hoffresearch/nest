@@ -40,6 +40,10 @@ pub struct Deduped {
     pub back_refs: Vec<u32>,
 }
 
+crate::shape_debug!(Deduped {
+    len unique, len back_refs,
+});
+
 /// run the first-seen dedup pass over `texts` (the decompressed canonical
 /// strings, in chunk order). deterministic: a `HashMap` keyed by the text
 /// only decides membership, while first-seen ORDER is driven by the input
@@ -146,5 +150,15 @@ mod tests {
         assert_eq!(a.unique, b.unique);
         assert_eq!(a.back_refs, b.back_refs);
         assert_eq!(encode_map(&a.back_refs), encode_map(&b.back_refs));
+    }
+
+    #[test]
+    fn debug_prints_the_shape_not_the_texts() {
+        let big = "x".repeat(10_000);
+        let d = Deduped {
+            unique: vec![big.clone(), big],
+            back_refs: vec![0, 1, 1],
+        };
+        assert_eq!(format!("{d:?}"), "Deduped { unique: 2, back_refs: 3, .. }");
     }
 }
