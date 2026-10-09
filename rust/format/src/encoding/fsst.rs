@@ -19,8 +19,9 @@
 
 use super::fsst_table::{SymbolTable, parse_table, serialize_table};
 use super::intpack::{IntpackReader, pack_u64s};
-use super::txt_streams::{build_canonical, malformed, write_container};
+use super::txt_streams::{build_canonical, concat_frames, malformed, write_container};
 use crate::bytes::{le_u32, le_u64};
+use rayon::prelude::*;
 
 /// kind/version byte for the fsst-framed variant.
 pub const TXT_STREAMS_V3: u8 = 2;
@@ -81,13 +82,13 @@ pub fn encode(texts: &[String]) -> crate::Result<Vec<u8>> {
     let corpus: Vec<u8> = texts.iter().flat_map(|t| t.as_bytes().to_vec()).collect();
     let table = SymbolTable::build(&corpus);
     let table_blob = serialize_table(&table);
-    let mut streams: Vec<u8> = Vec::new();
-    let mut offsets: Vec<u64> = Vec::with_capacity(texts.len() + 1);
-    offsets.push(0);
-    for t in texts {
-        streams.extend_from_slice(&encode_one(&table, t.as_bytes()));
-        offsets.push(streams.len() as u64);
-    }
+    // frames are independent given the table: coded in parallel, laid out
+    // in chunk order, so the bytes do not depend on the thread count.
+    let frames: Vec<Vec<u8>> = texts
+        .par_iter()
+        .map(|t| encode_one(&table, t.as_bytes()))
+        .collect();
+    let (streams, offsets) = concat_frames(&frames);
     let off_table = pack_u64s(&offsets);
     // the container streams region = u32 table_len + symbol table + frames.
     // the offset table indexes frames relative to the table blob end, so
@@ -183,3 +184,31 @@ fn parse_v3(bytes: &[u8]) -> crate::Result<(usize, Vec<u64>, &[u8])> {
 // positive + escape-path coverage lives in tests/fsst_roundtrip.rs and the
 // negative/fuzz coverage in tests/negative_fsst.rs (both exercise the public
 // encode/decode, which drive encode_one/decode_one through every frame).
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parallel_encode_equals_sequential() {
+        let t: Vec<String> = (0..2_000)
+            .map(|i| format!("coração {} do acervo {}", i, "ção ".repeat(i % 31)))
+            .collect();
+        // the encoder before the frames were coded in parallel, kept to pin
+        // the bytes: one pass over the chunks, in order.
+        let corpus: Vec<u8> = t.iter().flat_map(|s| s.as_bytes().to_vec()).collect();
+        let table = SymbolTable::build(&corpus);
+        let blob = serialize_table(&table);
+        let mut framed = (blob.len() as u32).to_le_bytes().to_vec();
+        framed.extend_from_slice(&blob);
+        let mut offsets: Vec<u64> = vec![0];
+        let mut streams: Vec<u8> = Vec::new();
+        for s in &t {
+            streams.extend_from_slice(&encode_one(&table, s.as_bytes()));
+            offsets.push(streams.len() as u64);
+        }
+        framed.extend_from_slice(&streams);
+        let sequential = write_container(TXT_STREAMS_V3, t.len(), &pack_u64s(&offsets), &framed);
+        assert_eq!(encode(&t).unwrap(), sequential);
+    }
+}

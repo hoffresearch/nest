@@ -81,5 +81,4 @@ TMP/
 
 # quickstart build output (demo/starter/corpus.toml)
 demo/starter/out/
-tool/
 tmps/

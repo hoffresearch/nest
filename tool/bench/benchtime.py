@@ -20,6 +20,10 @@ def percentile(values: list[float], p: float) -> float:
     return s[idx]
 
 
+# timed runs per query in run_bench; the fastest is kept.
+REPEATS = 5
+
+
 def run_bench(
     db,
     queries,
@@ -32,22 +36,32 @@ def run_bench(
 
     Returns `(times_ms, hits_per_query)`. Caller computes recall against
     a baseline `hits_per_query` and percentiles over `times_ms`.
+
+    Every query runs once untimed first (the warm-up; its hits are the ones
+    returned, so recall does not depend on the timing), then is timed
+    `REPEATS` times and keeps its fastest: a system pause lands in some
+    repeats, a real regression slows every one. The repeats are rounds over
+    all the queries, so one query's repeats are spread out and a pause of a
+    few milliseconds cannot cover all of them.
     """
-    times: list[float] = []
-    results = []
-    for qvec, qtext in queries:
-        t0 = time.time()
+
+    def search(qvec, qtext):
         if mode == "exact":
-            hits = db.search(qvec, k)
-        elif mode == "ann":
-            hits = db.search_ann(qvec, k, ef)
-        elif mode == "hybrid":
-            hits = db.search_hybrid(qvec, qtext, k, candidates)
-        else:
-            raise ValueError(mode)
-        dt = (time.time() - t0) * 1000.0
-        times.append(dt)
-        results.append(hits)
+            return db.search(qvec, k)
+        if mode == "ann":
+            return db.search_ann(qvec, k, ef)
+        if mode == "hybrid":
+            return db.search_hybrid(qvec, qtext, k, candidates)
+        raise ValueError(mode)
+
+    results = [search(qvec, qtext) for qvec, qtext in queries]
+    best = [float("inf")] * len(queries)
+    for _ in range(REPEATS):
+        for i, (qvec, qtext) in enumerate(queries):
+            t0 = time.perf_counter()
+            search(qvec, qtext)
+            best[i] = min(best[i], time.perf_counter() - t0)
+    times = [b * 1000.0 for b in best]
     return times, results
 
 

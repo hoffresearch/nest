@@ -16,6 +16,45 @@ pub fn zstd_encode(bytes: &[u8]) -> crate::Result<Vec<u8>> {
         .map_err(|e| UrnaError::InvalidInput(format!("zstd compression failed: {}", e)))
 }
 
+/// a reusable zstd context for many small frames. [`zstd_encode`] builds a
+/// new level-19 context per call, which dominates the cost of encoding tens
+/// of thousands of chunk-sized frames. this keeps one context and resets its
+/// session between frames, and feeds it the same way `zstd::encode_all`
+/// does (unknown pledged size, streaming end), so every frame is
+/// byte-identical to `zstd_encode` on the same input.
+pub(super) struct ZstdFramer {
+    cctx: zstd::zstd_safe::CCtx<'static>,
+}
+
+impl ZstdFramer {
+    pub(super) fn new() -> Self {
+        Self {
+            cctx: zstd::zstd_safe::CCtx::create(),
+        }
+    }
+
+    /// compress `bytes` into one frame equal to `zstd_encode(bytes)`.
+    pub(super) fn encode(&mut self, bytes: &[u8]) -> crate::Result<Vec<u8>> {
+        let fail = |what: &str, e: String| {
+            UrnaError::InvalidInput(format!("zstd compression failed: {}: {}", what, e))
+        };
+        let code = |c: usize| zstd::zstd_safe::get_error_name(c).to_string();
+        self.cctx
+            .reset(zstd::zstd_safe::ResetDirective::SessionOnly)
+            .map_err(|c| fail("reset", code(c)))?;
+        self.cctx
+            .set_parameter(zstd::zstd_safe::CParameter::CompressionLevel(
+                DEFAULT_ZSTD_LEVEL,
+            ))
+            .map_err(|c| fail("level", code(c)))?;
+        let mut out = Vec::new();
+        let mut enc = zstd::stream::write::Encoder::with_context(&mut out, &mut self.cctx);
+        std::io::copy(&mut &bytes[..], &mut enc).map_err(|e| fail("write", e.to_string()))?;
+        enc.finish().map_err(|e| fail("finish", e.to_string()))?;
+        Ok(out)
+    }
+}
+
 /// hostile-input guard: an attacker can ship a tiny zstd frame that inflates
 /// to many GiB and OOM-kills the process at file `open()` (a classic
 /// decompression bomb). The decompressed size is bounded to
@@ -80,6 +119,20 @@ mod tests {
         assert!(compressed.len() < 4096, "bomb should compress tiny");
         let err = zstd_decode(&compressed).unwrap_err();
         assert!(matches!(err, UrnaError::MalformedSectionPayload { .. }));
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)] // zstd is c code, miri cannot call it
+    fn framer_frames_equal_zstd_encode() {
+        // one framer reused across inputs of every size class: empty, tiny,
+        // and past one 128 KiB zstd block, in an order that would expose any
+        // state leaking from one frame into the next.
+        let big = b"o arquivo e o banco de dados. ".repeat(10_000);
+        let inputs: Vec<&[u8]> = vec![b"", b"a", &big, b"coracao", &big[..131_073], b""];
+        let mut framer = ZstdFramer::new();
+        for input in inputs {
+            assert_eq!(framer.encode(input).unwrap(), zstd_encode(input).unwrap());
+        }
     }
 
     #[test]
